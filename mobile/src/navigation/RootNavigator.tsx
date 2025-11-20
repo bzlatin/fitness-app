@@ -79,6 +79,7 @@ const RootNavigator = () => (
       headerTintColor: colors.textPrimary,
       contentStyle: { backgroundColor: colors.background },
       headerTitleStyle: { fontFamily: fontFamilies.semibold },
+      headerBackTitle: "Back",
     }}
   >
     <Stack.Screen

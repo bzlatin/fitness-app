@@ -34,6 +34,10 @@ export interface WorkoutTemplateExercise {
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;
+  defaultWeight?: number;
+  defaultIncline?: number;
+  defaultDistance?: number;
+  defaultDurationMinutes?: number;
   notes?: string;
 }
 

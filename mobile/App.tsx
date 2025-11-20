@@ -15,6 +15,7 @@ import {
 import RootNavigator from "./src/navigation/RootNavigator";
 import { colors } from "./src/theme/colors";
 import { fontFamilies } from "./src/theme/typography";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const App = () => {
   const [fontsLoaded] = useFonts({
@@ -47,42 +48,40 @@ const App = () => {
     },
   };
 
-  if (!fontsLoaded) {
-    return (
-      <SafeAreaProvider>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.background,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-          }}
-        >
-          <ActivityIndicator color={colors.primary} />
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontFamily: fontFamilies.medium,
-              letterSpacing: 0.3,
-            }}
-          >
-            Loading GymBrain...
-          </Text>
-        </View>
-      </SafeAreaProvider>
-    );
-  }
+  const content = fontsLoaded ? (
+    <QueryClientProvider client={queryClient}>
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style="light" />
+        <RootNavigator />
+      </NavigationContainer>
+    </QueryClientProvider>
+  ) : (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+      }}
+    >
+      <ActivityIndicator color={colors.primary} />
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontFamily: fontFamilies.medium,
+          letterSpacing: 0.3,
+        }}
+      >
+        Loading GymBrain...
+      </Text>
+    </View>
+  );
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <NavigationContainer theme={navTheme}>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </NavigationContainer>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>{content}</SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 };
 

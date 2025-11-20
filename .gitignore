@@ -26,3 +26,5 @@ Thumbs.db
 .env.*.local
 server/.env
 mobile/.env
+server/src/data/dist
+server/src/data/exercises

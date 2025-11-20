@@ -14,6 +14,10 @@ export interface WorkoutTemplateExercise {
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;
+  defaultWeight?: number;
+  defaultIncline?: number;
+  defaultDistance?: number;
+  defaultDurationMinutes?: number;
   notes?: string;
 }
 
@@ -54,13 +58,19 @@ export interface Exercise {
   name: string;
   primaryMuscleGroup: string;
   equipment: string;
+  category?: string;
   gifUrl?: string;
 }
 
 export type TemplateExerciseForm = {
+  formId: string;
   exercise: Exercise;
   sets: number;
   reps: number;
   restSeconds?: number;
+  weight?: number;
+  incline?: number;
+  distance?: number;
+  durationMinutes?: number;
   notes?: string;
 };

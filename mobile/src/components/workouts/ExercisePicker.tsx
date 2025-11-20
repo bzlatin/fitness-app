@@ -12,16 +12,18 @@ import {
   View,
 } from "react-native";
 import { searchExercises } from "../../api/exercises";
+import { API_BASE_URL } from "../../api/client";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { Exercise, TemplateExerciseForm } from "../../types/workouts";
+import { isCardioExercise } from "../../utils/exercises";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   selected: TemplateExerciseForm[];
-  onAdd: (exerciseForm: TemplateExerciseForm) => void;
+  onAdd: (exerciseForm: Omit<TemplateExerciseForm, "formId">) => void;
   onRemove: (exerciseId: string) => void;
 };
 
@@ -44,6 +46,9 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
   const [sets, setSets] = useState("3");
   const [reps, setReps] = useState("10");
   const [restSeconds, setRestSeconds] = useState("90");
+  const [incline, setIncline] = useState("1");
+  const [duration, setDuration] = useState("20");
+  const [distance, setDistance] = useState("1.0");
 
   const debouncedQuery = useDebouncedValue(query, 350);
 
@@ -76,26 +81,45 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
     setSets("3");
     setReps("10");
     setRestSeconds("90");
+    setIncline("1");
+    setDuration("20");
+    setDistance("1.0");
   };
 
   const confirmAdd = () => {
     if (!activeExercise) return;
+    const cardio = isCardioExercise(activeExercise);
     const parsedSets = Number(sets) || 3;
     const parsedReps = Number(reps) || 10;
     const parsedRest = restSeconds ? Number(restSeconds) : undefined;
+    const parsedIncline = incline ? Number(incline) : undefined;
+    const parsedDuration = duration ? Number(duration) : undefined;
+    const parsedDistance = distance ? Number(distance) : undefined;
 
     onAdd({
       exercise: activeExercise,
       sets: parsedSets,
       reps: parsedReps,
       restSeconds: parsedRest,
+      incline: cardio ? parsedIncline : undefined,
+      durationMinutes: cardio ? parsedDuration : undefined,
+      distance: cardio ? parsedDistance : undefined,
     });
     setActiveExercise(null);
   };
 
+  const apiHost = API_BASE_URL.replace(/\/api$/, "");
+
   const renderExercise = ({ item }: { item: Exercise }) => {
     const isAdded = selected.some((ex) => ex.exercise.id === item.id);
     const isConfiguring = activeExercise?.id === item.id;
+    const cardio = isCardioExercise(item);
+    const imageUri =
+      item.gifUrl && item.gifUrl.startsWith("http")
+        ? item.gifUrl
+        : item.gifUrl
+        ? `${apiHost}${item.gifUrl}`
+        : undefined;
     return (
       <View
         style={{
@@ -108,9 +132,9 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
         }}
       >
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          {item.gifUrl ? (
+          {imageUri ? (
             <Image
-              source={{ uri: item.gifUrl }}
+              source={{ uri: imageUri }}
               style={{
                 width: 68,
                 height: 68,
@@ -193,15 +217,38 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
             >
               Quick add
             </Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <InputChip label="Sets" value={sets} onChangeText={setSets} />
-              <InputChip label="Reps" value={reps} onChangeText={setReps} />
-              <InputChip
-                label="Rest (s)"
-                value={restSeconds}
-                onChangeText={setRestSeconds}
-              />
-            </View>
+            {cardio ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <InputChip
+                  label="Incline"
+                  value={incline}
+                  onChangeText={setIncline}
+                  keyboardType="decimal-pad"
+                />
+                <InputChip
+                  label="Duration (min)"
+                  value={duration}
+                  onChangeText={setDuration}
+                  keyboardType="decimal-pad"
+                />
+                <InputChip
+                  label="Distance (mi)"
+                  value={distance}
+                  onChangeText={setDistance}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <InputChip label="Sets" value={sets} onChangeText={setSets} />
+                <InputChip label="Reps" value={reps} onChangeText={setReps} />
+                <InputChip
+                  label="Rest (s)"
+                  value={restSeconds}
+                  onChangeText={setRestSeconds}
+                />
+              </View>
+            )}
             <Pressable
               onPress={confirmAdd}
               style={({ pressed }) => ({
@@ -389,9 +436,15 @@ type InputChipProps = {
   label: string;
   value: string;
   onChangeText: (val: string) => void;
+  keyboardType?: "numeric" | "decimal-pad";
 };
 
-const InputChip = ({ label, value, onChangeText }: InputChipProps) => (
+const InputChip = ({
+  label,
+  value,
+  onChangeText,
+  keyboardType = "numeric",
+}: InputChipProps) => (
   <View
     style={{
       flex: 1,
@@ -407,7 +460,7 @@ const InputChip = ({ label, value, onChangeText }: InputChipProps) => (
       {label}
     </Text>
     <TextInput
-      keyboardType="numeric"
+      keyboardType={keyboardType}
       value={value}
       onChangeText={onChangeText}
       style={{

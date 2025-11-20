@@ -1,121 +1,87 @@
-import { Router } from "express";
+import express, { Router } from "express";
+import path from "path";
+import fs from "fs";
 import { exercises as localExercises } from "../data/exercises";
-
-type ExerciseDbItem = {
-  exerciseId: string;
-  name: string;
-  gifUrl?: string;
-  targetMuscles?: string[];
-  bodyParts?: string[];
-  equipments?: string[];
-  secondaryMuscles?: string[];
-  instructions?: string[];
-};
 
 const router = Router();
 
-const EXERCISEDB_BASE_URL =
-  process.env.EXERCISEDB_BASE_URL || "https://www.exercisedb.dev/api/v1";
-const EXERCISEDB_API_KEY = process.env.EXERCISEDB_API_KEY;
-const EXERCISEDB_RAPID_HOST = process.env.EXERCISEDB_RAPID_HOST;
+// Load the big local dataset from dist.
+type LocalExercise = {
+  id: string;
+  name: string;
+  force?: string | null;
+  level?: string | null;
+  mechanic?: string | null;
+  equipment?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  instructions?: string[];
+  category?: string;
+  images?: string[];
+};
 
-const mapExercise = (item: ExerciseDbItem) => ({
-  id: item.exerciseId,
-  name: item.name,
-  primaryMuscleGroup:
-    item.targetMuscles?.[0] ||
-    item.bodyParts?.[0] ||
-    item.secondaryMuscles?.[0] ||
-    "Unknown",
-  equipment: item.equipments?.[0] || "Bodyweight",
-  gifUrl: item.gifUrl,
-});
+const distPath = path.join(__dirname, "../data/dist/exercises.json");
+const largeExercises: LocalExercise[] = fs.existsSync(distPath)
+  ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
+  : [];
 
-// Proxy to ExerciseDB search endpoint with optional muscle group filtering.
-router.get("/search", async (req, res) => {
+const dedupeId = (id: string) => id.replace(/\s+/g, "_");
+
+const normalizeExercise = (item: LocalExercise) => {
+  const primary =
+    item.primaryMuscles?.[0] ||
+    (Array.isArray((item as any).primaryMuscleGroup)
+      ? (item as any).primaryMuscleGroup[0]
+      : (item as any).primaryMuscleGroup) ||
+    "other";
+  const equipment =
+    item.equipment ||
+    (Array.isArray((item as any).equipments)
+      ? (item as any).equipments[0]
+      : (item as any).equipments) ||
+    "bodyweight";
+
+  const images = item.images ?? [];
+  const imageUrl =
+    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
+
+  return {
+    id: item.id || dedupeId(item.name),
+    name: item.name,
+    primaryMuscleGroup: primary.toLowerCase(),
+    equipment: equipment.toLowerCase(),
+    category: item.category?.toLowerCase(),
+    gifUrl: imageUrl,
+  };
+};
+
+// Serve static exercise images (dist dataset first, then raw exercises folder as fallback)
+const imagesDirDist = path.join(__dirname, "../data/dist");
+const imagesDirLegacy = path.join(__dirname, "../data/exercises");
+router.use("/assets", express.static(imagesDirDist));
+router.use("/assets", express.static(imagesDirLegacy));
+
+router.get("/search", (req, res) => {
   const { query, muscleGroup } = req.query;
-  const params = new URLSearchParams();
-  const searchValue = typeof query === "string" ? query : "";
-  const searchParamKey = EXERCISEDB_BASE_URL.includes("rapidapi") ? "search" : "query";
+  const searchValue = typeof query === "string" ? query.toLowerCase() : "";
+  const muscleValue =
+    typeof muscleGroup === "string" ? muscleGroup.toLowerCase() : "";
 
-  if (searchValue) {
-    params.set(searchParamKey, searchValue);
-  } else {
-    // RapidAPI list endpoint supports offset/limit
-    params.set("offset", "0");
-  }
-  params.set("limit", "30");
+  const source = largeExercises.length > 0 ? largeExercises : localExercises;
 
-  try {
-    const path = searchValue ? "/exercises/search" : "/exercises";
-    const url = `${EXERCISEDB_BASE_URL}${path}?${params.toString()}`;
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (EXERCISEDB_RAPID_HOST && EXERCISEDB_API_KEY) {
-      headers["x-rapidapi-key"] = EXERCISEDB_API_KEY;
-      headers["x-rapidapi-host"] = EXERCISEDB_RAPID_HOST;
-    } else if (EXERCISEDB_API_KEY) {
-      headers["x-api-key"] = EXERCISEDB_API_KEY;
-    }
-
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-      throw new Error(`ExerciseDB error: ${response.status} ${response.statusText}`);
-    }
-
-    const json = await response.json();
-    const items: ExerciseDbItem[] = Array.isArray(json)
-      ? json
-      : json.data ?? json.results ?? [];
-
-    const filtered = items.filter((item) => {
-      if (!muscleGroup || typeof muscleGroup !== "string") return true;
-      const target = muscleGroup.toLowerCase();
-      const groups = [
-        ...(item.targetMuscles ?? []),
-        ...(item.bodyParts ?? []),
-        ...(item.secondaryMuscles ?? []),
-      ];
-      return groups.some((g) => g.toLowerCase().includes(target));
-    });
-
-    return res.json(filtered.map(mapExercise));
-  } catch (err) {
-    console.error("ExerciseDB fetch failed, falling back to local data", err);
-    const fallback = localExercises.filter((ex) => {
+  const results = source
+    .map(normalizeExercise)
+    .filter((ex) => {
       const matchesQuery =
-        !searchValue ||
-        ex.name.toLowerCase().includes(searchValue.toLowerCase());
+        !searchValue || ex.name.toLowerCase().includes(searchValue);
       const matchesMuscle =
-        !muscleGroup ||
-        (typeof muscleGroup === "string" &&
-          ex.primaryMuscleGroup.toLowerCase().includes(muscleGroup.toLowerCase()));
+        !muscleValue ||
+        ex.primaryMuscleGroup.toLowerCase().includes(muscleValue);
       return matchesQuery && matchesMuscle;
-    });
-    return res.json(
-      fallback.map((ex) => ({
-        id: ex.id,
-        name: ex.name,
-        primaryMuscleGroup: ex.primaryMuscleGroup,
-        equipment: ex.equipment,
-        gifUrl: ex.gifUrl,
-      }))
-    );
-  }
-});
+    })
+    .slice(0, 100);
 
-// Legacy local listing for internal use/testing.
-router.get("/", (req, res) => {
-  const { muscleGroup, equipment } = req.query;
-
-  let results = localExercises;
-  if (muscleGroup && typeof muscleGroup === "string") {
-    results = results.filter((ex) => ex.primaryMuscleGroup === muscleGroup);
-  }
-  if (equipment && typeof equipment === "string") {
-    results = results.filter((ex) => ex.equipment === equipment);
-  }
-
-  res.json(results);
+  return res.json(results);
 });
 
 export default router;

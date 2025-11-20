@@ -31,6 +31,10 @@ router.post("/", (req, res) => {
       defaultSets: number;
       defaultReps: number;
       defaultRestSeconds?: number;
+      defaultWeight?: number;
+      defaultIncline?: number;
+      defaultDistance?: number;
+      defaultDurationMinutes?: number;
       notes?: string;
     }>;
   };
@@ -51,6 +55,10 @@ router.post("/", (req, res) => {
       defaultSets: ex.defaultSets,
       defaultReps: ex.defaultReps,
       defaultRestSeconds: ex.defaultRestSeconds,
+      defaultWeight: ex.defaultWeight,
+      defaultIncline: ex.defaultIncline,
+      defaultDistance: ex.defaultDistance,
+      defaultDurationMinutes: ex.defaultDurationMinutes,
       notes: ex.notes,
     })
   );
@@ -85,6 +93,10 @@ router.put("/:id", (req, res) => {
       defaultSets: number;
       defaultReps: number;
       defaultRestSeconds?: number;
+      defaultWeight?: number;
+      defaultIncline?: number;
+      defaultDistance?: number;
+      defaultDurationMinutes?: number;
       notes?: string;
     }>;
   };
@@ -109,6 +121,10 @@ router.put("/:id", (req, res) => {
       defaultSets: ex.defaultSets,
       defaultReps: ex.defaultReps,
       defaultRestSeconds: ex.defaultRestSeconds,
+      defaultWeight: ex.defaultWeight,
+      defaultIncline: ex.defaultIncline,
+      defaultDistance: ex.defaultDistance,
+      defaultDurationMinutes: ex.defaultDurationMinutes,
       notes: ex.notes,
     }));
   }

@@ -1,9 +1,21 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import DraggableFlatList, {
+  RenderItemParams,
+} from "react-native-draggable-flatlist";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  KeyboardTypeOptions,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import ExercisePicker from "../components/workouts/ExercisePicker";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import {
@@ -19,10 +31,12 @@ import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import {
+  Exercise,
   TemplateExerciseForm,
   WorkoutTemplate,
   WorkoutTemplateExercise,
 } from "../types/workouts";
+import { isCardioExercise } from "../utils/exercises";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -42,20 +56,31 @@ const formatExerciseName = (id: string) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
+const createFallbackExercise = (exerciseId: string): Exercise => ({
+  id: exerciseId,
+  name: formatExerciseName(exerciseId),
+  primaryMuscleGroup: "custom",
+  equipment: "custom",
+});
+
+const generateFormId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
 const mapPersistedExercise = (
   exercise: WorkoutTemplateExercise
 ): TemplateExerciseForm => ({
-  exercise: {
-    id: exercise.exerciseId,
-    name: formatExerciseName(exercise.exerciseId),
-    primaryMuscleGroup: "Saved",
-    equipment: "Custom",
-  },
+  formId: exercise.id,
+  exercise: createFallbackExercise(exercise.exerciseId),
   sets: exercise.defaultSets,
   reps: exercise.defaultReps,
   restSeconds: exercise.defaultRestSeconds,
+  weight: exercise.defaultWeight,
+  incline: exercise.defaultIncline,
+  distance: exercise.defaultDistance,
+  durationMinutes: exercise.defaultDurationMinutes,
   notes: exercise.notes,
 });
+
 
 const WorkoutTemplateBuilderScreen = () => {
   const route = useRoute<RootRoute<"WorkoutTemplateBuilder">>();
@@ -120,6 +145,10 @@ const WorkoutTemplateBuilderScreen = () => {
         defaultSets: number;
         defaultReps: number;
         defaultRestSeconds?: number;
+        defaultWeight?: number;
+        defaultIncline?: number;
+        defaultDistance?: number;
+        defaultDurationMinutes?: number;
         notes?: string;
       }[];
     }) =>
@@ -135,36 +164,57 @@ const WorkoutTemplateBuilderScreen = () => {
 
   const saving = createMutation.isPending || updateMutation.isPending;
 
-  const handleAddExercise = (exerciseForm: TemplateExerciseForm) => {
-    setExercises((prev) => [...prev, exerciseForm]);
+  const handleAddExercise = (
+    exerciseForm: Omit<TemplateExerciseForm, "formId">
+  ) => {
+    setExercises((prev) => [
+      ...prev,
+      { ...exerciseForm, formId: generateFormId() },
+    ]);
     setPickerVisible(false);
     setErrors((prev) => ({ ...prev, exercises: undefined }));
   };
 
-  const handleRemoveExercise = (exerciseId: string) => {
-    setExercises((prev) => prev.filter((ex) => ex.exercise.id !== exerciseId));
+  const removeExerciseByFormId = (formId: string) => {
+    setExercises((prev) => prev.filter((ex) => ex.formId !== formId));
+  };
+
+  const removeExerciseByExerciseId = (exerciseId: string) => {
+    setExercises((prev) => {
+      const index = prev.findIndex((ex) => ex.exercise.id === exerciseId);
+      if (index === -1) return prev;
+      const clone = [...prev];
+      clone.splice(index, 1);
+      return clone;
+    });
   };
 
   const updateExerciseField = (
-    exerciseId: string,
-    field: "sets" | "reps" | "restSeconds",
+    formId: string,
+    field:
+      | "sets"
+      | "reps"
+      | "restSeconds"
+      | "weight"
+      | "incline"
+      | "distance"
+      | "durationMinutes",
     value: string
   ) => {
-    const parsed = Number(value);
+    const parsed = value === "" ? NaN : Number(value);
     const nextValue =
-      field === "restSeconds"
-        ? value
-          ? parsed || undefined
-          : undefined
-        : parsed > 0
-        ? parsed
-        : 1;
+      field === "sets" || field === "reps"
+        ? Math.max(1, Number.isNaN(parsed) ? 1 : Math.round(parsed))
+        : Number.isNaN(parsed)
+        ? undefined
+        : parsed;
+
     setExercises((prev) =>
       prev.map((ex) =>
-        ex.exercise.id === exerciseId
+        ex.formId === formId
           ? {
               ...ex,
-              [field]: nextValue,
+              [field]: value === "" ? undefined : nextValue,
             }
           : ex
       )
@@ -191,6 +241,10 @@ const WorkoutTemplateBuilderScreen = () => {
         defaultSets: ex.sets,
         defaultReps: ex.reps,
         defaultRestSeconds: ex.restSeconds,
+        defaultWeight: ex.weight,
+        defaultIncline: ex.incline,
+        defaultDistance: ex.distance,
+        defaultDurationMinutes: ex.durationMinutes,
         notes: ex.notes,
       })),
     };
@@ -202,370 +256,385 @@ const WorkoutTemplateBuilderScreen = () => {
     }
   };
 
-  return (
-    <ScreenContainer scroll>
-      <View style={{ gap: 16, paddingBottom: 24 }}>
-        <View style={{ gap: 4 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-            {isEditing ? "Edit workout" : "Build a workout"}
+  const headerComponent = (
+    <View style={{ gap: 16, paddingBottom: 16 }}>
+      <View style={{ gap: 4 }}>
+        <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+          {isEditing ? "Edit workout" : "Build a workout"}
+        </Text>
+        <Text style={{ ...typography.body, color: colors.textSecondary }}>
+          Name it, define the split, then arrange exercises with long-press drag.
+        </Text>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 14,
+        }}
+      >
+        <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+          Template info
+        </Text>
+        <View style={{ gap: 6 }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            Workout name
           </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>
-            Give it a name, choose the split, then drop in exercises with quick
-            presets.
-          </Text>
+          <TextInput
+            placeholder="Push power"
+            placeholderTextColor={colors.textSecondary}
+            value={name}
+            onChangeText={setName}
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 12,
+              padding: 12,
+              color: colors.textPrimary,
+              borderWidth: 1,
+              borderColor: errors.name ? "#ef4444" : colors.border,
+              fontFamily: fontFamilies.medium,
+            }}
+          />
+          {errors.name ? (
+            <Text style={{ color: "#ef4444", ...typography.caption }}>
+              {errors.name}
+            </Text>
+          ) : null}
         </View>
 
+        <View style={{ gap: 6 }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            Description (optional)
+          </Text>
+          <TextInput
+            placeholder="Heavy pressing, then accessory shoulders."
+            placeholderTextColor={colors.textSecondary}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 12,
+              padding: 12,
+              color: colors.textPrimary,
+              borderWidth: 1,
+              borderColor: colors.border,
+              minHeight: 64,
+              fontFamily: fontFamilies.regular,
+            }}
+          />
+        </View>
+
+        <View style={{ gap: 8 }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            Split type
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            {splitOptions.map((option) => {
+              const active = splitType === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setSplitType(option.value)}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: active
+                      ? "rgba(34,197,94,0.12)"
+                      : colors.surfaceMuted,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      fontFamily: fontFamilies.semibold,
+                      color: active ? colors.primary : colors.textPrimary,
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 12,
+        }}
+      >
         <View
           style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
           <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-            Template info
+            Exercises
           </Text>
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{ ...typography.caption, color: colors.textSecondary }}
-            >
-              Workout name
-            </Text>
-            <TextInput
-              placeholder='Push power'
-              placeholderTextColor={colors.textSecondary}
-              value={name}
-              onChangeText={setName}
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 12,
-                padding: 12,
-                color: colors.textPrimary,
-                borderWidth: 1,
-                borderColor: errors.name ? "#ef4444" : colors.border,
-                fontFamily: fontFamilies.medium,
-              }}
-            />
-            {errors.name ? (
-              <Text style={{ color: "#ef4444", ...typography.caption }}>
-                {errors.name}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{ ...typography.caption, color: colors.textSecondary }}
-            >
-              Description (optional)
-            </Text>
-            <TextInput
-              placeholder='Heavy pressing, then accessory shoulders.'
-              placeholderTextColor={colors.textSecondary}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 12,
-                padding: 12,
-                color: colors.textPrimary,
-                borderWidth: 1,
-                borderColor: colors.border,
-                minHeight: 64,
-                fontFamily: fontFamilies.regular,
-              }}
-            />
-          </View>
-
-          <View style={{ gap: 8 }}>
-            <Text
-              style={{ ...typography.caption, color: colors.textSecondary }}
-            >
-              Split type
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {splitOptions.map((option) => {
-                const active = splitType === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setSplitType(option.value)}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? colors.primary : colors.border,
-                      backgroundColor: active
-                        ? "rgba(34,197,94,0.12)"
-                        : colors.surfaceMuted,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fontFamilies.semibold,
-                        color: active ? colors.primary : colors.textPrimary,
-                      }}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-              Exercises
-            </Text>
-            <Pressable
-              onPress={() => setPickerVisible(true)}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.secondary,
-                backgroundColor: colors.surfaceMuted,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Ionicons name='add' size={18} color={colors.secondary} />
-              <Text
-                style={{
-                  fontFamily: fontFamilies.semibold,
-                  color: colors.secondary,
-                }}
-              >
-                Add exercise
-              </Text>
-            </Pressable>
-          </View>
-
-          {errors.exercises ? (
-            <Text style={{ color: "#ef4444", ...typography.caption }}>
-              {errors.exercises}
-            </Text>
-          ) : null}
-
-          {exercises.length === 0 ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderStyle: "dashed",
-                borderRadius: 12,
-                padding: 14,
-                backgroundColor: colors.surfaceMuted,
-              }}
-            >
-              <Text style={{ ...typography.title, color: colors.textPrimary }}>
-                No exercises yet
-              </Text>
-              <Text
-                style={{
-                  ...typography.caption,
-                  color: colors.textSecondary,
-                  marginTop: 4,
-                }}
-              >
-                Tap “Add exercise” to pull from ExerciseDB and preview GIFs.
-              </Text>
-            </View>
-          ) : (
-            exercises.map((exercise) => (
-              <View
-                key={exercise.exercise.id}
-                style={{
-                  backgroundColor: colors.surfaceMuted,
-                  borderRadius: 14,
-                  padding: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  gap: 10,
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      backgroundColor: colors.surface,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fontFamilies.semibold,
-                        color: colors.textPrimary,
-                        fontSize: 16,
-                      }}
-                    >
-                      {exercise.exercise.name.slice(0, 1)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{ ...typography.title, color: colors.textPrimary }}
-                    >
-                      {exercise.exercise.name}
-                    </Text>
-                    <Text
-                      style={{
-                        ...typography.caption,
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      {exercise.exercise.primaryMuscleGroup} •{" "}
-                      {exercise.exercise.equipment}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => handleRemoveExercise(exercise.exercise.id)}
-                    hitSlop={8}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                  >
-                    <Ionicons
-                      name='trash-outline'
-                      color={colors.textSecondary}
-                      size={20}
-                    />
-                  </Pressable>
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  <InlineNumberInput
-                    label='Sets'
-                    value={String(exercise.sets)}
-                    onChangeText={(val) =>
-                      updateExerciseField(exercise.exercise.id, "sets", val)
-                    }
-                  />
-                  <InlineNumberInput
-                    label='Reps'
-                    value={String(exercise.reps)}
-                    onChangeText={(val) =>
-                      updateExerciseField(exercise.exercise.id, "reps", val)
-                    }
-                  />
-                  <InlineNumberInput
-                    label='Rest (s)'
-                    value={
-                      exercise.restSeconds ? String(exercise.restSeconds) : ""
-                    }
-                    onChangeText={(val) =>
-                      updateExerciseField(
-                        exercise.exercise.id,
-                        "restSeconds",
-                        val
-                      )
-                    }
-                  />
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={{ gap: 12 }}>
-          <Pressable
-            onPress={save}
-            disabled={saving}
-            style={({ pressed }) => ({
-              backgroundColor: colors.primary,
-              paddingVertical: 16,
-              borderRadius: 14,
-              alignItems: "center",
-              opacity: pressed || saving ? 0.85 : 1,
-              shadowColor: colors.primary,
-              shadowOpacity: 0.25,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 6 },
-            })}
-          >
-            <Text
-              style={{
-                color: colors.surface,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 16,
-              }}
-            >
-              {saving ? "Saving..." : "Save workout"}
-            </Text>
-          </Pressable>
           <Pressable
             onPress={() => setPickerVisible(true)}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              paddingVertical: 14,
-              borderRadius: 14,
+              gap: 6,
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.secondary,
-              backgroundColor: colors.surface,
+              backgroundColor: colors.surfaceMuted,
               opacity: pressed ? 0.9 : 1,
-              gap: 8,
             })}
           >
-            <Ionicons
-              name='add-circle-outline'
-              size={20}
-              color={colors.secondary}
-            />
+            <Ionicons name="add" size={18} color={colors.secondary} />
             <Text
-              style={{
-                color: colors.secondary,
-                fontFamily: fontFamilies.semibold,
-              }}
+              style={{ fontFamily: fontFamilies.semibold, color: colors.secondary }}
             >
-              Add another exercise
+              Add exercise
             </Text>
           </Pressable>
         </View>
-      </View>
 
-      <ExercisePicker
-        visible={pickerVisible}
-        onClose={() => setPickerVisible(false)}
-        selected={exercises}
-        onAdd={handleAddExercise}
-        onRemove={handleRemoveExercise}
-      />
+        {errors.exercises ? (
+          <Text style={{ color: "#ef4444", ...typography.caption }}>
+            {errors.exercises}
+          </Text>
+        ) : null}
+
+        {exercises.length === 0 ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderStyle: "dashed",
+              borderRadius: 12,
+              padding: 14,
+              backgroundColor: colors.surfaceMuted,
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              No exercises yet
+            </Text>
+            <Text
+              style={{
+                ...typography.caption,
+                color: colors.textSecondary,
+                marginTop: 4,
+              }}
+            >
+              Tap “Add exercise” to pull from the GymBrain library with visuals.
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const footerComponent = (
+    <View style={{ gap: 12, paddingTop: 16, paddingBottom: 32 }}>
+      <Pressable
+        onPress={save}
+        disabled={saving}
+        style={({ pressed }) => ({
+          backgroundColor: colors.primary,
+          paddingVertical: 16,
+          borderRadius: 14,
+          alignItems: "center",
+          opacity: pressed || saving ? 0.85 : 1,
+          shadowColor: colors.primary,
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+        })}
+      >
+        <Text
+          style={{
+            color: colors.surface,
+            fontFamily: fontFamilies.semibold,
+            fontSize: 16,
+          }}
+        >
+          {saving ? "Saving..." : "Save workout"}
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => setPickerVisible(true)}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingVertical: 14,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.secondary,
+          backgroundColor: colors.surface,
+          opacity: pressed ? 0.9 : 1,
+          gap: 8,
+        })}
+      >
+        <Ionicons name="add-circle-outline" size={20} color={colors.secondary} />
+        <Text style={{ color: colors.secondary, fontFamily: fontFamilies.semibold }}>
+          Add another exercise
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderExerciseItem = ({
+    item,
+    drag,
+    isActive,
+  }: RenderItemParams<TemplateExerciseForm>) => {
+    const cardio = isCardioExercise(item.exercise);
+    return (
+      <View
+        style={{
+          backgroundColor: colors.surfaceMuted,
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: isActive ? colors.secondary : colors.border,
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <Pressable
+            onLongPress={drag}
+            style={({ pressed }) => ({
+              padding: 6,
+              borderRadius: 999,
+              backgroundColor: pressed ? colors.surface : "transparent",
+            })}
+          >
+            <Ionicons
+              name="reorder-three"
+              size={24}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              {item.exercise.name}
+            </Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              {item.exercise.primaryMuscleGroup} • {item.exercise.equipment}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => removeExerciseByFormId(item.formId)}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Ionicons name="trash-outline" color={colors.textSecondary} size={20} />
+          </Pressable>
+        </View>
+
+        {cardio ? (
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <InlineNumberInput
+              label="Incline"
+              value={item.incline ? String(item.incline) : ""}
+              onChangeText={(val) => updateExerciseField(item.formId, "incline", val)}
+              keyboardType="decimal-pad"
+            />
+            <InlineNumberInput
+              label="Duration (min)"
+              value={item.durationMinutes ? String(item.durationMinutes) : ""}
+              onChangeText={(val) =>
+                updateExerciseField(item.formId, "durationMinutes", val)
+              }
+              keyboardType="decimal-pad"
+            />
+            <InlineNumberInput
+              label="Distance (mi)"
+              value={item.distance ? String(item.distance) : ""}
+              onChangeText={(val) => updateExerciseField(item.formId, "distance", val)}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        ) : (
+          <>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <InlineNumberInput
+                label="Sets"
+                value={String(item.sets)}
+                onChangeText={(val) => updateExerciseField(item.formId, "sets", val)}
+              />
+              <InlineNumberInput
+                label="Reps"
+                value={String(item.reps)}
+                onChangeText={(val) => updateExerciseField(item.formId, "reps", val)}
+              />
+              <InlineNumberInput
+                label="Rest (s)"
+                value={item.restSeconds ? String(item.restSeconds) : ""}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "restSeconds", val)
+                }
+              />
+            </View>
+            <InlineNumberInput
+              label="Weight (lb)"
+              value={item.weight ? String(item.weight) : ""}
+              onChangeText={(val) => updateExerciseField(item.formId, "weight", val)}
+              keyboardType="decimal-pad"
+            />
+          </>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <ScreenContainer>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 32 : 0}
+      >
+        <DraggableFlatList
+          data={exercises}
+          keyExtractor={(item) => item.formId}
+          renderItem={renderExerciseItem}
+          onDragEnd={({ data }) => setExercises(data)}
+          ListHeaderComponent={headerComponent}
+          ListFooterComponent={footerComponent}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+        />
+
+        <ExercisePicker
+          visible={pickerVisible}
+          onClose={() => setPickerVisible(false)}
+          selected={exercises}
+          onAdd={handleAddExercise}
+          onRemove={removeExerciseByExerciseId}
+        />
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 };
@@ -574,19 +643,21 @@ type InlineNumberInputProps = {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
+  keyboardType?: KeyboardTypeOptions;
 };
 
 const InlineNumberInput = ({
   label,
   value,
   onChangeText,
+  keyboardType = "numeric",
 }: InlineNumberInputProps) => (
   <View style={{ flex: 1, gap: 6 }}>
     <Text style={{ ...typography.caption, color: colors.textSecondary }}>
       {label}
     </Text>
     <TextInput
-      keyboardType='numeric'
+      keyboardType={keyboardType}
       value={value}
       onChangeText={onChangeText}
       style={{
