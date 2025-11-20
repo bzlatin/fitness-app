@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useMemo, useState } from "react";
@@ -37,6 +37,8 @@ import {
   WorkoutTemplateExercise,
 } from "../types/workouts";
 import { isCardioExercise } from "../utils/exercises";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import { canCreateAnotherTemplate } from "../utils/featureGating";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -90,7 +92,9 @@ const mapPersistedExercise = (
 const WorkoutTemplateBuilderScreen = () => {
   const route = useRoute<RootRoute<"WorkoutTemplateBuilder">>();
   const navigation = useNavigation<Nav>();
+  const queryClient = useQueryClient();
   const { data: listData } = useWorkoutTemplates();
+  const { user } = useCurrentUser();
 
   const existingTemplate = useMemo(
     () => listData?.find((t) => t.id === route.params?.templateId),
@@ -135,6 +139,7 @@ const WorkoutTemplateBuilderScreen = () => {
   const createMutation = useMutation({
     mutationFn: createTemplate,
     onSuccess: (template) => {
+      queryClient.invalidateQueries({ queryKey: templatesKey });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
     onError: () => Alert.alert("Could not save template", "Please try again."),
@@ -161,8 +166,10 @@ const WorkoutTemplateBuilderScreen = () => {
         route.params!.templateId!,
         payload as unknown as Partial<WorkoutTemplate>
       ),
-    onSuccess: (template) =>
-      navigation.replace("WorkoutTemplateDetail", { templateId: template.id }),
+    onSuccess: (template) => {
+      queryClient.invalidateQueries({ queryKey: templatesKey });
+      navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
+    },
     onError: () =>
       Alert.alert("Could not update template", "Please try again."),
   });
@@ -242,6 +249,17 @@ const WorkoutTemplateBuilderScreen = () => {
     }
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
+
+    if (!isEditing) {
+      const templateCount = listData?.length ?? 0;
+      if (!canCreateAnotherTemplate(user, templateCount)) {
+        Alert.alert(
+          "Free limit reached",
+          "You’ve reached the free template limit. Upgrades coming soon."
+        );
+        return;
+      }
+    }
 
     const parseDecimal = (input?: string) => {
       if (input === undefined) return undefined;

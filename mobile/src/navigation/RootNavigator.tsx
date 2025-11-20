@@ -4,13 +4,15 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
-import TodayScreen from "../screens/TodayScreen";
-import MyWorkoutsScreen from "../screens/MyWorkoutsScreen";
 import HistoryScreen from "../screens/HistoryScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import WorkoutTemplateDetailScreen from "../screens/WorkoutTemplateDetailScreen";
 import WorkoutTemplateBuilderScreen from "../screens/WorkoutTemplateBuilderScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
+import SquadScreen from "../screens/SquadScreen";
+import ProfileScreen from "../screens/ProfileScreen";
+import PostWorkoutShareScreen from "../screens/PostWorkoutShareScreen";
+import HomeScreen from "../screens/HomeScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -20,10 +22,10 @@ const tabIconMap: Record<
   keyof RootTabParamList,
   { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }
 > = {
-  Today: { focused: "calendar", unfocused: "calendar-outline" },
-  MyWorkouts: { focused: "barbell", unfocused: "barbell-outline" },
+  Home: { focused: "barbell", unfocused: "barbell-outline" },
+  Squad: { focused: "people", unfocused: "people-outline" },
   History: { focused: "time", unfocused: "time-outline" },
-  Settings: { focused: "settings", unfocused: "settings-outline" },
+  Settings: { focused: "person", unfocused: "person-outline" },
 };
 
 const RootTabs = () => (
@@ -50,14 +52,14 @@ const RootTabs = () => (
     })}
   >
     <Tab.Screen
-      name="Today"
-      component={TodayScreen}
-      options={{ tabBarLabel: "Today" }}
+      name="Home"
+      component={HomeScreen}
+      options={{ tabBarLabel: "Workout" }}
     />
     <Tab.Screen
-      name="MyWorkouts"
-      component={MyWorkoutsScreen}
-      options={{ tabBarLabel: "My Workouts" }}
+      name="Squad"
+      component={SquadScreen}
+      options={{ tabBarLabel: "Squad" }}
     />
     <Tab.Screen
       name="History"
@@ -67,7 +69,7 @@ const RootTabs = () => (
     <Tab.Screen
       name="Settings"
       component={SettingsScreen}
-      options={{ tabBarLabel: "Settings" }}
+      options={{ tabBarLabel: "Profile" }}
     />
   </Tab.Navigator>
 );
@@ -90,7 +92,7 @@ const RootNavigator = () => (
     <Stack.Screen
       name="WorkoutTemplateDetail"
       component={WorkoutTemplateDetailScreen}
-      options={{ title: "Template" }}
+      options={{ title: "Workout" }}
     />
     <Stack.Screen
       name="WorkoutTemplateBuilder"
@@ -100,7 +102,17 @@ const RootNavigator = () => (
     <Stack.Screen
       name="WorkoutSession"
       component={WorkoutSessionScreen}
-      options={{ title: "Workout Session" }}
+      options={{ title: "Workout Session", headerShown: false }}
+    />
+    <Stack.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={{ title: "Profile" }}
+    />
+    <Stack.Screen
+      name="PostWorkoutShare"
+      component={PostWorkoutShareScreen}
+      options={{ title: "Share Workout" }}
     />
   </Stack.Navigator>
 );

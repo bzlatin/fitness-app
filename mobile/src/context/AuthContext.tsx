@@ -9,7 +9,7 @@ import {
 } from "react";
 import * as AuthSession from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
-import { setAuthTokenProvider } from "../api/client";
+import { setAuthErrorHandler, setAuthTokenProvider } from "../api/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -18,6 +18,8 @@ const AUTH0_DOMAIN = process.env.EXPO_PUBLIC_AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID;
 const AUTH0_AUDIENCE = process.env.EXPO_PUBLIC_AUTH0_AUDIENCE;
 const AUTH0_SCHEME = process.env.EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME || "push-pull";
+const TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiry
+const TOKEN_EXPIRY_GRACE_MS = 5 * 1000;
 
 if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
   throw new Error("Missing Auth0 configuration. Please set EXPO_PUBLIC_AUTH0_DOMAIN and EXPO_PUBLIC_AUTH0_CLIENT_ID.");
@@ -78,11 +80,28 @@ const persistTokens = async (tokens: AuthTokens | null) => {
   }
 };
 
+const isTokenExpired = (expiresAt?: number) =>
+  !expiresAt || expiresAt <= Date.now() + TOKEN_EXPIRY_GRACE_MS;
+
+const buildAuthTokens = (
+  tokenResponse: AuthSession.TokenResponse,
+  fallbackRefreshToken?: string
+): AuthTokens => {
+  const expiresAt = Date.now() + (tokenResponse.expiresIn ?? 3600) * 1000;
+  return {
+    accessToken: tokenResponse.accessToken,
+    idToken: tokenResponse.idToken ?? undefined,
+    refreshToken: tokenResponse.refreshToken ?? fallbackRefreshToken ?? undefined,
+    expiresAt,
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const discovery = AuthSession.useAutoDiscovery(`https://${AUTH0_DOMAIN}`);
 
@@ -105,27 +124,134 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     discovery
   );
 
-  useEffect(() => {
-    loadStoredTokens()
-      .then((stored) => {
-        if (stored) {
-          setTokens(stored);
+  const refreshTokens = useCallback(
+    async (current: AuthTokens) => {
+      if (!discovery) {
+        throw new Error("Auth0 discovery document not ready for refresh.");
+      }
+      if (isRefreshing) {
+        return current;
+      }
+      if (!current.refreshToken) {
+        setTokens(null);
+        await persistTokens(null);
+        setError("Session expired. Please sign in again.");
+        throw new Error("No refresh token available");
+      }
+
+      setIsRefreshing(true);
+      try {
+        const refreshed = await AuthSession.refreshAsync(
+          {
+            clientId: AUTH0_CLIENT_ID,
+            refreshToken: current.refreshToken,
+            extraParams: AUTH0_AUDIENCE
+              ? {
+                  audience: AUTH0_AUDIENCE,
+                }
+              : undefined,
+          },
+          discovery
+        );
+
+        if (!refreshed.accessToken) {
+          throw new Error("Auth0 refresh did not return an access token.");
         }
-      })
-      .finally(() => setIsInitializing(false));
-  }, []);
+
+        const nextTokens = buildAuthTokens(refreshed, current.refreshToken);
+        setTokens(nextTokens);
+        setAuthTokenProvider(() => nextTokens.accessToken);
+        await persistTokens(nextTokens);
+        setError(null);
+        return nextTokens;
+      } catch (err) {
+        console.error("Failed to refresh Auth0 tokens", err);
+        setTokens(null);
+        await persistTokens(null);
+        setError("Session expired. Please sign in again.");
+        throw err;
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [discovery, isRefreshing]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    const bootstrap = async () => {
+      try {
+        const stored = await loadStoredTokens();
+        if (!isMounted || !stored) return;
+        if (isTokenExpired(stored.expiresAt)) {
+          if (discovery) {
+            try {
+              await refreshTokens(stored);
+            } catch {
+              // refreshTokens already cleared state on failure
+            }
+          } else {
+            setTokens(null);
+            await persistTokens(null);
+            setError("Session expired. Please sign in again.");
+          }
+        } else {
+          setTokens(stored);
+          setAuthTokenProvider(() => stored.accessToken);
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
+    };
+    void bootstrap();
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTokens, discovery]);
 
   useEffect(() => {
     const token = tokens?.accessToken ?? null;
-    if (token) {
+    if (token && !isTokenExpired(tokens?.expiresAt)) {
       setAuthTokenProvider(() => token);
     } else {
       setAuthTokenProvider(null);
     }
-    return () => {
-      setAuthTokenProvider(null);
-    };
-  }, [tokens?.accessToken]);
+  }, [tokens?.accessToken, tokens?.expiresAt]);
+
+  const invalidateSession = useCallback(async () => {
+    setTokens(null);
+    await persistTokens(null);
+    setAuthTokenProvider(null);
+    setError("Session expired. Please sign in again.");
+  }, []);
+
+  useEffect(() => {
+    setAuthErrorHandler(() => {
+      void invalidateSession();
+    });
+    return () => setAuthErrorHandler(null);
+  }, [invalidateSession]);
+
+  useEffect(() => {
+    if (
+      !tokens ||
+      !tokens.refreshToken ||
+      isTokenExpired(tokens.expiresAt) ||
+      !discovery
+    ) {
+      return;
+    }
+
+    const msUntilRefresh = tokens.expiresAt - Date.now() - TOKEN_REFRESH_BUFFER_MS;
+    const timeoutMs = Math.max(msUntilRefresh, 0);
+    const timer = setTimeout(() => {
+      void refreshTokens(tokens);
+    }, timeoutMs);
+
+    return () => clearTimeout(timer);
+  }, [tokens?.accessToken, tokens?.expiresAt, tokens?.refreshToken, discovery, refreshTokens]);
 
   useEffect(() => {
     const completeAuth = async () => {
@@ -157,16 +283,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw new Error("Auth0 response did not include an access token.");
         }
 
-        const expiresAt = Date.now() + (tokenResponse.expiresIn ?? 3600) * 1000;
-
-        const nextTokens: AuthTokens = {
-          accessToken: tokenResponse.accessToken,
-          idToken: tokenResponse.idToken ?? undefined,
-          refreshToken: tokenResponse.refreshToken ?? undefined,
-          expiresAt,
-        };
-
+        const nextTokens = buildAuthTokens(tokenResponse);
+        console.log("Auth0 access token (debug)", tokenResponse.accessToken);
         setTokens(nextTokens);
+        setAuthTokenProvider(() => nextTokens.accessToken);
         await persistTokens(nextTokens);
         setError(null);
       } catch (err) {
@@ -219,16 +339,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const isSessionActive =
+    Boolean(tokens?.accessToken) && !isTokenExpired(tokens?.expiresAt);
+
   const value = useMemo<AuthContextValue>(
     () => ({
-      isAuthenticated: Boolean(tokens?.accessToken),
+      isAuthenticated: isSessionActive,
       isLoading: isInitializing,
       isAuthorizing,
       login,
       logout,
       error,
     }),
-    [tokens?.accessToken, isInitializing, isAuthorizing, login, logout, error]
+    [isSessionActive, isInitializing, isAuthorizing, login, logout, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

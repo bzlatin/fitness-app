@@ -65,6 +65,8 @@ export interface WorkoutSet {
   sessionId: string;
   templateExerciseId?: string;
   exerciseId: string;
+  exerciseName?: string;
+  exerciseImageUrl?: string;
   setIndex: number;
   targetReps?: number;
   targetWeight?: number;
@@ -77,6 +79,7 @@ export interface WorkoutSession {
   id: string;
   userId: string;
   templateId?: string;
+  templateName?: string;
   startedAt: string;
   finishedAt?: string;
   sets: WorkoutSet[];
