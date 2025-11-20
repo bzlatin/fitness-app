@@ -1,24 +1,146 @@
 import { Router } from "express";
+import { PoolClient } from "pg";
 import { generateId } from "../utils/id";
-import { templates as templateStore } from "../data/templates";
 import { DEMO_USER_ID, WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
+import { pool, query } from "../db";
 
 const router = Router();
 
-const findTemplate = (id: string) =>
-  templateStore.find((t) => t.id === id);
+type TemplateRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  split_type: string | null;
+  is_favorite: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
-router.get("/", (_req, res) => {
-  const templates = templateStore.filter((t) => t.userId === DEMO_USER_ID);
-  res.json(templates);
+type ExerciseRow = {
+  id: string;
+  template_id: string;
+  order_index: number;
+  exercise_id: string;
+  default_sets: number;
+  default_reps: number;
+  default_rest_seconds: number | null;
+  default_weight: string | null;
+  default_incline: string | null;
+  default_distance: string | null;
+  default_duration_minutes: string | null;
+  notes: string | null;
+};
+
+const numberOrUndefined = (value: string | number | null) =>
+  value === null || value === undefined ? undefined : Number(value);
+
+const mapExercise = (row: ExerciseRow): WorkoutTemplateExercise => ({
+  id: row.id,
+  exerciseId: row.exercise_id,
+  orderIndex: row.order_index,
+  defaultSets: row.default_sets,
+  defaultReps: row.default_reps,
+  defaultRestSeconds: row.default_rest_seconds ?? undefined,
+  defaultWeight: numberOrUndefined(row.default_weight),
+  defaultIncline: numberOrUndefined(row.default_incline),
+  defaultDistance: numberOrUndefined(row.default_distance),
+  defaultDurationMinutes: numberOrUndefined(row.default_duration_minutes),
+  notes: row.notes ?? undefined,
 });
 
-router.get("/:id", (req, res) => {
-  const template = findTemplate(req.params.id);
-  if (!template) {
-    return res.status(404).json({ error: "Template not found" });
+const mapTemplate = (
+  row: TemplateRow,
+  exerciseRows: ExerciseRow[]
+): WorkoutTemplate => ({
+  id: row.id,
+  userId: row.user_id,
+  name: row.name,
+  description: row.description ?? undefined,
+  splitType: (row.split_type as WorkoutTemplate["splitType"]) ?? undefined,
+  isFavorite: row.is_favorite,
+  exercises: exerciseRows
+    .filter((ex) => ex.template_id === row.id)
+    .sort((a, b) => a.order_index - b.order_index)
+    .map(mapExercise),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const buildTemplates = async (templateRows: TemplateRow[]) => {
+  if (templateRows.length === 0) return [];
+  const templateIds = templateRows.map((row) => row.id);
+  const exerciseRowsResult = await query<ExerciseRow>(
+    `SELECT *
+     FROM workout_template_exercises
+     WHERE template_id = ANY($1::text[])
+     ORDER BY order_index ASC`,
+    [templateIds]
+  );
+  return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows));
+};
+
+const fetchTemplates = async (): Promise<WorkoutTemplate[]> => {
+  const templateRowsResult = await query<TemplateRow>(
+    `SELECT *
+     FROM workout_templates
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [DEMO_USER_ID]
+  );
+  return buildTemplates(templateRowsResult.rows);
+};
+
+const fetchTemplateById = async (
+  templateId: string
+): Promise<WorkoutTemplate | null> => {
+  const templateRowsResult = await query<TemplateRow>(
+    `SELECT *
+     FROM workout_templates
+     WHERE user_id = $1 AND id = $2
+     LIMIT 1`,
+    [DEMO_USER_ID, templateId]
+  );
+  const templates = await buildTemplates(templateRowsResult.rows);
+  return templates[0] ?? null;
+};
+
+const withTransaction = async <T>(fn: (client: PoolClient) => Promise<T>) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
   }
-  return res.json(template);
+};
+
+router.get("/", async (_req, res) => {
+  try {
+    const templates = await fetchTemplates();
+    res.json(templates);
+  } catch (err) {
+    console.error("Failed to fetch templates", err);
+    res.status(500).json({ error: "Failed to fetch templates" });
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  try {
+    const template = await fetchTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    return res.json(template);
+  } catch (err) {
+    console.error("Failed to fetch template", err);
+    return res.status(500).json({ error: "Failed to fetch template" });
+  }
 });
 
 router.post("/", (req, res) => {
@@ -46,44 +168,69 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "At least one exercise required" });
   }
 
-  const createdAt = new Date().toISOString();
-  const exerciseEntries: WorkoutTemplateExercise[] = exercises.map(
-    (ex, idx) => ({
-      id: generateId(),
-      exerciseId: ex.exerciseId,
-      orderIndex: idx,
-      defaultSets: ex.defaultSets,
-      defaultReps: ex.defaultReps,
-      defaultRestSeconds: ex.defaultRestSeconds,
-      defaultWeight: ex.defaultWeight,
-      defaultIncline: ex.defaultIncline,
-      defaultDistance: ex.defaultDistance,
-      defaultDurationMinutes: ex.defaultDurationMinutes,
-      notes: ex.notes,
-    })
-  );
+  withTransaction(async (client) => {
+    const templateId = generateId();
+    const now = new Date().toISOString();
 
-  const template: WorkoutTemplate = {
-    id: generateId(),
-    userId: DEMO_USER_ID,
-    name: name.trim(),
-    description,
-    splitType,
-    isFavorite: false,
-    exercises: exerciseEntries,
-    createdAt,
-    updatedAt: createdAt,
-  };
+    const templateRow = (
+      await client.query<TemplateRow>(
+        `INSERT INTO workout_templates
+          (id, user_id, name, description, split_type, is_favorite, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, false, $6, $6)
+         RETURNING *`,
+        [
+          templateId,
+          DEMO_USER_ID,
+          name.trim(),
+          description ?? null,
+          splitType ?? null,
+          now,
+        ]
+      )
+    ).rows[0];
 
-  templateStore.push(template);
-  return res.status(201).json(template);
+    for (let index = 0; index < exercises.length; index += 1) {
+      const ex = exercises[index];
+      await client.query(
+        `INSERT INTO workout_template_exercises
+          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+            default_weight, default_incline, default_distance, default_duration_minutes, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          generateId(),
+          templateId,
+          index,
+          ex.exerciseId,
+          ex.defaultSets,
+          ex.defaultReps,
+          ex.defaultRestSeconds ?? null,
+          ex.defaultWeight ?? null,
+          ex.defaultIncline ?? null,
+          ex.defaultDistance ?? null,
+          ex.defaultDurationMinutes ?? null,
+          ex.notes ?? null,
+        ]
+      );
+    }
+
+    const exercisesRows = (
+      await client.query<ExerciseRow>(
+        `SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`,
+        [templateId]
+      )
+    ).rows;
+
+    return mapTemplate(templateRow, exercisesRows);
+  })
+    .then((template) => res.status(201).json(template))
+    .catch((err) => {
+      console.error("Failed to create template", err);
+      res.status(500).json({ error: "Failed to create template" });
+    });
 });
 
 router.put("/:id", (req, res) => {
-  const template = findTemplate(req.params.id);
-  if (!template) {
-    return res.status(404).json({ error: "Template not found" });
-  }
+  const templateId = req.params.id;
 
   const { name, description, splitType, isFavorite, exercises } = req.body as Partial<
     WorkoutTemplate
@@ -108,56 +255,165 @@ router.put("/:id", (req, res) => {
     return res.status(400).json({ error: "At least one exercise required" });
   }
 
-  if (name) template.name = name.trim();
-  if (description !== undefined) template.description = description;
-  if (splitType !== undefined) template.splitType = splitType;
-  if (isFavorite !== undefined) template.isFavorite = isFavorite;
+  withTransaction(async (client) => {
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 3;
 
-  if (exercises) {
-    template.exercises = exercises.map((ex, idx) => ({
-      id: generateId(),
-      exerciseId: ex.exerciseId,
-      orderIndex: idx,
-      defaultSets: ex.defaultSets,
-      defaultReps: ex.defaultReps,
-      defaultRestSeconds: ex.defaultRestSeconds,
-      defaultWeight: ex.defaultWeight,
-      defaultIncline: ex.defaultIncline,
-      defaultDistance: ex.defaultDistance,
-      defaultDurationMinutes: ex.defaultDurationMinutes,
-      notes: ex.notes,
-    }));
-  }
+    if (name !== undefined) {
+      updates.push(`name = $${idx}`);
+      values.push(name.trim());
+      idx += 1;
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${idx}`);
+      values.push(description ?? null);
+      idx += 1;
+    }
+    if (splitType !== undefined) {
+      updates.push(`split_type = $${idx}`);
+      values.push(splitType ?? null);
+      idx += 1;
+    }
+    if (isFavorite !== undefined) {
+      updates.push(`is_favorite = $${idx}`);
+      values.push(isFavorite);
+      idx += 1;
+    }
 
-  template.updatedAt = new Date().toISOString();
+    updates.push(`updated_at = NOW()`);
 
-  return res.json(template);
+    const updateQuery = `
+      UPDATE workout_templates
+      SET ${updates.join(", ")}
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+    `;
+
+    const templateResult = await client.query<TemplateRow>(
+      updateQuery,
+      [templateId, DEMO_USER_ID, ...values]
+    );
+
+    if (templateResult.rowCount === 0) {
+      throw new Error("NOT_FOUND");
+    }
+
+    if (exercises) {
+      await client.query(
+        `DELETE FROM workout_template_exercises WHERE template_id = $1`,
+        [templateId]
+      );
+
+      for (let index = 0; index < exercises.length; index += 1) {
+        const ex = exercises[index];
+        await client.query(
+          `INSERT INTO workout_template_exercises
+            (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+              default_weight, default_incline, default_distance, default_duration_minutes, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            generateId(),
+            templateId,
+            index,
+            ex.exerciseId,
+            ex.defaultSets,
+            ex.defaultReps,
+            ex.defaultRestSeconds ?? null,
+            ex.defaultWeight ?? null,
+            ex.defaultIncline ?? null,
+            ex.defaultDistance ?? null,
+            ex.defaultDurationMinutes ?? null,
+            ex.notes ?? null,
+          ]
+        );
+      }
+    }
+
+    const exercisesRows = (
+      await client.query<ExerciseRow>(
+        `SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`,
+        [templateId]
+      )
+    ).rows;
+
+    return mapTemplate(templateResult.rows[0], exercisesRows);
+  })
+    .then((template) => res.json(template))
+    .catch((err) => {
+      if ((err as Error).message === "NOT_FOUND") {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      console.error("Failed to update template", err);
+      return res.status(500).json({ error: "Failed to update template" });
+    });
 });
 
-router.post("/:id/duplicate", (req, res) => {
-  const existing = findTemplate(req.params.id);
-  if (!existing) {
+router.post("/:id/duplicate", async (req, res) => {
+  const original = await fetchTemplateById(req.params.id);
+  if (!original) {
     return res.status(404).json({ error: "Template not found" });
   }
 
-  const createdAt = new Date().toISOString();
-  const duplicatedExercises = existing.exercises.map((ex) => ({
-    ...ex,
-    id: generateId(),
-  }));
+  withTransaction(async (client) => {
+    const templateId = generateId();
+    const now = new Date().toISOString();
 
-  const duplicate: WorkoutTemplate = {
-    ...existing,
-    id: generateId(),
-    name: `${existing.name} (Copy)`,
-    isFavorite: false,
-    exercises: duplicatedExercises,
-    createdAt,
-    updatedAt: createdAt,
-  };
+    const templateRow = (
+      await client.query<TemplateRow>(
+        `INSERT INTO workout_templates
+          (id, user_id, name, description, split_type, is_favorite, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, false, $6, $6)
+         RETURNING *`,
+        [
+          templateId,
+          DEMO_USER_ID,
+          `${original.name} (Copy)`,
+          original.description ?? null,
+          original.splitType ?? null,
+          now,
+        ]
+      )
+    ).rows[0];
 
-  templateStore.push(duplicate);
-  return res.status(201).json(duplicate);
+    for (let index = 0; index < original.exercises.length; index += 1) {
+      const ex = original.exercises[index];
+      await client.query(
+        `INSERT INTO workout_template_exercises
+          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+            default_weight, default_incline, default_distance, default_duration_minutes, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          generateId(),
+          templateId,
+          index,
+          ex.exerciseId,
+          ex.defaultSets,
+          ex.defaultReps,
+          ex.defaultRestSeconds ?? null,
+          ex.defaultWeight ?? null,
+          ex.defaultIncline ?? null,
+          ex.defaultDistance ?? null,
+          ex.defaultDurationMinutes ?? null,
+          ex.notes ?? null,
+        ]
+      );
+    }
+
+    const exercisesRows = (
+      await client.query<ExerciseRow>(
+        `SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`,
+        [templateId]
+      )
+    ).rows;
+
+    return mapTemplate(templateRow, exercisesRows);
+  })
+    .then((duplicate) => res.status(201).json(duplicate))
+    .catch((err) => {
+      console.error("Failed to duplicate template", err);
+      res.status(500).json({ error: "Failed to duplicate template" });
+    });
 });
 
 export default router;
