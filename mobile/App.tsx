@@ -101,8 +101,10 @@ const App = () => {
 export default App;
 
 const OnboardingGate = ({ children }: { children: ReactNode }) => {
-  const { isOnboarded, isLoading } = useCurrentUser();
-  if (isLoading) {
+  const { isOnboarded, isLoading, user } = useCurrentUser();
+
+  // Only block the UI while we haven't loaded a user yet.
+  if (isLoading && !user) {
     return (
       <View
         style={{
@@ -116,6 +118,7 @@ const OnboardingGate = ({ children }: { children: ReactNode }) => {
       </View>
     );
   }
+
   if (!isOnboarded) {
     return <OnboardingScreen />;
   }

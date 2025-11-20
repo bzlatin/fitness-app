@@ -55,7 +55,10 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+    const shouldBlock = !user;
+    if (shouldBlock) {
+      setIsLoading(true);
+    }
     try {
       const profile = await getCurrentUserProfile();
       await persist(profile as UserProfile);
@@ -66,7 +69,9 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.warn("Failed to sync profile", err);
     } finally {
-      setIsLoading(false);
+      if (shouldBlock) {
+        setIsLoading(false);
+      }
     }
   };
 

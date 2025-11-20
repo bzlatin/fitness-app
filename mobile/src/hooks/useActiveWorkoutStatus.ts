@@ -37,49 +37,51 @@ export const useActiveWorkoutStatus = ({
   const clearStatusMutation = useMutation({
     mutationFn: clearActiveWorkoutStatus,
   });
+  const setStatus = setStatusMutation.mutate;
+  const clearStatus = clearStatusMutation.mutate;
 
   useEffect(() => {
     if (!sessionId || hasInitialized.current) return;
-    setStatusMutation.mutate({
+    setStatus({
       sessionId,
       templateId,
       templateName,
       visibility,
     });
     hasInitialized.current = true;
-  }, [sessionId, templateId, templateName, visibility, setStatusMutation]);
+  }, [sessionId, templateId, templateName, visibility, setStatus]);
 
   useEffect(() => {
     if (!sessionId || !hasInitialized.current) return;
     if (templateName && templateName !== lastTemplateName.current) {
       lastTemplateName.current = templateName;
-      setStatusMutation.mutate({
+      setStatus({
         sessionId,
         templateId,
         templateName,
         visibility,
       });
     }
-  }, [sessionId, templateId, templateName, setStatusMutation]);
+  }, [sessionId, templateId, templateName, setStatus, visibility]);
 
   const setVisibility = useCallback(
     (next: Visibility) => {
       setVisibilityState(next);
       if (!sessionId) return;
-      setStatusMutation.mutate({
+      setStatus({
         sessionId,
         templateId,
         templateName,
         visibility: next,
       });
     },
-    [sessionId, templateId, templateName, setStatusMutation]
+    [sessionId, templateId, templateName, setStatus]
   );
 
   const endActiveStatus = useCallback(() => {
     if (!sessionId) return;
-    clearStatusMutation.mutate(sessionId);
-  }, [sessionId, clearStatusMutation]);
+    clearStatus(sessionId);
+  }, [sessionId, clearStatus]);
 
   const isUpdating = useMemo(
     () => setStatusMutation.isPending || clearStatusMutation.isPending,
@@ -89,10 +91,10 @@ export const useActiveWorkoutStatus = ({
   useEffect(
     () => () => {
       if (sessionId) {
-        clearStatusMutation.mutate(sessionId);
+        clearStatus(sessionId);
       }
     },
-    [sessionId, clearStatusMutation]
+    [sessionId, clearStatus]
   );
 
   return {
