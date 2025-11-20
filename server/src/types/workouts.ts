@@ -24,6 +24,7 @@ export interface Exercise {
   name: string;
   primaryMuscleGroup: MuscleGroup;
   equipment: EquipmentType;
+  gifUrl?: string;
 }
 
 export interface WorkoutTemplateExercise {

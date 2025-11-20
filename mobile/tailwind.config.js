@@ -3,6 +3,10 @@ module.exports = {
   content: ["./App.{js,jsx,ts,tsx}", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["SpaceGrotesk-Regular", "System"],
+        display: ["SpaceGrotesk-SemiBold", "System"],
+      },
       colors: {
         background: "#050816",
         surface: {

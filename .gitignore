@@ -21,3 +21,8 @@ pnpm-lock.yaml
 *.orig
 Thumbs.db
 *.tsbuildinfo
+.env
+.env.local
+.env.*.local
+server/.env
+mobile/.env

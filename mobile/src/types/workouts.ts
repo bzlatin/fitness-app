@@ -54,4 +54,13 @@ export interface Exercise {
   name: string;
   primaryMuscleGroup: string;
   equipment: string;
+  gifUrl?: string;
 }
+
+export type TemplateExerciseForm = {
+  exercise: Exercise;
+  sets: number;
+  reps: number;
+  restSeconds?: number;
+  notes?: string;
+};

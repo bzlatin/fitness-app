@@ -1,8 +1,9 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { NavigationProp, RouteProp } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../theme/colors";
+import { fontFamilies } from "../theme/typography";
 import TodayScreen from "../screens/TodayScreen";
 import MyWorkoutsScreen from "../screens/MyWorkoutsScreen";
 import HistoryScreen from "../screens/HistoryScreen";
@@ -15,64 +16,58 @@ import { RootStackParamList, RootTabParamList } from "./types";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-const TabLabel = ({ text, focused }: { text: string; focused: boolean }) => (
-  <View>
-    <Text
-      style={{
-        color: focused ? colors.primary : colors.textSecondary,
-        fontWeight: focused ? "700" : "500",
-      }}
-    >
-      {text}
-    </Text>
-  </View>
-);
+const tabIconMap: Record<
+  keyof RootTabParamList,
+  { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }
+> = {
+  Today: { focused: "calendar", unfocused: "calendar-outline" },
+  MyWorkouts: { focused: "barbell", unfocused: "barbell-outline" },
+  History: { focused: "time", unfocused: "time-outline" },
+  Settings: { focused: "settings", unfocused: "settings-outline" },
+};
 
 const RootTabs = () => (
   <Tab.Navigator
-    screenOptions={{
+    screenOptions={({ route }) => ({
       headerShown: false,
       tabBarStyle: {
-        backgroundColor: colors.surfaceMuted,
+        backgroundColor: colors.surface,
         borderTopColor: colors.border,
+        height: 70,
+        paddingTop: 8,
       },
       tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.textSecondary,
-    }}
+      tabBarInactiveTintColor: "#6B7280",
+      tabBarLabelStyle: {
+        fontFamily: fontFamilies.medium,
+        fontSize: 12,
+      },
+      tabBarIcon: ({ color, size, focused }) => {
+        const config = tabIconMap[route.name as keyof RootTabParamList];
+        const iconName = focused ? config.focused : config.unfocused;
+        return <Ionicons name={iconName} size={size + 2} color={color} />;
+      },
+    })}
   >
     <Tab.Screen
       name="Today"
       component={TodayScreen}
-      options={{
-        tabBarLabel: ({ focused }) => <TabLabel text="Today" focused={focused} />,
-      }}
+      options={{ tabBarLabel: "Today" }}
     />
     <Tab.Screen
       name="MyWorkouts"
       component={MyWorkoutsScreen}
-      options={{
-        tabBarLabel: ({ focused }) => (
-          <TabLabel text="My Workouts" focused={focused} />
-        ),
-      }}
+      options={{ tabBarLabel: "My Workouts" }}
     />
     <Tab.Screen
       name="History"
       component={HistoryScreen}
-      options={{
-        tabBarLabel: ({ focused }) => (
-          <TabLabel text="History" focused={focused} />
-        ),
-      }}
+      options={{ tabBarLabel: "History" }}
     />
     <Tab.Screen
       name="Settings"
       component={SettingsScreen}
-      options={{
-        tabBarLabel: ({ focused }) => (
-          <TabLabel text="Settings" focused={focused} />
-        ),
-      }}
+      options={{ tabBarLabel: "Settings" }}
     />
   </Tab.Navigator>
 );
@@ -83,6 +78,7 @@ const RootNavigator = () => (
       headerStyle: { backgroundColor: colors.surfaceMuted },
       headerTintColor: colors.textPrimary,
       contentStyle: { backgroundColor: colors.background },
+      headerTitleStyle: { fontFamily: fontFamilies.semibold },
     }}
   >
     <Stack.Screen
