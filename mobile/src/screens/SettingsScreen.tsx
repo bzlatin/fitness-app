@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Text, TouchableOpacity, View, Pressable, TextInput, Alert, Modal, Image, Switch, ActivityIndicator, Linking } from "react-native";
+import {
+  Text,
+  TouchableOpacity,
+  View,
+  Pressable,
+  TextInput,
+  Alert,
+  Modal,
+  Image,
+  Switch,
+  ActivityIndicator,
+  Linking,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -12,14 +24,19 @@ import { getConnections } from "../api/social";
 
 const SettingsScreen = () => {
   const { logout, isAuthorizing } = useAuth();
-  const { user, updateProfile, deleteAccount, refresh, isLoading } = useCurrentUser();
+  const { user, updateProfile, deleteAccount, refresh, isLoading } =
+    useCurrentUser();
   const [draftName, setDraftName] = useState(user?.name ?? "");
   const [draftHandle, setDraftHandle] = useState(user?.handle ?? "");
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
   const [draftTraining, setDraftTraining] = useState(user?.trainingStyle ?? "");
   const [draftGym, setDraftGym] = useState(user?.gymName ?? "");
-  const [showGym, setShowGym] = useState((user?.gymVisibility ?? "hidden") === "shown");
-  const [avatarUri, setAvatarUri] = useState<string | undefined>(user?.avatarUrl);
+  const [showGym, setShowGym] = useState(
+    (user?.gymVisibility ?? "hidden") === "shown"
+  );
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(
+    user?.avatarUrl
+  );
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,7 +53,16 @@ const SettingsScreen = () => {
       setAvatarUri(user.avatarUrl ?? undefined);
       setIsEditing(false);
     }
-  }, [user?.id, user?.name, user?.handle, user?.bio, user?.trainingStyle, user?.gymName, user?.gymVisibility, user?.avatarUrl]);
+  }, [
+    user?.id,
+    user?.name,
+    user?.handle,
+    user?.bio,
+    user?.trainingStyle,
+    user?.gymName,
+    user?.gymVisibility,
+    user?.avatarUrl,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,23 +83,31 @@ const SettingsScreen = () => {
   if (!user || isLoading) {
     return (
       <ScreenContainer>
-        <Text style={{ color: colors.textSecondary, marginTop: 20 }}>Loading profile…</Text>
+        <Text style={{ color: colors.textSecondary, marginTop: 20 }}>
+          Loading profile…
+        </Text>
       </ScreenContainer>
     );
   }
 
   const ensurePhotoPermission = async () => {
     const existing = await ImagePicker.getMediaLibraryPermissionsAsync();
-    if (existing.granted || existing.accessPrivileges === "limited") return true;
+    if (existing.granted || existing.accessPrivileges === "limited")
+      return true;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.granted || permission.accessPrivileges === "limited") return true;
-    Alert.alert("Permission needed", "Enable photo access to add a profile picture.", [
-      {
-        text: "Open settings",
-        onPress: () => Linking.openSettings(),
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    if (permission.granted || permission.accessPrivileges === "limited")
+      return true;
+    Alert.alert(
+      "Permission needed",
+      "Enable photo access to add a profile picture.",
+      [
+        {
+          text: "Open settings",
+          onPress: () => Linking.openSettings(),
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
     return false;
   };
 
@@ -84,16 +118,23 @@ const SettingsScreen = () => {
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
         quality: 0.85,
-        presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
+        presentationStyle:
+          ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
       if (!result.canceled && result.assets?.length) {
         setAvatarUri(result.assets[0]?.uri);
       } else if (result.canceled) {
-        Alert.alert("No photo selected", "Choose a photo to update your profile.");
+        Alert.alert(
+          "No photo selected",
+          "Choose a photo to update your profile."
+        );
       }
     } catch (err) {
       console.warn("Image picker failed", err);
-      Alert.alert("Could not open photos", "Please try again or reopen app permissions.");
+      Alert.alert(
+        "Could not open photos",
+        "Please try again or reopen app permissions."
+      );
     }
   };
 
@@ -126,7 +167,13 @@ const SettingsScreen = () => {
     <ScreenContainer scroll>
       <View style={{ marginTop: 16, gap: 16 }}>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 24,
+              fontWeight: "700",
+            }}
+          >
             Profile
           </Text>
           <Text style={{ color: colors.textSecondary }}>
@@ -171,7 +218,13 @@ const SettingsScreen = () => {
                     borderColor: colors.border,
                   }}
                 >
-                  <Text style={{ color: colors.textSecondary, fontSize: 22, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 22,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     {user.name?.[0]?.toUpperCase() ?? "?"}
                   </Text>
                 </View>
@@ -190,18 +243,31 @@ const SettingsScreen = () => {
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     {avatarUri ? "Change photo" : "Add photo"}
                   </Text>
                 </Pressable>
               ) : null}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 20, fontFamily: fontFamilies.semibold }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 20,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
                 {user.name}
               </Text>
               {user.handle ? (
-                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>{user.handle}</Text>
+                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                  {user.handle}
+                </Text>
               ) : null}
               {user.trainingStyle ? (
                 <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
@@ -227,7 +293,12 @@ const SettingsScreen = () => {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
                   Edit
                 </Text>
               </Pressable>
@@ -235,9 +306,14 @@ const SettingsScreen = () => {
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <Stat label="Workouts" value={user.workoutsCompleted ?? 0} />
-            <Stat label="Friends" value={friendCount ?? 0} />
-            <Stat label="Streak" value={user.currentStreakDays ? `${user.currentStreakDays}d` : "—"} />
+            <Stat label='Workouts' value={user.workoutsCompleted ?? 0} />
+            <Stat label='Friends' value={friendCount ?? 0} />
+            <Stat
+              label='Streak'
+              value={
+                user.currentStreakDays ? `${user.currentStreakDays}d` : "—"
+              }
+            />
           </View>
 
           {user.bio && !isEditing ? (
@@ -250,10 +326,18 @@ const SettingsScreen = () => {
                 borderColor: colors.border,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, marginBottom: 4 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  marginBottom: 4,
+                }}
+              >
                 Bio
               </Text>
-              <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>{user.bio}</Text>
+              <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
+                {user.bio}
+              </Text>
             </View>
           ) : null}
           {!isEditing ? (
@@ -267,7 +351,13 @@ const SettingsScreen = () => {
                 gap: 4,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, marginBottom: 4 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  marginBottom: 4,
+                }}
+              >
                 Gym
               </Text>
               <Text style={{ color: colors.textSecondary }}>
@@ -282,27 +372,32 @@ const SettingsScreen = () => {
 
           {isEditing ? (
             <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
                 Edit profile
               </Text>
               <TextInput
                 value={draftName}
                 onChangeText={setDraftName}
-                placeholder="Name"
+                placeholder='Name'
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
               <TextInput
                 value={draftHandle}
                 onChangeText={setDraftHandle}
-                placeholder="@handle"
+                placeholder='@handle'
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
               <TextInput
                 value={draftBio}
                 onChangeText={setDraftBio}
-                placeholder="Bio"
+                placeholder='Bio'
                 placeholderTextColor={colors.textSecondary}
                 style={[inputStyle, { minHeight: 64 }]}
                 multiline
@@ -310,14 +405,14 @@ const SettingsScreen = () => {
               <TextInput
                 value={draftTraining}
                 onChangeText={setDraftTraining}
-                placeholder="Training focus"
+                placeholder='Training focus'
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
               <TextInput
                 value={draftGym}
                 onChangeText={setDraftGym}
-                placeholder="Home gym"
+                placeholder='Home gym'
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
@@ -334,7 +429,12 @@ const SettingsScreen = () => {
                 }}
               >
                 <View>
-                  <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     Show gym on profile
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
@@ -353,9 +453,9 @@ const SettingsScreen = () => {
                   onPress={handleSave}
                   disabled={isSaving}
                   style={({ pressed }) => ({
-                    flex: 1,
-                    paddingVertical: 10,
-                    borderRadius: 10,
+                    flex: 2,
+                    paddingVertical: 12,
+                    borderRadius: 12,
                     backgroundColor: colors.primary,
                     borderWidth: 1,
                     borderColor: colors.primary,
@@ -363,7 +463,12 @@ const SettingsScreen = () => {
                     opacity: pressed || isSaving ? 0.9 : 1,
                   })}
                 >
-                  <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     {isSaving ? "Saving..." : "Save"}
                   </Text>
                 </Pressable>
@@ -379,8 +484,9 @@ const SettingsScreen = () => {
                     setAvatarUri(user.avatarUrl ?? undefined);
                   }}
                   style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    borderRadius: 10,
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 12,
                     borderWidth: 1,
                     borderColor: colors.border,
                     backgroundColor: colors.surfaceMuted,
@@ -388,7 +494,12 @@ const SettingsScreen = () => {
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     Cancel
                   </Text>
                 </Pressable>
@@ -408,11 +519,18 @@ const SettingsScreen = () => {
           }}
         >
           <View style={{ gap: 4 }}>
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
               Friends
             </Text>
             <Text style={{ color: colors.textSecondary }}>
-              Friends are people you both follow. Invites land here until it{"'"}s mutual.
+              Friends are people you both follow. Invites land here until it
+              {"'"}s mutual.
             </Text>
           </View>
           {connectionsQuery.isFetching ? (
@@ -420,11 +538,18 @@ const SettingsScreen = () => {
           ) : (
             <>
               <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
                   Active friends ({friends.length})
                 </Text>
                 {friends.length ? (
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
                     {friends.map((friend) => (
                       <View
                         key={friend.id}
@@ -437,11 +562,23 @@ const SettingsScreen = () => {
                           borderColor: colors.border,
                         }}
                       >
-                        <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
                           {friend.name}
                         </Text>
                         {friend.handle ? (
-                          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{friend.handle}</Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                            }}
+                          >
+                            {friend.handle}
+                          </Text>
                         ) : null}
                       </View>
                     ))}
@@ -454,11 +591,18 @@ const SettingsScreen = () => {
               </View>
 
               <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
                   Pending invites
                 </Text>
                 {pendingInvites.length ? (
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
                     {pendingInvites.map((invite) => (
                       <View
                         key={invite.id}
@@ -471,11 +615,23 @@ const SettingsScreen = () => {
                           borderColor: colors.border,
                         }}
                       >
-                        <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
                           {invite.name}
                         </Text>
                         {invite.handle ? (
-                          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                            }}
+                          >
+                            {invite.handle}
+                          </Text>
                         ) : null}
                       </View>
                     ))}
@@ -488,11 +644,18 @@ const SettingsScreen = () => {
               </View>
 
               <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
                   Invites you sent
                 </Text>
                 {outgoingInvites.length ? (
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
                     {outgoingInvites.map((invite) => (
                       <View
                         key={invite.id}
@@ -505,11 +668,23 @@ const SettingsScreen = () => {
                           borderColor: colors.border,
                         }}
                       >
-                        <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
                           {invite.name}
                         </Text>
                         {invite.handle ? (
-                          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                            }}
+                          >
+                            {invite.handle}
+                          </Text>
                         ) : null}
                       </View>
                     ))}
@@ -534,7 +709,13 @@ const SettingsScreen = () => {
             gap: 12,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 16,
+            }}
+          >
             Account
           </Text>
           <Pressable
@@ -549,7 +730,12 @@ const SettingsScreen = () => {
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
               Manage account
             </Text>
           </Pressable>
@@ -576,7 +762,7 @@ const SettingsScreen = () => {
         </View>
       </View>
 
-      <Modal visible={isDeleteOpen} animationType="slide" transparent>
+      <Modal visible={isDeleteOpen} animationType='slide' transparent>
         <View
           style={{
             flex: 1,
@@ -595,7 +781,13 @@ const SettingsScreen = () => {
               gap: 10,
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 18 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 18,
+              }}
+            >
               Delete account
             </Text>
             <Text style={{ color: colors.textSecondary }}>
@@ -604,7 +796,7 @@ const SettingsScreen = () => {
             <TextInput
               value={deleteConfirm}
               onChangeText={setDeleteConfirm}
-              placeholder="DELETE"
+              placeholder='DELETE'
               placeholderTextColor={colors.textSecondary}
               style={inputStyle}
             />
@@ -628,7 +820,12 @@ const SettingsScreen = () => {
                 opacity: pressed ? 0.9 : 1,
               })}
             >
-              <Text style={{ color: colors.error, fontFamily: fontFamilies.semibold }}>
+              <Text
+                style={{
+                  color: colors.error,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
                 Delete account
               </Text>
             </Pressable>
@@ -679,11 +876,19 @@ const Stat = ({ label, value }: { label: string; value: string | number }) => (
       numberOfLines={1}
       adjustsFontSizeToFit
       minimumFontScale={0.9}
-      style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 16 }}
+      style={{
+        color: colors.textPrimary,
+        fontFamily: fontFamilies.semibold,
+        fontSize: 16,
+      }}
     >
       {value}
     </Text>
-    <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1} ellipsizeMode="tail">
+    <Text
+      style={{ color: colors.textSecondary, fontSize: 12 }}
+      numberOfLines={1}
+      ellipsizeMode='tail'
+    >
       {label}
     </Text>
   </View>

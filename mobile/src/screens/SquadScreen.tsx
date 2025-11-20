@@ -414,21 +414,46 @@ const SquadScreen = () => {
         <Pressable
           onPress={() => setShowSocialModal(true)}
           style={({ pressed }) => ({
-            backgroundColor: colors.surface,
-            borderRadius: 14,
-            padding: 14,
+            backgroundColor: pressed ? "rgba(34,197,94,0.14)" : colors.surface,
+            borderRadius: 16,
+            padding: 16,
             borderWidth: 1,
-            borderColor: colors.border,
-            gap: 6,
-            opacity: pressed ? 0.9 : 1,
+            borderColor: colors.primary,
+            gap: 8,
+            opacity: pressed ? 1 : 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
           })}
         >
-          <Text style={{ ...typography.title, color: colors.textPrimary }}>
-            Find gym buddies & squads
-          </Text>
-          <Text style={{ color: colors.textSecondary }}>
-            Search, invite, or create squads without leaving Active Now.
-          </Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Find gym buddies & squads
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              Search, invite, or create squads without leaving Active Now.
+            </Text>
+          </View>
+          <View
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              backgroundColor: colors.primary,
+              borderWidth: 1,
+              borderColor: colors.primary,
+            }}
+          >
+            <Text
+              style={{
+                color: "#0B1220",
+                fontFamily: fontFamilies.semibold,
+                fontSize: 12,
+              }}
+            >
+              Browse
+            </Text>
+          </View>
         </Pressable>
 
         {emptyState ? (
