@@ -15,6 +15,8 @@ type UserRow = {
   plan_expires_at: string | null;
   profile_completed_at: string | null;
   training_style: string | null;
+  gym_name: string | null;
+  gym_visibility: string | null;
 };
 
 type SocialProfile = {
@@ -33,6 +35,9 @@ type SocialProfile = {
   workoutsCompleted?: number;
   currentStreakDays?: number;
   isFollowing?: boolean;
+  friendsCount?: number;
+  gymName?: string | null;
+  gymVisibility?: "hidden" | "shown";
 };
 
 type ActiveStatusRow = {
@@ -86,6 +91,8 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   planExpiresAt: row.plan_expires_at,
   profileCompletedAt: row.profile_completed_at,
   trainingStyle: row.training_style,
+  gymName: row.gym_name,
+  gymVisibility: (row.gym_visibility as "hidden" | "shown" | null) ?? "hidden",
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -99,7 +106,7 @@ const fetchUserSummary = async (userId: string) => {
   };
 };
 
-const fetchFollowerCounts = async (userId: string) => {
+const fetchRelationshipCounts = async (userId: string) => {
   const followers = await query<{ count: string }>(
     `SELECT COUNT(*)::text as count FROM follows WHERE target_user_id = $1`,
     [userId]
@@ -108,9 +115,21 @@ const fetchFollowerCounts = async (userId: string) => {
     `SELECT COUNT(*)::text as count FROM follows WHERE user_id = $1`,
     [userId]
   );
+  const friends = await query<{ count: string }>(
+    `
+      SELECT COUNT(*)::text as count
+      FROM follows f
+      JOIN follows f2
+        ON f.user_id = $1
+       AND f.target_user_id = f2.user_id
+       AND f2.target_user_id = $1
+    `,
+    [userId]
+  );
   return {
     followersCount: Number(followers.rows[0]?.count ?? 0),
     followingCount: Number(following.rows[0]?.count ?? 0),
+    friendsCount: Number(friends.rows[0]?.count ?? 0),
   };
 };
 
@@ -169,7 +188,7 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
   const user = userResult.rows[0];
   if (!user) return null;
 
-  const counts = await fetchFollowerCounts(targetUserId);
+  const counts = await fetchRelationshipCounts(targetUserId);
   const stats = await fetchWorkoutStats(targetUserId);
   const isFollowingResult = await query(
     `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
@@ -258,13 +277,16 @@ router.put("/me", async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle } =
+  const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility } =
     req.body as Partial<SocialProfile>;
 
   const normalizedHandle = normalizeHandle(handle);
 
   if (name !== undefined && !name.trim()) {
     return res.status(400).json({ error: "Name cannot be empty" });
+  }
+  if (gymVisibility && gymVisibility !== "hidden" && gymVisibility !== "shown") {
+    return res.status(400).json({ error: "Invalid gym visibility" });
   }
 
   const updates: string[] = [];
@@ -301,6 +323,16 @@ router.put("/me", async (req, res) => {
     values.push(trainingStyle);
     idx += 1;
   }
+  if (gymName !== undefined) {
+    updates.push(`gym_name = $${idx}`);
+    values.push(gymName ?? null);
+    idx += 1;
+  }
+  if (gymVisibility !== undefined) {
+    updates.push(`gym_visibility = $${idx}`);
+    values.push(gymVisibility);
+    idx += 1;
+  }
 
   if (updates.length === 0) {
     const profile = await fetchProfile(userId, userId);
@@ -321,7 +353,7 @@ router.put("/me", async (req, res) => {
     );
 
     const updated = result.rows[0];
-    const counts = await fetchFollowerCounts(userId);
+    const counts = await fetchRelationshipCounts(userId);
     const stats = await fetchWorkoutStats(userId);
     return res.json({
       ...mapUserRow(updated),
@@ -388,19 +420,32 @@ router.get("/connections", async (_req, res) => {
       [userId]
     );
 
+    const followingList = following.rows.map((row) => ({
+      id: row.id,
+      name: row.name ?? "Athlete",
+      handle: row.handle ?? undefined,
+      avatarUrl: row.avatar_url ?? undefined,
+    }));
+    const followersList = followers.rows.map((row) => ({
+      id: row.id,
+      name: row.name ?? "Athlete",
+      handle: row.handle ?? undefined,
+      avatarUrl: row.avatar_url ?? undefined,
+    }));
+
+    const followerIds = new Set(followersList.map((row) => row.id));
+    const followingIds = new Set(followingList.map((row) => row.id));
+
+    const friends = followingList.filter((row) => followerIds.has(row.id));
+    const pendingInvites = followersList.filter((row) => !followingIds.has(row.id));
+    const outgoingInvites = followingList.filter((row) => !followerIds.has(row.id));
+
     return res.json({
-      following: following.rows.map((row) => ({
-        id: row.id,
-        name: row.name ?? "Athlete",
-        handle: row.handle ?? undefined,
-        avatarUrl: row.avatar_url ?? undefined,
-      })),
-      followers: followers.rows.map((row) => ({
-        id: row.id,
-        name: row.name ?? "Athlete",
-        handle: row.handle ?? undefined,
-        avatarUrl: row.avatar_url ?? undefined,
-      })),
+      friends,
+      pendingInvites,
+      outgoingInvites,
+      following: followingList,
+      followers: followersList,
     });
   } catch (err) {
     console.error("Failed to load connections", err);

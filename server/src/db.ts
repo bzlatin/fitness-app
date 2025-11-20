@@ -41,7 +41,9 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free',
       ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS training_style TEXT
+      ADD COLUMN IF NOT EXISTS training_style TEXT,
+      ADD COLUMN IF NOT EXISTS gym_name TEXT,
+      ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden'
   `);
 
   await query(`

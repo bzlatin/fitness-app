@@ -37,6 +37,7 @@ export interface SocialProfile extends SocialUserSummary {
   bio?: string;
   followersCount?: number;
   followingCount?: number;
+  friendsCount?: number;
   workoutsCompleted?: number;
   currentStreakDays?: number;
   isFollowing?: boolean;
@@ -44,4 +45,6 @@ export interface SocialProfile extends SocialUserSummary {
   planExpiresAt?: string | null;
   profileCompletedAt?: string | null;
   trainingStyle?: string | null;
+  gymName?: string | null;
+  gymVisibility?: "hidden" | "shown";
 }

@@ -10,25 +10,29 @@ type Options = {
   sessionId?: string;
   templateId?: string;
   templateName?: string;
+  initialVisibility?: Visibility;
 };
 
 export const useActiveWorkoutStatus = ({
   sessionId,
   templateId,
   templateName,
+  initialVisibility,
 }: Options) => {
-  const [visibility, setVisibilityState] = useState<Visibility>("private");
+  const [visibility, setVisibilityState] = useState<Visibility>(
+    initialVisibility ?? "private"
+  );
   const lastSessionId = useRef<string | undefined>(sessionId);
   const hasInitialized = useRef(false);
   const lastTemplateName = useRef<string | undefined>(templateName);
 
   useEffect(() => {
     if (sessionId !== lastSessionId.current) {
-      setVisibilityState("private");
+      setVisibilityState(initialVisibility ?? "private");
       hasInitialized.current = false;
       lastSessionId.current = sessionId;
     }
-  }, [sessionId]);
+  }, [sessionId, initialVisibility]);
 
   const setStatusMutation = useMutation({
     mutationFn: setActiveWorkoutStatus,

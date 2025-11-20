@@ -11,11 +11,14 @@ export interface User {
   bio?: string;
   profileCompletedAt?: string;
   trainingStyle?: string;
+  gymName?: string | null;
+  gymVisibility?: "hidden" | "shown";
 }
 
 export interface UserProfile extends User {
   followersCount?: number;
   followingCount?: number;
+  friendsCount?: number;
   workoutsCompleted?: number;
   currentStreakDays?: number;
 }

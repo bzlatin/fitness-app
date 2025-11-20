@@ -36,10 +36,21 @@ const StatBlock = ({ label, value }: { label: string; value: string }) => (
       borderColor: colors.border,
     }}
   >
-    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 18 }}>
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.9}
+      style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 18 }}
+    >
       {value}
     </Text>
-    <Text style={{ color: colors.textSecondary, ...typography.caption }}>{label}</Text>
+    <Text
+      numberOfLines={1}
+      ellipsizeMode="tail"
+      style={{ color: colors.textSecondary, ...typography.caption }}
+    >
+      {label}
+    </Text>
   </View>
 );
 
@@ -137,6 +148,19 @@ const ProfileScreen = () => {
 
   const loadingState = isLoading;
   const isFollowing = profile?.isFollowing ?? false;
+  const friendCount = useMemo(() => {
+    if (!profile) return 0;
+    if (profile.friendsCount !== undefined) return profile.friendsCount;
+    const followers = profile.followersCount ?? 0;
+    const following = profile.followingCount ?? 0;
+    return Math.min(followers, following);
+  }, [profile]);
+  const gymStatValue =
+    profile?.gymName && profile?.gymVisibility !== "hidden"
+      ? profile.gymName
+      : profile?.gymName
+      ? "Hidden"
+      : "Not set";
 
   return (
     <ScreenContainer scroll>
@@ -173,6 +197,14 @@ const ProfileScreen = () => {
                   {profile.trainingStyle}
                 </Text>
               ) : null}
+              {profile.gymName ? (
+                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                  Gym:{" "}
+                  {profile.gymVisibility === "hidden"
+                    ? "Hidden from profile"
+                    : profile.gymName}
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -195,7 +227,7 @@ const ProfileScreen = () => {
                 fontFamily: fontFamilies.semibold,
               }}
             >
-              {isFollowing ? "Following" : "Follow"}
+              {isFollowing ? "Gym buddy" : "Add gym buddy"}
             </Text>
           </Pressable>
 
@@ -205,6 +237,13 @@ const ProfileScreen = () => {
               value={String(profile.workoutsCompleted ?? "—")}
             />
             <StatBlock
+              label="Friends"
+              value={String(friendCount)}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <StatBlock
               label="Streak"
               value={
                 profile.currentStreakDays
@@ -212,16 +251,9 @@ const ProfileScreen = () => {
                   : "—"
               }
             />
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 12 }}>
             <StatBlock
-              label="Followers"
-              value={String(profile.followersCount ?? "—")}
-            />
-            <StatBlock
-              label="Following"
-              value={String(profile.followingCount ?? "—")}
+              label="Gym"
+              value={gymStatValue}
             />
           </View>
 

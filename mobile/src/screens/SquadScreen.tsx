@@ -9,6 +9,7 @@ import {
   View,
   TextInput,
   ScrollView,
+  Modal,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -165,7 +166,7 @@ const ActiveCard = ({
           status.visibility === "private"
             ? "Private"
             : status.visibility === "followers"
-            ? "Followers"
+            ? "Friends"
             : "Squad"
         }
       />
@@ -223,7 +224,7 @@ const ShareCard = ({
           share.visibility === "private"
             ? "Private"
             : share.visibility === "followers"
-            ? "Followers"
+            ? "Friends"
             : "Squad"
         }
       />
@@ -274,6 +275,12 @@ const SquadScreen = () => {
   const [inviteSquad, setInviteSquad] = useState<string | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
+  const [showSocialModal, setShowSocialModal] = useState(false);
+  const closeSocialModal = () => {
+    setShowSocialModal(false);
+    setSearchTerm("");
+    setDebouncedTerm("");
+  };
 
   const connectionsQuery = useQuery({
     queryKey: ["social", "connections"],
@@ -305,6 +312,9 @@ const SquadScreen = () => {
     () => new Set((connectionsQuery.data?.following ?? []).map((u) => u.id)),
     [connectionsQuery.data?.following]
   );
+  const friendsList = connectionsQuery.data?.friends ?? [];
+  const pendingIncoming = connectionsQuery.data?.pendingInvites ?? [];
+  const pendingOutgoing = connectionsQuery.data?.outgoingInvites ?? [];
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
@@ -369,9 +379,9 @@ const SquadScreen = () => {
     <ScreenContainer>
       <View style={{ flex: 1, gap: 12 }}>
         <View style={{ marginTop: 6, gap: 4 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>Squad</Text>
+          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>Active Now</Text>
           <Text style={{ ...typography.body, color: colors.textSecondary }}>
-            See who{"'"}s training and celebrate wins with your crew.
+            Live workouts from your gym buddies and squads.
           </Text>
         </View>
 
@@ -386,266 +396,25 @@ const SquadScreen = () => {
           </Text>
         ) : null}
 
-        <View
-          style={{
+        <Pressable
+          onPress={() => setShowSocialModal(true)}
+          style={({ pressed }) => ({
             backgroundColor: colors.surface,
             borderRadius: 14,
             padding: 14,
             borderWidth: 1,
             borderColor: colors.border,
-            gap: 10,
-          }}
+            gap: 6,
+            opacity: pressed ? 0.9 : 1,
+          })}
         >
-          <Text style={{ ...typography.title, color: colors.textPrimary }}>Follow friends</Text>
-          <Text style={{ color: colors.textSecondary }}>
-            Keep following separate from squads. Search and follow people directly.
+          <Text style={{ ...typography.title, color: colors.textPrimary }}>
+            Find gym buddies & squads
           </Text>
-
-          <TextInput
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholder="Search by name or handle"
-            placeholderTextColor={colors.textSecondary}
-            style={inputStyle}
-          />
-
-          <View style={{ gap: 8 }}>
-            {debouncedTerm.length <= 1 ? (
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                Start typing to see suggestions.
-              </Text>
-            ) : searchQuery.isFetching ? (
-              <ActivityIndicator color={colors.secondary} />
-            ) : (searchQuery.data ?? []).length ? (
-              (searchQuery.data ?? []).map((user) => {
-                const alreadyFollowing = followingIds.has(user.id);
-                const isPending =
-                  followMutation.isPending || unfollowMutation.isPending;
-                return (
-                  <Pressable
-                    key={user.id}
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceMuted,
-                      opacity: pressed || isPending ? 0.9 : 1,
-                    })}
-                  >
-                    <View>
-                      <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                        {user.name}
-                      </Text>
-                      {user.handle ? (
-                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                          {user.handle}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Pressable
-                      disabled={isPending}
-                      onPress={() =>
-                        alreadyFollowing
-                          ? unfollowMutation.mutate(user.id)
-                          : followMutation.mutate(user.id)
-                      }
-                      style={({ pressed }) => ({
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: alreadyFollowing ? colors.border : colors.primary,
-                        backgroundColor: alreadyFollowing ? colors.surface : colors.primary,
-                        opacity: pressed || isPending ? 0.85 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: alreadyFollowing ? colors.textPrimary : colors.surface,
-                          fontFamily: fontFamilies.semibold,
-                        }}
-                      >
-                        {alreadyFollowing ? "Following" : "Follow"}
-                      </Text>
-                    </Pressable>
-                  </Pressable>
-                );
-              })
-            ) : (
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                No matching users yet.
-              </Text>
-            )}
-          </View>
-
-          {connectionsQuery.data?.following?.length ? (
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                Following
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {connectionsQuery.data.following.map((friend) => (
-                  <View
-                    key={friend.id}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 10,
-                      backgroundColor: colors.surfaceMuted,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                  >
-                    <Text style={{ color: colors.textPrimary }}>
-                      {friend.name} {friend.handle ? `· ${friend.handle}` : ""}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-          {connectionsQuery.data?.followers?.length ? (
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                Followers
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {connectionsQuery.data.followers.map((follower) => (
-                  <View
-                    key={follower.id}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 10,
-                      backgroundColor: colors.surfaceMuted,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                  >
-                    <Text style={{ color: colors.textPrimary }}>
-                      {follower.name} {follower.handle ? `· ${follower.handle}` : ""}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 14,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 10,
-          }}
-        >
-          <Text style={{ ...typography.title, color: colors.textPrimary }}>Squads</Text>
           <Text style={{ color: colors.textSecondary }}>
-            Organize squads separately from your follow graph.
+            Search, invite, or create squads without leaving Active Now.
           </Text>
-          <TextInput
-            value={squadName}
-            onChangeText={setSquadName}
-            placeholder="Create squad name"
-            placeholderTextColor={colors.textSecondary}
-            style={inputStyle}
-          />
-          <Pressable
-            onPress={() => {
-              void createSquad(squadName);
-              setInviteSquad(squadName || inviteSquad);
-              setSquadName("");
-            }}
-            style={({ pressed }) => ({
-              paddingVertical: 10,
-              borderRadius: 10,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-              Create squad
-            </Text>
-          </Pressable>
-
-          {state.squads.length ? (
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                Invite to squad
-              </Text>
-              <TextInput
-                value={inviteHandle}
-                onChangeText={setInviteHandle}
-                placeholder="Friend handle"
-                placeholderTextColor={colors.textSecondary}
-                style={inputStyle}
-              />
-              <ScrollSquads
-                squads={state.squads}
-                active={inviteSquad}
-                onSelect={(name) => setInviteSquad(name)}
-              />
-              <Pressable
-                onPress={() => {
-                  if (inviteSquad) {
-                    void inviteToSquad(inviteSquad, inviteHandle);
-                    setInviteHandle("");
-                  }
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  backgroundColor: colors.primary,
-                  alignItems: "center",
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
-                  Send invite
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {state.squads.length ? (
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                Squads
-              </Text>
-              <View style={{ gap: 8 }}>
-                {state.squads.map((squad) => (
-                  <View
-                    key={squad.name}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 10,
-                      padding: 10,
-                      backgroundColor: colors.surfaceMuted,
-                    }}
-                  >
-                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                      {squad.name}
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                      Members: {squad.members.join(", ") || "Just you"}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-        </View>
+        </Pressable>
 
         {emptyState ? (
           <View
@@ -679,6 +448,363 @@ const SquadScreen = () => {
             contentContainerStyle={{ gap: 12, paddingBottom: 24 }}
           />
         )}
+
+        <Modal
+          visible={showSocialModal}
+          animationType="slide"
+          transparent
+          onRequestClose={closeSocialModal}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                maxHeight: "90%",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                }}
+              >
+                <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                  Friends & squads
+                </Text>
+                <Pressable onPress={closeSocialModal}>
+                  <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={{ gap: 12, paddingBottom: 18 }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.surfaceMuted,
+                      borderRadius: 12,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                      Find gym buddies
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      Start a friend connection to see each other live.
+                    </Text>
+                    <TextInput
+                      value={searchTerm}
+                      onChangeText={setSearchTerm}
+                      placeholder="Search by name or handle"
+                      placeholderTextColor={colors.textSecondary}
+                      style={inputStyle}
+                    />
+                    <View style={{ gap: 8 }}>
+                      {debouncedTerm.length <= 1 ? (
+                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                          Start typing to see suggestions.
+                        </Text>
+                      ) : searchQuery.isFetching ? (
+                        <ActivityIndicator color={colors.secondary} />
+                      ) : (searchQuery.data ?? []).length ? (
+                        (searchQuery.data ?? []).map((user) => {
+                          const alreadyFollowing = followingIds.has(user.id);
+                          const isPending =
+                            followMutation.isPending || unfollowMutation.isPending;
+                          return (
+                            <Pressable
+                              key={user.id}
+                              style={({ pressed }) => ({
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: 12,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                backgroundColor: colors.surface,
+                                opacity: pressed || isPending ? 0.9 : 1,
+                              })}
+                            >
+                              <View>
+                                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                                  {user.name}
+                                </Text>
+                                {user.handle ? (
+                                  <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                                    {user.handle}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <Pressable
+                                disabled={isPending}
+                                onPress={() =>
+                                  alreadyFollowing
+                                    ? unfollowMutation.mutate(user.id)
+                                    : followMutation.mutate(user.id)
+                                }
+                                style={({ pressed }) => ({
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 8,
+                                  borderRadius: 10,
+                                  borderWidth: 1,
+                                  borderColor: alreadyFollowing ? colors.border : colors.primary,
+                                  backgroundColor: alreadyFollowing ? colors.surfaceMuted : colors.primary,
+                                  opacity: pressed || isPending ? 0.85 : 1,
+                                })}
+                              >
+                                <Text
+                                  style={{
+                                    color: alreadyFollowing ? colors.textPrimary : colors.surface,
+                                    fontFamily: fontFamilies.semibold,
+                                  }}
+                                >
+                                  {alreadyFollowing ? "Added" : "Add friend"}
+                                </Text>
+                              </Pressable>
+                            </Pressable>
+                          );
+                        })
+                      ) : (
+                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                          No matching users yet.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor: colors.surfaceMuted,
+                      borderRadius: 12,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ ...typography.title, color: colors.textPrimary }}>Friends</Text>
+                    {friendsList.length ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {friendsList.map((friend) => (
+                          <View
+                            key={friend.id}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 10,
+                              backgroundColor: colors.surface,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                              {friend.name}
+                            </Text>
+                            {friend.handle ? (
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{friend.handle}</Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        No friends yet. Add a gym buddy to see them here.
+                      </Text>
+                    )}
+
+                    <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 6 }}>
+                      Pending invites
+                    </Text>
+                    {pendingIncoming.length ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {pendingIncoming.map((invite) => (
+                          <View
+                            key={invite.id}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 10,
+                              backgroundColor: colors.surface,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
+                            {invite.handle ? (
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        No pending requests at the moment.
+                      </Text>
+                    )}
+
+                    <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 6 }}>
+                      Invites you sent
+                    </Text>
+                    {pendingOutgoing.length ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {pendingOutgoing.map((invite) => (
+                          <View
+                            key={invite.id}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 10,
+                              backgroundColor: colors.surface,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
+                            {invite.handle ? (
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        No outgoing invites right now.
+                      </Text>
+                    )}
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor: colors.surfaceMuted,
+                      borderRadius: 12,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      gap: 10,
+                    }}
+                  >
+                    <Text style={{ ...typography.title, color: colors.textPrimary }}>Squads</Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      Keep active now visible while creating or inviting to squads.
+                    </Text>
+                    <TextInput
+                      value={squadName}
+                      onChangeText={setSquadName}
+                      placeholder="Create squad name"
+                      placeholderTextColor={colors.textSecondary}
+                      style={inputStyle}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        void createSquad(squadName);
+                        setInviteSquad(squadName || inviteSquad);
+                        setSquadName("");
+                      }}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        alignItems: "center",
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                        Create squad
+                      </Text>
+                    </Pressable>
+
+                    {state.squads.length ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                          Invite to squad
+                        </Text>
+                        <TextInput
+                          value={inviteHandle}
+                          onChangeText={setInviteHandle}
+                          placeholder="Friend handle"
+                          placeholderTextColor={colors.textSecondary}
+                          style={inputStyle}
+                        />
+                        <ScrollSquads
+                          squads={state.squads}
+                          active={inviteSquad}
+                          onSelect={(name) => setInviteSquad(name)}
+                        />
+                        <Pressable
+                          onPress={() => {
+                            if (inviteSquad) {
+                              void inviteToSquad(inviteSquad, inviteHandle);
+                              setInviteHandle("");
+                            }
+                          }}
+                          style={({ pressed }) => ({
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            backgroundColor: colors.primary,
+                            alignItems: "center",
+                            opacity: pressed ? 0.9 : 1,
+                          })}
+                        >
+                          <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
+                            Send invite
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    {state.squads.length ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                          Squads
+                        </Text>
+                        <View style={{ gap: 8 }}>
+                          {state.squads.map((squad) => (
+                            <View
+                              key={squad.name}
+                              style={{
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: 10,
+                                padding: 10,
+                                backgroundColor: colors.surface,
+                              }}
+                            >
+                              <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                                {squad.name}
+                              </Text>
+                              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                                Members: {squad.members.join(", ") || "Just you"}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ScreenContainer>
   );

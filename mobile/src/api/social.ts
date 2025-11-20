@@ -109,9 +109,12 @@ export const getUserProfile = async (userId: string) => {
         handle: "you",
         followersCount: 0,
         followingCount: 0,
+        friendsCount: 0,
         workoutsCompleted: 0,
         currentStreakDays: 0,
         isFollowing: false,
+        gymName: null,
+        gymVisibility: "hidden",
       } satisfies SocialProfile;
     }
     throw err;
@@ -157,6 +160,15 @@ export const getConnections = async () => {
   const res = await apiClient.get<{
     following: SocialUserSummary[];
     followers: SocialUserSummary[];
+    friends?: SocialUserSummary[];
+    pendingInvites?: SocialUserSummary[];
+    outgoingInvites?: SocialUserSummary[];
   }>("/social/connections");
-  return res.data ?? { following: [], followers: [] };
+  return {
+    following: res.data?.following ?? [],
+    followers: res.data?.followers ?? [],
+    friends: res.data?.friends ?? [],
+    pendingInvites: res.data?.pendingInvites ?? [],
+    outgoingInvites: res.data?.outgoingInvites ?? [],
+  };
 };

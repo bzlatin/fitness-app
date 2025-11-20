@@ -1,10 +1,59 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
+import path from "path";
+import fs from "fs";
 import { pool, query } from "../db";
 import { WorkoutSession, WorkoutSet } from "../types/workouts";
 import { generateId } from "../utils/id";
+import { exercises as localExercises } from "../data/exercises";
 
 const router = Router();
+
+type LocalExercise = {
+  id: string;
+  name: string;
+  force?: string | null;
+  level?: string | null;
+  mechanic?: string | null;
+  equipment?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  instructions?: string[];
+  category?: string;
+  images?: string[];
+};
+
+const distPath = path.join(__dirname, "../data/dist/exercises.json");
+const largeExercises: LocalExercise[] = fs.existsSync(distPath)
+  ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
+  : [];
+
+const dedupeId = (id: string) => id.replace(/\s+/g, "_");
+const formatExerciseId = (id: string) =>
+  id
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+const normalizeExercise = (item: LocalExercise) => {
+  const images = item.images ?? [];
+  const imageUrl =
+    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
+
+  return {
+    id: item.id || dedupeId(item.name),
+    name: item.name,
+    gifUrl: imageUrl,
+  };
+};
+
+const exerciseIndex = new Map<string, { name: string; gifUrl?: string }>();
+(largeExercises.length > 0 ? largeExercises : localExercises).forEach((item) => {
+  const normalized = normalizeExercise(item as unknown as LocalExercise);
+  exerciseIndex.set(normalized.id, { name: normalized.name, gifUrl: normalized.gifUrl });
+});
+
+const describeExercise = (exerciseId: string) =>
+  exerciseIndex.get(exerciseId) ?? { name: formatExerciseId(exerciseId) };
 
 type TemplateExerciseRow = {
   id: string;
@@ -19,6 +68,7 @@ type SessionRow = {
   id: string;
   user_id: string;
   template_id: string | null;
+  template_name?: string | null;
   started_at: string;
   finished_at: string | null;
   created_at: string;
@@ -38,23 +88,33 @@ type SetRow = {
   rpe: string | null;
 };
 
-const mapSet = (row: SetRow): WorkoutSet => ({
-  id: row.id,
-  sessionId: row.session_id,
-  templateExerciseId: row.template_exercise_id ?? undefined,
-  exerciseId: row.exercise_id,
-  setIndex: row.set_index,
-  targetReps: row.target_reps ?? undefined,
-  targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
-  actualReps: row.actual_reps ?? undefined,
-  actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
-  rpe: row.rpe === null ? undefined : Number(row.rpe),
-});
+const mapSet = (row: SetRow): WorkoutSet => {
+  const exerciseMeta = describeExercise(row.exercise_id);
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    templateExerciseId: row.template_exercise_id ?? undefined,
+    exerciseId: row.exercise_id,
+    setIndex: row.set_index,
+    targetReps: row.target_reps ?? undefined,
+    targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
+    actualReps: row.actual_reps ?? undefined,
+    actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
+    rpe: row.rpe === null ? undefined : Number(row.rpe),
+    exerciseName: exerciseMeta.name,
+    exerciseImageUrl: exerciseMeta.gifUrl,
+  };
+};
 
-const mapSession = (row: SessionRow, setRows: SetRow[]): WorkoutSession => ({
+const mapSession = (
+  row: SessionRow,
+  setRows: SetRow[],
+  meta?: { templateName?: string }
+): WorkoutSession => ({
   id: row.id,
   userId: row.user_id,
   templateId: row.template_id ?? undefined,
+  templateName: meta?.templateName ?? row.template_name ?? undefined,
   startedAt: row.started_at,
   finishedAt: row.finished_at ?? undefined,
   sets: setRows
@@ -80,7 +140,13 @@ const withTransaction = async <T>(fn: (client: PoolClient) => Promise<T>) => {
 
 const fetchSessionById = async (sessionId: string, userId: string) => {
   const sessionResult = await query<SessionRow>(
-    `SELECT * FROM workout_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    `
+      SELECT s.*, t.name as template_name
+      FROM workout_sessions s
+      LEFT JOIN workout_templates t ON t.id = s.template_id
+      WHERE s.id = $1 AND s.user_id = $2
+      LIMIT 1
+    `,
     [sessionId, userId]
   );
   if (!sessionResult.rowCount) return null;
@@ -171,7 +237,8 @@ router.post("/from-template/:templateId", async (req, res) => {
           created_at: now,
           updated_at: now,
         },
-        setRows
+        setRows,
+        { templateName: template.name }
       );
     });
 

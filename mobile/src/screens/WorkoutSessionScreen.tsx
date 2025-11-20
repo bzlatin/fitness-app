@@ -30,7 +30,7 @@ const VisibilityControl = ({
 }) => {
   const options: { value: Visibility; label: string; helper: string }[] = [
     { value: "private", label: "Private", helper: "Only you can see." },
-    { value: "followers", label: "Followers", helper: "Approved followers." },
+    { value: "followers", label: "Friends", helper: "Gym buddies who follow back." },
     { value: "squad", label: "Squad", helper: "People you follow + accept." },
   ];
 
@@ -110,11 +110,21 @@ const summarizeSets = (sessionSets: WorkoutSet[]) => {
   };
 };
 
+const formatStopwatch = (seconds: number) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  const two = (n: number) => String(n).padStart(2, "0");
+  return hrs > 0 ? `${hrs}:${two(mins)}:${two(secs)}` : `${two(mins)}:${two(secs)}`;
+};
+
 const WorkoutSessionScreen = () => {
   const route = useRoute<RootRoute<"WorkoutSession">>();
   const navigation = useNavigation<Nav>();
   const [sessionId, setSessionId] = useState(route.params.sessionId);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
+  const [startTime, setStartTime] = useState<string | undefined>(undefined);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const { data: templates } = useWorkoutTemplates();
 
   const template = useMemo(
@@ -126,7 +136,10 @@ const WorkoutSessionScreen = () => {
     queryKey: ["session", sessionId],
     enabled: Boolean(sessionId),
     queryFn: () => fetchSession(sessionId!),
-    onSuccess: (data) => setSets(data.sets),
+    onSuccess: (data) => {
+      setSets(data.sets);
+      setStartTime(data.startedAt);
+    },
   });
 
   const startMutation = useMutation({
@@ -134,6 +147,7 @@ const WorkoutSessionScreen = () => {
     onSuccess: (session) => {
       setSessionId(session.id);
       setSets(session.sets);
+      setStartTime(session.startedAt);
     },
     onError: () =>
       Alert.alert("Could not start session", "Please try again."),
@@ -145,11 +159,31 @@ const WorkoutSessionScreen = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!startTime) return;
+    const tick = () => {
+      const diff = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(startTime).getTime()) / 1000)
+      );
+      setElapsedSeconds(diff);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+
+  const templateName = useMemo(
+    () => template?.name ?? sessionQuery.data?.templateName,
+    [template?.name, sessionQuery.data?.templateName]
+  );
+
   const { visibility, setVisibility, endActiveStatus, isUpdating } =
     useActiveWorkoutStatus({
       sessionId,
       templateId: route.params.templateId,
-      templateName: template?.name,
+      templateName,
+      initialVisibility: route.params.initialVisibility,
     });
 
   const finishMutation = useMutation({
@@ -160,7 +194,7 @@ const WorkoutSessionScreen = () => {
       navigation.navigate("PostWorkoutShare", {
         sessionId: session.id,
         templateId: session.templateId,
-        templateName: template?.name,
+        templateName: templateName,
         totalSets: summary.totalSets,
         totalVolume: summary.totalVolume,
         prCount: summary.prCount,
@@ -180,20 +214,12 @@ const WorkoutSessionScreen = () => {
     setSets((prev) => prev.map((set) => (set.id === updated.id ? updated : set)));
   };
 
-  const sessionTitle = sessionQuery.data?.templateId
-    ? "Workout Session"
-    : "Active Session";
+  const sessionTitle = templateName ?? "Workout Session";
+  const stopwatchLabel = startTime ? formatStopwatch(elapsedSeconds) : "00:00";
 
   return (
     <ScreenContainer scroll>
       <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}>
-          {sessionTitle}
-        </Text>
-        <Text style={{ color: colors.textSecondary }}>
-          Log your sets below. Targets are prefilled from the template.
-        </Text>
-
         <View
           style={{
             backgroundColor: colors.surface,
@@ -201,9 +227,50 @@ const WorkoutSessionScreen = () => {
             padding: 12,
             borderWidth: 1,
             borderColor: colors.border,
-            gap: 8,
+            gap: 10,
           }}
         >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: "700" }}>
+                {sessionTitle}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Log your sets below. You can share or change visibility any time.
+              </Text>
+            </View>
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                minWidth: 96,
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Timer</Text>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: "700",
+                  marginTop: 4,
+                  letterSpacing: 0.5,
+                }}
+              >
+                {stopwatchLabel}
+              </Text>
+            </View>
+          </View>
           <VisibilityControl
             value={visibility}
             onChange={setVisibility}

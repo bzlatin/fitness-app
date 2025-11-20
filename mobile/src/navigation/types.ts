@@ -4,7 +4,7 @@ export type RootStackParamList = {
   RootTabs: undefined;
   WorkoutTemplateDetail: { templateId: string };
   WorkoutTemplateBuilder: { templateId?: string };
-  WorkoutSession: { templateId: string; sessionId?: string };
+  WorkoutSession: { templateId: string; sessionId?: string; initialVisibility?: Visibility };
   Profile: { userId: string };
   PostWorkoutShare: {
     sessionId: string;
@@ -27,3 +27,4 @@ export type RootRoute<T extends keyof RootStackParamList> = RouteProp<
   RootStackParamList,
   T
 >;
+import { Visibility } from "../types/social";
