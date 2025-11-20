@@ -8,7 +8,12 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import ExerciseRow from "../components/workouts/ExerciseRow";
 import { fetchTemplate, updateTemplate } from "../api/templates";
 import { startSessionFromTemplate } from "../api/sessions";
-import { useDeleteTemplate, useDuplicateTemplate, templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import {
+  useDeleteTemplate,
+  useDuplicateTemplate,
+  templatesKey,
+  useWorkoutTemplates,
+} from "../hooks/useWorkoutTemplates";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { Visibility } from "../types/social";
@@ -28,8 +33,7 @@ const WorkoutTemplateDetailScreen = () => {
   const templateQuery = useQuery({
     queryKey: detailQueryKey,
     queryFn: () => fetchTemplate(route.params.templateId),
-    initialData: () =>
-      listData?.find((t) => t.id === route.params.templateId),
+    initialData: () => listData?.find((t) => t.id === route.params.templateId),
     enabled: !deleteMutation.isPending,
   });
 
@@ -114,7 +118,7 @@ const WorkoutTemplateDetailScreen = () => {
                 <TextInput
                   value={draftName}
                   onChangeText={setDraftName}
-                  placeholder="Template name"
+                  placeholder='Template name'
                   placeholderTextColor={colors.textSecondary}
                   style={{
                     flex: 1,
@@ -163,7 +167,14 @@ const WorkoutTemplateDetailScreen = () => {
               </>
             ) : (
               <>
-                <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700", flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: "700",
+                    flex: 1,
+                  }}
+                >
                   {template.name}
                 </Text>
                 <Pressable
@@ -171,16 +182,24 @@ const WorkoutTemplateDetailScreen = () => {
                   style={({ pressed }) => ({
                     padding: 6,
                     borderRadius: 999,
-                    backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                    backgroundColor: pressed
+                      ? colors.surfaceMuted
+                      : "transparent",
                   })}
                 >
-                  <Ionicons name="pencil" size={20} color={colors.textSecondary} />
+                  <Ionicons
+                    name='pencil'
+                    size={20}
+                    color={colors.textSecondary}
+                  />
                 </Pressable>
               </>
             )}
           </View>
           {template.description ? (
-            <Text style={{ color: colors.textSecondary }}>{template.description}</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {template.description}
+            </Text>
           ) : null}
           {template.splitType ? (
             <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
@@ -189,14 +208,17 @@ const WorkoutTemplateDetailScreen = () => {
           ) : null}
 
           <View style={{ marginTop: 8 }}>
-            <Text style={{ color: colors.textPrimary, fontWeight: "700", marginBottom: 8 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontWeight: "700",
+                marginBottom: 8,
+              }}
+            >
               Exercises
             </Text>
             {template.exercises.map((exercise) => (
-              <ExerciseRow
-                key={exercise.id}
-                item={exercise}
-              />
+              <ExerciseRow key={exercise.id} item={exercise} />
             ))}
           </View>
 
@@ -210,7 +232,9 @@ const WorkoutTemplateDetailScreen = () => {
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: "#0B1220", fontWeight: "700" }}>Start Workout</Text>
+            <Text style={{ color: "#0B1220", fontWeight: "700" }}>
+              Start Workout
+            </Text>
           </Pressable>
 
           <Pressable
@@ -230,7 +254,7 @@ const WorkoutTemplateDetailScreen = () => {
             })}
           >
             <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-              Edit Template
+              Edit
             </Text>
           </Pressable>
 
@@ -263,14 +287,14 @@ const WorkoutTemplateDetailScreen = () => {
             disabled={deleteMutation.isPending}
           >
             <Text style={{ color: colors.error, fontWeight: "700" }}>
-              Delete Template
+              Delete
             </Text>
           </Pressable>
         </View>
-        ) : (
+      ) : (
         <Text style={{ color: colors.textSecondary }}>Loading template…</Text>
       )}
-      <Modal visible={startModalVisible} animationType="fade" transparent>
+      <Modal visible={startModalVisible} animationType='fade' transparent>
         <View
           style={{
             flex: 1,
@@ -289,11 +313,18 @@ const WorkoutTemplateDetailScreen = () => {
               gap: 12,
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: "700" }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 20,
+                fontWeight: "700",
+              }}
+            >
               Set live visibility
             </Text>
             <Text style={{ color: colors.textSecondary }}>
-              Choose who can see you going live. You can change this mid-session at any time.
+              Choose who can see you going live. You can change this mid-session
+              at any time.
             </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               {[
@@ -305,14 +336,18 @@ const WorkoutTemplateDetailScreen = () => {
                 return (
                   <Pressable
                     key={option.value}
-                    onPress={() => setLiveVisibility(option.value as Visibility)}
+                    onPress={() =>
+                      setLiveVisibility(option.value as Visibility)
+                    }
                     style={({ pressed }) => ({
                       flex: 1,
                       paddingVertical: 10,
                       borderRadius: 12,
                       borderWidth: 1,
                       borderColor: active ? colors.primary : colors.border,
-                      backgroundColor: active ? "rgba(34,197,94,0.12)" : colors.surfaceMuted,
+                      backgroundColor: active
+                        ? "rgba(34,197,94,0.12)"
+                        : colors.surfaceMuted,
                       opacity: pressed ? 0.9 : 1,
                     })}
                   >

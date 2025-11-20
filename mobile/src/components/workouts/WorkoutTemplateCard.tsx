@@ -19,13 +19,19 @@ const Badge = ({ label }: { label: string }) => (
       borderColor: colors.border,
     }}
   >
-    <Text style={{ color: colors.textSecondary, fontWeight: "600", fontSize: 12 }}>
+    <Text
+      style={{ color: colors.textSecondary, fontWeight: "600", fontSize: 12 }}
+    >
       {label}
     </Text>
   </View>
 );
 
-const WorkoutTemplateCard = ({ template, onPress, onDuplicate }: Props) => (
+const WorkoutTemplateCard = ({
+  template,
+  onPress,
+  onDuplicate,
+}: Props) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => ({
@@ -38,13 +44,30 @@ const WorkoutTemplateCard = ({ template, onPress, onDuplicate }: Props) => (
       marginBottom: 12,
     })}
   >
-    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-      <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "700" }}>
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 10,
+        alignItems: "center",
+      }}
+    >
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontSize: 18,
+          fontWeight: "700",
+          flex: 1,
+        }}
+        numberOfLines={1}
+      >
         {template.name}
       </Text>
-      {template.isFavorite ? (
-        <Text style={{ color: colors.secondary, fontWeight: "700" }}>★</Text>
-      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {template.isFavorite ? (
+          <Text style={{ color: colors.secondary, fontWeight: "700" }}>★</Text>
+        ) : null}
+      </View>
     </View>
     <View
       style={{
@@ -55,7 +78,9 @@ const WorkoutTemplateCard = ({ template, onPress, onDuplicate }: Props) => (
         alignItems: "center",
       }}
     >
-      {template.splitType ? <Badge label={template.splitType.toUpperCase()} /> : null}
+      {template.splitType ? (
+        <Badge label={template.splitType.toUpperCase()} />
+      ) : null}
       <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
         {template.exercises.length} exercises
       </Text>

@@ -42,6 +42,7 @@ export interface WorkoutSet {
   setIndex: number;
   targetReps?: number;
   targetWeight?: number;
+  targetRestSeconds?: number;
   actualReps?: number;
   actualWeight?: number;
   rpe?: number;

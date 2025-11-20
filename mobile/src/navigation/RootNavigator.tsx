@@ -92,7 +92,7 @@ const RootNavigator = () => (
     <Stack.Screen
       name="WorkoutTemplateDetail"
       component={WorkoutTemplateDetailScreen}
-      options={{ title: "Template" }}
+      options={{ title: "Workout" }}
     />
     <Stack.Screen
       name="WorkoutTemplateBuilder"
@@ -102,7 +102,7 @@ const RootNavigator = () => (
     <Stack.Screen
       name="WorkoutSession"
       component={WorkoutSessionScreen}
-      options={{ title: "Workout Session" }}
+      options={{ title: "Workout Session", headerShown: false }}
     />
     <Stack.Screen
       name="Profile"

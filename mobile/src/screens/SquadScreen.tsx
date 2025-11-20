@@ -24,6 +24,7 @@ import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useSocialLocalState } from "../hooks/useSocialLocalState";
 import { followUser, getConnections, searchUsers, unfollowUser } from "../api/social";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 type FeedItem =
   | { kind: "section"; title: string; subtitle?: string }
@@ -37,6 +38,13 @@ const initialsForName = (name?: string) => {
   const parts = name.trim().split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
+
+const formatHandle = (handle?: string | null) => {
+  if (!handle) return undefined;
+  const cleaned = handle.replace(/^@+/, "");
+  if (!cleaned) return undefined;
+  return `@${cleaned}`;
 };
 
 const Avatar = ({ user }: { user: SocialUserSummary }) =>
@@ -270,6 +278,7 @@ const SquadScreen = () => {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useSquadFeed();
   const { state, createSquad, inviteToSquad } = useSocialLocalState();
+  const { user } = useCurrentUser();
   const [squadName, setSquadName] = useState("");
   const [inviteHandle, setInviteHandle] = useState("");
   const [inviteSquad, setInviteSquad] = useState<string | undefined>(undefined);
@@ -317,13 +326,19 @@ const SquadScreen = () => {
   const pendingOutgoing = connectionsQuery.data?.outgoingInvites ?? [];
 
   const feedItems = useMemo<FeedItem[]>(() => {
+    const filteredActive = (data?.activeStatuses ?? []).filter(
+      (status) => status.user.id !== user?.id
+    );
+    const filteredShares = (data?.recentShares ?? []).filter(
+      (share) => share.user.id !== user?.id
+    );
     const items: FeedItem[] = [];
     items.push({
       kind: "section",
-      title: "Active now",
-      subtitle: "Live presence from people you follow.",
+      title: "Live crew",
+      subtitle: "Friends currently training.",
     });
-    (data?.activeStatuses ?? []).forEach((status) =>
+    filteredActive.forEach((status) =>
       items.push({ kind: "active", status })
     );
 
@@ -332,12 +347,12 @@ const SquadScreen = () => {
       title: "Recent sessions",
       subtitle: "Share wins when you want—never public by default.",
     });
-    (data?.recentShares ?? []).forEach((share) =>
+    filteredShares.forEach((share) =>
       items.push({ kind: "share", share })
     );
 
     return items;
-  }, [data?.activeStatuses, data?.recentShares]);
+  }, [data?.activeStatuses, data?.recentShares, user?.id]);
 
   const renderItem = ({ item }: { item: FeedItem }) => {
     switch (item.kind) {
@@ -379,7 +394,7 @@ const SquadScreen = () => {
     <ScreenContainer>
       <View style={{ flex: 1, gap: 12 }}>
         <View style={{ marginTop: 6, gap: 4 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>Active Now</Text>
+          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>Who{"'"}s Lifting?</Text>
           <Text style={{ ...typography.body, color: colors.textSecondary }}>
             Live workouts from your gym buddies and squads.
           </Text>
@@ -543,15 +558,15 @@ const SquadScreen = () => {
                               })}
                             >
                               <View>
-                                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                                  {user.name}
-                                </Text>
-                                {user.handle ? (
-                                  <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                                    {user.handle}
-                                  </Text>
-                                ) : null}
-                              </View>
+                            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                              {user.name}
+                            </Text>
+                            {user.handle ? (
+                              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                              {formatHandle(user.handle)}
+                              </Text>
+                            ) : null}
+                          </View>
                               <Pressable
                                 disabled={isPending}
                                 onPress={() =>
@@ -618,7 +633,9 @@ const SquadScreen = () => {
                               {friend.name}
                             </Text>
                             {friend.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{friend.handle}</Text>
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                {formatHandle(friend.handle)}
+                              </Text>
                             ) : null}
                           </View>
                         ))}
@@ -648,7 +665,9 @@ const SquadScreen = () => {
                           >
                             <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
                             {invite.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                {formatHandle(invite.handle)}
+                              </Text>
                             ) : null}
                           </View>
                         ))}
@@ -678,7 +697,9 @@ const SquadScreen = () => {
                           >
                             <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
                             {invite.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{invite.handle}</Text>
+                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                {formatHandle(invite.handle)}
+                              </Text>
                             ) : null}
                           </View>
                         ))}
