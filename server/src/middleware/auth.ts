@@ -1,8 +1,11 @@
 import { RequestHandler } from "express";
 import { auth } from "express-oauth2-jwt-bearer";
 import { query } from "../db";
+import { DEMO_USER_ID } from "../types/workouts";
 
 const { AUTH0_DOMAIN, AUTH0_AUDIENCE } = process.env;
+const ALLOW_DEV_AUTH_BYPASS = process.env.ALLOW_DEV_AUTH_BYPASS === "true";
+const DEV_USER_ID = process.env.DEV_USER_ID || DEMO_USER_ID;
 
 if (!AUTH0_DOMAIN) {
   throw new Error("AUTH0_DOMAIN is not set. Please add it to your .env.");
@@ -18,7 +21,19 @@ export const requireAuth = auth({
   tokenSigningAlg: "RS256",
 });
 
+export const maybeRequireAuth: RequestHandler = (req, res, next) => {
+  // Helpful during local dev when Auth0 tokens are missing; do NOT enable in prod.
+  if (ALLOW_DEV_AUTH_BYPASS && !req.headers.authorization) {
+    res.locals.userId = DEV_USER_ID;
+    return next();
+  }
+  return requireAuth(req, res, next);
+};
+
 export const attachUser: RequestHandler = (_req, res, next) => {
+  if (res.locals.userId) {
+    return next();
+  }
   const userId = _req.auth?.payload?.sub;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -50,6 +65,7 @@ export const ensureUser: RequestHandler = async (req, res, next) => {
         ON CONFLICT (id) DO UPDATE
         SET email = COALESCE($2, users.email),
             name = COALESCE($3, users.name),
+            plan = COALESCE(users.plan, 'free'),
             updated_at = NOW()
       `,
       [userId, email ?? null, name ?? null]

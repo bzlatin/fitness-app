@@ -5,11 +5,20 @@ export type RootStackParamList = {
   WorkoutTemplateDetail: { templateId: string };
   WorkoutTemplateBuilder: { templateId?: string };
   WorkoutSession: { templateId: string; sessionId?: string };
+  Profile: { userId: string };
+  PostWorkoutShare: {
+    sessionId: string;
+    templateId?: string;
+    templateName?: string;
+    totalSets?: number;
+    totalVolume?: number;
+    prCount?: number;
+  };
 };
 
 export type RootTabParamList = {
-  Today: undefined;
-  MyWorkouts: undefined;
+  Home: undefined;
+  Squad: undefined;
   History: undefined;
   Settings: undefined;
 };

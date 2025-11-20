@@ -59,7 +59,7 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
             textAlign: "center",
           }}
         >
-          Sign in to sync your workouts and templates securely.
+          Sign in to log your workouts, track your progress, and stay motivated.
         </Text>
         <TouchableOpacity
           onPress={login}
@@ -82,7 +82,7 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
               fontSize: 16,
             }}
           >
-            {isAuthorizing ? "Connecting..." : "Continue with Auth0"}
+            {isAuthorizing ? "Connecting..." : "Sign In / Sign Up"}
           </Text>
         </TouchableOpacity>
         {error ? (

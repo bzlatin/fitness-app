@@ -7,9 +7,15 @@ const DEFAULT_API_URL = "http://localhost:4000/api";
 type TokenProvider = () => string | null | undefined;
 
 let authTokenProvider: TokenProvider | null = null;
+type AuthErrorHandler = () => void;
+let authErrorHandler: AuthErrorHandler | null = null;
 
 export const setAuthTokenProvider = (provider: TokenProvider | null) => {
   authTokenProvider = provider;
+};
+
+export const setAuthErrorHandler = (handler: AuthErrorHandler | null) => {
+  authErrorHandler = handler;
 };
 
 const resolveApiBaseUrl = () => {
@@ -30,6 +36,9 @@ const resolveApiBaseUrl = () => {
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();
+// Debug the resolved API host during development.
+// eslint-disable-next-line no-console
+console.log("API base URL", API_BASE_URL);
 
 type RequestConfig = {
   params?: Record<string, string | number | boolean | undefined>;
@@ -66,6 +75,10 @@ const request = async <T>(
   const token = authTokenProvider?.();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  } else if (path.includes("/social/me")) {
+    // Helpful debug to confirm auth header is being set on profile fetches.
+    // eslint-disable-next-line no-console
+    console.warn("No auth token set for /social/me request");
   }
 
   const response = await fetch(url, {
@@ -74,7 +87,25 @@ const request = async <T>(
   });
 
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
+    const raw = await response.text().catch(() => response.statusText);
+    const parsedError = (() => {
+      try {
+        return raw ? (JSON.parse(raw) as { error?: string }) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const isUnauthorized =
+      response.status === 401 ||
+      response.status === 403 ||
+      (response.status === 400 && parsedError?.error?.toLowerCase() === "unauthorized");
+
+    if (isUnauthorized) {
+      authErrorHandler?.();
+    }
+
+    const message = parsedError?.error ?? raw ?? response.statusText;
     throw new Error(`Request failed: ${response.status} ${message}`);
   }
 

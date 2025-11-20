@@ -2,7 +2,7 @@ import "react-native-gesture-handler";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
-import { useMemo } from "react";
+import { ReactNode, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
@@ -18,6 +18,9 @@ import { fontFamilies } from "./src/theme/typography";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "./src/context/AuthContext";
 import AuthGate from "./src/components/auth/AuthGate";
+import { UserProfileProvider } from "./src/context/UserProfileContext";
+import { useCurrentUser } from "./src/hooks/useCurrentUser";
+import OnboardingScreen from "./src/screens/OnboardingScreen";
 
 const App = () => {
   const [fontsLoaded] = useFonts({
@@ -53,12 +56,16 @@ const App = () => {
   const content = fontsLoaded ? (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <StatusBar style='light' />
-        <AuthGate>
-          <NavigationContainer theme={navTheme}>
-            <RootNavigator />
-          </NavigationContainer>
-        </AuthGate>
+        <UserProfileProvider>
+          <StatusBar style='light' />
+          <AuthGate>
+            <OnboardingGate>
+              <NavigationContainer theme={navTheme}>
+                <RootNavigator />
+              </NavigationContainer>
+            </OnboardingGate>
+          </AuthGate>
+        </UserProfileProvider>
       </QueryClientProvider>
     </AuthProvider>
   ) : (
@@ -92,3 +99,25 @@ const App = () => {
 };
 
 export default App;
+
+const OnboardingGate = ({ children }: { children: ReactNode }) => {
+  const { isOnboarded, isLoading } = useCurrentUser();
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+  if (!isOnboarded) {
+    return <OnboardingScreen />;
+  }
+  return <>{children}</>;
+};

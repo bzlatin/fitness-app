@@ -1,17 +1,32 @@
 import { useNavigation } from "@react-navigation/native";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import { useDuplicateTemplate, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import { canCreateAnotherTemplate } from "../utils/featureGating";
 
 const MyWorkoutsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
-  const { data, isLoading, refetch, isRefetching } = useWorkoutTemplates();
+  const { data, isLoading } = useWorkoutTemplates();
   const duplicateMutation = useDuplicateTemplate();
+  const { user } = useCurrentUser();
 
   const templates = data ?? [];
+  const templateLimitReached = !canCreateAnotherTemplate(user, templates.length);
+
+  const handleCreateTemplate = () => {
+    if (templateLimitReached) {
+      Alert.alert(
+        "Free limit reached",
+        "You’ve reached the free template limit. Upgrades coming soon."
+      );
+      return;
+    }
+    navigation.navigate("WorkoutTemplateBuilder", {});
+  };
 
   return (
     <ScreenContainer scroll>
@@ -25,7 +40,7 @@ const MyWorkoutsScreen = () => {
       </View>
 
       <Pressable
-        onPress={() => navigation.navigate("WorkoutTemplateBuilder", {})}
+        onPress={handleCreateTemplate}
         style={({ pressed }) => ({
           backgroundColor: colors.primary,
           paddingVertical: 14,
@@ -39,8 +54,13 @@ const MyWorkoutsScreen = () => {
           New Workout
         </Text>
       </Pressable>
+      {templateLimitReached ? (
+        <Text style={{ color: colors.textSecondary, marginBottom: 12 }}>
+          You’ve reached the free template limit. Upgrades coming soon.
+        </Text>
+      ) : null}
 
-      {isLoading || isRefetching ? (
+      {isLoading ? (
         <View style={{ marginTop: 20 }}>
           <ActivityIndicator color={colors.secondary} />
         </View>
@@ -63,7 +83,7 @@ const MyWorkoutsScreen = () => {
             Create your first workout template to jump into sessions faster.
           </Text>
           <Pressable
-            onPress={() => navigation.navigate("WorkoutTemplateBuilder", {})}
+            onPress={handleCreateTemplate}
             style={({ pressed }) => ({
               marginTop: 12,
               paddingVertical: 12,
@@ -91,20 +111,6 @@ const MyWorkoutsScreen = () => {
           />
         ))
       )}
-
-      <Pressable
-        onPress={() => refetch()}
-        style={{
-          alignSelf: "flex-start",
-          marginTop: 12,
-          padding: 10,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <Text style={{ color: colors.textSecondary }}>Refresh</Text>
-      </Pressable>
     </ScreenContainer>
   );
 };
