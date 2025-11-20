@@ -284,7 +284,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const nextTokens = buildAuthTokens(tokenResponse);
-        console.log("Auth0 access token (debug)", tokenResponse.accessToken);
         setTokens(nextTokens);
         setAuthTokenProvider(() => nextTokens.accessToken);
         await persistTokens(nextTokens);
