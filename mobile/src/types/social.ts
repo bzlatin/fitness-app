@@ -48,3 +48,19 @@ export interface SocialProfile extends SocialUserSummary {
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
 }
+
+export interface SquadMemberSummary {
+  id: string;
+  name: string;
+  handle?: string;
+  avatarUrl?: string | null;
+  role?: string | null;
+}
+
+export interface SquadDetail {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  memberCount: number;
+  members: SquadMemberSummary[];
+}

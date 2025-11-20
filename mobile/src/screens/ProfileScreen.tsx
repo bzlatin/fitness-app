@@ -19,6 +19,7 @@ import {
   unfollowUser,
 } from "../api/social";
 import { SocialProfile } from "../types/social";
+import { formatHandle } from "../utils/formatHandle";
 
 const initialForName = (name?: string) => {
   if (!name) return "?";
@@ -161,6 +162,7 @@ const ProfileScreen = () => {
       : profile?.gymName
       ? "Hidden"
       : "Not set";
+  const formattedHandle = formatHandle(profile?.handle);
 
   return (
     <ScreenContainer scroll>
@@ -183,9 +185,9 @@ const ProfileScreen = () => {
               <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
                 {profile.name}
               </Text>
-              {profile.handle ? (
+              {formattedHandle ? (
                 <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
-                  @{profile.handle}
+                  {formattedHandle}
                 </Text>
               ) : null}
               {profile.trainingStyleTags?.length ? (

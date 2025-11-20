@@ -764,6 +764,7 @@ const WorkoutSessionScreen = () => {
 
 type SetInputRowProps = {
   set: WorkoutSet;
+  displayIndex: number;
   onChange: (updated: WorkoutSet) => void;
   onLog: () => void;
   restSeconds?: number;
@@ -775,6 +776,7 @@ type SetInputRowProps = {
 
 const SetInputRow = ({
   set,
+  displayIndex,
   onChange,
   onLog,
   restSeconds,
@@ -817,7 +819,7 @@ const SetInputRow = ({
       >
         <View>
           <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-            Set {set.setIndex + 1}
+            Set {displayIndex + 1}
           </Text>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
             {targetLine ? `Target ${targetLine}` : "Log this effort"}
@@ -978,7 +980,7 @@ const ExerciseCard = ({
   const statusLabel =
     nextIncompleteIndex === -1
       ? "All sets logged"
-      : `Set ${group.sets[nextIncompleteIndex].setIndex + 1} ready`;
+      : `Set ${nextIncompleteIndex + 1} ready`;
 
   return (
     <View
@@ -1069,10 +1071,11 @@ const ExerciseCard = ({
             </View>
           </View>
 
-          {group.sets.map((set) => (
+          {group.sets.map((set, displayIndex) => (
             <View key={set.id} style={{ gap: 8 }}>
               <SetInputRow
                 set={set}
+                displayIndex={displayIndex}
                 onChange={onChangeSet}
                 onLog={() => onLogSet(set.id, group.restSeconds)}
                 restSeconds={group.restSeconds}

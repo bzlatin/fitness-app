@@ -14,17 +14,24 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { useSquadFeed } from "../hooks/useSquadFeed";
+import { useSquads } from "../hooks/useSquads";
 import {
   ActiveWorkoutStatus,
   SocialUserSummary,
+  SquadDetail,
   WorkoutSummaryShare,
 } from "../types/social";
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
-import { useSocialLocalState } from "../hooks/useSocialLocalState";
-import { followUser, getConnections, searchUsers, unfollowUser } from "../api/social";
+import {
+  followUser,
+  getConnections,
+  searchUsers,
+  unfollowUser,
+} from "../api/social";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { formatHandle } from "../utils/formatHandle";
 
 type FeedItem =
   | { kind: "section"; title: string; subtitle?: string }
@@ -40,18 +47,16 @@ const initialsForName = (name?: string) => {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
-const formatHandle = (handle?: string | null) => {
-  if (!handle) return undefined;
-  const cleaned = handle.replace(/^@+/, "");
-  if (!cleaned) return undefined;
-  return `@${cleaned}`;
-};
-
 const Avatar = ({ user }: { user: SocialUserSummary }) =>
   user.avatarUrl ? (
     <Image
       source={{ uri: user.avatarUrl }}
-      style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: colors.surfaceMuted }}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 999,
+        backgroundColor: colors.surfaceMuted,
+      }}
     />
   ) : (
     <View
@@ -139,6 +144,39 @@ const formatRelativeTime = (iso: string) => {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+};
+
+const buildFeedItems = (
+  activeStatuses: ActiveWorkoutStatus[],
+  recentShares: WorkoutSummaryShare[],
+  excludeUserId?: string,
+  titles?: {
+    liveTitle?: string;
+    liveSubtitle?: string;
+    recentTitle?: string;
+    recentSubtitle?: string;
+  }
+): FeedItem[] => {
+  const filteredActive = activeStatuses.filter(
+    (status) => status.user.id !== excludeUserId
+  );
+  const filteredShares = recentShares.filter(
+    (share) => share.user.id !== excludeUserId
+  );
+  const items: FeedItem[] = [];
+  items.push({
+    kind: "section",
+    title: titles?.liveTitle ?? "Live crew",
+    subtitle: titles?.liveSubtitle,
+  });
+  filteredActive.forEach((status) => items.push({ kind: "active", status }));
+  items.push({
+    kind: "section",
+    title: titles?.recentTitle ?? "Recent sessions",
+    subtitle: titles?.recentSubtitle,
+  });
+  filteredShares.forEach((share) => items.push({ kind: "share", share }));
+  return items;
 };
 
 const ActiveCard = ({
@@ -246,12 +284,19 @@ const ShareCard = ({
       }}
     >
       <View style={{ flex: 1, gap: 4 }}>
-        <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontFamily: fontFamilies.semibold,
+          }}
+        >
           {share.templateName ?? "Custom workout"}
         </Text>
         <Text style={{ color: colors.textSecondary, ...typography.caption }}>
           {share.totalSets} sets
-          {share.totalVolume ? ` · ${share.totalVolume.toLocaleString()} kg` : ""}{" "}
+          {share.totalVolume
+            ? ` · ${share.totalVolume.toLocaleString()} kg`
+            : ""}{" "}
           {share.prCount ? ` · ${share.prCount} PRs` : ""}
         </Text>
       </View>
@@ -276,14 +321,32 @@ const ShareCard = ({
 const SquadScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
-  const { data, isLoading, isError } = useSquadFeed();
-  const { state, createSquad, inviteToSquad } = useSocialLocalState();
+  const { data: generalFeed, isLoading, isError } = useSquadFeed();
+  const {
+    data: squads = [],
+    isLoading: squadsLoading,
+    isError: squadsError,
+    createSquad: createSquadAction,
+    inviteToSquad: inviteToSquadAction,
+    isCreatingSquad,
+    isInvitingToSquad,
+  } = useSquads();
   const { user } = useCurrentUser();
   const [squadName, setSquadName] = useState("");
   const [inviteHandle, setInviteHandle] = useState("");
-  const [inviteSquad, setInviteSquad] = useState<string | undefined>(undefined);
+  const [inviteSquadId, setInviteSquadId] = useState<string | undefined>(
+    undefined
+  );
+  const [selectedSquadId, setSelectedSquadId] = useState<string | undefined>(
+    undefined
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
+  const {
+    data: selectedSquadData,
+    isLoading: selectedSquadLoading,
+    isError: selectedSquadError,
+  } = useSquadFeed(selectedSquadId, { enabled: Boolean(selectedSquadId) });
   const [showSocialModal, setShowSocialModal] = useState(false);
   const closeSocialModal = () => {
     setShowSocialModal(false);
@@ -301,6 +364,48 @@ const SquadScreen = () => {
     return () => clearTimeout(handle);
   }, [searchTerm]);
 
+  useEffect(() => {
+    if (!inviteSquadId && squads.length > 0) {
+      setInviteSquadId(squads[0].id);
+    }
+  }, [squads, inviteSquadId]);
+
+  useEffect(() => {
+    if (
+      selectedSquadId &&
+      !squads.some((squad) => squad.id === selectedSquadId)
+    ) {
+      setSelectedSquadId(undefined);
+    }
+  }, [squads, selectedSquadId]);
+
+  const handleCreateSquad = async () => {
+    const trimmed = squadName.trim();
+    if (!trimmed) return;
+    try {
+      const squad = await createSquadAction(trimmed);
+      setSelectedSquadId(squad.id);
+      setInviteSquadId(squad.id);
+      setSquadName("");
+    } catch (err) {
+      console.error("Failed to create squad", err);
+    }
+  };
+
+  const handleInvite = async () => {
+    const trimmedHandle = inviteHandle.trim();
+    if (!inviteSquadId || !trimmedHandle) return;
+    try {
+      await inviteToSquadAction({
+        squadId: inviteSquadId,
+        handle: trimmedHandle,
+      });
+      setInviteHandle("");
+    } catch (err) {
+      console.error("Failed to invite to squad", err);
+    }
+  };
+
   const searchQuery = useQuery({
     queryKey: ["social", "search", debouncedTerm],
     queryFn: () => searchUsers(debouncedTerm),
@@ -309,12 +414,14 @@ const SquadScreen = () => {
 
   const followMutation = useMutation({
     mutationFn: followUser,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["social", "connections"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["social", "connections"] }),
   });
 
   const unfollowMutation = useMutation({
     mutationFn: unfollowUser,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["social", "connections"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["social", "connections"] }),
   });
 
   const followingIds = useMemo(
@@ -326,44 +433,67 @@ const SquadScreen = () => {
   const pendingOutgoing = connectionsQuery.data?.outgoingInvites ?? [];
 
   const feedItems = useMemo<FeedItem[]>(() => {
-    const filteredActive = (data?.activeStatuses ?? []).filter(
-      (status) => status.user.id !== user?.id
+    return buildFeedItems(
+      generalFeed?.activeStatuses ?? [],
+      generalFeed?.recentShares ?? [],
+      user?.id
     );
-    const filteredShares = (data?.recentShares ?? []).filter(
-      (share) => share.user.id !== user?.id
-    );
-    const items: FeedItem[] = [];
-    items.push({
-      kind: "section",
-      title: "Live crew",
-      subtitle: "Friends currently training.",
-    });
-    filteredActive.forEach((status) =>
-      items.push({ kind: "active", status })
-    );
+  }, [generalFeed?.activeStatuses, generalFeed?.recentShares, user?.id]);
 
-    items.push({
-      kind: "section",
-      title: "Recent sessions",
-      subtitle: "Share wins when you want—never public by default.",
-    });
-    filteredShares.forEach((share) =>
-      items.push({ kind: "share", share })
-    );
+  const selectedSquad = squads.find((squad) => squad.id === selectedSquadId);
+  const selectedSquadItems = useMemo<FeedItem[]>(() => {
+    if (!selectedSquadId) return [];
+    return buildFeedItems(
+      selectedSquadData?.activeStatuses ?? [],
+      selectedSquadData?.recentShares ?? [],
+      undefined,
+      {
+        liveTitle: selectedSquad ? `${selectedSquad.name} live` : "Squad live",
+        liveSubtitle: undefined,
 
-    return items;
-  }, [data?.activeStatuses, data?.recentShares, user?.id]);
+        recentSubtitle: undefined,
+      }
+    );
+  }, [
+    selectedSquadId,
+    selectedSquadData?.activeStatuses,
+    selectedSquadData?.recentShares,
+    selectedSquad?.name,
+    user?.id,
+  ]);
+  const selectedSquadEmpty =
+    selectedSquadId &&
+    !selectedSquadLoading &&
+    selectedSquadItems.filter((item) => item.kind !== "section").length === 0;
+
+  const showingSquadFeed = Boolean(selectedSquadId);
+  const displayItems = showingSquadFeed ? selectedSquadItems : feedItems;
+  const displayLoading = showingSquadFeed ? selectedSquadLoading : isLoading;
+  const displayError = showingSquadFeed ? selectedSquadError : isError;
+  const displayEmpty = showingSquadFeed ? selectedSquadEmpty : emptyState;
 
   const renderItem = ({ item }: { item: FeedItem }) => {
     switch (item.kind) {
       case "section":
         return (
-          <View style={{ paddingHorizontal: 4, paddingVertical: 6 }}>
-            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+          <View style={{ paddingHorizontal: 4, paddingVertical: 4 }}>
+            <Text
+              style={{
+                ...typography.title,
+                color: colors.textSecondary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
               {item.title}
             </Text>
             {item.subtitle ? (
-              <Text style={{ color: colors.textSecondary, marginTop: 4, ...typography.body }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  marginTop: 2,
+                  ...typography.caption,
+                }}
+              >
                 {item.subtitle}
               </Text>
             ) : null}
@@ -373,14 +503,18 @@ const SquadScreen = () => {
         return (
           <ActiveCard
             status={item.status}
-            onPressProfile={(userId) => navigation.navigate("Profile", { userId })}
+            onPressProfile={(userId) =>
+              navigation.navigate("Profile", { userId })
+            }
           />
         );
       case "share":
         return (
           <ShareCard
             share={item.share}
-            onPressProfile={(userId) => navigation.navigate("Profile", { userId })}
+            onPressProfile={(userId) =>
+              navigation.navigate("Profile", { userId })
+            }
           />
         );
       default:
@@ -388,75 +522,156 @@ const SquadScreen = () => {
     }
   };
 
-  const emptyState = !isLoading && feedItems.filter((f) => f.kind !== "section").length === 0;
+  const emptyState =
+    !isLoading && feedItems.filter((f) => f.kind !== "section").length === 0;
 
   return (
     <ScreenContainer>
       <View style={{ flex: 1, gap: 12 }}>
-        <View style={{ marginTop: 6, gap: 4 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>Who{"'"}s Lifting?</Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>
-            Live workouts from your gym buddies and squads.
-          </Text>
-        </View>
-
-        {isLoading ? (
-          <View style={{ marginTop: 20 }}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : null}
-        {isError ? (
-          <Text style={{ color: colors.error }}>
-            Could not load your squad feed. We{"'"}ll retry in a moment.
-          </Text>
-        ) : null}
-
-        <Pressable
-          onPress={() => setShowSocialModal(true)}
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? "rgba(34,197,94,0.14)" : colors.surface,
-            borderRadius: 16,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.primary,
-            gap: 8,
-            opacity: pressed ? 1 : 1,
+        <View
+          style={{
+            marginTop: 4,
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
-          })}
+            gap: 12,
+          }}
         >
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              Find gym buddies & squads
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+              Who{"'"}s lifting
             </Text>
-            <Text style={{ color: colors.textSecondary }}>
-              Search, invite, or create squads without leaving Active Now.
+            <Text
+              style={{ ...typography.caption, color: colors.textSecondary }}
+            >
+              More room for the live crew and your squads.
             </Text>
           </View>
-          <View
-            style={{
-              paddingVertical: 8,
+          <Pressable
+            onPress={() => setShowSocialModal(true)}
+            style={({ pressed }) => ({
+              paddingVertical: 10,
               paddingHorizontal: 12,
-              borderRadius: 999,
-              backgroundColor: colors.primary,
+              borderRadius: 12,
               borderWidth: 1,
-              borderColor: colors.primary,
-            }}
+              borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+            })}
           >
             <Text
               style={{
-                color: "#0B1220",
+                color: colors.textPrimary,
                 fontFamily: fontFamilies.semibold,
-                fontSize: 12,
               }}
             >
-              Browse
+              Find buddies
+            </Text>
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderRadius: 14,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 8,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Squads
+            </Text>
+            <Pressable onPress={() => setShowSocialModal(true)}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Manage
+              </Text>
+            </Pressable>
+          </View>
+          {squadsError ? (
+            <Text style={{ color: colors.error, ...typography.caption }}>
+              Could not load your squads. Try again shortly.
+            </Text>
+          ) : null}
+          {squadsLoading ? (
+            <View
+              style={{
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: 12,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                flexDirection: "row",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <ActivityIndicator color={colors.primary} />
+              <Text
+                style={{ color: colors.textSecondary, ...typography.caption }}
+              >
+                Loading squads…
+              </Text>
+            </View>
+          ) : squads.length ? (
+            <ScrollSquads
+              squads={squads}
+              activeId={selectedSquadId}
+              onSelect={(id) =>
+                setSelectedSquadId((prev) => (prev === id ? undefined : id))
+              }
+            />
+          ) : (
+            <Text
+              style={{ color: colors.textSecondary, ...typography.caption }}
+            >
+              Add or create a squad to pin it here.
+            </Text>
+          )}
+        </View>
+
+        {displayError ? (
+          <Text style={{ color: colors.error }}>
+            Could not load your {showingSquadFeed ? "squad feed" : "feed"}. We
+            {"'"}ll retry in a moment.
+          </Text>
+        ) : null}
+        {displayLoading ? (
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              padding: 24,
+              borderWidth: 1,
+              borderColor: colors.border,
+              marginTop: 12,
+            }}
+          >
+            <ActivityIndicator color={colors.primary} />
+            <Text
+              style={{
+                color: colors.textSecondary,
+                marginTop: 8,
+                ...typography.caption,
+              }}
+            >
+              Searching for live {showingSquadFeed ? "squad" : "crew"}…
             </Text>
           </View>
-        </Pressable>
-
-        {emptyState ? (
+        ) : displayEmpty ? (
           <View
             style={{
               backgroundColor: colors.surface,
@@ -465,20 +680,25 @@ const SquadScreen = () => {
               borderWidth: 1,
               borderColor: colors.border,
               gap: 6,
+              marginTop: 12,
             }}
           >
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
               Quiet right now
             </Text>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              When friends start a workout or share a session, it shows up here.
+            <Text
+              style={{ ...typography.caption, color: colors.textSecondary }}
+            >
+              When {showingSquadFeed ? "squadmates" : "friends"} start a workout
+              or share a session, it shows up here.
             </Text>
           </View>
         ) : (
           <LegendList
-            data={feedItems}
+            data={displayItems}
             keyExtractor={(item, index) => {
-              if (item.kind === "section") return `section-${item.title}-${index}`;
+              if (item.kind === "section")
+                return `section-${item.title}-${index}`;
               if (item.kind === "active") return `active-${item.status.id}`;
               return `share-${item.share.id}`;
             }}
@@ -489,9 +709,31 @@ const SquadScreen = () => {
           />
         )}
 
+        {selectedSquadId ? (
+          <Pressable
+            onPress={() => setSelectedSquadId(undefined)}
+            style={({ pressed }) => ({
+              marginTop: 8,
+              padding: 10,
+              alignSelf: "flex-start",
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+            })}
+          >
+            <Text
+              style={{ color: colors.textSecondary, ...typography.caption }}
+            >
+              Viewing squad: {selectedSquad?.name ?? "Crew"} (tap to switch
+              back)
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Modal
           visible={showSocialModal}
-          animationType="slide"
+          animationType='slide'
           transparent
           onRequestClose={closeSocialModal}
         >
@@ -521,11 +763,18 @@ const SquadScreen = () => {
                   marginBottom: 10,
                 }}
               >
-                <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                <Text
+                  style={{ ...typography.title, color: colors.textPrimary }}
+                >
                   Friends & squads
                 </Text>
                 <Pressable onPress={closeSocialModal}>
-                  <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
                     Close
                   </Text>
                 </Pressable>
@@ -542,7 +791,9 @@ const SquadScreen = () => {
                       gap: 8,
                     }}
                   >
-                    <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                    <Text
+                      style={{ ...typography.title, color: colors.textPrimary }}
+                    >
                       Find gym buddies
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
@@ -551,13 +802,18 @@ const SquadScreen = () => {
                     <TextInput
                       value={searchTerm}
                       onChangeText={setSearchTerm}
-                      placeholder="Search by name or handle"
+                      placeholder='Search by name or handle'
                       placeholderTextColor={colors.textSecondary}
                       style={inputStyle}
                     />
                     <View style={{ gap: 8 }}>
                       {debouncedTerm.length <= 1 ? (
-                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            ...typography.caption,
+                          }}
+                        >
                           Start typing to see suggestions.
                         </Text>
                       ) : searchQuery.isFetching ? (
@@ -566,7 +822,8 @@ const SquadScreen = () => {
                         (searchQuery.data ?? []).map((user) => {
                           const alreadyFollowing = followingIds.has(user.id);
                           const isPending =
-                            followMutation.isPending || unfollowMutation.isPending;
+                            followMutation.isPending ||
+                            unfollowMutation.isPending;
                           return (
                             <Pressable
                               key={user.id}
@@ -583,15 +840,25 @@ const SquadScreen = () => {
                               })}
                             >
                               <View>
-                            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                              {user.name}
-                            </Text>
-                            {user.handle ? (
-                              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                              {formatHandle(user.handle)}
-                              </Text>
-                            ) : null}
-                          </View>
+                                <Text
+                                  style={{
+                                    color: colors.textPrimary,
+                                    fontFamily: fontFamilies.semibold,
+                                  }}
+                                >
+                                  {user.name}
+                                </Text>
+                                {user.handle ? (
+                                  <Text
+                                    style={{
+                                      color: colors.textSecondary,
+                                      ...typography.caption,
+                                    }}
+                                  >
+                                    {formatHandle(user.handle)}
+                                  </Text>
+                                ) : null}
+                              </View>
                               <Pressable
                                 disabled={isPending}
                                 onPress={() =>
@@ -604,14 +871,20 @@ const SquadScreen = () => {
                                   paddingVertical: 8,
                                   borderRadius: 10,
                                   borderWidth: 1,
-                                  borderColor: alreadyFollowing ? colors.border : colors.primary,
-                                  backgroundColor: alreadyFollowing ? colors.surfaceMuted : colors.primary,
+                                  borderColor: alreadyFollowing
+                                    ? colors.border
+                                    : colors.primary,
+                                  backgroundColor: alreadyFollowing
+                                    ? colors.surfaceMuted
+                                    : colors.primary,
                                   opacity: pressed || isPending ? 0.85 : 1,
                                 })}
                               >
                                 <Text
                                   style={{
-                                    color: alreadyFollowing ? colors.textPrimary : colors.surface,
+                                    color: alreadyFollowing
+                                      ? colors.textPrimary
+                                      : colors.surface,
                                     fontFamily: fontFamilies.semibold,
                                   }}
                                 >
@@ -622,7 +895,12 @@ const SquadScreen = () => {
                           );
                         })
                       ) : (
-                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            ...typography.caption,
+                          }}
+                        >
                           No matching users yet.
                         </Text>
                       )}
@@ -639,9 +917,19 @@ const SquadScreen = () => {
                       gap: 8,
                     }}
                   >
-                    <Text style={{ ...typography.title, color: colors.textPrimary }}>Friends</Text>
+                    <Text
+                      style={{ ...typography.title, color: colors.textPrimary }}
+                    >
+                      Friends
+                    </Text>
                     {friendsList.length ? (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                        }}
+                      >
                         {friendsList.map((friend) => (
                           <View
                             key={friend.id}
@@ -654,11 +942,21 @@ const SquadScreen = () => {
                               borderColor: colors.border,
                             }}
                           >
-                            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                            <Text
+                              style={{
+                                color: colors.textPrimary,
+                                fontFamily: fontFamilies.semibold,
+                              }}
+                            >
                               {friend.name}
                             </Text>
                             {friend.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
                                 {formatHandle(friend.handle)}
                               </Text>
                             ) : null}
@@ -666,16 +964,30 @@ const SquadScreen = () => {
                         ))}
                       </View>
                     ) : (
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
                         No friends yet. Add a gym buddy to see them here.
                       </Text>
                     )}
 
-                    <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 6 }}>
+                    <Text
+                      style={{
+                        ...typography.caption,
+                        color: colors.textSecondary,
+                        marginTop: 6,
+                      }}
+                    >
                       Pending invites
                     </Text>
                     {pendingIncoming.length ? (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                        }}
+                      >
                         {pendingIncoming.map((invite) => (
                           <View
                             key={invite.id}
@@ -688,9 +1000,16 @@ const SquadScreen = () => {
                               borderColor: colors.border,
                             }}
                           >
-                            <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
+                            <Text style={{ color: colors.textPrimary }}>
+                              {invite.name}
+                            </Text>
                             {invite.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
                                 {formatHandle(invite.handle)}
                               </Text>
                             ) : null}
@@ -698,16 +1017,30 @@ const SquadScreen = () => {
                         ))}
                       </View>
                     ) : (
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
                         No pending requests at the moment.
                       </Text>
                     )}
 
-                    <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 6 }}>
+                    <Text
+                      style={{
+                        ...typography.caption,
+                        color: colors.textSecondary,
+                        marginTop: 6,
+                      }}
+                    >
                       Invites you sent
                     </Text>
                     {pendingOutgoing.length ? (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                        }}
+                      >
                         {pendingOutgoing.map((invite) => (
                           <View
                             key={invite.id}
@@ -720,9 +1053,16 @@ const SquadScreen = () => {
                               borderColor: colors.border,
                             }}
                           >
-                            <Text style={{ color: colors.textPrimary }}>{invite.name}</Text>
+                            <Text style={{ color: colors.textPrimary }}>
+                              {invite.name}
+                            </Text>
                             {invite.handle ? (
-                              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
                                 {formatHandle(invite.handle)}
                               </Text>
                             ) : null}
@@ -730,7 +1070,9 @@ const SquadScreen = () => {
                         ))}
                       </View>
                     ) : (
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
                         No outgoing invites right now.
                       </Text>
                     )}
@@ -746,23 +1088,27 @@ const SquadScreen = () => {
                       gap: 10,
                     }}
                   >
-                    <Text style={{ ...typography.title, color: colors.textPrimary }}>Squads</Text>
+                    <Text
+                      style={{ ...typography.title, color: colors.textPrimary }}
+                    >
+                      Squads
+                    </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Keep active now visible while creating or inviting to squads.
+                      Keep active now visible while creating or inviting to
+                      squads.
                     </Text>
                     <TextInput
                       value={squadName}
                       onChangeText={setSquadName}
-                      placeholder="Create squad name"
+                      placeholder='Create squad name'
                       placeholderTextColor={colors.textSecondary}
                       style={inputStyle}
                     />
                     <Pressable
                       onPress={() => {
-                        void createSquad(squadName);
-                        setInviteSquad(squadName || inviteSquad);
-                        setSquadName("");
+                        void handleCreateSquad();
                       }}
+                      disabled={isCreatingSquad}
                       style={({ pressed }) => ({
                         paddingVertical: 10,
                         borderRadius: 10,
@@ -770,62 +1116,84 @@ const SquadScreen = () => {
                         borderWidth: 1,
                         borderColor: colors.border,
                         alignItems: "center",
-                        opacity: pressed ? 0.9 : 1,
+                        opacity: pressed || isCreatingSquad ? 0.7 : 1,
                       })}
                     >
-                      <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                        Create squad
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                        }}
+                      >
+                        {isCreatingSquad ? "Creating squad…" : "Create squad"}
                       </Text>
                     </Pressable>
 
-                    {state.squads.length ? (
+                    {squads.length ? (
                       <View style={{ gap: 6 }}>
-                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            ...typography.caption,
+                          }}
+                        >
                           Invite to squad
                         </Text>
                         <TextInput
                           value={inviteHandle}
                           onChangeText={setInviteHandle}
-                          placeholder="Friend handle"
+                          placeholder='Friend handle'
                           placeholderTextColor={colors.textSecondary}
                           style={inputStyle}
                         />
                         <ScrollSquads
-                          squads={state.squads}
-                          active={inviteSquad}
-                          onSelect={(name) => setInviteSquad(name)}
+                          squads={squads}
+                          activeId={inviteSquadId}
+                          onSelect={(id) => setInviteSquadId(id)}
                         />
                         <Pressable
                           onPress={() => {
-                            if (inviteSquad) {
-                              void inviteToSquad(inviteSquad, inviteHandle);
-                              setInviteHandle("");
-                            }
+                            void handleInvite();
                           }}
+                          disabled={
+                            isInvitingToSquad ||
+                            !inviteSquadId ||
+                            !inviteHandle.trim()
+                          }
                           style={({ pressed }) => ({
                             paddingVertical: 10,
                             borderRadius: 10,
                             backgroundColor: colors.primary,
                             alignItems: "center",
-                            opacity: pressed ? 0.9 : 1,
+                            opacity: pressed || isInvitingToSquad ? 0.7 : 1,
                           })}
                         >
-                          <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
-                            Send invite
+                          <Text
+                            style={{
+                              color: colors.surface,
+                              fontFamily: fontFamilies.semibold,
+                            }}
+                          >
+                            {isInvitingToSquad ? "Inviting…" : "Send invite"}
                           </Text>
                         </Pressable>
                       </View>
                     ) : null}
 
-                    {state.squads.length ? (
+                    {squads.length ? (
                       <View style={{ gap: 6 }}>
-                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            ...typography.caption,
+                          }}
+                        >
                           Squads
                         </Text>
                         <View style={{ gap: 8 }}>
-                          {state.squads.map((squad) => (
+                          {squads.map((squad) => (
                             <View
-                              key={squad.name}
+                              key={squad.id}
                               style={{
                                 borderWidth: 1,
                                 borderColor: colors.border,
@@ -834,11 +1202,22 @@ const SquadScreen = () => {
                                 backgroundColor: colors.surface,
                               }}
                             >
-                              <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                              <Text
+                                style={{
+                                  color: colors.textPrimary,
+                                  fontFamily: fontFamilies.semibold,
+                                }}
+                              >
                                 {squad.name}
                               </Text>
-                              <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-                                Members: {squad.members.join(", ") || "Just you"}
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  ...typography.caption,
+                                }}
+                              >
+                                Members:{" "}
+                                {formatSquadMembersLabel(squad.members)}
                               </Text>
                             </View>
                           ))}
@@ -869,33 +1248,49 @@ const inputStyle = {
 
 const ScrollSquads = ({
   squads,
-  active,
+  activeId,
   onSelect,
 }: {
-  squads: { name: string; members: string[] }[];
-  active?: string;
-  onSelect: (name: string) => void;
+  squads: SquadDetail[];
+  activeId?: string;
+  onSelect: (id: string) => void;
 }) => (
-  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    style={{ marginVertical: 8 }}
+  >
     <View style={{ flexDirection: "row", gap: 8 }}>
       {squads.map((squad) => {
-        const selected = active === squad.name;
+        const selected = activeId === squad.id;
         return (
           <Pressable
-            key={squad.name}
-            onPress={() => onSelect(squad.name)}
+            key={squad.id}
+            onPress={() => onSelect(squad.id)}
             style={({ pressed }) => ({
               paddingHorizontal: 12,
               paddingVertical: 10,
               borderRadius: 12,
               borderWidth: 1,
               borderColor: selected ? colors.primary : colors.border,
-              backgroundColor: selected ? "rgba(34,197,94,0.12)" : colors.surface,
+              backgroundColor: selected
+                ? "rgba(34,197,94,0.12)"
+                : colors.surface,
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+            <Text
+              style={{
+                color: selected ? colors.primary : colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
               {squad.name}
+            </Text>
+            <Text
+              style={{ color: colors.textSecondary, ...typography.caption }}
+            >
+              {formatSquadMembersLabel(squad.members)}
             </Text>
           </Pressable>
         );
@@ -903,3 +1298,13 @@ const ScrollSquads = ({
     </View>
   </ScrollView>
 );
+
+const formatSquadMembersLabel = (members: SquadDetail["members"]) => {
+  const names = members
+    .map((member) => member.handle ?? member.name ?? "Athlete")
+    .filter((value): value is string => Boolean(value));
+  if (!names.length) return "Just you";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+};

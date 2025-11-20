@@ -1,7 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import { ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
-import { getCurrentUserProfile, updateCurrentUserProfile } from "../api/social";
+import {
+  deleteCurrentUserAccount,
+  getCurrentUserProfile,
+  updateCurrentUserProfile,
+} from "../api/social";
 import { useAuth } from "./AuthContext";
 import { UserProfile } from "../types/user";
 import { SocialProfile } from "../types/social";
@@ -101,6 +105,7 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteAccount = async () => {
+    await deleteCurrentUserAccount();
     await persist(null);
     queryClient.clear();
   };

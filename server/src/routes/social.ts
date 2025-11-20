@@ -71,6 +71,104 @@ type ShareRow = {
   avatar_url: string | null;
 };
 
+type SquadMemberRow = {
+  id: string;
+  name: string | null;
+  handle: string | null;
+  avatar_url: string | null;
+  role: string | null;
+};
+
+type SquadRow = {
+  id: string;
+  name: string;
+  created_by: string;
+  members: SquadMemberRow[];
+};
+
+type SquadResponse = {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  memberCount: number;
+  members: {
+    id: string;
+    name: string;
+    handle?: string;
+    avatarUrl?: string;
+    role?: string | null;
+  }[];
+};
+
+const SQUAD_MEMBERS_AGGREGATE = `
+  SELECT s.id, s.name, s.created_by,
+    COALESCE(
+      json_agg(
+        json_build_object(
+          'id', u.id,
+          'name', u.name,
+          'handle', u.handle,
+          'avatar_url', u.avatar_url,
+          'role', sm.role
+        ) ORDER BY sm.joined_at ASC
+      ) FILTER (WHERE u.id IS NOT NULL),
+      '[]'::json
+    ) AS members
+  FROM squads s
+  JOIN squad_members sm ON sm.squad_id = s.id
+  JOIN users u ON u.id = sm.user_id
+`;
+
+const mapSquadRow = (row: SquadRow, viewerId: string): SquadResponse => {
+  const members = row.members ?? [];
+  return {
+    id: row.id,
+    name: row.name,
+    isOwner: row.created_by === viewerId,
+    memberCount: members.length,
+    members: members.map((member) => ({
+      id: member.id,
+      name: member.name ?? "Athlete",
+      handle: member.handle ?? undefined,
+      avatarUrl: member.avatar_url ?? undefined,
+      role: member.role ?? undefined,
+    })),
+  };
+};
+
+const fetchSquadsForUser = async (userId: string) => {
+  const result = await query<SquadRow>(
+    `
+      ${SQUAD_MEMBERS_AGGREGATE}
+      WHERE s.id IN (
+        SELECT squad_id FROM squad_members WHERE user_id = $1
+      )
+      GROUP BY s.id
+      ORDER BY s.name
+    `,
+    [userId]
+  );
+  return result.rows.map((row) => mapSquadRow(row, userId));
+};
+
+const fetchSquadById = async (userId: string, squadId: string) => {
+  const result = await query<SquadRow>(
+    `
+      ${SQUAD_MEMBERS_AGGREGATE}
+      WHERE s.id = $2
+        AND s.id IN (
+          SELECT squad_id FROM squad_members WHERE user_id = $1
+        )
+      GROUP BY s.id
+    `,
+    [userId, squadId]
+  );
+  if (result.rowCount === 0) {
+    return null;
+  }
+  return mapSquadRow(result.rows[0], userId);
+};
+
 const router = Router();
 
 const normalizeHandle = (value?: string | null) => {
@@ -356,22 +454,37 @@ router.put("/me", async (req, res) => {
     const updated = result.rows[0];
     const counts = await fetchRelationshipCounts(userId);
     const stats = await fetchWorkoutStats(userId);
-    return res.json({
-      ...mapUserRow(updated),
-      ...counts,
-      ...stats,
-      isFollowing: false,
-    });
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code: string }).code === "23505"
-    ) {
-      return res.status(409).json({ error: "Handle already taken" });
+      return res.json({
+        ...mapUserRow(updated),
+        ...counts,
+        ...stats,
+        isFollowing: false,
+      });
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        "code" in err &&
+        (err as { code: string }).code === "23505"
+      ) {
+        return res.status(409).json({ error: "Handle already taken" });
+      }
+      console.error("Failed to update profile", err);
+      return res.status(500).json({ error: "Failed to update profile" });
     }
-    console.error("Failed to update profile", err);
-    return res.status(500).json({ error: "Failed to update profile" });
+});
+
+router.delete("/me", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to delete account", err);
+    return res.status(500).json({ error: "Failed to delete account" });
   }
 });
 
@@ -451,6 +564,111 @@ router.get("/connections", async (_req, res) => {
   } catch (err) {
     console.error("Failed to load connections", err);
     return res.status(500).json({ error: "Failed to load connections" });
+  }
+});
+
+router.get("/squads", async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const squads = await fetchSquadsForUser(userId);
+    return res.json({ squads });
+  } catch (err) {
+    console.error("Failed to load squads", err);
+    return res.status(500).json({ error: "Failed to load squads" });
+  }
+});
+
+router.post("/squads", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const { name } = req.body as { name?: string };
+  if (!name?.trim()) {
+    return res.status(400).json({ error: "Squad name required" });
+  }
+  const squadId = generateId();
+
+  try {
+    await query(
+      `INSERT INTO squads (id, name, created_by) VALUES ($1, $2, $3)`,
+      [squadId, name.trim(), userId]
+    );
+    await query(
+      `
+        INSERT INTO squad_members (squad_id, user_id, role)
+        VALUES ($1, $2, 'owner')
+        ON CONFLICT (squad_id, user_id) DO NOTHING
+      `,
+      [squadId, userId]
+    );
+    const squad = await fetchSquadById(userId, squadId);
+    if (!squad) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+    return res.status(201).json({ squad });
+  } catch (err) {
+    console.error("Failed to create squad", err);
+    return res.status(500).json({ error: "Failed to create squad" });
+  }
+});
+
+router.post("/squads/:squadId/members", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const { handle } = req.body as { handle?: string };
+  const targetValue = (handle ?? "").trim();
+  if (!targetValue) {
+    return res.status(400).json({ error: "Handle or id required" });
+  }
+  const normalizedHandle = normalizeHandle(targetValue) ?? targetValue;
+
+  try {
+    const squadMembership = await query(`SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [
+      req.params.squadId,
+      userId,
+    ]);
+    if (squadMembership.rowCount === 0) {
+      return res.status(403).json({ error: "Not a member of that squad" });
+    }
+
+    const targetResult = await query<{ id: string }>(
+      `
+        SELECT id
+        FROM users
+        WHERE id = $1 OR LOWER(handle) = LOWER($2)
+        LIMIT 1
+      `,
+      [targetValue, normalizedHandle]
+    );
+    const target = targetResult.rows[0];
+    if (!target) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await query(
+      `
+        INSERT INTO squad_members (squad_id, user_id, role)
+        VALUES ($1, $2, 'member')
+        ON CONFLICT (squad_id, user_id) DO NOTHING
+      `,
+      [req.params.squadId, target.id]
+    );
+
+    const squad = await fetchSquadById(userId, req.params.squadId);
+    if (!squad) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+    return res.json({ squad });
+  } catch (err) {
+    console.error("Failed to add squad member", err);
+    return res.status(500).json({ error: "Failed to invite member" });
   }
 });
 
@@ -651,13 +869,33 @@ router.post("/share", async (req, res) => {
   }
 });
 
-router.get("/squad-feed", async (_req, res) => {
+router.get("/squad-feed", async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const squadId =
+    typeof req.query.squadId === "string" && req.query.squadId.trim().length > 0
+      ? req.query.squadId.trim()
+      : undefined;
+  let squadMembers: Set<string> | null = null;
+
   try {
+    if (squadId) {
+      const squadMemberRows = await query<{ user_id: string }>(
+        `SELECT user_id FROM squad_members WHERE squad_id = $1`,
+        [squadId]
+      );
+      if (squadMemberRows.rowCount === 0) {
+        return res.status(404).json({ error: "Squad not found" });
+      }
+      const membersSet = new Set(squadMemberRows.rows.map((row) => row.user_id));
+      if (!membersSet.has(userId)) {
+        return res.status(403).json({ error: "Not a member of this squad" });
+      }
+      squadMembers = membersSet;
+    }
     const followingRows = await query<{ target_user_id: string }>(
       `SELECT target_user_id FROM follows WHERE user_id = $1`,
       [userId]
@@ -692,11 +930,21 @@ router.get("/squad-feed", async (_req, res) => {
     );
 
     const activeStatuses = statuses.rows
-      .filter((row) => canView(row.user_id, row.visibility, userId, following, mutual))
+      .filter((row) => {
+        if (squadMembers) {
+          return row.visibility === "squad" && squadMembers.has(row.user_id);
+        }
+        return canView(row.user_id, row.visibility, userId, following, mutual);
+      })
       .map(mapStatus);
 
     const recentShares = shares.rows
-      .filter((row) => canView(row.user_id, row.visibility, userId, following, mutual))
+      .filter((row) => {
+        if (squadMembers) {
+          return row.visibility === "squad" && squadMembers.has(row.user_id);
+        }
+        return canView(row.user_id, row.visibility, userId, following, mutual);
+      })
       .map(mapShare);
 
     return res.json({ activeStatuses, recentShares });

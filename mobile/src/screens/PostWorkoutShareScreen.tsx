@@ -112,6 +112,10 @@ const PostWorkoutShareScreen = () => {
     shareMutation.mutate({
       sessionId: route.params.sessionId,
       visibility,
+      templateName: route.params.templateName,
+      totalSets: route.params.totalSets,
+      totalVolume: route.params.totalVolume,
+      prCount: route.params.prCount,
       progressPhotoUri,
     });
   };
