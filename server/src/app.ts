@@ -3,6 +3,7 @@ import cors from "cors";
 import exercisesRouter from "./routes/exercises";
 import templatesRouter from "./routes/templates";
 import sessionsRouter from "./routes/sessions";
+import { requireAuth, attachUser, ensureUser } from "./middleware/auth";
 
 const app = express();
 
@@ -14,8 +15,8 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/exercises", exercisesRouter);
-app.use("/api/templates", templatesRouter);
-app.use("/api/sessions", sessionsRouter);
+app.use("/api/templates", requireAuth, attachUser, ensureUser, templatesRouter);
+app.use("/api/sessions", requireAuth, attachUser, ensureUser, sessionsRouter);
 
 app.use(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -16,6 +16,8 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import { colors } from "./src/theme/colors";
 import { fontFamilies } from "./src/theme/typography";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { AuthProvider } from "./src/context/AuthContext";
+import AuthGate from "./src/components/auth/AuthGate";
 
 const App = () => {
   const [fontsLoaded] = useFonts({
@@ -49,12 +51,16 @@ const App = () => {
   };
 
   const content = fontsLoaded ? (
-    <QueryClientProvider client={queryClient}>
-      <NavigationContainer theme={navTheme}>
-        <StatusBar style="light" />
-        <RootNavigator />
-      </NavigationContainer>
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style='light' />
+        <AuthGate>
+          <NavigationContainer theme={navTheme}>
+            <RootNavigator />
+          </NavigationContainer>
+        </AuthGate>
+      </QueryClientProvider>
+    </AuthProvider>
   ) : (
     <View
       style={{
@@ -73,7 +79,7 @@ const App = () => {
           letterSpacing: 0.3,
         }}
       >
-        Loading GymBrain...
+        Loading Push / Pull...
       </Text>
     </View>
   );

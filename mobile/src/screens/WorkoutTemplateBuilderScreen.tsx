@@ -74,13 +74,18 @@ const mapPersistedExercise = (
   sets: exercise.defaultSets,
   reps: exercise.defaultReps,
   restSeconds: exercise.defaultRestSeconds,
-  weight: exercise.defaultWeight,
-  incline: exercise.defaultIncline,
-  distance: exercise.defaultDistance,
-  durationMinutes: exercise.defaultDurationMinutes,
+  weight:
+    exercise.defaultWeight !== undefined ? String(exercise.defaultWeight) : undefined,
+  incline:
+    exercise.defaultIncline !== undefined ? String(exercise.defaultIncline) : undefined,
+  distance:
+    exercise.defaultDistance !== undefined ? String(exercise.defaultDistance) : undefined,
+  durationMinutes:
+    exercise.defaultDurationMinutes !== undefined
+      ? String(exercise.defaultDurationMinutes)
+      : undefined,
   notes: exercise.notes,
 });
-
 
 const WorkoutTemplateBuilderScreen = () => {
   const route = useRoute<RootRoute<"WorkoutTemplateBuilder">>();
@@ -201,23 +206,29 @@ const WorkoutTemplateBuilderScreen = () => {
       | "durationMinutes",
     value: string
   ) => {
-    const parsed = value === "" ? NaN : Number(value);
-    const nextValue =
-      field === "sets" || field === "reps"
-        ? Math.max(1, Number.isNaN(parsed) ? 1 : Math.round(parsed))
-        : Number.isNaN(parsed)
-        ? undefined
-        : parsed;
-
     setExercises((prev) =>
-      prev.map((ex) =>
-        ex.formId === formId
-          ? {
-              ...ex,
-              [field]: value === "" ? undefined : nextValue,
-            }
-          : ex
-      )
+      prev.map((ex) => {
+        if (ex.formId !== formId) return ex;
+        if (field === "sets" || field === "reps") {
+          const parsed = Number(value);
+          const nextValue = value === "" ? 1 : Math.max(1, Math.round(parsed || 1));
+          return { ...ex, [field]: nextValue };
+        }
+        if (field === "restSeconds") {
+          if (value === "") {
+            return { ...ex, restSeconds: undefined };
+          }
+          const parsed = Number(value);
+          if (Number.isNaN(parsed)) {
+            return ex;
+          }
+          return { ...ex, restSeconds: Math.max(0, Math.round(parsed)) };
+        }
+        return {
+          ...ex,
+          [field]: value === "" ? undefined : value,
+        };
+      })
     );
   };
 
@@ -232,6 +243,13 @@ const WorkoutTemplateBuilderScreen = () => {
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
+    const parseDecimal = (input?: string) => {
+      if (input === undefined) return undefined;
+      const normalized = input.replace(",", ".");
+      const parsed = Number(normalized);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    };
+
     const payload = {
       name: name.trim(),
       description: description.trim() || undefined,
@@ -241,10 +259,10 @@ const WorkoutTemplateBuilderScreen = () => {
         defaultSets: ex.sets,
         defaultReps: ex.reps,
         defaultRestSeconds: ex.restSeconds,
-        defaultWeight: ex.weight,
-        defaultIncline: ex.incline,
-        defaultDistance: ex.distance,
-        defaultDurationMinutes: ex.durationMinutes,
+        defaultWeight: parseDecimal(ex.weight),
+        defaultIncline: parseDecimal(ex.incline),
+        defaultDistance: parseDecimal(ex.distance),
+        defaultDurationMinutes: parseDecimal(ex.durationMinutes),
         notes: ex.notes,
       })),
     };
@@ -263,7 +281,8 @@ const WorkoutTemplateBuilderScreen = () => {
           {isEditing ? "Edit workout" : "Build a workout"}
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Name it, define the split, then arrange exercises with long-press drag.
+          Name it, define the split, then arrange exercises with long-press
+          drag.
         </Text>
       </View>
 
@@ -285,7 +304,7 @@ const WorkoutTemplateBuilderScreen = () => {
             Workout name
           </Text>
           <TextInput
-            placeholder="Push power"
+            placeholder='Push power'
             placeholderTextColor={colors.textSecondary}
             value={name}
             onChangeText={setName}
@@ -311,7 +330,7 @@ const WorkoutTemplateBuilderScreen = () => {
             Description (optional)
           </Text>
           <TextInput
-            placeholder="Heavy pressing, then accessory shoulders."
+            placeholder='Heavy pressing, then accessory shoulders.'
             placeholderTextColor={colors.textSecondary}
             value={description}
             onChangeText={setDescription}
@@ -402,9 +421,12 @@ const WorkoutTemplateBuilderScreen = () => {
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Ionicons name="add" size={18} color={colors.secondary} />
+            <Ionicons name='add' size={18} color={colors.secondary} />
             <Text
-              style={{ fontFamily: fontFamilies.semibold, color: colors.secondary }}
+              style={{
+                fontFamily: fontFamilies.semibold,
+                color: colors.secondary,
+              }}
             >
               Add exercise
             </Text>
@@ -438,7 +460,8 @@ const WorkoutTemplateBuilderScreen = () => {
                 marginTop: 4,
               }}
             >
-              Tap “Add exercise” to pull from the GymBrain library with visuals.
+              Tap “Add exercise” to pull from the Push / Pull library with
+              visuals.
             </Text>
           </View>
         ) : null}
@@ -488,8 +511,14 @@ const WorkoutTemplateBuilderScreen = () => {
           gap: 8,
         })}
       >
-        <Ionicons name="add-circle-outline" size={20} color={colors.secondary} />
-        <Text style={{ color: colors.secondary, fontFamily: fontFamilies.semibold }}>
+        <Ionicons
+          name='add-circle-outline'
+          size={20}
+          color={colors.secondary}
+        />
+        <Text
+          style={{ color: colors.secondary, fontFamily: fontFamilies.semibold }}
+        >
           Add another exercise
         </Text>
       </Pressable>
@@ -530,7 +559,7 @@ const WorkoutTemplateBuilderScreen = () => {
             })}
           >
             <Ionicons
-              name="reorder-three"
+              name='reorder-three'
               size={24}
               color={colors.textSecondary}
             />
@@ -539,7 +568,9 @@ const WorkoutTemplateBuilderScreen = () => {
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
               {item.exercise.name}
             </Text>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            <Text
+              style={{ ...typography.caption, color: colors.textSecondary }}
+            >
               {item.exercise.primaryMuscleGroup} • {item.exercise.equipment}
             </Text>
           </View>
@@ -548,48 +579,60 @@ const WorkoutTemplateBuilderScreen = () => {
             hitSlop={8}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Ionicons name="trash-outline" color={colors.textSecondary} size={20} />
+            <Ionicons
+              name='trash-outline'
+              color={colors.textSecondary}
+              size={20}
+            />
           </Pressable>
         </View>
 
         {cardio ? (
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <InlineNumberInput
-              label="Incline"
-              value={item.incline ? String(item.incline) : ""}
-              onChangeText={(val) => updateExerciseField(item.formId, "incline", val)}
-              keyboardType="decimal-pad"
+              <InlineNumberInput
+                label='Incline'
+                value={item.incline ?? ""}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "incline", val)
+                }
+                keyboardType='decimal-pad'
             />
-            <InlineNumberInput
-              label="Duration (min)"
-              value={item.durationMinutes ? String(item.durationMinutes) : ""}
-              onChangeText={(val) =>
-                updateExerciseField(item.formId, "durationMinutes", val)
-              }
-              keyboardType="decimal-pad"
+              <InlineNumberInput
+                label='Duration (min)'
+                value={item.durationMinutes ?? ""}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "durationMinutes", val)
+                }
+                keyboardType='decimal-pad'
             />
-            <InlineNumberInput
-              label="Distance (mi)"
-              value={item.distance ? String(item.distance) : ""}
-              onChangeText={(val) => updateExerciseField(item.formId, "distance", val)}
-              keyboardType="decimal-pad"
+              <InlineNumberInput
+                label='Distance (mi)'
+                value={item.distance ?? ""}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "distance", val)
+                }
+                keyboardType='decimal-pad'
             />
           </View>
         ) : (
           <>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <InlineNumberInput
-                label="Sets"
+                label='Sets'
                 value={String(item.sets)}
-                onChangeText={(val) => updateExerciseField(item.formId, "sets", val)}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "sets", val)
+                }
               />
               <InlineNumberInput
-                label="Reps"
+                label='Reps'
                 value={String(item.reps)}
-                onChangeText={(val) => updateExerciseField(item.formId, "reps", val)}
+                onChangeText={(val) =>
+                  updateExerciseField(item.formId, "reps", val)
+                }
               />
               <InlineNumberInput
-                label="Rest (s)"
+                label='Rest (s)'
                 value={item.restSeconds ? String(item.restSeconds) : ""}
                 onChangeText={(val) =>
                   updateExerciseField(item.formId, "restSeconds", val)
@@ -597,10 +640,12 @@ const WorkoutTemplateBuilderScreen = () => {
               />
             </View>
             <InlineNumberInput
-              label="Weight (lb)"
-              value={item.weight ? String(item.weight) : ""}
-              onChangeText={(val) => updateExerciseField(item.formId, "weight", val)}
-              keyboardType="decimal-pad"
+              label='Weight (lb)'
+              value={item.weight ?? ""}
+              onChangeText={(val) =>
+                updateExerciseField(item.formId, "weight", val)
+              }
+              keyboardType='decimal-pad'
             />
           </>
         )}
@@ -624,7 +669,7 @@ const WorkoutTemplateBuilderScreen = () => {
           ListFooterComponent={footerComponent}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps='handled'
         />
 
         <ExercisePicker

@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import ExerciseRow from "../components/workouts/ExerciseRow";
 import { fetchTemplate, updateTemplate } from "../api/templates";
 import { startSessionFromTemplate } from "../api/sessions";
-import { useDuplicateTemplate, templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { useDeleteTemplate, useDuplicateTemplate, templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 
@@ -19,13 +19,17 @@ const WorkoutTemplateDetailScreen = () => {
   const navigation = useNavigation<Nav>();
   const { data: listData } = useWorkoutTemplates();
   const duplicateMutation = useDuplicateTemplate();
+  const deleteMutation = useDeleteTemplate();
   const queryClient = useQueryClient();
 
+  const detailQueryKey = [...templatesKey, route.params.templateId];
+
   const templateQuery = useQuery({
-    queryKey: [...templatesKey, route.params.templateId],
+    queryKey: detailQueryKey,
     queryFn: () => fetchTemplate(route.params.templateId),
     initialData: () =>
       listData?.find((t) => t.id === route.params.templateId),
+    enabled: !deleteMutation.isPending,
   });
 
   const startMutation = useMutation({
@@ -62,6 +66,30 @@ const WorkoutTemplateDetailScreen = () => {
     const trimmed = draftName.trim();
     if (!trimmed || !template) return;
     renameMutation.mutate(trimmed);
+  };
+
+  const confirmDelete = () => {
+    if (!template) return;
+    Alert.alert(
+      "Delete template?",
+      "This will remove the workout and all of its exercises. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteMutation.mutate(template.id, {
+              onSuccess: () => {
+                queryClient.removeQueries({ queryKey: detailQueryKey });
+                queryClient.invalidateQueries({ queryKey: templatesKey });
+                navigation.goBack();
+              },
+            });
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -213,6 +241,23 @@ const WorkoutTemplateDetailScreen = () => {
           >
             <Text style={{ color: colors.secondary, fontWeight: "700" }}>
               Duplicate
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={confirmDelete}
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              borderRadius: 12,
+              alignItems: "center",
+              borderColor: colors.error,
+              borderWidth: 1,
+              opacity: pressed ? 0.9 : 1,
+            })}
+            disabled={deleteMutation.isPending}
+          >
+            <Text style={{ color: colors.error, fontWeight: "700" }}>
+              Delete Template
             </Text>
           </Pressable>
         </View>

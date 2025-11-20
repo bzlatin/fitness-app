@@ -1,13 +1,20 @@
 import { Router } from "express";
 import { templates as templateStore } from "../data/templates";
 import { sessions, findSession } from "../data/sessions";
-import { DEMO_USER_ID, WorkoutSession, WorkoutSet } from "../types/workouts";
+import { WorkoutSession, WorkoutSet } from "../types/workouts";
 import { generateId } from "../utils/id";
 
 const router = Router();
 
 router.post("/from-template/:templateId", (req, res) => {
-  const template = templateStore.find((t) => t.id === req.params.templateId);
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const template = templateStore.find(
+    (t) => t.id === req.params.templateId && t.userId === userId
+  );
   if (!template) {
     return res.status(404).json({ error: "Template not found" });
   }
@@ -33,7 +40,7 @@ router.post("/from-template/:templateId", (req, res) => {
 
   const session: WorkoutSession = {
     id: sessionId,
-    userId: DEMO_USER_ID,
+    userId,
     templateId: template.id,
     startedAt,
     finishedAt: undefined,
@@ -45,7 +52,12 @@ router.post("/from-template/:templateId", (req, res) => {
 });
 
 router.get("/:id", (req, res) => {
-  const session = findSession(req.params.id);
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const session = findSession(req.params.id, userId);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
@@ -53,7 +65,12 @@ router.get("/:id", (req, res) => {
 });
 
 router.patch("/:id", (req, res) => {
-  const session = findSession(req.params.id);
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const session = findSession(req.params.id, userId);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }

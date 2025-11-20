@@ -68,9 +68,9 @@ export type TemplateExerciseForm = {
   sets: number;
   reps: number;
   restSeconds?: number;
-  weight?: number;
-  incline?: number;
-  distance?: number;
-  durationMinutes?: number;
+  weight?: string;
+  incline?: string;
+  distance?: string;
+  durationMinutes?: string;
   notes?: string;
 };

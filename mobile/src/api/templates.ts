@@ -46,3 +46,7 @@ export const duplicateTemplate = async (id: string) => {
   const res = await apiClient.post<WorkoutTemplate>(`/templates/${id}/duplicate`);
   return res.data;
 };
+
+export const deleteTemplate = async (id: string) => {
+  await apiClient.delete<void>(`/templates/${id}`);
+};

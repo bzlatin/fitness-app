@@ -24,6 +24,16 @@ export const query = <T extends QueryResultRow = QueryResultRow>(
 
 export const initDb = async () => {
   await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT,
+      name TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS workout_templates (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

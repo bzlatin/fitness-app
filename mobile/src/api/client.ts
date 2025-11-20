@@ -4,6 +4,14 @@ declare const process: any;
 
 const DEFAULT_API_URL = "http://localhost:4000/api";
 
+type TokenProvider = () => string | null | undefined;
+
+let authTokenProvider: TokenProvider | null = null;
+
+export const setAuthTokenProvider = (provider: TokenProvider | null) => {
+  authTokenProvider = provider;
+};
+
 const resolveApiBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
@@ -43,12 +51,22 @@ const buildUrl = (path: string, params?: RequestConfig["params"]) => {
   return url.toString();
 };
 
-const request = async <T>(path: string, init: RequestInit, config?: RequestConfig) => {
+const request = async <T>(
+  path: string,
+  init: RequestInit,
+  config?: RequestConfig,
+  expectJson = true
+) => {
   const url = buildUrl(path, config?.params);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(config?.headers ?? {}),
   };
+
+  const token = authTokenProvider?.();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   const response = await fetch(url, {
     ...init,
@@ -60,7 +78,12 @@ const request = async <T>(path: string, init: RequestInit, config?: RequestConfi
     throw new Error(`Request failed: ${response.status} ${message}`);
   }
 
-  const data = (await response.json()) as T;
+  if (!expectJson || response.status === 204) {
+    return { data: undefined as T };
+  }
+
+  const text = await response.text();
+  const data = text ? (JSON.parse(text) as T) : (undefined as T);
   return { data };
 };
 
@@ -85,4 +108,6 @@ export const apiClient = {
       { method: "PATCH", body: body ? JSON.stringify(body) : undefined },
       config
     ),
+  delete: <T>(path: string, config?: RequestConfig) =>
+    request<T>(path, { method: "DELETE" }, config, false),
 };

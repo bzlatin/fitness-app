@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 4000;
 initDb()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`GymBrain API running on http://localhost:${PORT}`);
+      console.log(`Push / Pull API running on http://localhost:${PORT}`);
     });
   })
   .catch((err) => {

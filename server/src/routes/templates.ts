@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
 import { generateId } from "../utils/id";
-import { DEMO_USER_ID, WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
+import { WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
 import { pool, query } from "../db";
 
 const router = Router();
@@ -80,18 +80,19 @@ const buildTemplates = async (templateRows: TemplateRow[]) => {
   return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows));
 };
 
-const fetchTemplates = async (): Promise<WorkoutTemplate[]> => {
+const fetchTemplates = async (userId: string): Promise<WorkoutTemplate[]> => {
   const templateRowsResult = await query<TemplateRow>(
     `SELECT *
      FROM workout_templates
      WHERE user_id = $1
      ORDER BY created_at DESC`,
-    [DEMO_USER_ID]
+    [userId]
   );
   return buildTemplates(templateRowsResult.rows);
 };
 
 const fetchTemplateById = async (
+  userId: string,
   templateId: string
 ): Promise<WorkoutTemplate | null> => {
   const templateRowsResult = await query<TemplateRow>(
@@ -99,7 +100,7 @@ const fetchTemplateById = async (
      FROM workout_templates
      WHERE user_id = $1 AND id = $2
      LIMIT 1`,
-    [DEMO_USER_ID, templateId]
+    [userId, templateId]
   );
   const templates = await buildTemplates(templateRowsResult.rows);
   return templates[0] ?? null;
@@ -121,8 +122,12 @@ const withTransaction = async <T>(fn: (client: PoolClient) => Promise<T>) => {
 };
 
 router.get("/", async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   try {
-    const templates = await fetchTemplates();
+    const templates = await fetchTemplates(userId);
     res.json(templates);
   } catch (err) {
     console.error("Failed to fetch templates", err);
@@ -131,8 +136,12 @@ router.get("/", async (_req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   try {
-    const template = await fetchTemplateById(req.params.id);
+    const template = await fetchTemplateById(userId, req.params.id);
     if (!template) {
       return res.status(404).json({ error: "Template not found" });
     }
@@ -144,6 +153,10 @@ router.get("/:id", async (req, res) => {
 });
 
 router.post("/", (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const { name, description, splitType, exercises } = req.body as {
     name?: string;
     description?: string;
@@ -180,7 +193,7 @@ router.post("/", (req, res) => {
          RETURNING *`,
         [
           templateId,
-          DEMO_USER_ID,
+          userId,
           name.trim(),
           description ?? null,
           splitType ?? null,
@@ -231,6 +244,10 @@ router.post("/", (req, res) => {
 
 router.put("/:id", (req, res) => {
   const templateId = req.params.id;
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   const { name, description, splitType, isFavorite, exercises } = req.body as Partial<
     WorkoutTemplate
@@ -292,7 +309,7 @@ router.put("/:id", (req, res) => {
 
     const templateResult = await client.query<TemplateRow>(
       updateQuery,
-      [templateId, DEMO_USER_ID, ...values]
+      [templateId, userId, ...values]
     );
 
     if (templateResult.rowCount === 0) {
@@ -350,7 +367,11 @@ router.put("/:id", (req, res) => {
 });
 
 router.post("/:id/duplicate", async (req, res) => {
-  const original = await fetchTemplateById(req.params.id);
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const original = await fetchTemplateById(userId, req.params.id);
   if (!original) {
     return res.status(404).json({ error: "Template not found" });
   }
@@ -367,7 +388,7 @@ router.post("/:id/duplicate", async (req, res) => {
          RETURNING *`,
         [
           templateId,
-          DEMO_USER_ID,
+          userId,
           `${original.name} (Copy)`,
           original.description ?? null,
           original.splitType ?? null,
@@ -414,6 +435,26 @@ router.post("/:id/duplicate", async (req, res) => {
       console.error("Failed to duplicate template", err);
       res.status(500).json({ error: "Failed to duplicate template" });
     });
+});
+
+router.delete("/:id", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const result = await query(
+      `DELETE FROM workout_templates WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [req.params.id, userId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to delete template", err);
+    return res.status(500).json({ error: "Failed to delete template" });
+  }
 });
 
 export default router;

@@ -101,9 +101,12 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
       sets: parsedSets,
       reps: parsedReps,
       restSeconds: parsedRest,
-      incline: cardio ? parsedIncline : undefined,
-      durationMinutes: cardio ? parsedDuration : undefined,
-      distance: cardio ? parsedDistance : undefined,
+      incline:
+        cardio && parsedIncline !== undefined ? String(parsedIncline) : undefined,
+      durationMinutes:
+        cardio && parsedDuration !== undefined ? String(parsedDuration) : undefined,
+      distance:
+        cardio && parsedDistance !== undefined ? String(parsedDistance) : undefined,
     });
     setActiveExercise(null);
   };

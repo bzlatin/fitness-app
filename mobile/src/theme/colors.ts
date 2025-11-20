@@ -7,6 +7,7 @@ export const colors = {
   textPrimary: "#F9FAFB",
   textSecondary: "#9CA3AF",
   border: "#1F2933",
+  error: "#F87171",
 };
 
 export type ColorName = keyof typeof colors;

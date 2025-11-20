@@ -1,16 +1,13 @@
 import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import { useDuplicateTemplate, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { colors } from "../theme/colors";
-import { RootStackParamList } from "../navigation/types";
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+import { RootNavigation } from "../navigation/RootNavigator";
 
 const MyWorkoutsScreen = () => {
-  const navigation = useNavigation<Nav>();
+  const navigation = useNavigation<RootNavigation>();
   const { data, isLoading, refetch, isRefetching } = useWorkoutTemplates();
   const duplicateMutation = useDuplicateTemplate();
 
@@ -28,7 +25,7 @@ const MyWorkoutsScreen = () => {
       </View>
 
       <Pressable
-        onPress={() => navigation.navigate("WorkoutTemplateBuilder")}
+        onPress={() => navigation.navigate("WorkoutTemplateBuilder", {})}
         style={({ pressed }) => ({
           backgroundColor: colors.primary,
           paddingVertical: 14,
@@ -66,7 +63,7 @@ const MyWorkoutsScreen = () => {
             Create your first workout template to jump into sessions faster.
           </Text>
           <Pressable
-            onPress={() => navigation.navigate("WorkoutTemplateBuilder")}
+            onPress={() => navigation.navigate("WorkoutTemplateBuilder", {})}
             style={({ pressed }) => ({
               marginTop: 12,
               paddingVertical: 12,

@@ -1,5 +1,5 @@
 {
-  "name": "gymbrain-server",
+  "name": "push-pull-server",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
+    "express-oauth2-jwt-bearer": "^1.7.1",
     "nanoid": "^4.0.2",
     "pg": "^8.11.5"
   },
