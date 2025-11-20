@@ -143,7 +143,7 @@ const SettingsScreen = () => {
     try {
       await updateProfile({
         name: draftName.trim() || user.name,
-        handle: draftHandle.trim() || undefined,
+        handle: draftHandle.trim() || null,
         bio: draftBio.trim() || undefined,
         trainingStyle: draftTraining.trim() || undefined,
         gymName: draftGym.trim() ? draftGym.trim() : null,

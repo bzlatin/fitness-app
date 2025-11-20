@@ -23,7 +23,7 @@ type SocialProfile = {
   id: string;
   name: string;
   email?: string;
-  handle?: string;
+  handle?: string | null;
   avatarUrl?: string;
   bio?: string;
   plan?: string;
@@ -280,7 +280,8 @@ router.put("/me", async (req, res) => {
   const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility } =
     req.body as Partial<SocialProfile>;
 
-  const normalizedHandle = normalizeHandle(handle);
+  const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
+  const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
 
   if (name !== undefined && !name.trim()) {
     return res.status(400).json({ error: "Name cannot be empty" });
@@ -298,9 +299,9 @@ router.put("/me", async (req, res) => {
     values.push(name.trim());
     idx += 1;
   }
-  if (normalizedHandle !== undefined) {
+  if (handleProvided) {
     updates.push(`handle = $${idx}`);
-    values.push(normalizedHandle);
+    values.push(normalizedHandle ?? null);
     idx += 1;
   }
   if (bio !== undefined) {

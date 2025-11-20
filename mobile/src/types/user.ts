@@ -6,7 +6,7 @@ export interface User {
   name: string;
   plan: Plan;
   planExpiresAt?: string | null;
-  handle?: string;
+  handle?: string | null;
   avatarUrl?: string;
   bio?: string;
   profileCompletedAt?: string;

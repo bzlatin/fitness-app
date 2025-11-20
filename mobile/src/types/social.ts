@@ -4,7 +4,7 @@ export interface SocialUserSummary {
   id: string;
   name: string;
   avatarUrl?: string;
-  handle?: string;
+  handle?: string | null;
   trainingStyleTags?: string[];
 }
 
