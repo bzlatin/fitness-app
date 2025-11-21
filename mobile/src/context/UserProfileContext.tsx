@@ -24,6 +24,9 @@ const STORAGE_KEY = "push-pull.user-profile";
 
 const UserProfileContext = createContext<State | undefined>(undefined);
 
+const isProfileComplete = (profile: UserProfile | null) =>
+  Boolean(profile?.profileCompletedAt || profile?.handle);
+
 export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +56,21 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
     void loadCached();
   }, []);
 
+  const backfillProfileCompletion = async (profile: UserProfile) => {
+    if (profile.profileCompletedAt || !profile.handle) {
+      return profile;
+    }
+    try {
+      const stamped = await updateCurrentUserProfile({
+        profileCompletedAt: new Date().toISOString(),
+      });
+      return stamped as UserProfile;
+    } catch (err) {
+      console.warn("Failed to backfill profile completion", err);
+      return profile;
+    }
+  };
+
   const refresh = async () => {
     if (!isAuthenticated) {
       setUser(null);
@@ -65,10 +83,11 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       const profile = await getCurrentUserProfile();
-      await persist(profile as UserProfile);
+      const finalizedProfile = await backfillProfileCompletion(profile as UserProfile);
+      await persist(finalizedProfile);
       queryClient.setQueryData<SocialProfile>(
         ["profile", profile.id],
-        (prev) => ({ ...(prev ?? {}), ...(profile as SocialProfile) })
+        (prev) => ({ ...(prev ?? {}), ...(finalizedProfile as SocialProfile) })
       );
     } catch (err) {
       console.warn("Failed to sync profile", err);
@@ -114,7 +133,7 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       user,
       isLoading,
-      isOnboarded: Boolean(user?.profileCompletedAt),
+      isOnboarded: isProfileComplete(user),
       refresh,
       updateProfile,
       completeOnboarding,

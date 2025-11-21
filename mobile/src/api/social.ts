@@ -60,6 +60,10 @@ export const inviteToSquad = async (squadId: string, handle: string) => {
   await apiClient.post(`/social/squads/${squadId}/members`, { handle });
 };
 
+export const deleteSquad = async (squadId: string) => {
+  await apiClient.delete<void>(`/social/squads/${squadId}`);
+};
+
 export const setActiveWorkoutStatus = async (payload: {
   sessionId: string;
   templateId?: string;
@@ -166,6 +170,15 @@ export const followUser = async (userId: string) => {
 export const unfollowUser = async (userId: string) => {
   try {
     await apiClient.delete<void>(`/social/follow/${userId}`);
+  } catch (err) {
+    if (isNotFound(err)) return;
+    throw err;
+  }
+};
+
+export const removeFollower = async (userId: string) => {
+  try {
+    await apiClient.delete<void>(`/social/followers/${userId}`);
   } catch (err) {
     if (isNotFound(err)) return;
     throw err;

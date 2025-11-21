@@ -849,429 +849,435 @@ const SquadScreen = () => {
           transparent
           onRequestClose={closeSocialModal}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              justifyContent: "flex-end",
-            }}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={24}
-              style={{ flex: 1, justifyContent: "flex-end" }}
+          <TouchableWithoutFeedback onPress={closeSocialModal}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                justifyContent: "flex-end",
+              }}
             >
-              <View
-                style={{
-                  backgroundColor: colors.surface,
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  padding: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  maxHeight: "88%",
-                }}
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={24}
+                style={{ flex: 1, justifyContent: "flex-end" }}
               >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
-                  }}
+                <TouchableWithoutFeedback
+                  onPress={(event) => event.stopPropagation()}
                 >
                   <View
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
+                      backgroundColor: colors.surface,
+                      borderTopLeftRadius: 20,
+                      borderTopRightRadius: 20,
+                      padding: 16,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      maxHeight: "88%",
                     }}
                   >
-                    <Ionicons
-                      name='person-add-outline'
-                      size={18}
-                      color={colors.textPrimary}
-                    />
-                    <Text
-                      style={{ ...typography.title, color: colors.textPrimary }}
-                    >
-                      Find buddies
-                    </Text>
-                  </View>
-                  <Pressable onPress={closeSocialModal}>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontFamily: fontFamilies.semibold,
-                      }}
-                    >
-                      Close
-                    </Text>
-                  </Pressable>
-                </View>
-                <View
-                  style={{
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
-                    marginHorizontal: -16,
-                    marginTop: 4,
-                    marginBottom: 10,
-                  }}
-                />
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps='always'
-                >
-                  <View style={{ gap: 12, paddingBottom: 18 }}>
                     <View
                       style={{
-                        backgroundColor: colors.surfaceMuted,
-                        borderRadius: 12,
-                        padding: 12,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        gap: 10,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 10,
                       }}
                     >
                       <View
                         style={{
-                          gap: 4,
                           flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "space-between",
+                          gap: 8,
                         }}
                       >
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text
-                            style={{
-                              ...typography.title,
-                              color: colors.textPrimary,
-                            }}
-                          >
-                            Find gym buddies
-                          </Text>
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              ...typography.caption,
-                            }}
-                          >
-                            Search, tap add, done.
-                          </Text>
-                        </View>
                         <Ionicons
-                          name='search'
+                          name='person-add-outline'
                           size={18}
-                          color={colors.textSecondary}
+                          color={colors.textPrimary}
                         />
+                        <Text
+                          style={{ ...typography.title, color: colors.textPrimary }}
+                        >
+                          Find buddies
+                        </Text>
                       </View>
-                      <TextInput
-                        value={searchTerm}
-                        onChangeText={setSearchTerm}
-                        placeholder='Search by name or handle'
-                        placeholderTextColor={colors.textSecondary}
-                        style={inputStyle}
-                      />
-                      <View style={{ gap: 8 }}>
-                        {debouncedTerm.length <= 1 ? (
-                          <Text
+                      <Pressable onPress={closeSocialModal}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          Close
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <View
+                      style={{
+                        borderTopWidth: 1,
+                        borderTopColor: colors.border,
+                        marginHorizontal: -16,
+                        marginTop: 4,
+                        marginBottom: 10,
+                      }}
+                    />
+                    <ScrollView
+                      showsVerticalScrollIndicator={false}
+                      keyboardShouldPersistTaps='always'
+                    >
+                      <View style={{ gap: 12, paddingBottom: 18 }}>
+                        <View
+                          style={{
+                            backgroundColor: colors.surfaceMuted,
+                            borderRadius: 12,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            gap: 10,
+                          }}
+                        >
+                          <View
                             style={{
-                              color: colors.textSecondary,
-                              ...typography.caption,
+                              gap: 4,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
                             }}
                           >
-                            Type at least 2 characters to see suggestions.
-                          </Text>
-                        ) : searchQuery.isFetching ? (
-                          <ActivityIndicator color={colors.secondary} />
-                        ) : (searchQuery.data ?? []).length ? (
-                          (searchQuery.data ?? []).map((user) => {
-                            const alreadyFollowing = followingIds.has(user.id);
-                            const isPending =
-                              followMutation.isPending ||
-                              unfollowMutation.isPending;
-                            return (
-                              <TouchableOpacity
-                                key={user.id}
-                                onPress={() => openProfilePreview(user)}
-                                activeOpacity={0.9}
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text
+                                style={{
+                                  ...typography.title,
+                                  color: colors.textPrimary,
+                                }}
+                              >
+                                Find gym buddies
+                              </Text>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  ...typography.caption,
+                                }}
+                              >
+                                Search, tap add, done.
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name='search'
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                          <TextInput
+                            value={searchTerm}
+                            onChangeText={setSearchTerm}
+                            placeholder='Search by name or handle'
+                            placeholderTextColor={colors.textSecondary}
+                            style={inputStyle}
+                          />
+                          <View style={{ gap: 8 }}>
+                            {debouncedTerm.length <= 1 ? (
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  ...typography.caption,
+                                }}
+                              >
+                                Type at least 2 characters to see suggestions.
+                              </Text>
+                            ) : searchQuery.isFetching ? (
+                              <ActivityIndicator color={colors.secondary} />
+                            ) : (searchQuery.data ?? []).length ? (
+                              (searchQuery.data ?? []).map((user) => {
+                                const alreadyFollowing = followingIds.has(user.id);
+                                const isPending =
+                                  followMutation.isPending ||
+                                  unfollowMutation.isPending;
+                                return (
+                                  <TouchableOpacity
+                                    key={user.id}
+                                    onPress={() => openProfilePreview(user)}
+                                    activeOpacity={0.9}
+                                    style={{
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      padding: 12,
+                                      borderRadius: 12,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
+                                      backgroundColor: colors.surface,
+                                      opacity: isPending ? 0.9 : 1,
+                                    }}
+                                  >
+                                    <View>
+                                      <Text
+                                        style={{
+                                          color: colors.textPrimary,
+                                          fontFamily: fontFamilies.semibold,
+                                        }}
+                                      >
+                                        {user.name}
+                                      </Text>
+                                      {user.handle ? (
+                                        <Text
+                                          style={{
+                                            color: colors.textSecondary,
+                                            ...typography.caption,
+                                          }}
+                                        >
+                                          {formatHandle(user.handle)}
+                                        </Text>
+                                      ) : null}
+                                    </View>
+                                    <Pressable
+                                      disabled={isPending}
+                                      onPress={() =>
+                                        alreadyFollowing
+                                          ? unfollowMutation.mutate(user.id)
+                                          : followMutation.mutate(user.id)
+                                      }
+                                      style={({ pressed }) => ({
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 8,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: alreadyFollowing
+                                          ? colors.border
+                                          : colors.primary,
+                                        backgroundColor: alreadyFollowing
+                                          ? colors.surfaceMuted
+                                          : colors.primary,
+                                        opacity: pressed || isPending ? 0.85 : 1,
+                                      })}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: alreadyFollowing
+                                            ? colors.textPrimary
+                                            : colors.surface,
+                                          fontFamily: fontFamilies.semibold,
+                                        }}
+                                      >
+                                        {alreadyFollowing ? "Added" : "Add friend"}
+                                      </Text>
+                                    </Pressable>
+                                  </TouchableOpacity>
+                                );
+                              })
+                            ) : (
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  ...typography.caption,
+                                }}
+                              >
+                                No matching users yet.
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        <CollapsibleSection
+                          title='Friends & requests'
+                          subtitle={
+                            friendsList.length
+                              ? `${friendsList.length} friend${
+                                  friendsList.length === 1 ? "" : "s"
+                                } plus invites`
+                              : "Keep friends tucked away until you need them."
+                          }
+                          open={showFriendsSection}
+                          onToggle={() => setShowFriendsSection((prev) => !prev)}
+                          iconName='people-outline'
+                        >
+                          {friendsList.length ? (
+                            <View style={{ gap: 6 }}>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  ...typography.caption,
+                                }}
+                              >
+                                Friends
+                              </Text>
+                              <View
                                 style={{
                                   flexDirection: "row",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: 12,
-                                  borderRadius: 12,
-                                  borderWidth: 1,
-                                  borderColor: colors.border,
-                                  backgroundColor: colors.surface,
-                                  opacity: isPending ? 0.9 : 1,
+                                  flexWrap: "wrap",
+                                  gap: 8,
                                 }}
                               >
-                                <View>
-                                  <Text
+                                {friendsList.map((friend) => (
+                                  <TouchableOpacity
+                                    key={friend.id}
+                                    onPress={() => openProfilePreview(friend)}
+                                    activeOpacity={0.85}
                                     style={{
-                                      color: colors.textPrimary,
-                                      fontFamily: fontFamilies.semibold,
+                                      paddingHorizontal: 10,
+                                      paddingVertical: 6,
+                                      borderRadius: 10,
+                                      backgroundColor: colors.surface,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
                                     }}
                                   >
-                                    {user.name}
-                                  </Text>
-                                  {user.handle ? (
                                     <Text
                                       style={{
-                                        color: colors.textSecondary,
-                                        ...typography.caption,
+                                        color: colors.textPrimary,
+                                        fontFamily: fontFamilies.semibold,
                                       }}
                                     >
-                                      {formatHandle(user.handle)}
+                                      {friend.name}
                                     </Text>
-                                  ) : null}
-                                </View>
-                                <Pressable
-                                  disabled={isPending}
-                                  onPress={() =>
-                                    alreadyFollowing
-                                      ? unfollowMutation.mutate(user.id)
-                                      : followMutation.mutate(user.id)
-                                  }
-                                  style={({ pressed }) => ({
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    borderRadius: 10,
-                                    borderWidth: 1,
-                                    borderColor: alreadyFollowing
-                                      ? colors.border
-                                      : colors.primary,
-                                    backgroundColor: alreadyFollowing
-                                      ? colors.surfaceMuted
-                                      : colors.primary,
-                                    opacity: pressed || isPending ? 0.85 : 1,
-                                  })}
-                                >
-                                  <Text
-                                    style={{
-                                      color: alreadyFollowing
-                                        ? colors.textPrimary
-                                        : colors.surface,
-                                      fontFamily: fontFamilies.semibold,
-                                    }}
-                                  >
-                                    {alreadyFollowing ? "Added" : "Add friend"}
-                                  </Text>
-                                </Pressable>
-                              </TouchableOpacity>
-                            );
-                          })
-                        ) : (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              ...typography.caption,
-                            }}
-                          >
-                            No matching users yet.
-                          </Text>
-                        )}
-                      </View>
-                    </View>
+                                    {friend.handle ? (
+                                      <Text
+                                        style={{
+                                          color: colors.textSecondary,
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        {formatHandle(friend.handle)}
+                                      </Text>
+                                    ) : null}
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </View>
+                          ) : (
+                            <Text
+                              style={{ color: colors.textSecondary, fontSize: 12 }}
+                            >
+                              No friends yet. Add a gym buddy to see them here.
+                            </Text>
+                          )}
 
-                    <CollapsibleSection
-                      title='Friends & requests'
-                      subtitle={
-                        friendsList.length
-                          ? `${friendsList.length} friend${
-                              friendsList.length === 1 ? "" : "s"
-                            } plus invites`
-                          : "Keep friends tucked away until you need them."
-                      }
-                      open={showFriendsSection}
-                      onToggle={() => setShowFriendsSection((prev) => !prev)}
-                      iconName='people-outline'
-                    >
-                      {friendsList.length ? (
-                        <View style={{ gap: 6 }}>
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              ...typography.caption,
-                            }}
-                          >
-                            Friends
-                          </Text>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            {friendsList.map((friend) => (
-                              <TouchableOpacity
-                                key={friend.id}
-                                onPress={() => openProfilePreview(friend)}
-                                activeOpacity={0.85}
+                          <View style={{ gap: 6 }}>
+                            <Text
+                              style={{
+                                ...typography.caption,
+                                color: colors.textSecondary,
+                              }}
+                            >
+                              Pending invites
+                            </Text>
+                            {pendingIncoming.length ? (
+                              <View
                                 style={{
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 6,
-                                  borderRadius: 10,
-                                  backgroundColor: colors.surface,
-                                  borderWidth: 1,
-                                  borderColor: colors.border,
+                                  flexDirection: "row",
+                                  flexWrap: "wrap",
+                                  gap: 8,
                                 }}
                               >
-                                <Text
-                                  style={{
-                                    color: colors.textPrimary,
-                                    fontFamily: fontFamilies.semibold,
-                                  }}
-                                >
-                                  {friend.name}
-                                </Text>
-                                {friend.handle ? (
-                                  <Text
+                                {pendingIncoming.map((invite) => (
+                                  <TouchableOpacity
+                                    key={invite.id}
+                                    onPress={() => openProfilePreview(invite)}
+                                    activeOpacity={0.85}
                                     style={{
-                                      color: colors.textSecondary,
-                                      fontSize: 12,
+                                      paddingHorizontal: 10,
+                                      paddingVertical: 6,
+                                      borderRadius: 10,
+                                      backgroundColor: colors.surface,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
                                     }}
                                   >
-                                    {formatHandle(friend.handle)}
-                                  </Text>
-                                ) : null}
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-                      ) : (
-                        <Text
-                          style={{ color: colors.textSecondary, fontSize: 12 }}
-                        >
-                          No friends yet. Add a gym buddy to see them here.
-                        </Text>
-                      )}
-
-                      <View style={{ gap: 6 }}>
-                        <Text
-                          style={{
-                            ...typography.caption,
-                            color: colors.textSecondary,
-                          }}
-                        >
-                          Pending invites
-                        </Text>
-                        {pendingIncoming.length ? (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            {pendingIncoming.map((invite) => (
-                              <TouchableOpacity
-                                key={invite.id}
-                                onPress={() => openProfilePreview(invite)}
-                                activeOpacity={0.85}
+                                    <Text style={{ color: colors.textPrimary }}>
+                                      {invite.name}
+                                    </Text>
+                                    {invite.handle ? (
+                                      <Text
+                                        style={{
+                                          color: colors.textSecondary,
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        {formatHandle(invite.handle)}
+                                      </Text>
+                                    ) : null}
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            ) : (
+                              <Text
                                 style={{
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 6,
-                                  borderRadius: 10,
-                                  backgroundColor: colors.surface,
-                                  borderWidth: 1,
-                                  borderColor: colors.border,
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
                                 }}
                               >
-                                <Text style={{ color: colors.textPrimary }}>
-                                  {invite.name}
-                                </Text>
-                                {invite.handle ? (
-                                  <Text
-                                    style={{
-                                      color: colors.textSecondary,
-                                      fontSize: 12,
-                                    }}
-                                  >
-                                    {formatHandle(invite.handle)}
-                                  </Text>
-                                ) : null}
-                              </TouchableOpacity>
-                            ))}
+                                No pending requests at the moment.
+                              </Text>
+                            )}
                           </View>
-                        ) : (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                            }}
-                          >
-                            No pending requests at the moment.
-                          </Text>
-                        )}
-                      </View>
 
-                      <View style={{ gap: 6 }}>
-                        <Text
-                          style={{
-                            ...typography.caption,
-                            color: colors.textSecondary,
-                          }}
-                        >
-                          Invites you sent
-                        </Text>
-                        {pendingOutgoing.length ? (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            {pendingOutgoing.map((invite) => (
-                              <TouchableOpacity
-                                key={invite.id}
-                                onPress={() => openProfilePreview(invite)}
-                                activeOpacity={0.85}
+                          <View style={{ gap: 6 }}>
+                            <Text
+                              style={{
+                                ...typography.caption,
+                                color: colors.textSecondary,
+                              }}
+                            >
+                              Invites you sent
+                            </Text>
+                            {pendingOutgoing.length ? (
+                              <View
                                 style={{
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 6,
-                                  borderRadius: 10,
-                                  backgroundColor: colors.surface,
-                                  borderWidth: 1,
-                                  borderColor: colors.border,
+                                  flexDirection: "row",
+                                  flexWrap: "wrap",
+                                  gap: 8,
                                 }}
                               >
-                                <Text style={{ color: colors.textPrimary }}>
-                                  {invite.name}
-                                </Text>
-                                {invite.handle ? (
-                                  <Text
+                                {pendingOutgoing.map((invite) => (
+                                  <TouchableOpacity
+                                    key={invite.id}
+                                    onPress={() => openProfilePreview(invite)}
+                                    activeOpacity={0.85}
                                     style={{
-                                      color: colors.textSecondary,
-                                      fontSize: 12,
+                                      paddingHorizontal: 10,
+                                      paddingVertical: 6,
+                                      borderRadius: 10,
+                                      backgroundColor: colors.surface,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
                                     }}
                                   >
-                                    {formatHandle(invite.handle)}
-                                  </Text>
-                                ) : null}
-                              </TouchableOpacity>
-                            ))}
+                                    <Text style={{ color: colors.textPrimary }}>
+                                      {invite.name}
+                                    </Text>
+                                    {invite.handle ? (
+                                      <Text
+                                        style={{
+                                          color: colors.textSecondary,
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        {formatHandle(invite.handle)}
+                                      </Text>
+                                    ) : null}
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            ) : (
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
+                                No outgoing invites right now.
+                              </Text>
+                            )}
                           </View>
-                        ) : (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                            }}
-                          >
-                            No outgoing invites right now.
-                          </Text>
-                        )}
+                        </CollapsibleSection>
                       </View>
-                    </CollapsibleSection>
+                    </ScrollView>
                   </View>
-                </ScrollView>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
+                </TouchableWithoutFeedback>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
         </Modal>
 
         <Modal
@@ -1280,76 +1286,78 @@ const SquadScreen = () => {
           transparent
           onRequestClose={closeSquadModal}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              justifyContent: "flex-end",
-            }}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={24}
-              style={{ flex: 1, justifyContent: "flex-end" }}
+          <TouchableWithoutFeedback onPress={closeSquadModal}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                justifyContent: "flex-end",
+              }}
             >
-              <View
-                style={{
-                  backgroundColor: colors.surface,
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  padding: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  maxHeight: "90%",
-                }}
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={24}
+                style={{ flex: 1, justifyContent: "flex-end" }}
               >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
-                  }}
-                >
+                <TouchableWithoutFeedback onPress={(event) => event.stopPropagation()}>
                   <View
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
+                      backgroundColor: colors.surface,
+                      borderTopLeftRadius: 20,
+                      borderTopRightRadius: 20,
+                      padding: 16,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      maxHeight: "90%",
                     }}
                   >
-                    <Ionicons
-                      name='people-outline'
-                      size={18}
-                      color={colors.textPrimary}
-                    />
-                    <Text
-                      style={{ ...typography.title, color: colors.textPrimary }}
-                    >
-                      Manage squads
-                    </Text>
-                  </View>
-                  <Pressable onPress={closeSquadModal}>
-                    <Text
+                    <View
                       style={{
-                        color: colors.textSecondary,
-                        fontFamily: fontFamilies.semibold,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 10,
                       }}
                     >
-                      Close
-                    </Text>
-                  </Pressable>
-                </View>
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginHorizontal: -16,
-                    marginTop: 4,
-                    marginBottom: 10,
-                  }}
-                />
-                <ScrollView showsVerticalScrollIndicator={false}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons
+                          name='people-outline'
+                          size={18}
+                          color={colors.textPrimary}
+                        />
+                        <Text
+                          style={{ ...typography.title, color: colors.textPrimary }}
+                        >
+                          Manage squads
+                        </Text>
+                      </View>
+                      <Pressable onPress={closeSquadModal}>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          Close
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: colors.border,
+                        marginHorizontal: -16,
+                        marginTop: 4,
+                        marginBottom: 10,
+                      }}
+                    />
+                    <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={{ gap: 12, paddingBottom: 18 }}>
                     <View
                       style={{
@@ -1735,8 +1743,10 @@ const SquadScreen = () => {
                   </View>
                 </ScrollView>
               </View>
-            </KeyboardAvoidingView>
-          </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </View>
+          </TouchableWithoutFeedback>
         </Modal>
         {profilePreview ? (
           <ProfilePreviewModal

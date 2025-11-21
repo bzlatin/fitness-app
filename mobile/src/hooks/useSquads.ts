@@ -3,6 +3,7 @@ import {
   createSquad as createSquadApi,
   getSquads,
   inviteToSquad as inviteToSquadApi,
+  deleteSquad as deleteSquadApi,
 } from "../api/social";
 import { SquadDetail } from "../types/social";
 
@@ -25,11 +26,21 @@ export const useSquads = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["social", "squads"] }),
   });
 
+  const deleteSquadMutation = useMutation({
+    mutationFn: (squadId: string) => deleteSquadApi(squadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["social", "squads"] });
+      queryClient.invalidateQueries({ queryKey: ["social", "squad-feed"] });
+    },
+  });
+
   return {
     ...squadsQuery,
     createSquad: createSquadMutation.mutateAsync,
     isCreatingSquad: createSquadMutation.isPending,
     inviteToSquad: inviteToSquadMutation.mutateAsync,
     isInvitingToSquad: inviteToSquadMutation.isPending,
+    deleteSquad: deleteSquadMutation.mutateAsync,
+    isDeletingSquad: deleteSquadMutation.isPending,
   };
 };

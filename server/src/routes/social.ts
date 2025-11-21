@@ -38,6 +38,12 @@ type SocialProfile = {
   friendsCount?: number;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
+  friendsPreview?: {
+    id: string;
+    name: string;
+    handle?: string | null;
+    avatarUrl?: string | null;
+  }[];
 };
 
 type ActiveStatusRow = {
@@ -194,7 +200,10 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
 });
 
 const fetchUserSummary = async (userId: string) => {
-  const result = await query<UserRow>(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
+  const result = await query<UserRow>(
+    `SELECT * FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
   const row = result.rows[0];
   return {
     id: userId,
@@ -231,8 +240,75 @@ const fetchRelationshipCounts = async (userId: string) => {
   };
 };
 
+const fetchMutualFriends = async (userId: string, limit = 12) => {
+  const result = await query<UserRow>(
+    `
+      SELECT u.*
+      FROM follows f
+      JOIN follows f2
+        ON f.user_id = $1
+       AND f.target_user_id = f2.user_id
+       AND f2.target_user_id = $1
+      JOIN users u
+        ON u.id = f.target_user_id
+      ORDER BY u.name ASC
+      LIMIT $2
+    `,
+    [userId, limit]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name ?? "Athlete",
+    handle: row.handle ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+  }));
+};
+
+const fetchSharedFriends = async (
+  viewerId: string,
+  targetUserId: string,
+  limit = 12
+) => {
+  const shared = await query<UserRow>(
+    `
+      SELECT u.*
+      FROM users u
+      WHERE u.id IN (
+        SELECT f.target_user_id
+        FROM follows f
+        JOIN follows f2
+          ON f.user_id = $1
+         AND f.target_user_id = f2.user_id
+         AND f2.target_user_id = $1
+      )
+      AND u.id IN (
+        SELECT f.target_user_id
+        FROM follows f
+        JOIN follows f2
+          ON f.user_id = $2
+         AND f.target_user_id = f2.user_id
+         AND f2.target_user_id = $2
+      )
+      ORDER BY u.name ASC
+      LIMIT $3
+    `,
+    [viewerId, targetUserId, limit]
+  );
+
+  return shared.rows.map((row) => ({
+    id: row.id,
+    name: row.name ?? "Athlete",
+    handle: row.handle ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+  }));
+};
+
 const fetchWorkoutStats = async (userId: string) => {
-  const sessions = await query<{ started_at: string | Date; finished_at: string | Date | null }>(
+  const sessions = await query<{
+    started_at: string | Date;
+    finished_at: string | Date | null;
+  }>(
     `SELECT started_at, finished_at
      FROM workout_sessions
      WHERE user_id = $1
@@ -288,6 +364,10 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
 
   const counts = await fetchRelationshipCounts(targetUserId);
   const stats = await fetchWorkoutStats(targetUserId);
+  const friendsPreview =
+    viewerId === targetUserId
+      ? await fetchMutualFriends(targetUserId, 12)
+      : await fetchSharedFriends(viewerId, targetUserId, 12);
   const isFollowingResult = await query(
     `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
     [viewerId, targetUserId]
@@ -297,7 +377,8 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
     ...mapUserRow(user),
     ...counts,
     ...stats,
-    isFollowing: isFollowingResult.rowCount > 0,
+    friendsPreview,
+    isFollowing: (isFollowingResult.rowCount ?? 0) > 0,
   } satisfies SocialProfile;
 };
 
@@ -375,16 +456,31 @@ router.put("/me", async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility } =
-    req.body as Partial<SocialProfile>;
+  const {
+    name,
+    handle,
+    bio,
+    avatarUrl,
+    profileCompletedAt,
+    trainingStyle,
+    gymName,
+    gymVisibility,
+  } = req.body as Partial<SocialProfile>;
 
-  const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
+  const handleProvided = Object.prototype.hasOwnProperty.call(
+    req.body,
+    "handle"
+  );
   const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
 
   if (name !== undefined && !name.trim()) {
     return res.status(400).json({ error: "Name cannot be empty" });
   }
-  if (gymVisibility && gymVisibility !== "hidden" && gymVisibility !== "shown") {
+  if (
+    gymVisibility &&
+    gymVisibility !== "hidden" &&
+    gymVisibility !== "shown"
+  ) {
     return res.status(400).json({ error: "Invalid gym visibility" });
   }
 
@@ -454,23 +550,24 @@ router.put("/me", async (req, res) => {
     const updated = result.rows[0];
     const counts = await fetchRelationshipCounts(userId);
     const stats = await fetchWorkoutStats(userId);
-      return res.json({
-        ...mapUserRow(updated),
-        ...counts,
-        ...stats,
-        isFollowing: false,
-      });
-    } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        "code" in err &&
-        (err as { code: string }).code === "23505"
-      ) {
-        return res.status(409).json({ error: "Handle already taken" });
-      }
-      console.error("Failed to update profile", err);
-      return res.status(500).json({ error: "Failed to update profile" });
+    return res.json({
+      ...mapUserRow(updated),
+      ...counts,
+      ...stats,
+      friendsPreview: await fetchMutualFriends(userId, 12),
+      isFollowing: false,
+    });
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as { code: string }).code === "23505"
+    ) {
+      return res.status(409).json({ error: "Handle already taken" });
     }
+    console.error("Failed to update profile", err);
+    return res.status(500).json({ error: "Failed to update profile" });
+  }
 });
 
 router.delete("/me", async (req, res) => {
@@ -551,8 +648,12 @@ router.get("/connections", async (_req, res) => {
     const followingIds = new Set(followingList.map((row) => row.id));
 
     const friends = followingList.filter((row) => followerIds.has(row.id));
-    const pendingInvites = followersList.filter((row) => !followingIds.has(row.id));
-    const outgoingInvites = followingList.filter((row) => !followerIds.has(row.id));
+    const pendingInvites = followersList.filter(
+      (row) => !followingIds.has(row.id)
+    );
+    const outgoingInvites = followingList.filter(
+      (row) => !followerIds.has(row.id)
+    );
 
     return res.json({
       friends,
@@ -630,10 +731,10 @@ router.post("/squads/:squadId/members", async (req, res) => {
   const normalizedHandle = normalizeHandle(targetValue) ?? targetValue;
 
   try {
-    const squadMembership = await query(`SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [
-      req.params.squadId,
-      userId,
-    ]);
+    const squadMembership = await query(
+      `SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.squadId, userId]
+    );
     if (squadMembership.rowCount === 0) {
       return res.status(403).json({ error: "Not a member of that squad" });
     }
@@ -669,6 +770,38 @@ router.post("/squads/:squadId/members", async (req, res) => {
   } catch (err) {
     console.error("Failed to add squad member", err);
     return res.status(500).json({ error: "Failed to invite member" });
+  }
+});
+
+router.delete("/squads/:squadId", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { squadId } = req.params;
+  try {
+    const squadResult = await query<{ created_by: string }>(
+      `SELECT created_by FROM squads WHERE id = $1 LIMIT 1`,
+      [squadId]
+    );
+
+    if (squadResult.rowCount === 0) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+
+    const createdBy = squadResult.rows[0]?.created_by;
+    if (createdBy !== userId) {
+      return res
+        .status(403)
+        .json({ error: "Only the squad owner can delete it" });
+    }
+
+    await query(`DELETE FROM squads WHERE id = $1`, [squadId]);
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to delete squad", err);
+    return res.status(500).json({ error: "Failed to delete squad" });
   }
 });
 
@@ -734,14 +867,32 @@ router.delete("/follow/:id", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
   try {
-    await query(`DELETE FROM follows WHERE user_id = $1 AND target_user_id = $2`, [
-      userId,
-      req.params.id,
-    ]);
+    await query(
+      `DELETE FROM follows WHERE user_id = $1 AND target_user_id = $2`,
+      [userId, req.params.id]
+    );
     return res.status(204).send();
   } catch (err) {
     console.error("Failed to unfollow user", err);
     return res.status(500).json({ error: "Failed to unfollow user" });
+  }
+});
+
+router.delete("/followers/:id", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    await query(
+      `DELETE FROM follows WHERE user_id = $1 AND target_user_id = $2`,
+      [req.params.id, userId]
+    );
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to decline invite", err);
+    return res.status(500).json({ error: "Failed to decline invite" });
   }
 });
 
@@ -751,7 +902,13 @@ router.post("/active-status", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { sessionId, templateId, templateName, visibility, currentExerciseName } = req.body as {
+  const {
+    sessionId,
+    templateId,
+    templateName,
+    visibility,
+    currentExerciseName,
+  } = req.body as {
     sessionId?: string;
     templateId?: string;
     templateName?: string;
@@ -778,7 +935,14 @@ router.post("/active-status", async (req, res) => {
               updated_at = NOW()
         RETURNING *
       `,
-      [sessionId, userId, templateId ?? null, templateName ?? null, vis, currentExerciseName ?? null]
+      [
+        sessionId,
+        userId,
+        templateId ?? null,
+        templateName ?? null,
+        vis,
+        currentExerciseName ?? null,
+      ]
     );
 
     const row = result.rows[0];
@@ -819,16 +983,23 @@ router.post("/share", async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const { sessionId, visibility, progressPhotoUrl, templateName, totalSets, totalVolume, prCount } =
-    req.body as {
-      sessionId?: string;
-      visibility?: Visibility;
-      progressPhotoUrl?: string;
-      templateName?: string;
-      totalSets?: number;
-      totalVolume?: number;
-      prCount?: number;
-    };
+  const {
+    sessionId,
+    visibility,
+    progressPhotoUrl,
+    templateName,
+    totalSets,
+    totalVolume,
+    prCount,
+  } = req.body as {
+    sessionId?: string;
+    visibility?: Visibility;
+    progressPhotoUrl?: string;
+    templateName?: string;
+    totalSets?: number;
+    totalVolume?: number;
+    prCount?: number;
+  };
   if (!sessionId) {
     return res.status(400).json({ error: "sessionId required" });
   }
@@ -890,7 +1061,9 @@ router.get("/squad-feed", async (req, res) => {
       if (squadMemberRows.rowCount === 0) {
         return res.status(404).json({ error: "Squad not found" });
       }
-      const membersSet = new Set(squadMemberRows.rows.map((row) => row.user_id));
+      const membersSet = new Set(
+        squadMemberRows.rows.map((row) => row.user_id)
+      );
       if (!membersSet.has(userId)) {
         return res.status(403).json({ error: "Not a member of this squad" });
       }
@@ -900,7 +1073,9 @@ router.get("/squad-feed", async (req, res) => {
       `SELECT target_user_id FROM follows WHERE user_id = $1`,
       [userId]
     );
-    const following = new Set(followingRows.rows.map((row) => row.target_user_id));
+    const following = new Set(
+      followingRows.rows.map((row) => row.target_user_id)
+    );
 
     const mutualRows = await query<{ user_id: string }>(
       `SELECT user_id FROM follows WHERE target_user_id = $1 AND user_id = ANY($2::text[])`,

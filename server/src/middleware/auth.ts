@@ -77,20 +77,35 @@ export const ensureUser: RequestHandler = async (req, res, next) => {
     normalizeClaim((payload as Record<string, unknown>).name) ??
     normalizeClaim((payload as Record<string, unknown>).nickname);
 
+  // Only seed mutual follows with mock users on the very first creation of a user
+  // to avoid re-adding follows after someone intentionally unfriends.
   try {
-    await query(
+    const insertResult = await query(
       `
         INSERT INTO users (id, email, name)
         VALUES ($1, $2, $3)
-        ON CONFLICT (id) DO UPDATE
-        SET email = COALESCE($2, users.email),
-            name = COALESCE($3, users.name),
-            plan = COALESCE(users.plan, 'free'),
-            updated_at = NOW()
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
       `,
       [userId, email ?? null, name ?? null]
     );
-    if (userId !== DEMO_USER_ID) {
+    const isNewUser = (insertResult?.rowCount ?? 0) > 0;
+
+    if (!isNewUser) {
+      await query(
+        `
+          UPDATE users
+          SET email = COALESCE($2, users.email),
+              name = COALESCE($3, users.name),
+              plan = COALESCE(users.plan, 'free'),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [userId, email ?? null, name ?? null]
+      );
+    }
+
+    if (isNewUser && userId !== DEMO_USER_ID) {
       const followTargets = MOCK_USER_IDS.filter((id) => id !== userId);
       const followPairs: [string, string][] = [];
       for (const targetId of followTargets) {
