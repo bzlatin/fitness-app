@@ -305,14 +305,11 @@ const fetchSharedFriends = async (
 };
 
 const fetchWorkoutStats = async (userId: string) => {
-  const sessions = await query<{
-    started_at: string | Date;
-    finished_at: string | Date | null;
-  }>(
-    `SELECT started_at, finished_at
+  const sessions = await query<{ finished_at: string | Date }>(
+    `SELECT finished_at
      FROM workout_sessions
-     WHERE user_id = $1
-     ORDER BY started_at DESC
+     WHERE user_id = $1 AND finished_at IS NOT NULL
+     ORDER BY finished_at DESC
      LIMIT 90`,
     [userId]
   );
@@ -322,10 +319,7 @@ const fetchWorkoutStats = async (userId: string) => {
     typeof value === "string" ? value : value.toISOString();
   const uniqueDays = Array.from(
     new Set(
-      sessions.rows.map((row) => {
-        const iso = row.finished_at ?? row.started_at;
-        return formatIso(iso).slice(0, 10);
-      })
+      sessions.rows.map((row) => formatIso(row.finished_at).slice(0, 10))
     )
   ).sort((a, b) => (a > b ? -1 : 1));
 

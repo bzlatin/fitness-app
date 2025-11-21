@@ -240,9 +240,9 @@ const WorkoutSessionScreen = () => {
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [startTime, setStartTime] = useState<string | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [timerActive, setTimerActive] = useState(
-    Boolean(route.params.sessionId)
-  );
+  const [elapsedBaseSeconds, setElapsedBaseSeconds] = useState(0);
+  const [timerAnchor, setTimerAnchor] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
   const [activeExerciseKey, setActiveExerciseKey] = useState<string | null>(
     null
   );
@@ -272,6 +272,44 @@ const WorkoutSessionScreen = () => {
     return lookup;
   }, [template]);
 
+  const initializeTimer = (startedAt: string, autoStart = true) => {
+    const base = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
+    );
+    setStartTime(startedAt);
+    setElapsedBaseSeconds(base);
+    setElapsedSeconds(base);
+    if (autoStart) {
+      setTimerAnchor(Date.now());
+      setTimerActive(true);
+    } else {
+      setTimerAnchor(null);
+      setTimerActive(false);
+    }
+  };
+
+  const pauseTimer = () => {
+    if (!timerActive && timerAnchor === null) {
+      return;
+    }
+    const elapsedSinceAnchor =
+      timerAnchor !== null
+        ? Math.max(0, Math.floor((Date.now() - timerAnchor) / 1000))
+        : 0;
+    const nextBase = elapsedBaseSeconds + elapsedSinceAnchor;
+    setElapsedBaseSeconds(nextBase);
+    setElapsedSeconds(nextBase);
+    setTimerAnchor(null);
+    setTimerActive(false);
+  };
+
+  const resumeTimer = () => {
+    if (timerActive) return;
+    setTimerAnchor(Date.now());
+    setTimerActive(true);
+  };
+
   const sessionQuery = useQuery({
     queryKey: ["session", sessionId],
     enabled: Boolean(sessionId),
@@ -279,8 +317,7 @@ const WorkoutSessionScreen = () => {
     onSuccess: (data) => {
       setDefaultsApplied(false);
       setSets(data.sets);
-      setStartTime(data.startedAt);
-      setTimerActive(true);
+      initializeTimer(data.startedAt);
     },
   });
 
@@ -290,8 +327,7 @@ const WorkoutSessionScreen = () => {
       setDefaultsApplied(false);
       setSessionId(session.id);
       setSets(session.sets);
-      setStartTime(session.startedAt);
-      setTimerActive(false);
+      initializeTimer(session.startedAt);
     },
     onError: () => Alert.alert("Could not start session", "Please try again."),
   });
@@ -303,18 +339,25 @@ const WorkoutSessionScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (!startTime || !timerActive) return;
+    if (!timerActive || timerAnchor === null) {
+      return;
+    }
     const tick = () => {
-      const diff = Math.max(
+      const runningSeconds = Math.max(
         0,
-        Math.floor((Date.now() - new Date(startTime).getTime()) / 1000)
+        Math.floor((Date.now() - timerAnchor) / 1000)
       );
-      setElapsedSeconds(diff);
+      setElapsedSeconds(elapsedBaseSeconds + runningSeconds);
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [startTime, timerActive]);
+  }, [timerActive, timerAnchor, elapsedBaseSeconds]);
+
+  useEffect(() => {
+    if (timerActive) return;
+    setElapsedSeconds(elapsedBaseSeconds);
+  }, [timerActive, elapsedBaseSeconds]);
 
   useEffect(() => {
     if (defaultsApplied || sets.length === 0) return;
@@ -439,11 +482,10 @@ const WorkoutSessionScreen = () => {
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId(setId);
 
-    if (!timerActive) {
-      setTimerActive(true);
-      setStartTime((prev) => prev ?? new Date().toISOString());
-    } else if (!startTime) {
-      setStartTime(new Date().toISOString());
+    if (!startTime) {
+      initializeTimer(new Date().toISOString());
+    } else if (!timerActive) {
+      resumeTimer();
     }
 
     if (autoRestTimer) {
@@ -500,8 +542,12 @@ const WorkoutSessionScreen = () => {
   };
 
   const sessionTitle = templateName ?? "Workout Session";
-  const stopwatchLabel =
-    startTime && timerActive ? formatStopwatch(elapsedSeconds) : "00:00";
+  const stopwatchLabel = startTime ? formatStopwatch(elapsedSeconds) : "00:00";
+  const timerStatusLabel = timerActive
+    ? "Running"
+    : elapsedSeconds > 0
+    ? "Paused"
+    : "Ready";
   const restLabel = !autoRestTimer
     ? "Off"
     : restRemaining !== null
@@ -509,6 +555,32 @@ const WorkoutSessionScreen = () => {
     : "On";
   const visibilityLabel =
     visibilityOptions.find((o) => o.value === visibility)?.label ?? "Private";
+  const hasWorkoutProgress = loggedSetIds.size > 0 || elapsedSeconds > 0;
+
+  const handleExitSession = () => {
+    if (!hasWorkoutProgress) {
+      endActiveStatus();
+      navigation.goBack();
+      return;
+    }
+
+    Alert.alert(
+      "Leave workout?",
+      "You have an active timer and sets in progress. The workout will only count if you finish it.",
+      [
+        { text: "Keep going", style: "cancel" },
+        {
+          text: "Leave workout",
+          style: "destructive",
+          onPress: () => {
+            pauseTimer();
+            endActiveStatus();
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <ScreenContainer scroll>
@@ -520,27 +592,53 @@ const WorkoutSessionScreen = () => {
         disabled={isUpdating || !sessionId}
       />
       <View style={{ gap: 12 }}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => ({
+        <View
+          style={{
             flexDirection: "row",
             alignItems: "center",
-            gap: 6,
             alignSelf: "flex-start",
-            paddingVertical: 6,
-            paddingHorizontal: 8,
-            borderRadius: 12,
-            backgroundColor: colors.surfaceMuted,
-            borderWidth: 1,
-            borderColor: colors.border,
-            opacity: pressed ? 0.85 : 1,
-          })}
+            gap: 8,
+          }}
         >
-          <Ionicons name='chevron-back' size={18} color={colors.textPrimary} />
-          <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
-            Back
-          </Text>
-        </Pressable>
+          <Pressable
+            accessibilityLabel='Exit workout'
+            onPress={handleExitSession}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 8,
+              paddingHorizontal: 10,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Ionicons name='close' size={18} color={colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            accessibilityLabel={timerActive ? "Pause workout timer" : "Resume workout timer"}
+            onPress={timerActive ? pauseTimer : resumeTimer}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 8,
+              paddingHorizontal: 10,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Ionicons
+              name={timerActive ? "pause" : "play"}
+              size={18}
+              color={colors.textPrimary}
+            />
+          </Pressable>
+        </View>
 
         <View
           style={{
@@ -578,12 +676,38 @@ const WorkoutSessionScreen = () => {
                 backgroundColor: colors.surfaceMuted,
                 borderWidth: 1,
                 borderColor: colors.border,
-                gap: 6,
+                gap: 10,
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Session timer
-              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Session timer
+                  </Text>
+                  <Text
+                    style={{
+                      color: timerActive ? colors.primary : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      marginTop: 2,
+                    }}
+                  >
+                    {timerStatusLabel}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={timerActive ? "pause" : "play"}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </View>
               <Text
                 style={{
                   color: colors.textPrimary,
