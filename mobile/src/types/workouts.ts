@@ -57,6 +57,40 @@ export interface WorkoutSession {
   sets: WorkoutSet[];
 }
 
+export interface WorkoutHistorySession {
+  id: string;
+  startedAt: string;
+  finishedAt?: string;
+  templateName?: string;
+  totalVolumeLbs: number;
+  estimatedCalories: number;
+  exercises: {
+    exerciseId: string;
+    name: string;
+    sets: number;
+    volumeLbs: number;
+  }[];
+}
+
+export interface WorkoutHistoryDay {
+  date: string;
+  sessions: WorkoutHistorySession[];
+  totalVolumeLbs: number;
+  estimatedCalories: number;
+}
+
+export interface WorkoutHistoryStats {
+  totalWorkouts: number;
+  weeklyGoal: number;
+  weeklyCompleted: number;
+  currentStreak: number;
+}
+
+export interface WorkoutHistoryResponse {
+  days: WorkoutHistoryDay[];
+  stats: WorkoutHistoryStats;
+}
+
 export interface Exercise {
   id: string;
   name: string;

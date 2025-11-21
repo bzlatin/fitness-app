@@ -99,11 +99,17 @@ export const initDb = async () => {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       template_id TEXT REFERENCES workout_templates(id) ON DELETE SET NULL,
+      template_name TEXT,
       started_at TIMESTAMPTZ NOT NULL,
       finished_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+
+  await query(`
+    ALTER TABLE workout_sessions
+      ADD COLUMN IF NOT EXISTS template_name TEXT
   `);
 
   await query(`
