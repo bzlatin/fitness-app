@@ -352,6 +352,7 @@ const SquadScreen = () => {
     undefined
   );
   const [isNearBottom, setIsNearBottom] = useState(false);
+  const [isNearTop, setIsNearTop] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
   const [showFriendsSection, setShowFriendsSection] = useState(false);
@@ -826,12 +827,37 @@ const SquadScreen = () => {
             onScroll={(event) => {
               const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
               const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+              const distanceFromTop = contentOffset.y;
               setIsNearBottom(distanceFromBottom < 10);
+              setIsNearTop(distanceFromTop < 10);
             }}
             scrollEventThrottle={16}
           />
         )}
 
+        {!displayEmpty && !isNearTop && (
+          <LinearGradient
+            colors={[
+              colors.background,
+              `${colors.background}E0`,
+              `${colors.background}C0`,
+              `${colors.background}90`,
+              `${colors.background}60`,
+              `${colors.background}30`,
+              `${colors.background}10`,
+              'transparent',
+            ]}
+            locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -16,
+              right: -16,
+              height: 60,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         {!displayEmpty && !isNearBottom && (
           <LinearGradient
             colors={[

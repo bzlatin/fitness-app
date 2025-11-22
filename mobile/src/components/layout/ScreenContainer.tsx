@@ -15,19 +15,24 @@ const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
   const [contentHeight, setContentHeight] = useState(0);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
   const [isNearBottom, setIsNearBottom] = useState(false);
+  const [isNearTop, setIsNearTop] = useState(true);
 
   const Wrapper = scroll ? ScrollView : View;
 
-  // Only show gradient if content is scrollable and not at bottom
+  // Only show gradient if content is scrollable
   const isScrollable = contentHeight > scrollViewHeight;
-  const shouldShowGradient = showGradient !== undefined
+  const shouldShowBottomGradient = showGradient !== undefined
     ? showGradient
     : scroll && isScrollable && !isNearBottom;
+  const shouldShowTopGradient = scroll && isScrollable && !isNearTop;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    const distanceFromTop = contentOffset.y;
+
     setIsNearBottom(distanceFromBottom < 10);
+    setIsNearTop(distanceFromTop < 10);
   };
 
   return (
@@ -45,7 +50,30 @@ const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
         >
           {children}
         </Wrapper>
-        {shouldShowGradient && (
+        {shouldShowTopGradient && (
+          <LinearGradient
+            colors={[
+              colors.background,
+              `${colors.background}E0`,
+              `${colors.background}C0`,
+              `${colors.background}90`,
+              `${colors.background}60`,
+              `${colors.background}30`,
+              `${colors.background}10`,
+              'transparent',
+            ]}
+            locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 60,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        {shouldShowBottomGradient && (
           <LinearGradient
             colors={[
               'transparent',
