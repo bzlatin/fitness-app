@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { NavigationProp, RouteProp } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
@@ -29,29 +30,34 @@ const tabIconMap: Record<
   Settings: { focused: "person", unfocused: "person-outline" },
 };
 
-const RootTabs = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      headerShown: false,
-      tabBarStyle: {
-        backgroundColor: colors.surface,
-        borderTopColor: colors.border,
-        height: 70,
-        paddingTop: 8,
-      },
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: "#6B7280",
-      tabBarLabelStyle: {
-        fontFamily: fontFamilies.medium,
-        fontSize: 12,
-      },
-      tabBarIcon: ({ color, size, focused }) => {
-        const config = tabIconMap[route.name as keyof RootTabParamList];
-        const iconName = focused ? config.focused : config.unfocused;
-        return <Ionicons name={iconName} size={size + 2} color={color} />;
-      },
-    })}
-  >
+const RootTabs = () => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          height: 60 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: "#6B7280",
+        tabBarLabelStyle: {
+          fontFamily: fontFamilies.medium,
+          fontSize: 12,
+          marginBottom: 4,
+        },
+        tabBarIcon: ({ color, size, focused }) => {
+          const config = tabIconMap[route.name as keyof RootTabParamList];
+          const iconName = focused ? config.focused : config.unfocused;
+          return <Ionicons name={iconName} size={size + 2} color={color} />;
+        },
+      })}
+    >
     <Tab.Screen
       name="Home"
       component={HomeScreen}
@@ -73,7 +79,8 @@ const RootTabs = () => (
       options={{ tabBarLabel: "Profile" }}
     />
   </Tab.Navigator>
-);
+  );
+};
 
 const RootNavigator = () => (
   <Stack.Navigator
