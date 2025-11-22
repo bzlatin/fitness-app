@@ -14,6 +14,7 @@ export type RootStackParamList = {
     totalVolume?: number;
     prCount?: number;
   };
+  Onboarding: { isRetake?: boolean };
 };
 
 export type RootTabParamList = {

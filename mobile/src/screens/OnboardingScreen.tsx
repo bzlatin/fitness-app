@@ -4,81 +4,147 @@ import {
   Platform,
   Pressable,
   Text,
-  TextInput,
   View,
-  Image,
   Alert,
-  Linking,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
-import { fontFamilies, typography } from "../theme/typography";
+import { fontFamilies } from "../theme/typography";
+import { ProgressIndicator } from "../components/onboarding/ProgressIndicator";
+import { WelcomeStep } from "../components/onboarding/WelcomeStep";
+import { GoalsStep } from "../components/onboarding/GoalsStep";
+import { ExperienceStep } from "../components/onboarding/ExperienceStep";
+import { EquipmentStep } from "../components/onboarding/EquipmentStep";
+import { ScheduleStep } from "../components/onboarding/ScheduleStep";
+import { LimitationsStep } from "../components/onboarding/LimitationsStep";
+import { TrainingSplitStep } from "../components/onboarding/TrainingSplitStep";
+import { OnboardingData } from "../types/user";
 
-const OnboardingScreen = () => {
-  const { completeOnboarding } = useCurrentUser();
-  const [name, setName] = useState("");
-  const [handle, setHandle] = useState("");
-  const [trainingStyle, setTrainingStyle] = useState("");
-  const [weeklyGoal, setWeeklyGoal] = useState("4");
+type OnboardingScreenProps = {
+  route?: {
+    params?: {
+      isRetake?: boolean;
+    };
+  };
+};
+
+const TOTAL_STEPS = 7;
+
+const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
+  const { completeOnboarding, user } = useCurrentUser();
+  const isRetake = route?.params?.isRetake ?? false;
+  const isHandleLocked = Boolean(user?.handle);
+
+  const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [avatarUri, setAvatarUri] = useState<string | undefined>();
 
-  const ensurePhotoPermission = async () => {
-    const current = await ImagePicker.getMediaLibraryPermissionsAsync();
-    if (current.granted || current.accessPrivileges === "limited") return true;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.granted || permission.accessPrivileges === "limited") return true;
-    Alert.alert(
-      "Permission needed",
-      "Enable photo access to add a profile picture.",
-      [
-        {
-          text: "Open settings",
-          onPress: () => Linking.openSettings(),
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-    return false;
-  };
+  // Step 1: Welcome
+  const [name, setName] = useState(user?.name ?? "");
+  const [handle, setHandle] = useState(user?.handle ?? "");
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(
+    user?.avatarUrl
+  );
 
-  const pickAvatar = async () => {
-    const allowed = await ensurePhotoPermission();
-    if (!allowed) return;
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        quality: 0.85,
-        aspect: [1, 1],
-        presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
-      });
-      if (!result.canceled && result.assets?.length) {
-        setAvatarUri(result.assets[0]?.uri);
-      }
-    } catch (err) {
-      console.warn("Image picker failed", err);
-      Alert.alert("Could not open photos", "Please try again.");
+  // Step 2: Goals
+  const [selectedGoals, setSelectedGoals] = useState<string[]>(
+    user?.onboardingData?.goals ?? []
+  );
+
+  // Step 3: Experience
+  const [experienceLevel, setExperienceLevel] = useState<string>(
+    user?.onboardingData?.experienceLevel ?? ""
+  );
+
+  // Step 4: Equipment
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(
+    user?.onboardingData?.availableEquipment ?? []
+  );
+
+  // Step 5: Schedule
+  const [weeklyFrequency, setWeeklyFrequency] = useState<number>(
+    user?.onboardingData?.weeklyFrequency ?? user?.weeklyGoal ?? 4
+  );
+  const [sessionDuration, setSessionDuration] = useState<number>(
+    user?.onboardingData?.sessionDuration ?? 45
+  );
+
+  // Step 6: Limitations
+  const [injuryNotes, setInjuryNotes] = useState<string>(
+    user?.onboardingData?.injuryNotes ?? ""
+  );
+  const [movementsToAvoid, setMovementsToAvoid] = useState<string>(
+    user?.onboardingData?.movementsToAvoid ?? ""
+  );
+
+  // Step 7: Training Split
+  const [preferredSplit, setPreferredSplit] = useState<string>(
+    user?.onboardingData?.preferredSplit ?? ""
+  );
+
+  const canGoNext = () => {
+    switch (currentStep) {
+      case 0:
+        return name.trim().length > 0;
+      case 1:
+        return selectedGoals.length > 0;
+      case 2:
+        return experienceLevel.length > 0;
+      case 3:
+        return selectedEquipment.length > 0;
+      case 4:
+        return true; // Schedule has defaults
+      case 5:
+        return true; // Limitations are optional
+      case 6:
+        return preferredSplit.length > 0;
+      default:
+        return false;
     }
   };
 
-  const submit = async () => {
-    if (!name.trim()) {
-      setError("Add your name to personalize your profile.");
+  const handleNext = () => {
+    if (!canGoNext()) {
+      setError("Please complete this step before continuing");
       return;
     }
+    setError(null);
+    setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
+  };
+
+  const handleBack = () => {
+    setError(null);
+    setCurrentStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  const handleSubmit = async () => {
+    if (!canGoNext()) {
+      setError("Please complete all required fields");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
+
     try {
+      const onboardingData: OnboardingData = {
+        goals: selectedGoals,
+        experienceLevel,
+        availableEquipment: selectedEquipment,
+        weeklyFrequency,
+        sessionDuration,
+        injuryNotes: injuryNotes.trim() || undefined,
+        movementsToAvoid: movementsToAvoid.trim() || undefined,
+        preferredSplit,
+      };
+
       await completeOnboarding({
         name: name.trim(),
-        handle: handle.trim() || undefined,
-        bio: trainingStyle.trim() || undefined,
-        trainingStyle: trainingStyle.trim() || undefined,
+        handle: isHandleLocked ? undefined : handle.trim() || undefined,
         avatarUrl: avatarUri,
-        weeklyGoal: Number(weeklyGoal) || 4,
+        weeklyGoal: weeklyFrequency,
+        onboardingData,
       });
     } catch (err) {
       const message =
@@ -91,158 +157,161 @@ const OnboardingScreen = () => {
     }
   };
 
+  const renderStep = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <WelcomeStep
+            name={name}
+            handle={handle}
+            avatarUri={avatarUri}
+            onNameChange={setName}
+            onHandleChange={setHandle}
+            onAvatarChange={setAvatarUri}
+            isRetake={isRetake}
+            isHandleLocked={isHandleLocked}
+          />
+        );
+      case 1:
+        return (
+          <GoalsStep
+            selectedGoals={selectedGoals}
+            onGoalsChange={setSelectedGoals}
+          />
+        );
+      case 2:
+        return (
+          <ExperienceStep
+            experienceLevel={experienceLevel}
+            onExperienceChange={setExperienceLevel}
+          />
+        );
+      case 3:
+        return (
+          <EquipmentStep
+            selectedEquipment={selectedEquipment}
+            onEquipmentChange={setSelectedEquipment}
+          />
+        );
+      case 4:
+        return (
+          <ScheduleStep
+            weeklyFrequency={weeklyFrequency}
+            sessionDuration={sessionDuration}
+            onFrequencyChange={setWeeklyFrequency}
+            onDurationChange={setSessionDuration}
+          />
+        );
+      case 5:
+        return (
+          <LimitationsStep
+            injuryNotes={injuryNotes}
+            movementsToAvoid={movementsToAvoid}
+            onInjuryNotesChange={setInjuryNotes}
+            onMovementsToAvoidChange={setMovementsToAvoid}
+          />
+        );
+      case 6:
+        return (
+          <TrainingSplitStep
+            preferredSplit={preferredSplit}
+            onSplitChange={setPreferredSplit}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const isLastStep = currentStep === TOTAL_STEPS - 1;
+
   return (
     <ScreenContainer>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={{ gap: 16, marginTop: 16 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-            Set up your profile
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>
-            Choose a name and handle so friends can find you. Handles are unique, so pick
-            one you want to keep.
-          </Text>
+        <View style={{ gap: 20, marginTop: 16, flex: 1 }}>
+          <ProgressIndicator
+            currentStep={currentStep}
+            totalSteps={TOTAL_STEPS}
+          />
 
-          <View style={{ gap: 10 }}>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              Profile photo (optional)
-            </Text>
-            <Pressable
-              onPress={pickAvatar}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
+          <View style={{ flex: 1 }}>{renderStep()}</View>
+
+          {error ? (
+            <View
+              style={{
                 padding: 12,
-                borderRadius: 12,
-                backgroundColor: colors.surfaceMuted,
+                borderRadius: 10,
+                backgroundColor: `${colors.error}15`,
                 borderWidth: 1,
-                borderColor: colors.border,
-                opacity: pressed ? 0.9 : 1,
-              })}
+                borderColor: colors.error,
+              }}
             >
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 999,
-                  backgroundColor: colors.surface,
-                  alignItems: "center",
-                  justifyContent: "center",
+              <Text style={{ color: colors.error, fontSize: 14 }}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            {currentStep > 0 && (
+              <Pressable
+                onPress={handleBack}
+                disabled={isSubmitting}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceMuted,
                   borderWidth: 1,
                   borderColor: colors.border,
+                  alignItems: "center",
+                  opacity: pressed || isSubmitting ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                  }}
+                >
+                  ← Back
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={isLastStep ? handleSubmit : handleNext}
+              disabled={isSubmitting || !canGoNext()}
+              style={({ pressed }) => ({
+                flex: 2,
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: canGoNext() ? colors.primary : colors.border,
+                alignItems: "center",
+                opacity: pressed || isSubmitting ? 0.8 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: canGoNext() ? colors.surface : colors.textSecondary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
                 }}
               >
-                {avatarUri ? (
-                  <Image
-                    source={{ uri: avatarUri }}
-                    style={{ width: 52, height: 52, borderRadius: 999 }}
-                  />
-                ) : (
-                  <Text
-                    style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}
-                  >
-                    +
-                  </Text>
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                  {avatarUri ? "Change photo" : "Add a photo"}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  A clear photo helps friends recognize you.
-                </Text>
-              </View>
+                {isSubmitting
+                  ? "Saving..."
+                  : isLastStep
+                  ? "🎉 Complete"
+                  : "Continue →"}
+              </Text>
             </Pressable>
           </View>
-
-          <View style={{ gap: 10 }}>
-            <InputField label="Name" value={name} onChangeText={setName} />
-            <InputField
-              label="Handle"
-              value={handle}
-              onChangeText={setHandle}
-              placeholder="@pushpull"
-            />
-            <InputField
-              label="Training focus / bio"
-              value={trainingStyle}
-              onChangeText={setTrainingStyle}
-              placeholder="Push/pull, hybrid, running"
-              multiline
-            />
-            <InputField
-              label="Weekly workout goal"
-              value={weeklyGoal}
-              onChangeText={setWeeklyGoal}
-              placeholder="4"
-              keyboardType="numeric"
-            />
-          </View>
-
-          {error ? <Text style={{ color: colors.error }}>{error}</Text> : null}
-
-          <Pressable
-            onPress={submit}
-            disabled={isSubmitting}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              borderRadius: 12,
-              backgroundColor: colors.primary,
-              alignItems: "center",
-              opacity: pressed || isSubmitting ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
-              {isSubmitting ? "Saving..." : "Continue"}
-            </Text>
-          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
 };
-
-const InputField = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline,
-  keyboardType,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  keyboardType?: "default" | "numeric";
-}) => (
-  <View style={{ gap: 6 }}>
-    <Text style={{ ...typography.caption, color: colors.textSecondary }}>{label}</Text>
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textSecondary}
-      multiline={multiline}
-      keyboardType={keyboardType}
-      style={{
-        backgroundColor: colors.surfaceMuted,
-        borderRadius: 12,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        color: colors.textPrimary,
-        minHeight: multiline ? 72 : undefined,
-        fontFamily: fontFamilies.medium,
-      }}
-    />
-  </View>
-);
 
 export default OnboardingScreen;

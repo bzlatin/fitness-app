@@ -13,6 +13,7 @@ import SquadScreen from "../screens/SquadScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import PostWorkoutShareScreen from "../screens/PostWorkoutShareScreen";
 import HomeScreen from "../screens/HomeScreen";
+import OnboardingScreen from "../screens/OnboardingScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -113,6 +114,11 @@ const RootNavigator = () => (
       name="PostWorkoutShare"
       component={PostWorkoutShareScreen}
       options={{ title: "Share Workout" }}
+    />
+    <Stack.Screen
+      name="Onboarding"
+      component={OnboardingScreen}
+      options={{ title: "Setup", headerShown: false }}
     />
   </Stack.Navigator>
 );

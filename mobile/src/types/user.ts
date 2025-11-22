@@ -1,5 +1,16 @@
 export type Plan = "free" | "pro" | "lifetime";
 
+export type OnboardingData = {
+  goals?: string[];
+  experienceLevel?: string;
+  availableEquipment?: string[];
+  weeklyFrequency?: number;
+  sessionDuration?: number;
+  injuryNotes?: string;
+  movementsToAvoid?: string;
+  preferredSplit?: string;
+};
+
 export interface User {
   id: string;
   email: string;
@@ -14,6 +25,7 @@ export interface User {
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
+  onboardingData?: OnboardingData | null;
 }
 
 export interface UserProfile extends User {
