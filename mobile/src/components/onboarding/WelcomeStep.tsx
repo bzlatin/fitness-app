@@ -1,35 +1,31 @@
-import { View, Text, TextInput, Pressable, Image, Alert, Linking } from "react-native";
+import { useState } from "react";
+import { Pressable, Text, TextInput, View, Image, Alert, Linking } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 
-type WelcomeStepProps = {
+interface WelcomeStepProps {
   name: string;
   handle: string;
   avatarUri?: string;
   onNameChange: (name: string) => void;
   onHandleChange: (handle: string) => void;
   onAvatarChange: (uri: string | undefined) => void;
-  isRetake?: boolean;
-  isHandleLocked?: boolean;
-};
+}
 
-export const WelcomeStep = ({
+const WelcomeStep = ({
   name,
   handle,
   avatarUri,
   onNameChange,
   onHandleChange,
   onAvatarChange,
-  isRetake = false,
-  isHandleLocked = false,
 }: WelcomeStepProps) => {
   const ensurePhotoPermission = async () => {
     const current = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (current.granted || current.accessPrivileges === "limited") return true;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.granted || permission.accessPrivileges === "limited")
-      return true;
+    if (permission.granted || permission.accessPrivileges === "limited") return true;
     Alert.alert(
       "Permission needed",
       "Enable photo access to add a profile picture.",
@@ -52,8 +48,7 @@ export const WelcomeStep = ({
         allowsEditing: true,
         quality: 0.85,
         aspect: [1, 1],
-        presentationStyle:
-          ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
+        presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
       if (!result.canceled && result.assets?.length) {
         onAvatarChange(result.assets[0]?.uri);
@@ -67,142 +62,110 @@ export const WelcomeStep = ({
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 8 }}>
-        <Text
-          style={{
-            ...typography.heading1,
-            color: colors.textPrimary,
-            fontSize: 28,
-          }}
-        >
-          {isRetake ? "👋 Welcome back!" : "👋 Welcome!"}
+        <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+          Welcome to your fitness journey
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          {isRetake
-            ? "Let's update your profile and training preferences."
-            : "Let's get you set up! This'll only take a minute."}
+          Let's start by setting up your profile. Choose a name and handle so friends can find you.
         </Text>
       </View>
 
-      <View style={{ gap: 12, alignItems: "center", marginVertical: 8 }}>
+      <View style={{ gap: 10 }}>
+        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+          Profile photo (optional)
+        </Text>
         <Pressable
           onPress={pickAvatar}
           style={({ pressed }) => ({
-            opacity: pressed ? 0.8 : 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
           })}
         >
           <View
             style={{
-              width: 100,
-              height: 100,
+              width: 52,
+              height: 52,
               borderRadius: 999,
-              backgroundColor: colors.surfaceMuted,
+              backgroundColor: colors.surface,
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: 3,
-              borderColor: colors.primary,
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
           >
             {avatarUri ? (
               <Image
                 source={{ uri: avatarUri }}
-                style={{ width: 100, height: 100, borderRadius: 999 }}
+                style={{ width: 52, height: 52, borderRadius: 999 }}
               />
             ) : (
               <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 36,
-                  fontFamily: fontFamilies.semibold,
-                }}
+                style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}
               >
                 +
               </Text>
             )}
           </View>
-        </Pressable>
-        <Pressable onPress={pickAvatar}>
-          <Text
-            style={{
-              color: colors.primary,
-              fontFamily: fontFamilies.semibold,
-              fontSize: 14,
-            }}
-          >
-            {avatarUri ? "Change photo" : "Add photo"}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+              {avatarUri ? "Change photo" : "Add a photo"}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              A clear photo helps friends recognize you.
+            </Text>
+          </View>
         </Pressable>
       </View>
 
-      <View style={{ gap: 14 }}>
-        <View style={{ gap: 6 }}>
-          <Text
-            style={{
-              ...typography.caption,
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-            }}
-          >
-            Your name *
-          </Text>
-          <TextInput
-            value={name}
-            onChangeText={onNameChange}
-            placeholder="John Doe"
-            placeholderTextColor={colors.textSecondary}
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: 12,
-              padding: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.medium,
-              fontSize: 16,
-            }}
-          />
-        </View>
-
-        <View style={{ gap: 6 }}>
-          <Text
-            style={{
-              ...typography.caption,
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-            }}
-          >
-            Handle {!isRetake && "(optional)"}
-          </Text>
-          <TextInput
-            value={handle}
-            onChangeText={onHandleChange}
-            placeholder="@yourhandle"
-            placeholderTextColor={colors.textSecondary}
-            editable={!isHandleLocked}
-            style={{
-              backgroundColor: isHandleLocked
-                ? colors.surface
-                : colors.surfaceMuted,
-              borderRadius: 12,
-              padding: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: isHandleLocked ? colors.textSecondary : colors.textPrimary,
-              fontFamily: fontFamilies.medium,
-              fontSize: 16,
-              opacity: isHandleLocked ? 0.6 : 1,
-            }}
-          />
-          {isHandleLocked ? (
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-              Handles are locked once set
-            </Text>
-          ) : (
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-              Your unique handle helps friends find you
-            </Text>
-          )}
-        </View>
+      <View style={{ gap: 10 }}>
+        <InputField label="Name" value={name} onChangeText={onNameChange} placeholder="Your name" />
+        <InputField
+          label="Handle (optional)"
+          value={handle}
+          onChangeText={onHandleChange}
+          placeholder="@username"
+        />
       </View>
     </View>
   );
 };
+
+const InputField = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+}) => (
+  <View style={{ gap: 6 }}>
+    <Text style={{ ...typography.caption, color: colors.textSecondary }}>{label}</Text>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.textSecondary}
+      style={{
+        backgroundColor: colors.surfaceMuted,
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        color: colors.textPrimary,
+        fontFamily: fontFamilies.medium,
+      }}
+    />
+  </View>
+);
+
+export default WelcomeStep;

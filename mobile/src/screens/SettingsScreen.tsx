@@ -1013,6 +1013,51 @@ const SettingsScreen = () => {
             Account
           </Text>
           <Pressable
+            onPress={() => {
+              Alert.alert(
+                "Re-take Onboarding",
+                "This will let you update your fitness goals, experience level, and preferences. Your profile data will be preserved.",
+                [
+                  {
+                    text: "Cancel",
+                    style: "cancel",
+                  },
+                  {
+                    text: "Continue",
+                    onPress: async () => {
+                      try {
+                        await updateProfile({
+                          profileCompletedAt: null,
+                        });
+                        Alert.alert("Success", "You'll be guided through onboarding on next restart.");
+                      } catch (err) {
+                        Alert.alert("Error", "Could not reset onboarding. Please try again.");
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              borderRadius: 10,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: "center",
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              Re-take Onboarding
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => setIsDeleteOpen(true)}
             style={({ pressed }) => ({
               paddingVertical: 12,

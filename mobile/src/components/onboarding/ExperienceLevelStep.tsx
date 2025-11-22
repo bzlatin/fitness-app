@@ -1,56 +1,38 @@
 import { Pressable, Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
-import { FitnessGoal, FITNESS_GOAL_LABELS } from "../../types/onboarding";
+import {
+  ExperienceLevel,
+  EXPERIENCE_LEVEL_LABELS,
+  EXPERIENCE_LEVEL_DESCRIPTIONS,
+} from "../../types/onboarding";
 
-interface GoalsStepProps {
-  selectedGoals: FitnessGoal[];
-  onGoalsChange: (goals: FitnessGoal[]) => void;
+interface ExperienceLevelStepProps {
+  selectedLevel?: ExperienceLevel;
+  onLevelChange: (level: ExperienceLevel) => void;
 }
 
-const GOAL_DESCRIPTIONS: Record<FitnessGoal, string> = {
-  build_muscle: "Increase muscle mass and size",
-  lose_weight: "Reduce body fat and lose weight",
-  strength: "Build maximum strength and power",
-  endurance: "Improve cardiovascular fitness",
-  general_fitness: "Stay active and healthy",
-};
-
-const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
-  const toggleGoal = (goal: FitnessGoal) => {
-    if (selectedGoals.includes(goal)) {
-      onGoalsChange(selectedGoals.filter((g) => g !== goal));
-    } else {
-      onGoalsChange([...selectedGoals, goal]);
-    }
-  };
-
-  const goals: FitnessGoal[] = [
-    "build_muscle",
-    "lose_weight",
-    "strength",
-    "endurance",
-    "general_fitness",
-  ];
+const ExperienceLevelStep = ({ selectedLevel, onLevelChange }: ExperienceLevelStepProps) => {
+  const levels: ExperienceLevel[] = ["beginner", "intermediate", "advanced"];
 
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 8 }}>
         <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-          What are your fitness goals?
+          What's your experience level?
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Select all that apply. We'll use this to personalize your experience.
+          This helps us recommend the right workout intensity and progression.
         </Text>
       </View>
 
       <View style={{ gap: 12 }}>
-        {goals.map((goal) => {
-          const isSelected = selectedGoals.includes(goal);
+        {levels.map((level) => {
+          const isSelected = selectedLevel === level;
           return (
             <Pressable
-              key={goal}
-              onPress={() => toggleGoal(goal)}
+              key={level}
+              onPress={() => onLevelChange(level)}
               style={({ pressed }) => ({
                 padding: 16,
                 borderRadius: 12,
@@ -74,9 +56,14 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                   }}
                 >
                   {isSelected && (
-                    <Text style={{ color: colors.surface, fontSize: 14, fontFamily: fontFamilies.semibold }}>
-                      ✓
-                    </Text>
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: colors.surface,
+                      }}
+                    />
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
@@ -87,7 +74,7 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                       fontSize: 16,
                     }}
                   >
-                    {FITNESS_GOAL_LABELS[goal]}
+                    {EXPERIENCE_LEVEL_LABELS[level]}
                   </Text>
                   <Text
                     style={{
@@ -96,7 +83,7 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                       marginTop: 2,
                     }}
                   >
-                    {GOAL_DESCRIPTIONS[goal]}
+                    {EXPERIENCE_LEVEL_DESCRIPTIONS[level]}
                   </Text>
                 </View>
               </View>
@@ -108,4 +95,4 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
   );
 };
 
-export default GoalsStep;
+export default ExperienceLevelStep;

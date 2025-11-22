@@ -1,96 +1,71 @@
-import { View, Text, Pressable } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
+import { SESSION_DURATIONS, WEEKLY_FREQUENCIES } from "../../types/onboarding";
 
-const FREQUENCY_OPTIONS = [3, 4, 5, 6, 7];
+interface ScheduleStepProps {
+  weeklyFrequency?: number;
+  sessionDuration?: number;
+  onWeeklyFrequencyChange: (frequency: number) => void;
+  onSessionDurationChange: (duration: number) => void;
+}
 
-const DURATION_OPTIONS: { value: number; label: string }[] = [
-  { value: 30, label: "30 min" },
-  { value: 45, label: "45 min" },
-  { value: 60, label: "60 min" },
-  { value: 90, label: "90 min" },
-];
-
-type ScheduleStepProps = {
-  weeklyFrequency: number;
-  sessionDuration: number;
-  onFrequencyChange: (frequency: number) => void;
-  onDurationChange: (duration: number) => void;
-};
-
-export const ScheduleStep = ({
+const ScheduleStep = ({
   weeklyFrequency,
   sessionDuration,
-  onFrequencyChange,
-  onDurationChange,
+  onWeeklyFrequencyChange,
+  onSessionDurationChange,
 }: ScheduleStepProps) => {
   return (
     <View style={{ gap: 24 }}>
       <View style={{ gap: 8 }}>
-        <Text
-          style={{
-            ...typography.heading1,
-            color: colors.textPrimary,
-            fontSize: 28,
-          }}
-        >
-          📅 Training schedule
+        <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+          Let's plan your schedule
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Tell us about your availability so we can plan workouts that fit your
-          lifestyle.
+          Choose a realistic schedule that fits your lifestyle. You can always adjust this later.
         </Text>
       </View>
 
       <View style={{ gap: 12 }}>
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontFamily: fontFamilies.semibold,
-            fontSize: 16,
-          }}
-        >
-          Workouts per week
+        <Text style={{ ...typography.subheading, color: colors.textPrimary }}>
+          How many days per week?
         </Text>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {FREQUENCY_OPTIONS.map((freq) => {
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {WEEKLY_FREQUENCIES.map((freq) => {
             const isSelected = weeklyFrequency === freq;
             return (
               <Pressable
                 key={freq}
-                onPress={() => onFrequencyChange(freq)}
+                onPress={() => onWeeklyFrequencyChange(freq)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  minWidth: 60,
-                  paddingVertical: 16,
-                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: isSelected ? colors.primary : colors.border,
-                  backgroundColor: isSelected
-                    ? colors.primary
-                    : colors.surfaceMuted,
-                  alignItems: "center",
+                  backgroundColor: isSelected ? `${colors.primary}15` : colors.surfaceMuted,
                   opacity: pressed ? 0.8 : 1,
+                  minWidth: 70,
+                  alignItems: "center",
                 })}
               >
                 <Text
                   style={{
-                    color: isSelected ? colors.surface : colors.textPrimary,
-                    fontFamily: fontFamilies.bold,
-                    fontSize: 20,
+                    color: isSelected ? colors.primary : colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
                   }}
                 >
                   {freq}
                 </Text>
                 <Text
                   style={{
-                    color: isSelected ? colors.surface : colors.textSecondary,
-                    fontSize: 11,
-                    marginTop: 2,
+                    color: colors.textSecondary,
+                    fontSize: 12,
                   }}
                 >
-                  days
+                  {freq === 1 ? "day" : "days"}
                 </Text>
               </Pressable>
             );
@@ -99,79 +74,53 @@ export const ScheduleStep = ({
       </View>
 
       <View style={{ gap: 12 }}>
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontFamily: fontFamilies.semibold,
-            fontSize: 16,
-          }}
-        >
-          Session length
+        <Text style={{ ...typography.subheading, color: colors.textPrimary }}>
+          Session duration
         </Text>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {DURATION_OPTIONS.map((option) => {
-            const isSelected = sessionDuration === option.value;
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {SESSION_DURATIONS.map((duration) => {
+            const isSelected = sessionDuration === duration;
             return (
               <Pressable
-                key={option.value}
-                onPress={() => onDurationChange(option.value)}
+                key={duration}
+                onPress={() => onSessionDurationChange(duration)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  minWidth: 70,
-                  paddingVertical: 16,
-                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: isSelected ? colors.primary : colors.border,
-                  backgroundColor: isSelected
-                    ? colors.primary
-                    : colors.surfaceMuted,
-                  alignItems: "center",
+                  backgroundColor: isSelected ? `${colors.primary}15` : colors.surfaceMuted,
                   opacity: pressed ? 0.8 : 1,
+                  flex: 1,
+                  minWidth: 80,
+                  alignItems: "center",
                 })}
               >
                 <Text
                   style={{
-                    color: isSelected ? colors.surface : colors.textPrimary,
-                    fontFamily: fontFamilies.bold,
-                    fontSize: 18,
+                    color: isSelected ? colors.primary : colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
                   }}
                 >
-                  {option.label}
+                  {duration}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  minutes
                 </Text>
               </Pressable>
             );
           })}
         </View>
       </View>
-
-      <View
-        style={{
-          padding: 14,
-          borderRadius: 12,
-          backgroundColor: `${colors.primary}10`,
-          borderWidth: 1,
-          borderColor: `${colors.primary}30`,
-        }}
-      >
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontSize: 14,
-            textAlign: "center",
-            fontFamily: fontFamilies.medium,
-          }}
-        >
-          💪 You'll train{" "}
-          <Text style={{ fontFamily: fontFamilies.bold }}>
-            {weeklyFrequency} times
-          </Text>{" "}
-          per week for{" "}
-          <Text style={{ fontFamily: fontFamilies.bold }}>
-            {sessionDuration} minutes
-          </Text>
-        </Text>
-      </View>
     </View>
   );
 };
+
+export default ScheduleStep;

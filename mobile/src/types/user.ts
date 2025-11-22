@@ -1,15 +1,6 @@
-export type Plan = "free" | "pro" | "lifetime";
+import { OnboardingData } from "./onboarding";
 
-export type OnboardingData = {
-  goals?: string[];
-  experienceLevel?: string;
-  availableEquipment?: string[];
-  weeklyFrequency?: number;
-  sessionDuration?: number;
-  injuryNotes?: string;
-  movementsToAvoid?: string;
-  preferredSplit?: string;
-};
+export type Plan = "free" | "pro" | "lifetime";
 
 export interface User {
   id: string;
@@ -20,7 +11,7 @@ export interface User {
   handle?: string | null;
   avatarUrl?: string;
   bio?: string;
-  profileCompletedAt?: string;
+  profileCompletedAt?: string | null;
   trainingStyle?: string;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";

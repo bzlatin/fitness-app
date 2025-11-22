@@ -18,7 +18,7 @@ type UserRow = {
   gym_name: string | null;
   gym_visibility: string | null;
   weekly_goal: number | null;
-  onboarding_data: object | null;
+  onboarding_data: unknown;
 };
 
 type SocialProfile = {
@@ -41,7 +41,7 @@ type SocialProfile = {
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
-  onboardingData?: object | null;
+  onboardingData?: unknown;
   friendsPreview?: {
     id: string;
     name: string;

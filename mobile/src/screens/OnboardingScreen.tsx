@@ -5,121 +5,98 @@ import {
   Pressable,
   Text,
   View,
-  Alert,
+  ScrollView,
 } from "react-native";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
-import { fontFamilies } from "../theme/typography";
-import { ProgressIndicator } from "../components/onboarding/ProgressIndicator";
-import { WelcomeStep } from "../components/onboarding/WelcomeStep";
-import { GoalsStep } from "../components/onboarding/GoalsStep";
-import { ExperienceStep } from "../components/onboarding/ExperienceStep";
-import { EquipmentStep } from "../components/onboarding/EquipmentStep";
-import { ScheduleStep } from "../components/onboarding/ScheduleStep";
-import { LimitationsStep } from "../components/onboarding/LimitationsStep";
-import { TrainingSplitStep } from "../components/onboarding/TrainingSplitStep";
-import { OnboardingData } from "../types/user";
-
-type OnboardingScreenProps = {
-  route?: {
-    params?: {
-      isRetake?: boolean;
-    };
-  };
-};
+import { fontFamilies, typography } from "../theme/typography";
+import {
+  FitnessGoal,
+  ExperienceLevel,
+  EquipmentType,
+  TrainingSplit,
+  PartialOnboardingData,
+} from "../types/onboarding";
+import WelcomeStep from "../components/onboarding/WelcomeStep";
+import GoalsStep from "../components/onboarding/GoalsStep";
+import ExperienceLevelStep from "../components/onboarding/ExperienceLevelStep";
+import EquipmentStep from "../components/onboarding/EquipmentStep";
+import ScheduleStep from "../components/onboarding/ScheduleStep";
+import LimitationsStep from "../components/onboarding/LimitationsStep";
+import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 
 const TOTAL_STEPS = 7;
 
-const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
-  const { completeOnboarding, user } = useCurrentUser();
-  const isRetake = route?.params?.isRetake ?? false;
-  const isHandleLocked = Boolean(user?.handle);
-
-  const [currentStep, setCurrentStep] = useState(0);
+const OnboardingScreen = () => {
+  const { completeOnboarding } = useCurrentUser();
+  const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 1: Welcome
-  const [name, setName] = useState(user?.name ?? "");
-  const [handle, setHandle] = useState(user?.handle ?? "");
-  const [avatarUri, setAvatarUri] = useState<string | undefined>(
-    user?.avatarUrl
-  );
+  const [name, setName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [avatarUri, setAvatarUri] = useState<string | undefined>();
 
   // Step 2: Goals
-  const [selectedGoals, setSelectedGoals] = useState<string[]>(
-    user?.onboardingData?.goals ?? []
-  );
+  const [selectedGoals, setSelectedGoals] = useState<FitnessGoal[]>([]);
 
   // Step 3: Experience
-  const [experienceLevel, setExperienceLevel] = useState<string>(
-    user?.onboardingData?.experienceLevel ?? ""
-  );
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | undefined>();
 
   // Step 4: Equipment
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(
-    user?.onboardingData?.availableEquipment ?? []
-  );
+  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>([]);
+  const [customEquipment, setCustomEquipment] = useState<string[]>([]);
 
   // Step 5: Schedule
-  const [weeklyFrequency, setWeeklyFrequency] = useState<number>(
-    user?.onboardingData?.weeklyFrequency ?? user?.weeklyGoal ?? 4
-  );
-  const [sessionDuration, setSessionDuration] = useState<number>(
-    user?.onboardingData?.sessionDuration ?? 45
-  );
+  const [weeklyFrequency, setWeeklyFrequency] = useState<number | undefined>();
+  const [sessionDuration, setSessionDuration] = useState<number | undefined>();
 
   // Step 6: Limitations
-  const [injuryNotes, setInjuryNotes] = useState<string>(
-    user?.onboardingData?.injuryNotes ?? ""
-  );
-  const [movementsToAvoid, setMovementsToAvoid] = useState<string>(
-    user?.onboardingData?.movementsToAvoid ?? ""
-  );
+  const [injuryNotes, setInjuryNotes] = useState("");
+  const [movementsToAvoid, setMovementsToAvoid] = useState<string[]>([]);
 
-  // Step 7: Training Split
-  const [preferredSplit, setPreferredSplit] = useState<string>(
-    user?.onboardingData?.preferredSplit ?? ""
-  );
+  // Step 7: Training Style
+  const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>();
 
-  const canGoNext = () => {
+  const canProceed = () => {
     switch (currentStep) {
-      case 0:
-        return name.trim().length > 0;
       case 1:
-        return selectedGoals.length > 0;
+        return name.trim().length > 0;
       case 2:
-        return experienceLevel.length > 0;
+        return selectedGoals.length > 0;
       case 3:
-        return selectedEquipment.length > 0;
+        return experienceLevel !== undefined;
       case 4:
-        return true; // Schedule has defaults
+        return selectedEquipment.length > 0;
       case 5:
-        return true; // Limitations are optional
+        return weeklyFrequency !== undefined && sessionDuration !== undefined;
       case 6:
-        return preferredSplit.length > 0;
+        return true; // Optional step
+      case 7:
+        return preferredSplit !== undefined;
       default:
         return false;
     }
   };
 
   const handleNext = () => {
-    if (!canGoNext()) {
-      setError("Please complete this step before continuing");
-      return;
+    if (currentStep < TOTAL_STEPS) {
+      setCurrentStep(currentStep + 1);
+      setError(null);
     }
-    setError(null);
-    setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
   };
 
   const handleBack = () => {
-    setError(null);
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+      setError(null);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!canGoNext()) {
+    if (!canProceed()) {
       setError("Please complete all required fields");
       return;
     }
@@ -127,23 +104,23 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const onboardingData: OnboardingData = {
-        goals: selectedGoals,
-        experienceLevel,
-        availableEquipment: selectedEquipment,
-        weeklyFrequency,
-        sessionDuration,
-        injuryNotes: injuryNotes.trim() || undefined,
-        movementsToAvoid: movementsToAvoid.trim() || undefined,
-        preferredSplit,
-      };
+    const onboardingData: PartialOnboardingData = {
+      goals: selectedGoals,
+      experienceLevel,
+      availableEquipment: selectedEquipment,
+      customEquipment: selectedEquipment.includes("custom") ? customEquipment : undefined,
+      weeklyFrequency,
+      sessionDuration,
+      injuryNotes: injuryNotes.trim() || undefined,
+      movementsToAvoid: movementsToAvoid.length > 0 ? movementsToAvoid : undefined,
+      preferredSplit,
+    };
 
+    try {
       await completeOnboarding({
         name: name.trim(),
-        handle: isHandleLocked ? undefined : handle.trim() || undefined,
+        handle: handle.trim() || undefined,
         avatarUrl: avatarUri,
-        weeklyGoal: weeklyFrequency,
         onboardingData,
       });
     } catch (err) {
@@ -159,7 +136,7 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
 
   const renderStep = () => {
     switch (currentStep) {
-      case 0:
+      case 1:
         return (
           <WelcomeStep
             name={name}
@@ -168,41 +145,36 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
             onNameChange={setName}
             onHandleChange={setHandle}
             onAvatarChange={setAvatarUri}
-            isRetake={isRetake}
-            isHandleLocked={isHandleLocked}
-          />
-        );
-      case 1:
-        return (
-          <GoalsStep
-            selectedGoals={selectedGoals}
-            onGoalsChange={setSelectedGoals}
           />
         );
       case 2:
-        return (
-          <ExperienceStep
-            experienceLevel={experienceLevel}
-            onExperienceChange={setExperienceLevel}
-          />
-        );
+        return <GoalsStep selectedGoals={selectedGoals} onGoalsChange={setSelectedGoals} />;
       case 3:
         return (
-          <EquipmentStep
-            selectedEquipment={selectedEquipment}
-            onEquipmentChange={setSelectedEquipment}
+          <ExperienceLevelStep
+            selectedLevel={experienceLevel}
+            onLevelChange={setExperienceLevel}
           />
         );
       case 4:
         return (
-          <ScheduleStep
-            weeklyFrequency={weeklyFrequency}
-            sessionDuration={sessionDuration}
-            onFrequencyChange={setWeeklyFrequency}
-            onDurationChange={setSessionDuration}
+          <EquipmentStep
+            selectedEquipment={selectedEquipment}
+            customEquipment={customEquipment}
+            onEquipmentChange={setSelectedEquipment}
+            onCustomEquipmentChange={setCustomEquipment}
           />
         );
       case 5:
+        return (
+          <ScheduleStep
+            weeklyFrequency={weeklyFrequency}
+            sessionDuration={sessionDuration}
+            onWeeklyFrequencyChange={setWeeklyFrequency}
+            onSessionDurationChange={setSessionDuration}
+          />
+        );
+      case 6:
         return (
           <LimitationsStep
             injuryNotes={injuryNotes}
@@ -211,19 +183,14 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
             onMovementsToAvoidChange={setMovementsToAvoid}
           />
         );
-      case 6:
+      case 7:
         return (
-          <TrainingSplitStep
-            preferredSplit={preferredSplit}
-            onSplitChange={setPreferredSplit}
-          />
+          <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
         );
       default:
         return null;
     }
   };
-
-  const isLastStep = currentStep === TOTAL_STEPS - 1;
 
   return (
     <ScreenContainer>
@@ -231,40 +198,86 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={{ gap: 20, marginTop: 16, flex: 1 }}>
-          <ProgressIndicator
-            currentStep={currentStep}
-            totalSteps={TOTAL_STEPS}
-          />
-
-          <View style={{ flex: 1 }}>{renderStep()}</View>
-
-          {error ? (
-            <View
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                backgroundColor: `${colors.error}15`,
-                borderWidth: 1,
-                borderColor: colors.error,
-              }}
-            >
-              <Text style={{ color: colors.error, fontSize: 14 }}>{error}</Text>
+        <View style={{ flex: 1, gap: 16, marginTop: 16 }}>
+          {/* Progress indicator */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              Step {currentStep} of {TOTAL_STEPS}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {Array.from({ length: TOTAL_STEPS }).map((_, index) => {
+                const stepNumber = index + 1;
+                const isCompleted = stepNumber < currentStep;
+                const isCurrent = stepNumber === currentStep;
+                return (
+                  <View
+                    key={stepNumber}
+                    style={{
+                      flex: 1,
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor:
+                        isCompleted || isCurrent
+                          ? colors.primary
+                          : `${colors.textSecondary}30`,
+                      opacity: isCompleted || isCurrent ? 1 : 0.5,
+                    }}
+                  />
+                );
+              })}
             </View>
-          ) : null}
+          </View>
 
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            {currentStep > 0 && (
+          {/* Step content */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderStep()}
+          </ScrollView>
+
+          {/* Error message */}
+          {error && (
+            <Text style={{ color: colors.error, textAlign: "center" }}>{error}</Text>
+          )}
+
+          {/* Navigation buttons */}
+          <View style={{ gap: 10 }}>
+            <Pressable
+              onPress={currentStep === TOTAL_STEPS ? handleSubmit : handleNext}
+              disabled={!canProceed() || isSubmitting}
+              style={({ pressed }) => ({
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: canProceed() && !isSubmitting ? colors.primary : colors.border,
+                alignItems: "center",
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                }}
+              >
+                {isSubmitting
+                  ? "Saving..."
+                  : currentStep === TOTAL_STEPS
+                    ? "Complete Setup"
+                    : "Continue"}
+              </Text>
+            </Pressable>
+
+            {currentStep > 1 && (
               <Pressable
                 onPress={handleBack}
                 disabled={isSubmitting}
                 style={({ pressed }) => ({
-                  flex: 1,
                   paddingVertical: 14,
                   borderRadius: 12,
                   backgroundColor: colors.surfaceMuted,
-                  borderWidth: 1,
-                  borderColor: colors.border,
                   alignItems: "center",
                   opacity: pressed || isSubmitting ? 0.7 : 1,
                 })}
@@ -272,41 +285,14 @@ const OnboardingScreen = ({ route }: OnboardingScreenProps) => {
                 <Text
                   style={{
                     color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
+                    fontFamily: fontFamilies.medium,
                     fontSize: 16,
                   }}
                 >
-                  ← Back
+                  Back
                 </Text>
               </Pressable>
             )}
-
-            <Pressable
-              onPress={isLastStep ? handleSubmit : handleNext}
-              disabled={isSubmitting || !canGoNext()}
-              style={({ pressed }) => ({
-                flex: 2,
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: canGoNext() ? colors.primary : colors.border,
-                alignItems: "center",
-                opacity: pressed || isSubmitting ? 0.8 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: canGoNext() ? colors.surface : colors.textSecondary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 16,
-                }}
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : isLastStep
-                  ? "🎉 Complete"
-                  : "Continue →"}
-              </Text>
-            </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>

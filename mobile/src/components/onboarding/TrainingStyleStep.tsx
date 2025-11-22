@@ -1,56 +1,41 @@
 import { Pressable, Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
-import { FitnessGoal, FITNESS_GOAL_LABELS } from "../../types/onboarding";
+import { TrainingSplit, TRAINING_SPLIT_LABELS } from "../../types/onboarding";
 
-interface GoalsStepProps {
-  selectedGoals: FitnessGoal[];
-  onGoalsChange: (goals: FitnessGoal[]) => void;
+interface TrainingStyleStepProps {
+  selectedSplit?: TrainingSplit;
+  onSplitChange: (split: TrainingSplit) => void;
 }
 
-const GOAL_DESCRIPTIONS: Record<FitnessGoal, string> = {
-  build_muscle: "Increase muscle mass and size",
-  lose_weight: "Reduce body fat and lose weight",
-  strength: "Build maximum strength and power",
-  endurance: "Improve cardiovascular fitness",
-  general_fitness: "Stay active and healthy",
+const SPLIT_DESCRIPTIONS: Record<TrainingSplit, string> = {
+  push_pull_legs: "Split workouts into push, pull, and leg days (3-6x/week)",
+  upper_lower: "Alternate between upper and lower body (2-4x/week)",
+  full_body: "Train all major muscle groups each session (2-3x/week)",
+  custom: "Create your own training split",
 };
 
-const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
-  const toggleGoal = (goal: FitnessGoal) => {
-    if (selectedGoals.includes(goal)) {
-      onGoalsChange(selectedGoals.filter((g) => g !== goal));
-    } else {
-      onGoalsChange([...selectedGoals, goal]);
-    }
-  };
-
-  const goals: FitnessGoal[] = [
-    "build_muscle",
-    "lose_weight",
-    "strength",
-    "endurance",
-    "general_fitness",
-  ];
+const TrainingStyleStep = ({ selectedSplit, onSplitChange }: TrainingStyleStepProps) => {
+  const splits: TrainingSplit[] = ["push_pull_legs", "upper_lower", "full_body", "custom"];
 
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 8 }}>
         <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-          What are your fitness goals?
+          Choose your training split
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Select all that apply. We'll use this to personalize your experience.
+          This determines how you'll organize your workouts throughout the week.
         </Text>
       </View>
 
       <View style={{ gap: 12 }}>
-        {goals.map((goal) => {
-          const isSelected = selectedGoals.includes(goal);
+        {splits.map((split) => {
+          const isSelected = selectedSplit === split;
           return (
             <Pressable
-              key={goal}
-              onPress={() => toggleGoal(goal)}
+              key={split}
+              onPress={() => onSplitChange(split)}
               style={({ pressed }) => ({
                 padding: 16,
                 borderRadius: 12,
@@ -74,9 +59,14 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                   }}
                 >
                   {isSelected && (
-                    <Text style={{ color: colors.surface, fontSize: 14, fontFamily: fontFamilies.semibold }}>
-                      ✓
-                    </Text>
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: colors.surface,
+                      }}
+                    />
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
@@ -87,7 +77,7 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                       fontSize: 16,
                     }}
                   >
-                    {FITNESS_GOAL_LABELS[goal]}
+                    {TRAINING_SPLIT_LABELS[split]}
                   </Text>
                   <Text
                     style={{
@@ -96,7 +86,7 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
                       marginTop: 2,
                     }}
                   >
-                    {GOAL_DESCRIPTIONS[goal]}
+                    {SPLIT_DESCRIPTIONS[split]}
                   </Text>
                 </View>
               </View>
@@ -104,8 +94,32 @@ const GoalsStep = ({ selectedGoals, onGoalsChange }: GoalsStepProps) => {
           );
         })}
       </View>
+
+      <View
+        style={{
+          padding: 16,
+          borderRadius: 12,
+          backgroundColor: `${colors.success}15`,
+          borderWidth: 1,
+          borderColor: `${colors.success}30`,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontFamily: fontFamilies.semibold,
+            fontSize: 15,
+            marginBottom: 4,
+          }}
+        >
+          You're almost done!
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+          After completing this step, we'll personalize your workout experience based on your preferences.
+        </Text>
+      </View>
     </View>
   );
 };
 
-export default GoalsStep;
+export default TrainingStyleStep;
