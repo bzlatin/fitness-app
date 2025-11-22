@@ -11,6 +11,7 @@ interface WelcomeStepProps {
   onNameChange: (name: string) => void;
   onHandleChange: (handle: string) => void;
   onAvatarChange: (uri: string | undefined) => void;
+  isRetake?: boolean;
 }
 
 const WelcomeStep = ({
@@ -20,6 +21,7 @@ const WelcomeStep = ({
   onNameChange,
   onHandleChange,
   onAvatarChange,
+  isRetake = false,
 }: WelcomeStepProps) => {
   const ensurePhotoPermission = async () => {
     const current = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -126,12 +128,14 @@ const WelcomeStep = ({
 
       <View style={{ gap: 10 }}>
         <InputField label="Name" value={name} onChangeText={onNameChange} placeholder="Your name" />
-        <InputField
-          label="Handle (optional)"
-          value={handle}
-          onChangeText={onHandleChange}
-          placeholder="@username"
-        />
+        {!isRetake && (
+          <InputField
+            label="Handle (optional)"
+            value={handle}
+            onChangeText={onHandleChange}
+            placeholder="@username"
+          />
+        )}
       </View>
     </View>
   );

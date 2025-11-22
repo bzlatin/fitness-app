@@ -153,6 +153,7 @@ const OnboardingScreen = () => {
             onNameChange={setName}
             onHandleChange={setHandle}
             onAvatarChange={setAvatarUri}
+            isRetake={isRetake}
           />
         );
       case 2:
