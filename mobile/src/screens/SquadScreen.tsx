@@ -758,6 +758,7 @@ const SquadScreen = () => {
           )}
         </View>
 
+        <View style={{ flex: 1 }}>
         {displayError ? (
           <Text style={{ color: colors.error }}>
             Could not load your {showingSquadFeed ? "squad feed" : "feed"}. We
@@ -835,52 +836,53 @@ const SquadScreen = () => {
           />
         )}
 
-        {!displayEmpty && !isNearTop && (
-          <LinearGradient
-            colors={[
-              colors.background,
-              `${colors.background}E0`,
-              `${colors.background}C0`,
-              `${colors.background}90`,
-              `${colors.background}60`,
-              `${colors.background}30`,
-              `${colors.background}10`,
-              'transparent',
-            ]}
-            locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: -16,
-              right: -16,
-              height: 60,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-        {!displayEmpty && !isNearBottom && (
-          <LinearGradient
-            colors={[
-              'transparent',
-              `${colors.background}10`,
-              `${colors.background}30`,
-              `${colors.background}60`,
-              `${colors.background}90`,
-              `${colors.background}C0`,
-              `${colors.background}E0`,
-              colors.background,
-            ]}
-            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: -16,
-              right: -16,
-              height: 60 + insets.bottom,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
+          {!displayEmpty && !isNearTop && (
+            <LinearGradient
+              colors={[
+                colors.background,
+                `${colors.background}E0`,
+                `${colors.background}C0`,
+                `${colors.background}90`,
+                `${colors.background}60`,
+                `${colors.background}30`,
+                `${colors.background}10`,
+                'transparent',
+              ]}
+              locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: -16,
+                right: -16,
+                height: 60,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+          {!displayEmpty && !isNearBottom && (
+            <LinearGradient
+              colors={[
+                'transparent',
+                `${colors.background}10`,
+                `${colors.background}30`,
+                `${colors.background}60`,
+                `${colors.background}90`,
+                `${colors.background}C0`,
+                `${colors.background}E0`,
+                colors.background,
+              ]}
+              locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: -16,
+                right: -16,
+                height: 60 + insets.bottom,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+        </View>
 
         {selectedSquadId ? (
           <Pressable
