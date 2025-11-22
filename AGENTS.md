@@ -51,3 +51,25 @@ Commits in the existing history are short, imperative statements (“added auth 
 ## Security & Configuration Tips
 
 Do not commit credentials—use `.env` locally with `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, and the Expo `EXPO_PUBLIC_AUTH0_*` values. When testing on a device, set `EXPO_PUBLIC_API_URL` to your LAN IP (`http://192.168.x.x:4000/api`) and confirm HTTPS requirements for Auth0 callbacks. The API validates JWTs via RS256; always keep issuer/audience pairs in sync between client and server before sharing preview builds.
+
+## Feature Development & Progress Tracking
+
+The comprehensive feature roadmap lives in [ROADMAP.md](ROADMAP.md). This document outlines:
+
+- **Monetization strategy** (freemium model, pricing, trial logic)
+- **Implementation phases** (4 phases from foundation to polish)
+- **Technical specifications** for each feature (database schemas, API endpoints, file changes)
+- **Success metrics** and marketing strategy
+- **Technical debt** to address over time
+
+**As features are completed:**
+
+1. Mark items as complete in [ROADMAP.md](ROADMAP.md) by changing `- [ ]` to `- [x]` for individual tasks
+2. Update the phase status emoji (🎯 for in progress, ✅ for complete)
+3. Update the version history section at the bottom with release notes
+4. When starting a new feature, reference the roadmap section for implementation details
+5. If implementation differs from the plan, update the roadmap with actual approach taken
+
+**Current Phase:** Phase 1 - Core Experience & Foundation
+
+Refer to the roadmap when planning work, during implementation to verify requirements, and after completion to track progress. The roadmap serves as both a planning document and a living record of development decisions.
