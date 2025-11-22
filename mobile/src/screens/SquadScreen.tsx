@@ -822,6 +822,7 @@ const SquadScreen = () => {
             estimatedItemSize={140}
             style={{ flex: 1 }}
             contentContainerStyle={{ gap: 12, paddingBottom: 60 + insets.bottom }}
+            showsVerticalScrollIndicator={false}
             onScroll={(event) => {
               const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
               const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
