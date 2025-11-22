@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Text,
   TouchableOpacity,
@@ -14,15 +14,33 @@ import {
   Linking,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
 import { useAuth } from "../context/AuthContext";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { getConnections } from "../api/social";
+import {
+  followUser,
+  getConnections,
+  removeFollower,
+  unfollowUser,
+} from "../api/social";
+import { UserProfile } from "../types/user";
+import { SocialUserSummary } from "../types/social";
+import { formatHandle } from "../utils/formatHandle";
+import { RootNavigation } from "../navigation/RootNavigator";
+
+const initialsForName = (name?: string | null) => {
+  if (!name) return "?";
+  const parts = name.trim().split(" ");
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+};
 
 const SettingsScreen = () => {
+  const queryClient = useQueryClient();
+  const navigation = useNavigation<RootNavigation>();
   const { logout, isAuthorizing } = useAuth();
   const { user, updateProfile, deleteAccount, refresh, isLoading } =
     useCurrentUser();
@@ -31,6 +49,9 @@ const SettingsScreen = () => {
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
   const [draftTraining, setDraftTraining] = useState(user?.trainingStyle ?? "");
   const [draftGym, setDraftGym] = useState(user?.gymName ?? "");
+  const [draftWeeklyGoal, setDraftWeeklyGoal] = useState(
+    String(user?.weeklyGoal ?? 4)
+  );
   const [showGym, setShowGym] = useState(
     (user?.gymVisibility ?? "hidden") === "shown"
   );
@@ -41,6 +62,10 @@ const SettingsScreen = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedConnection, setSelectedConnection] =
+    useState<SocialUserSummary | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const isHandleLocked = Boolean(user?.handle);
 
   useEffect(() => {
     if (user) {
@@ -49,6 +74,7 @@ const SettingsScreen = () => {
       setDraftBio(user.bio ?? "");
       setDraftTraining(user.trainingStyle ?? "");
       setDraftGym(user.gymName ?? "");
+      setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
       setShowGym((user.gymVisibility ?? "hidden") === "shown");
       setAvatarUri(user.avatarUrl ?? undefined);
       setIsEditing(false);
@@ -62,6 +88,7 @@ const SettingsScreen = () => {
     user?.gymName,
     user?.gymVisibility,
     user?.avatarUrl,
+    user?.weeklyGoal,
   ]);
 
   useFocusEffect(
@@ -78,7 +105,199 @@ const SettingsScreen = () => {
   const friends = connectionsQuery.data?.friends ?? [];
   const pendingInvites = connectionsQuery.data?.pendingInvites ?? [];
   const outgoingInvites = connectionsQuery.data?.outgoingInvites ?? [];
-  const friendCount = user?.friendsCount ?? friends.length;
+  const friendCount = connectionsQuery.data
+    ? friends.length
+    : user?.friendsCount ?? 0;
+  const invalidateConnections = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["social", "connections"],
+      exact: false,
+    });
+  const refreshConnections = async () => {
+    invalidateConnections();
+    await queryClient.refetchQueries({
+      queryKey: ["social", "connections"],
+      type: "active",
+    });
+    await queryClient.refetchQueries({
+      queryKey: ["social", "connections", "settings"],
+      type: "active",
+    });
+    await refresh();
+  };
+
+  const acceptInvite = useMutation({
+    mutationFn: followUser,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const declineInvite = useMutation({
+    mutationFn: removeFollower,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const cancelOutgoing = useMutation({
+    mutationFn: unfollowUser,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const renderConnectionGroup = (
+    title: string,
+    subtitle: string,
+    list: SocialUserSummary[],
+    emptyCopy: string,
+    renderActions?: (person: SocialUserSummary) => ReactElement | null
+  ) => (
+    <View style={{ gap: 8 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: 12,
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 14,
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
+          >
+            {subtitle}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", minWidth: 52 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.bold,
+              fontSize: 18,
+            }}
+          >
+            {list.length}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            people
+          </Text>
+        </View>
+      </View>
+      {list.length ? (
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          {list.map((person) => (
+            <View
+              key={person.id}
+              style={{
+                flexBasis: "48%",
+                maxWidth: 200,
+                minWidth: 150,
+                alignItems: "stretch",
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={() => setSelectedConnection(person)}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingVertical: 10,
+                  borderRadius: 16,
+                  backgroundColor: pressed
+                    ? colors.surfaceMuted
+                    : colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {person.avatarUrl ? (
+                    <Image
+                      source={{ uri: person.avatarUrl }}
+                      style={{ width: 64, height: 64, borderRadius: 999 }}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 18,
+                      }}
+                    >
+                      {initialsForName(person.name)}
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                  }}
+                >
+                  {person.name}
+                </Text>
+                {person.handle ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: colors.textSecondary, fontSize: 11 }}
+                  >
+                    {formatHandle(person.handle)}
+                  </Text>
+                ) : null}
+              </Pressable>
+              {renderActions ? renderActions(person) : null}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View
+          style={{
+            backgroundColor: colors.surfaceMuted,
+            borderRadius: 12,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            {emptyCopy}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 
   if (!user || isLoading) {
     return (
@@ -141,15 +360,21 @@ const SettingsScreen = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateProfile({
+      const payload: Partial<UserProfile> = {
         name: draftName.trim() || user.name,
-        handle: draftHandle.trim() || null,
         bio: draftBio.trim() || undefined,
         trainingStyle: draftTraining.trim() || undefined,
         gymName: draftGym.trim() ? draftGym.trim() : null,
         gymVisibility: showGym ? "shown" : "hidden",
+        weeklyGoal: Number(draftWeeklyGoal) || 4,
         avatarUrl: avatarUri,
-      });
+      };
+
+      if (!isHandleLocked) {
+        payload.handle = draftHandle.trim() || null;
+      }
+
+      await updateProfile(payload);
       Alert.alert("Saved", "Profile updated.");
       setIsEditing(false);
     } catch (err) {
@@ -389,11 +614,29 @@ const SettingsScreen = () => {
               />
               <TextInput
                 value={draftHandle}
-                onChangeText={setDraftHandle}
+                onChangeText={isHandleLocked ? undefined : setDraftHandle}
                 placeholder='@handle'
                 placeholderTextColor={colors.textSecondary}
-                style={inputStyle}
+                editable={!isHandleLocked}
+                selectTextOnFocus={!isHandleLocked}
+                style={[
+                  inputStyle,
+                  isHandleLocked
+                    ? { opacity: 0.6, color: colors.textSecondary }
+                    : null,
+                ]}
               />
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: -4,
+                }}
+              >
+                {isHandleLocked
+                  ? "Handles are locked after setup. Reach out if you need a change."
+                  : "Handles are unique—pick one you'll keep."}
+              </Text>
               <TextInput
                 value={draftBio}
                 onChangeText={setDraftBio}
@@ -416,6 +659,23 @@ const SettingsScreen = () => {
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
+              <TextInput
+                value={draftWeeklyGoal}
+                onChangeText={setDraftWeeklyGoal}
+                placeholder='4'
+                placeholderTextColor={colors.textSecondary}
+                keyboardType='numeric'
+                style={inputStyle}
+              />
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: -4,
+                }}
+              >
+                Weekly workout goal (workouts per week)
+              </Text>
               <View
                 style={{
                   flexDirection: "row",
@@ -480,6 +740,7 @@ const SettingsScreen = () => {
                     setDraftBio(user.bio ?? "");
                     setDraftTraining(user.trainingStyle ?? "");
                     setDraftGym(user.gymName ?? "");
+                    setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
                     setShowGym((user.gymVisibility ?? "hidden") === "shown");
                     setAvatarUri(user.avatarUrl ?? undefined);
                   }}
@@ -515,10 +776,10 @@ const SettingsScreen = () => {
             backgroundColor: colors.surface,
             borderWidth: 1,
             borderColor: colors.border,
-            gap: 12,
+            gap: 14,
           }}
         >
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: 6 }}>
             <Text
               style={{
                 color: colors.textPrimary,
@@ -528,174 +789,159 @@ const SettingsScreen = () => {
             >
               Friends
             </Text>
-            <Text style={{ color: colors.textSecondary }}>
-              Friends are people you both follow. Invites land here until it
-              {"'"}s mutual.
-            </Text>
+            <Text style={{ color: colors.textSecondary }}></Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {[
+                { label: `${friends.length} buddies`, tone: colors.primary },
+                {
+                  label: `${pendingInvites.length} pending`,
+                  tone: colors.textSecondary,
+                },
+                {
+                  label: `${outgoingInvites.length} outgoing`,
+                  tone: colors.border,
+                },
+              ].map((pill, idx) => (
+                <View
+                  key={idx}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    backgroundColor: colors.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: 999,
+                      backgroundColor: pill.tone,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    {pill.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
           {connectionsQuery.isFetching ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
-            <>
-              <View style={{ gap: 6 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Active friends ({friends.length})
-                </Text>
-                {friends.length ? (
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                  >
-                    {friends.map((friend) => (
-                      <View
-                        key={friend.id}
+            <View style={{ gap: 14 }}>
+              {renderConnectionGroup(
+                "Gym buddies",
+                "Mutual follows you can invite to squads or challenge.",
+                friends,
+                "Add gym buddies from the Squad tab to see them here."
+              )}
+              {renderConnectionGroup(
+                "Pending invites",
+                "They follow you. Follow back to make it mutual.",
+                pendingInvites,
+                "No pending requests from others.",
+                (person) => (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      onPress={() => acceptInvite.mutate(person.id)}
+                      disabled={pendingActionId === person.id}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        backgroundColor: colors.primary,
+                        borderWidth: 1,
+                        borderColor: colors.primary,
+                        opacity:
+                          pressed || pendingActionId === person.id ? 0.85 : 1,
+                      })}
+                    >
+                      <Text
                         style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 10,
-                          backgroundColor: colors.surfaceMuted,
-                          borderWidth: 1,
-                          borderColor: colors.border,
+                          color: colors.surface,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 13,
+                          textAlign: "center",
                         }}
                       >
-                        <Text
-                          style={{
-                            color: colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                          }}
-                        >
-                          {friend.name}
-                        </Text>
-                        {friend.handle ? (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                            }}
-                          >
-                            {friend.handle}
-                          </Text>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Add gym buddies from the Squad tab to see them here.
-                  </Text>
-                )}
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Pending invites
-                </Text>
-                {pendingInvites.length ? (
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                  >
-                    {pendingInvites.map((invite) => (
-                      <View
-                        key={invite.id}
+                        {pendingActionId === person.id ? "Adding..." : "Accept"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => declineInvite.mutate(person.id)}
+                      disabled={pendingActionId === person.id}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceMuted,
+                        opacity:
+                          pressed || pendingActionId === person.id ? 0.8 : 1,
+                      })}
+                    >
+                      <Text
                         style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 10,
-                          backgroundColor: colors.surfaceMuted,
-                          borderWidth: 1,
-                          borderColor: colors.border,
+                          color: colors.textSecondary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 13,
                         }}
                       >
-                        <Text
-                          style={{
-                            color: colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                          }}
-                        >
-                          {invite.name}
-                        </Text>
-                        {invite.handle ? (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                            }}
-                          >
-                            {invite.handle}
-                          </Text>
-                        ) : null}
-                      </View>
-                    ))}
+                        Decline
+                      </Text>
+                    </Pressable>
                   </View>
-                ) : (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    No pending requests from others.
-                  </Text>
-                )}
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Invites you sent
-                </Text>
-                {outgoingInvites.length ? (
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                )
+              )}
+              {renderConnectionGroup(
+                "Invites you sent",
+                "You're following them. They'll move to buddies when they follow back.",
+                outgoingInvites,
+                "You haven't sent any invites yet.",
+                (person) => (
+                  <Pressable
+                    onPress={() => cancelOutgoing.mutate(person.id)}
+                    disabled={pendingActionId === person.id}
+                    style={({ pressed }) => ({
+                      width: "100%",
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceMuted,
+                      opacity:
+                        pressed || pendingActionId === person.id ? 0.85 : 1,
+                    })}
                   >
-                    {outgoingInvites.map((invite) => (
-                      <View
-                        key={invite.id}
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 10,
-                          backgroundColor: colors.surfaceMuted,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                          }}
-                        >
-                          {invite.name}
-                        </Text>
-                        {invite.handle ? (
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                            }}
-                          >
-                            {invite.handle}
-                          </Text>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    You haven{"'"}t sent any invites yet.
-                  </Text>
-                )}
-              </View>
-            </>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 13,
+                        textAlign: "center",
+                      }}
+                    >
+                      {pendingActionId === person.id
+                        ? "Cancelling..."
+                        : "Cancel invite"}
+                    </Text>
+                  </Pressable>
+                )
+              )}
+            </View>
           )}
         </View>
 
@@ -761,6 +1007,156 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={Boolean(selectedConnection)}
+        transparent
+        animationType='fade'
+        onRequestClose={() => setSelectedConnection(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setSelectedConnection(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            padding: 22,
+          }}
+        >
+          {selectedConnection ? (
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 16,
+                padding: 18,
+                gap: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
+              >
+                <View
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 999,
+                    backgroundColor: colors.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {selectedConnection.avatarUrl ? (
+                    <Image
+                      source={{ uri: selectedConnection.avatarUrl }}
+                      style={{ width: 72, height: 72, borderRadius: 999 }}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fontFamilies.bold,
+                        fontSize: 26,
+                      }}
+                    >
+                      {initialsForName(selectedConnection.name)}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 18,
+                    }}
+                  >
+                    {selectedConnection.name}
+                  </Text>
+                  {selectedConnection.handle ? (
+                    <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
+                      {formatHandle(selectedConnection.handle)}
+                    </Text>
+                  ) : null}
+                  {selectedConnection.trainingStyleTags?.length ? (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        marginTop: 4,
+                        fontSize: 12,
+                      }}
+                    >
+                      {selectedConnection.trainingStyleTags.join(" · ")}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Jump to their profile to follow back, invite them, or view their
+                latest sessions.
+              </Text>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    navigation.navigate("Profile", {
+                      userId: selectedConnection.id,
+                    });
+                    setSelectedConnection(null);
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor: colors.primary,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    View profile
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setSelectedConnection(null)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceMuted,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+        </TouchableOpacity>
+      </Modal>
 
       <Modal visible={isDeleteOpen} animationType='slide' transparent>
         <View

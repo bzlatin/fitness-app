@@ -13,6 +13,7 @@ export interface User {
   trainingStyle?: string;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
+  weeklyGoal?: number;
 }
 
 export interface UserProfile extends User {

@@ -2,7 +2,10 @@ import { useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
-import { useDuplicateTemplate, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import {
+  useDuplicateTemplate,
+  useWorkoutTemplates,
+} from "../hooks/useWorkoutTemplates";
 import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -15,7 +18,9 @@ const MyWorkoutsScreen = () => {
   const { user } = useCurrentUser();
 
   const templates = data ?? [];
-  const templateLimitReached = !canCreateAnotherTemplate(user, templates.length);
+  const templateLimitReached = user
+    ? !canCreateAnotherTemplate(user, templates.length)
+    : false;
 
   const handleCreateTemplate = () => {
     if (templateLimitReached) {
@@ -31,7 +36,9 @@ const MyWorkoutsScreen = () => {
   return (
     <ScreenContainer scroll>
       <View style={{ marginVertical: 12 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}
+        >
           My Workouts
         </Text>
         <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
@@ -76,10 +83,22 @@ const MyWorkoutsScreen = () => {
             borderColor: colors.border,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontWeight: "600", fontSize: 16 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontWeight: "600",
+              fontSize: 16,
+            }}
+          >
             No templates yet
           </Text>
-          <Text style={{ color: colors.textSecondary, marginTop: 6, lineHeight: 20 }}>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              marginTop: 6,
+              lineHeight: 20,
+            }}
+          >
             Create your first workout template to jump into sessions faster.
           </Text>
           <Pressable
@@ -105,7 +124,9 @@ const MyWorkoutsScreen = () => {
             key={template.id}
             template={template}
             onPress={() =>
-              navigation.navigate("WorkoutTemplateDetail", { templateId: template.id })
+              navigation.navigate("WorkoutTemplateDetail", {
+                templateId: template.id,
+              })
             }
             onDuplicate={() => duplicateMutation.mutate(template.id)}
           />

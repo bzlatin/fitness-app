@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import {
   ActiveWorkoutStatus,
   SocialProfile,
+  SquadDetail,
   Visibility,
   WorkoutSummaryShare,
   SocialUserSummary,
@@ -21,9 +22,11 @@ const fallbackUser: SocialUserSummary = {
   name: "Athlete",
 };
 
-export const getSquadFeed = async (): Promise<SquadFeedResponse> => {
+export const getSquadFeed = async (squadId?: string): Promise<SquadFeedResponse> => {
   try {
-    const res = await apiClient.get<SquadFeedResponse>("/social/squad-feed");
+    const res = await apiClient.get<SquadFeedResponse>("/social/squad-feed", {
+      params: squadId ? { squadId } : undefined,
+    });
     return res.data ?? { activeStatuses: [], recentShares: [] };
   } catch (err) {
     if (isNotFound(err)) {
@@ -31,6 +34,34 @@ export const getSquadFeed = async (): Promise<SquadFeedResponse> => {
     }
     throw err;
   }
+};
+
+export const getSquads = async (): Promise<SquadDetail[]> => {
+  try {
+    const res = await apiClient.get<{ squads: SquadDetail[] }>("/social/squads");
+    return res.data?.squads ?? [];
+  } catch (err) {
+    if (isNotFound(err)) {
+      return [];
+    }
+    throw err;
+  }
+};
+
+export const createSquad = async (name: string): Promise<SquadDetail> => {
+  const res = await apiClient.post<{ squad: SquadDetail }>("/social/squads", { name });
+  if (!res.data?.squad) {
+    throw new Error("Failed to create squad");
+  }
+  return res.data.squad;
+};
+
+export const inviteToSquad = async (squadId: string, handle: string) => {
+  await apiClient.post(`/social/squads/${squadId}/members`, { handle });
+};
+
+export const deleteSquad = async (squadId: string) => {
+  await apiClient.delete<void>(`/social/squads/${squadId}`);
 };
 
 export const setActiveWorkoutStatus = async (payload: {
@@ -71,6 +102,10 @@ export const clearActiveWorkoutStatus = async (sessionId: string) => {
 export const shareWorkoutSummary = async (payload: {
   sessionId: string;
   visibility: Visibility;
+  templateName?: string;
+  totalSets?: number;
+  totalVolume?: number;
+  prCount?: number;
   progressPhotoUri?: string;
 }) => {
   const { progressPhotoUri, ...rest } = payload;
@@ -86,8 +121,10 @@ export const shareWorkoutSummary = async (payload: {
         id: payload.sessionId,
         user: fallbackUser,
         sessionId: payload.sessionId,
-        templateName: undefined,
-        totalSets: 0,
+        templateName: payload.templateName,
+        totalSets: payload.totalSets ?? 0,
+        totalVolume: payload.totalVolume,
+        prCount: payload.prCount,
         createdAt: new Date().toISOString(),
         visibility: payload.visibility,
         progressPhotoUrl: progressPhotoUri,
@@ -139,6 +176,15 @@ export const unfollowUser = async (userId: string) => {
   }
 };
 
+export const removeFollower = async (userId: string) => {
+  try {
+    await apiClient.delete<void>(`/social/followers/${userId}`);
+  } catch (err) {
+    if (isNotFound(err)) return;
+    throw err;
+  }
+};
+
 export const getCurrentUserProfile = async () => {
   const res = await apiClient.get<UserProfile>("/social/me");
   return res.data;
@@ -147,6 +193,10 @@ export const getCurrentUserProfile = async () => {
 export const updateCurrentUserProfile = async (payload: Partial<User>) => {
   const res = await apiClient.put<UserProfile>("/social/me", payload);
   return res.data;
+};
+
+export const deleteCurrentUserAccount = async () => {
+  await apiClient.delete<void>("/social/me");
 };
 
 export const searchUsers = async (query: string) => {
