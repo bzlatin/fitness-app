@@ -86,7 +86,7 @@ const PostWorkoutShareScreen = () => {
 
   const shareMutation = useMutation({
     mutationFn: shareWorkoutSummary,
-    onSuccess: () => navigation.navigate("RootTabs"),
+    onSuccess: () => navigation.navigate("RootTabs", { screen: "History" }),
   });
 
   const requestPhoto = async () => {
@@ -106,7 +106,7 @@ const PostWorkoutShareScreen = () => {
 
   const share = () => {
     if (visibility === "private") {
-      navigation.navigate("RootTabs");
+      navigation.navigate("RootTabs", { screen: "History" });
       return;
     }
     shareMutation.mutate({
@@ -238,7 +238,7 @@ const PostWorkoutShareScreen = () => {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => navigation.navigate("RootTabs")}
+            onPress={() => navigation.navigate("RootTabs", { screen: "History" })}
             style={({ pressed }) => ({
               paddingVertical: 12,
               borderRadius: 12,

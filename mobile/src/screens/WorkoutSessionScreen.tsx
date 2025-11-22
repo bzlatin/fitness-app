@@ -385,10 +385,16 @@ const WorkoutSessionScreen = () => {
     });
 
   const finishMutation = useMutation({
-    mutationFn: () => completeSession(sessionId!, sets),
+    mutationFn: () => {
+      // Pause timer before finishing
+      pauseTimer();
+      return completeSession(sessionId!, sets);
+    },
     onSuccess: (session) => {
       endActiveStatus();
-      const summary = summarizeSets(sets);
+      // Only include logged sets in summary
+      const loggedSets = sets.filter((set) => loggedSetIds.has(set.id));
+      const summary = summarizeSets(loggedSets);
       navigation.navigate("PostWorkoutShare", {
         sessionId: session.id,
         templateId: session.templateId,

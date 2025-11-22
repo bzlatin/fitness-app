@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -25,6 +27,10 @@ import {
   WorkoutHistorySession,
   WorkoutHistoryStats,
 } from "../types/workouts";
+import { RootStackParamList } from "../navigation/types";
+import { fetchSession } from "../api/sessions";
+import { createTemplate } from "../api/templates";
+import { useQueryClient } from "@tanstack/react-query";
 
 const startOfMonth = (date: Date) => {
   const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -91,6 +97,9 @@ const isSameMonth = (a: Date, b: Date) =>
   a.getUTCMonth() === b.getUTCMonth();
 
 const HistoryScreen = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const queryClient = useQueryClient();
+
   // Get current date in local timezone to correctly identify "today"
   const today = startOfDayLocal(new Date());
   const currentMonth = startOfMonth(today);
@@ -107,6 +116,9 @@ const HistoryScreen = () => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [selectedSession, setSelectedSession] =
     useState<WorkoutHistorySession | null>(null);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [saveTemplateSessionId, setSaveTemplateSessionId] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({
     date: formatDateKey(today),
@@ -133,11 +145,18 @@ const HistoryScreen = () => {
     []
   );
 
-  const { data, isLoading } = useWorkoutHistory(rangeStart, rangeEnd);
+  const { data, isLoading, refetch } = useWorkoutHistory(rangeStart, rangeEnd);
   const createManual = useCreateManualSession(rangeStart, rangeEnd);
   const duplicate = useDuplicateSession(rangeStart, rangeEnd);
   const deleteSession = useDeleteSession(rangeStart, rangeEnd);
   const updateSession = useUpdateSession(rangeStart, rangeEnd);
+
+  // Auto-refresh history when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const dayMap = useMemo(() => {
     const map = new Map<string, WorkoutHistoryDay>();
@@ -279,6 +298,28 @@ const HistoryScreen = () => {
     return `${weekday}, ${month} ${day}, ${formattedHours}:${formattedMinutes} ${ampm}`;
   };
 
+  const formatDateMedium = (date: Date) => {
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const weekday = weekdayNames[date.getUTCDay()];
+    const month = monthNames[date.getUTCMonth()];
+    const day = date.getUTCDate();
+    return `${weekday}, ${month} ${day}`;
+  };
+
   const formatTime = (date: Date) => {
     const hours = date.getUTCHours();
     const minutes = date.getUTCMinutes();
@@ -348,30 +389,135 @@ const HistoryScreen = () => {
     setManualOpen(false);
   };
 
-  const renderSessionCard = (session: WorkoutHistorySession) => (
-    <Pressable
-      key={session.id}
-      onPress={() => handleSessionClick(session)}
-      style={({ pressed }) => ({
-        backgroundColor: colors.surface,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 14,
-        gap: 10,
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ ...typography.title, color: colors.textPrimary }}>
-            {session.templateName || "Logged workout"}
-          </Text>
-          <Text style={{ color: colors.textSecondary }}>
-            {formatTime(new Date(session.startedAt))}{" "}
-            · {session.exercises.length} exercises
-          </Text>
-        </View>
+  const handleStartWorkout = async () => {
+    if (!selectedSession) return;
+    try {
+      const session = await fetchSession(selectedSession.id);
+      if (session.templateId) {
+        setSelectedSession(null);
+        navigation.navigate("WorkoutSession", { templateId: session.templateId });
+      } else {
+        Alert.alert(
+          "No template found",
+          "This workout doesn't have an associated template. Create a template first, then start a workout from it."
+        );
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to load workout details");
+    }
+  };
+
+  const handleEditWorkout = async () => {
+    if (!selectedSession) return;
+    try {
+      const session = await fetchSession(selectedSession.id);
+      setSelectedSession(null);
+      navigation.navigate("WorkoutSession", {
+        templateId: session.templateId || "manual",
+        sessionId: session.id,
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to load workout details");
+    }
+  };
+
+  const handleSaveAsTemplate = () => {
+    if (!selectedSession) return;
+    const defaultName = selectedSession.templateName || "Workout";
+    setTemplateName(defaultName);
+    setSaveTemplateSessionId(selectedSession.id); // Store the session ID
+    setSelectedSession(null); // Close the session detail modal first
+    setSaveTemplateOpen(true);
+  };
+
+  const confirmSaveAsTemplate = async () => {
+    if (!saveTemplateSessionId) return;
+    if (!templateName.trim()) {
+      Alert.alert("Name required", "Please enter a name for the template");
+      return;
+    }
+
+    try {
+      const session = await fetchSession(saveTemplateSessionId);
+
+      // Group sets by exercise
+      const exerciseMap = new Map<string, typeof session.sets>();
+      session.sets.forEach((set) => {
+        const existing = exerciseMap.get(set.exerciseId) || [];
+        exerciseMap.set(set.exerciseId, [...existing, set]);
+      });
+
+      // Create template exercises from the session sets
+      const exercises = Array.from(exerciseMap.entries()).map(([exerciseId, sets]) => {
+        const avgReps = Math.round(
+          sets.reduce((sum, s) => sum + (s.actualReps || s.targetReps || 0), 0) / sets.length
+        );
+        const avgWeight = Math.round(
+          sets.reduce((sum, s) => sum + (s.actualWeight || s.targetWeight || 0), 0) / sets.length
+        );
+
+        return {
+          exerciseId,
+          defaultSets: sets.length,
+          defaultReps: avgReps,
+          defaultWeight: avgWeight,
+          defaultRestSeconds: sets[0]?.targetRestSeconds,
+        };
+      });
+
+      await createTemplate({
+        name: templateName.trim(),
+        description: `Saved from workout on ${formatDateTimeShort(new Date(session.startedAt))}`,
+        exercises,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      setSaveTemplateOpen(false);
+      setSaveTemplateSessionId(null);
+      Alert.alert("Success", "Workout saved as a new template!");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save workout as template");
+    }
+  };
+
+  const renderSessionCard = (session: WorkoutHistorySession) => {
+    const startDate = new Date(session.startedAt);
+    const duration = session.finishedAt
+      ? Math.max(
+          10,
+          Math.round(
+            (new Date(session.finishedAt).getTime() - startDate.getTime()) / 60000
+          )
+        )
+      : null;
+
+    return (
+      <Pressable
+        key={session.id}
+        onPress={() => handleSessionClick(session)}
+        style={({ pressed }) => ({
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: 14,
+          gap: 10,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              {session.templateName || "Logged workout"}
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {formatDateMedium(startDate)}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+              {formatTime(startDate)} · {session.exercises.length} exercises
+              {duration ? ` · ${duration} min` : ""}
+            </Text>
+          </View>
         <Pressable
           onPress={() => setMenuSession(session)}
           hitSlop={8}
@@ -436,7 +582,8 @@ const HistoryScreen = () => {
         ) : null}
       </View>
     </Pressable>
-  );
+    );
+  };
 
   return (
     <ScreenContainer scroll>
@@ -596,13 +743,35 @@ const HistoryScreen = () => {
           <Text style={{ ...typography.title, color: colors.textPrimary }}>
             All Workouts ({allSessions.length})
           </Text>
-          <View style={{ gap: 10 }}>
-            {allSessions.map((session) => (
-              <View key={`${session.id}-all`}>
-                {renderSessionCard(session)}
-              </View>
-            ))}
-          </View>
+          {allSessions.length === 0 ? (
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 24,
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons name='barbell-outline' size={48} color={colors.textSecondary} />
+              <Text style={{ ...typography.title, color: colors.textPrimary, textAlign: "center" }}>
+                No workouts yet
+              </Text>
+              <Text style={{ color: colors.textSecondary, textAlign: "center" }}>
+                Start your first workout to track your progress and build your fitness journey.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {allSessions.map((session) => (
+                <View key={`${session.id}-all`}>
+                  {renderSessionCard(session)}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </View>
 
@@ -685,11 +854,14 @@ const HistoryScreen = () => {
                 <ActionRow
                   icon='copy'
                   label='Save as new workout'
-                  onPress={async () => {
+                  onPress={() => {
                     if (menuSession) {
-                      await duplicate.mutateAsync(menuSession.id);
+                      const defaultName = menuSession.templateName || "Workout";
+                      setTemplateName(defaultName);
+                      setSaveTemplateSessionId(menuSession.id);
+                      setMenuSession(null);
+                      setSaveTemplateOpen(true);
                     }
-                    setMenuSession(null);
                   }}
                 />
                 <ActionRow
@@ -1253,14 +1425,138 @@ const HistoryScreen = () => {
                         </View>
                       ))}
                     </View>
+
+                    <View style={{ gap: 8, marginTop: 6 }}>
+                      <Pressable
+                        onPress={handleStartWorkout}
+                        style={({ pressed }) => ({
+                          paddingVertical: 14,
+                          alignItems: "center",
+                          borderRadius: 12,
+                          backgroundColor: colors.primary,
+                          opacity: pressed ? 0.9 : 1,
+                          flexDirection: "row",
+                          justifyContent: "center",
+                          gap: 8,
+                        })}
+                      >
+                        <Ionicons name='play' color={colors.surface} size={18} />
+                        <Text
+                          style={{
+                            color: colors.surface,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 15,
+                          }}
+                        >
+                          Start this workout
+                        </Text>
+                      </Pressable>
+
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pressable
+                          onPress={handleEditWorkout}
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 12,
+                            alignItems: "center",
+                            borderRadius: 12,
+                            backgroundColor: colors.surfaceMuted,
+                            opacity: pressed ? 0.9 : 1,
+                            flexDirection: "row",
+                            justifyContent: "center",
+                            gap: 6,
+                          })}
+                        >
+                          <Ionicons name='create-outline' color={colors.textPrimary} size={18} />
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.medium,
+                            }}
+                          >
+                            Edit
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={handleSaveAsTemplate}
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 12,
+                            alignItems: "center",
+                            borderRadius: 12,
+                            backgroundColor: colors.surfaceMuted,
+                            opacity: pressed ? 0.9 : 1,
+                            flexDirection: "row",
+                            justifyContent: "center",
+                            gap: 6,
+                          })}
+                        >
+                          <Ionicons name='bookmark-outline' color={colors.textPrimary} size={18} />
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.medium,
+                            }}
+                          >
+                            Save
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      <Pressable
+                        onPress={() => {
+                          if (!selectedSession) return;
+                          Alert.alert(
+                            "Delete workout?",
+                            "This will permanently remove this workout from your history.",
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Delete",
+                                style: "destructive",
+                                onPress: async () => {
+                                  await deleteSession.mutateAsync(selectedSession.id);
+                                  setSelectedSession(null);
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          paddingVertical: 12,
+                          alignItems: "center",
+                          borderRadius: 12,
+                          backgroundColor: "transparent",
+                          borderWidth: 1,
+                          borderColor: colors.error,
+                          opacity: pressed ? 0.7 : 1,
+                          flexDirection: "row",
+                          justifyContent: "center",
+                          gap: 6,
+                        })}
+                      >
+                        <Ionicons name='trash-outline' color={colors.error} size={18} />
+                        <Text
+                          style={{
+                            color: colors.error,
+                            fontFamily: fontFamilies.medium,
+                          }}
+                        >
+                          Delete workout
+                        </Text>
+                      </Pressable>
+                    </View>
+
                     <Pressable
                       onPress={() => setSelectedSession(null)}
                       style={({ pressed }) => ({
                         paddingVertical: 12,
                         alignItems: "center",
                         borderRadius: 12,
-                        backgroundColor: colors.surfaceMuted,
-                        opacity: pressed ? 0.9 : 1,
+                        backgroundColor: "transparent",
+                        opacity: pressed ? 0.7 : 1,
+                        marginTop: 4,
                       })}
                     >
                       <Text style={{ color: colors.textSecondary }}>Close</Text>
@@ -1271,6 +1567,97 @@ const HistoryScreen = () => {
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType='fade'
+        visible={saveTemplateOpen}
+        onRequestClose={() => {
+          setSaveTemplateOpen(false);
+          setSaveTemplateSessionId(null);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.55)",
+          }}
+        >
+          <View
+            style={{
+              marginHorizontal: 16,
+              backgroundColor: colors.surface,
+              borderRadius: 18,
+              padding: 18,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Save as template
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              Choose a name for this workout template.
+            </Text>
+            <View>
+              <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>
+                Template name
+              </Text>
+              <TextInput
+                value={templateName}
+                onChangeText={setTemplateName}
+                placeholder="e.g., Push Day, Upper Body"
+                placeholderTextColor={colors.textSecondary}
+                style={{
+                  backgroundColor: colors.surfaceMuted,
+                  padding: 12,
+                  borderRadius: 12,
+                  color: colors.textPrimary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              />
+            </View>
+            <Pressable
+              onPress={confirmSaveAsTemplate}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                paddingVertical: 14,
+                alignItems: "center",
+                borderRadius: 14,
+                opacity: pressed ? 0.9 : 1,
+                marginTop: 4,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Save template
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setSaveTemplateOpen(false);
+                setSaveTemplateSessionId(null);
+              }}
+              style={{
+                paddingVertical: 12,
+                alignItems: "center",
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                marginTop: 6,
+              }}
+            >
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </ScreenContainer>
   );
