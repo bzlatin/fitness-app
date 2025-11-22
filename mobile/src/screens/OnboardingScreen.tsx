@@ -121,7 +121,7 @@ const OnboardingScreen = () => {
         name: name.trim(),
         handle: handle.trim() || undefined,
         avatarUrl: avatarUri,
-        onboardingData,
+        onboardingData: onboardingData as any,
       });
     } catch (err) {
       const message =

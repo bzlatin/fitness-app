@@ -28,7 +28,7 @@ const ScheduleStep = ({
       </View>
 
       <View style={{ gap: 12 }}>
-        <Text style={{ ...typography.subheading, color: colors.textPrimary }}>
+        <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
           How many days per week?
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -65,7 +65,7 @@ const ScheduleStep = ({
                     fontSize: 12,
                   }}
                 >
-                  {freq === 1 ? "day" : "days"}
+                  days
                 </Text>
               </Pressable>
             );
@@ -74,7 +74,7 @@ const ScheduleStep = ({
       </View>
 
       <View style={{ gap: 12 }}>
-        <Text style={{ ...typography.subheading, color: colors.textPrimary }}>
+        <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
           Session duration
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>

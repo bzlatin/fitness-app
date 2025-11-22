@@ -99,9 +99,9 @@ const TrainingStyleStep = ({ selectedSplit, onSplitChange }: TrainingStyleStepPr
         style={{
           padding: 16,
           borderRadius: 12,
-          backgroundColor: `${colors.success}15`,
+          backgroundColor: `${colors.primary}15`,
           borderWidth: 1,
-          borderColor: `${colors.success}30`,
+          borderColor: `${colors.primary}30`,
         }}
       >
         <Text
