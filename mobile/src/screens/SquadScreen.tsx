@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
   Keyboard,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { useSquadFeed } from "../hooks/useSquadFeed";
@@ -327,6 +329,7 @@ const ShareCard = ({
 const SquadScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { data: generalFeed, isLoading, isError } = useSquadFeed();
   const {
     data: squads = [],
@@ -817,7 +820,21 @@ const SquadScreen = () => {
             renderItem={renderItem}
             estimatedItemSize={140}
             style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 12, paddingBottom: 24 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: 60 + insets.bottom }}
+          />
+        )}
+
+        {!displayEmpty && (
+          <LinearGradient
+            colors={['transparent', `${colors.background}CC`, colors.background]}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: -16,
+              right: -16,
+              height: 50 + insets.bottom,
+              pointerEvents: 'none',
+            }}
           />
         )}
 

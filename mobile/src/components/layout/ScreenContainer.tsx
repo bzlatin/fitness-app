@@ -32,7 +32,7 @@ const ScreenContainer = ({ children, scroll = false }: Props) => {
               bottom: 0,
               left: 0,
               right: 0,
-              height: 80 + insets.bottom,
+              height: 50 + insets.bottom,
               pointerEvents: 'none',
             }}
           />
