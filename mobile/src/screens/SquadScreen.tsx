@@ -351,6 +351,7 @@ const SquadScreen = () => {
   const [selectedSquadId, setSelectedSquadId] = useState<string | undefined>(
     undefined
   );
+  const [isNearBottom, setIsNearBottom] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
   const [showFriendsSection, setShowFriendsSection] = useState(false);
@@ -821,18 +822,34 @@ const SquadScreen = () => {
             estimatedItemSize={140}
             style={{ flex: 1 }}
             contentContainerStyle={{ gap: 12, paddingBottom: 60 + insets.bottom }}
+            onScroll={(event) => {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+              setIsNearBottom(distanceFromBottom < 10);
+            }}
+            scrollEventThrottle={16}
           />
         )}
 
-        {!displayEmpty && (
+        {!displayEmpty && !isNearBottom && (
           <LinearGradient
-            colors={['transparent', `${colors.background}CC`, colors.background]}
+            colors={[
+              'transparent',
+              `${colors.background}10`,
+              `${colors.background}30`,
+              `${colors.background}60`,
+              `${colors.background}90`,
+              `${colors.background}C0`,
+              `${colors.background}E0`,
+              colors.background,
+            ]}
+            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
             style={{
               position: 'absolute',
               bottom: 0,
               left: -16,
               right: -16,
-              height: 50 + insets.bottom,
+              height: 60 + insets.bottom,
               pointerEvents: 'none',
             }}
           />
