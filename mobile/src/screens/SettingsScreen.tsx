@@ -970,15 +970,8 @@ const SettingsScreen = () => {
             </Text>
           </View>
           <Pressable
-            onPress={async () => {
-              try {
-                await updateProfile({
-                  profileCompletedAt: null,
-                });
-                await refresh();
-              } catch (err) {
-                Alert.alert("Error", "Could not start preferences update. Please try again.");
-              }
+            onPress={() => {
+              navigation.navigate("Onboarding", { isRetake: true });
             }}
             style={({ pressed }) => ({
               paddingVertical: 14,

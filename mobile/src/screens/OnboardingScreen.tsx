@@ -33,10 +33,18 @@ import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
-  const route = useRoute<RootRoute<"Onboarding">>();
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
+  // Try to get route params if we're inside navigation context
+  let routeParams: { isRetake?: boolean } | undefined;
+  try {
+    const route = useRoute<RootRoute<"Onboarding">>();
+    routeParams = route.params;
+  } catch {
+    // Not in navigation context (rendered via OnboardingGate)
+    routeParams = undefined;
+  }
   // Check if this is a retake by looking at route params or if user has existing onboarding data
-  const isRetake = route.params?.isRetake ?? Boolean(user?.onboardingData);
+  const isRetake = routeParams?.isRetake ?? Boolean(user?.onboardingData);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

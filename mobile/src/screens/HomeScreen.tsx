@@ -261,12 +261,7 @@ const HomeScreen = () => {
               </Text>
               <Pressable
                 onPress={() => {
-                  try {
-                    // @ts-ignore - navigate to Settings tab
-                    navigation.getParent()?.getParent()?.navigate("Settings");
-                  } catch (err) {
-                    console.error("Navigation error:", err);
-                  }
+                  navigation.navigate("Onboarding", { isRetake: true });
                 }}
                 style={({ pressed }) => ({
                   flexDirection: "row",
