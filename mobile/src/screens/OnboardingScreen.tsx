@@ -21,6 +21,7 @@ const OnboardingScreen = () => {
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
   const [trainingStyle, setTrainingStyle] = useState("");
+  const [weeklyGoal, setWeeklyGoal] = useState("4");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | undefined>();
@@ -77,6 +78,7 @@ const OnboardingScreen = () => {
         bio: trainingStyle.trim() || undefined,
         trainingStyle: trainingStyle.trim() || undefined,
         avatarUrl: avatarUri,
+        weeklyGoal: Number(weeklyGoal) || 4,
       });
     } catch (err) {
       const message =
@@ -173,6 +175,13 @@ const OnboardingScreen = () => {
               placeholder="Push/pull, hybrid, running"
               multiline
             />
+            <InputField
+              label="Weekly workout goal"
+              value={weeklyGoal}
+              onChangeText={setWeeklyGoal}
+              placeholder="4"
+              keyboardType="numeric"
+            />
           </View>
 
           {error ? <Text style={{ color: colors.error }}>{error}</Text> : null}
@@ -204,12 +213,14 @@ const InputField = ({
   onChangeText,
   placeholder,
   multiline,
+  keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  keyboardType?: "default" | "numeric";
 }) => (
   <View style={{ gap: 6 }}>
     <Text style={{ ...typography.caption, color: colors.textSecondary }}>{label}</Text>
@@ -219,6 +230,7 @@ const InputField = ({
       placeholder={placeholder}
       placeholderTextColor={colors.textSecondary}
       multiline={multiline}
+      keyboardType={keyboardType}
       style={{
         backgroundColor: colors.surfaceMuted,
         borderRadius: 12,

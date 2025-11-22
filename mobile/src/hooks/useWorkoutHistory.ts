@@ -16,6 +16,28 @@ export const useWorkoutHistory = (start: Date, end: Date) => {
   return useQuery<WorkoutHistoryResponse>({
     queryKey: historyKey(startIso, endIso),
     queryFn: () => fetchHistoryRange(startIso, endIso),
+    select: (data) => {
+      const uniqueSessionIds = new Set<string>();
+      const filteredDays = data.days
+        .map((day) => {
+          const uniqueSessions = day.sessions.filter((session) => {
+            if (session.finishedAt && !uniqueSessionIds.has(session.id)) {
+              uniqueSessionIds.add(session.id);
+              return true;
+            }
+            return false;
+          });
+          return { ...day, sessions: uniqueSessions };
+        })
+        .filter((day) => day.sessions.length > 0);
+
+      const newStats = { ...data.stats, totalWorkouts: uniqueSessionIds.size };
+
+      return {
+        days: filteredDays,
+        stats: newStats,
+      };
+    },
   });
 };
 

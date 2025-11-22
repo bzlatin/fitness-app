@@ -17,6 +17,7 @@ type UserRow = {
   training_style: string | null;
   gym_name: string | null;
   gym_visibility: string | null;
+  weekly_goal: number | null;
 };
 
 type SocialProfile = {
@@ -38,6 +39,7 @@ type SocialProfile = {
   friendsCount?: number;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
+  weeklyGoal?: number;
   friendsPreview?: {
     id: string;
     name: string;
@@ -197,6 +199,7 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   trainingStyle: row.training_style,
   gymName: row.gym_name,
   gymVisibility: (row.gym_visibility as "hidden" | "shown" | null) ?? "hidden",
+  weeklyGoal: row.weekly_goal ?? 4,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -459,6 +462,7 @@ router.put("/me", async (req, res) => {
     trainingStyle,
     gymName,
     gymVisibility,
+    weeklyGoal,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -520,6 +524,11 @@ router.put("/me", async (req, res) => {
   if (gymVisibility !== undefined) {
     updates.push(`gym_visibility = $${idx}`);
     values.push(gymVisibility);
+    idx += 1;
+  }
+  if (weeklyGoal !== undefined) {
+    updates.push(`weekly_goal = $${idx}`);
+    values.push(weeklyGoal);
     idx += 1;
   }
 

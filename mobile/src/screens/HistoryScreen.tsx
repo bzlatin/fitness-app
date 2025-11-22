@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Dimensions,
   Modal,
   Pressable,
-  ScrollView,
   Share,
   Text,
   TextInput,
@@ -30,21 +27,34 @@ import {
 } from "../types/workouts";
 
 const startOfMonth = (date: Date) => {
-  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), 1));
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
   copy.setUTCHours(0, 0, 0, 0);
   return copy;
 };
 
 const addMonths = (date: Date, delta: number) =>
-  startOfMonth(new Date(Date.UTC(date.getFullYear(), date.getMonth() + delta, 1)));
+  startOfMonth(
+    new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1))
+  );
 
 const startOfDayUtc = (date: Date) => {
-  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const copy = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
   copy.setUTCHours(0, 0, 0, 0);
   return copy;
 };
 
-const formatDateKey = (date: Date) => startOfDayUtc(date).toISOString().split("T")[0];
+const startOfDayLocal = (date: Date) => {
+  const copy = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  );
+  copy.setUTCHours(0, 0, 0, 0);
+  return copy;
+};
+
+const formatDateKey = (date: Date) =>
+  startOfDayUtc(date).toISOString().split("T")[0];
 
 const getWeekDates = (anchor: Date) => {
   const start = startOfDayUtc(anchor);
@@ -77,44 +87,57 @@ const buildMonthMatrix = (monthAnchor: Date) => {
 
 const isSameDay = (a: Date, b: Date) => formatDateKey(a) === formatDateKey(b);
 const isSameMonth = (a: Date, b: Date) =>
-  a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
+  a.getUTCFullYear() === b.getUTCFullYear() &&
+  a.getUTCMonth() === b.getUTCMonth();
 
 const HistoryScreen = () => {
-  const today = startOfDayUtc(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const [monthCursor, setMonthCursor] = useState<Date>(startOfMonth(today));
+  // Get current date in local timezone to correctly identify "today"
+  const today = startOfDayLocal(new Date());
+  const currentMonth = startOfMonth(today);
+
+  const [monthCursor, setMonthCursor] = useState<Date>(() => startOfMonth(startOfDayLocal(new Date())));
   const [showMonth, setShowMonth] = useState(false);
-  const [menuSession, setMenuSession] = useState<WorkoutHistorySession | null>(null);
-  const [durationSession, setDurationSession] = useState<WorkoutHistorySession | null>(
+  const [menuSession, setMenuSession] = useState<WorkoutHistorySession | null>(
     null
   );
+  const [durationSession, setDurationSession] =
+    useState<WorkoutHistorySession | null>(null);
+  const [durationHours, setDurationHours] = useState(1);
+  const [durationMinutes, setDurationMinutes] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [selectedSession, setSelectedSession] =
+    useState<WorkoutHistorySession | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({
     date: formatDateKey(today),
     templateName: "Logged workout",
-    exerciseName: "Bench Press",
+    exerciseName: "Bench Press / Chest",
     weight: "135",
     reps: "8",
     duration: "45",
   });
 
+  // Fixed data range - fetch 2 years of history from today
   const rangeStart = useMemo(
-    () => startOfMonth(addMonths(monthCursor, -12)),
-    [monthCursor]
+    () => {
+      const now = startOfDayLocal(new Date());
+      return startOfMonth(addMonths(now, -24));
+    },
+    []
   );
-  const rangeEnd = useMemo(() => startOfMonth(addMonths(monthCursor, 12)), [monthCursor]);
+  const rangeEnd = useMemo(
+    () => {
+      const now = startOfDayLocal(new Date());
+      return startOfMonth(addMonths(now, 12));
+    },
+    []
+  );
 
-  const { data, isLoading, isRefetching, refetch } = useWorkoutHistory(
-    rangeStart,
-    rangeEnd
-  );
+  const { data, isLoading } = useWorkoutHistory(rangeStart, rangeEnd);
   const createManual = useCreateManualSession(rangeStart, rangeEnd);
   const duplicate = useDuplicateSession(rangeStart, rangeEnd);
   const deleteSession = useDeleteSession(rangeStart, rangeEnd);
   const updateSession = useUpdateSession(rangeStart, rangeEnd);
-
-  const calendarWidth = Dimensions.get("window").width - 32;
-  const monthScrollRef = useRef<ScrollView | null>(null);
 
   const dayMap = useMemo(() => {
     const map = new Map<string, WorkoutHistoryDay>();
@@ -122,52 +145,50 @@ const HistoryScreen = () => {
     return map;
   }, [data]);
 
-  const allSessionsUnique = useMemo(() => {
-    const sessions = (data?.days ?? [])
-      .slice()
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .flatMap((day) => day.sessions);
-    const unique = new Map<string, WorkoutHistorySession>();
-    sessions.forEach((session) => {
-      if (!unique.has(session.id)) {
-        unique.set(session.id, session);
-      }
-    });
-    return Array.from(unique.values()).sort(
-      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-    );
+  const allSessions = useMemo(() => {
+    return (data?.days ?? [])
+      .flatMap((day) => day.sessions)
+      .sort(
+        (a, b) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+      );
   }, [data]);
 
+  const monthMatrix = useMemo(
+    () => buildMonthMatrix(monthCursor),
+    [monthCursor]
+  );
+
   const stats: WorkoutHistoryStats | undefined = data?.stats;
-  const selectedKey = formatDateKey(selectedDate);
-  const selectedDay = dayMap.get(selectedKey);
 
-  const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
-
-  useEffect(() => {
-    if (showMonth && monthScrollRef.current) {
-      monthScrollRef.current.scrollTo({ x: calendarWidth, animated: false });
+  // Reset month cursor to current month when opening
+  const handleToggleMonth = () => {
+    if (!showMonth) {
+      // Opening: reset to current month
+      setMonthCursor(currentMonth);
     }
-  }, [showMonth, monthCursor, calendarWidth]);
+    setShowMonth(!showMonth);
+  };
 
-  const handleMonthSwipe = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
-    const offset = event.nativeEvent.contentOffset.x;
-    const page = Math.round(offset / calendarWidth);
-    if (page === 0) {
-      setMonthCursor((prev) => {
-        const next = addMonths(prev, -1);
-        setSelectedDate(next);
-        return next;
-      });
-    } else if (page === 2) {
-      setMonthCursor((prev) => {
-        const next = addMonths(prev, 1);
-        setSelectedDate(next);
-        return next;
-      });
-    }
-    requestAnimationFrame(() => {
-      monthScrollRef.current?.scrollTo({ x: calendarWidth, animated: false });
+  const handlePrevMonth = () => {
+    setMonthCursor((prev) => {
+      // Go back one month
+      const year = prev.getUTCFullYear();
+      const month = prev.getUTCMonth();
+      const newMonth = month === 0 ? 11 : month - 1;
+      const newYear = month === 0 ? year - 1 : year;
+      return new Date(Date.UTC(newYear, newMonth, 1, 0, 0, 0, 0));
+    });
+  };
+
+  const handleNextMonth = () => {
+    setMonthCursor((prev) => {
+      // Go forward one month
+      const year = prev.getUTCFullYear();
+      const month = prev.getUTCMonth();
+      const newMonth = month === 11 ? 0 : month + 1;
+      const newYear = month === 11 ? year + 1 : year;
+      return new Date(Date.UTC(newYear, newMonth, 1, 0, 0, 0, 0));
     });
   };
 
@@ -181,11 +202,91 @@ const HistoryScreen = () => {
   };
   const hasWorkouts = (date: Date) => !!dayMap.get(formatDateKey(date));
 
-  const formatFriendlyDate = (date: Date) =>
-    date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const formatMonthLabel = (date: Date) => {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    return `${monthNames[month]} ${year}`;
+  };
 
-  const formatMonthLabel = (date: Date) =>
-    date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const formatDateLong = (date: Date) => {
+    const weekdayNames = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const weekday = weekdayNames[date.getUTCDay()];
+    const month = monthNames[date.getUTCMonth()];
+    const day = date.getUTCDate();
+    return `${weekday}, ${month} ${day}`;
+  };
+
+  const formatDateTimeShort = (date: Date) => {
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const weekday = weekdayNames[date.getUTCDay()];
+    const month = monthNames[date.getUTCMonth()];
+    const day = date.getUTCDate();
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const formattedHours = hours % 12 || 12;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const formattedMinutes = minutes.toString().padStart(2, "0");
+    return `${weekday}, ${month} ${day}, ${formattedHours}:${formattedMinutes} ${ampm}`;
+  };
+
+  const formatTime = (date: Date) => {
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const formattedHours = hours % 12 || 12;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const formattedMinutes = minutes.toString().padStart(2, "0");
+    return `${formattedHours}:${formattedMinutes} ${ampm}`;
+  };
 
   const handleShare = async (session: WorkoutHistorySession) => {
     const title = session.templateName ?? "Workout";
@@ -196,14 +297,31 @@ const HistoryScreen = () => {
     });
   };
 
-  const applyDuration = async (session: WorkoutHistorySession, minutes: number) => {
-    const start = new Date(session.startedAt);
-    const finished = new Date(start.getTime() + minutes * 60 * 1000);
+  const applyDuration = async () => {
+    if (!durationSession) return;
+    const totalMinutes = durationHours * 60 + durationMinutes;
+    const start = new Date(durationSession.startedAt);
+    const finished = new Date(start.getTime() + totalMinutes * 60 * 1000);
     await updateSession.mutateAsync({
-      id: session.id,
-      payload: { finishedAt: finished.toISOString(), startedAt: start.toISOString() },
+      id: durationSession.id,
+      payload: {
+        finishedAt: finished.toISOString(),
+        startedAt: start.toISOString(),
+      },
     });
     setDurationSession(null);
+  };
+
+  const handleDayClick = (date: Date) => {
+    const key = formatDateKey(date);
+    const dayData = dayMap.get(key);
+    if (dayData && dayData.sessions.length > 0) {
+      setSelectedDay(date);
+    }
+  };
+
+  const handleSessionClick = (session: WorkoutHistorySession) => {
+    setSelectedSession(session);
   };
 
   const handleAddManual = async () => {
@@ -231,16 +349,18 @@ const HistoryScreen = () => {
   };
 
   const renderSessionCard = (session: WorkoutHistorySession) => (
-    <View
+    <Pressable
       key={session.id}
-      style={{
+      onPress={() => handleSessionClick(session)}
+      style={({ pressed }) => ({
         backgroundColor: colors.surface,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
         padding: 14,
         gap: 10,
-      }}
+        opacity: pressed ? 0.8 : 1,
+      })}
     >
       <View style={{ flexDirection: "row", alignItems: "center" }}>
         <View style={{ flex: 1 }}>
@@ -248,10 +368,7 @@ const HistoryScreen = () => {
             {session.templateName || "Logged workout"}
           </Text>
           <Text style={{ color: colors.textSecondary }}>
-            {new Date(session.startedAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
+            {formatTime(new Date(session.startedAt))}{" "}
             · {session.exercises.length} exercises
           </Text>
         </View>
@@ -264,16 +381,23 @@ const HistoryScreen = () => {
             backgroundColor: pressed ? colors.surfaceMuted : "transparent",
           })}
         >
-          <Ionicons name="ellipsis-horizontal" color={colors.textPrimary} size={20} />
+          <Ionicons
+            name='ellipsis-horizontal'
+            color={colors.textPrimary}
+            size={20}
+          />
         </Pressable>
       </View>
 
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <MetricPill label="Volume" value={`${Math.round(session.totalVolumeLbs)} lbs`} />
-        <MetricPill label="Calories" value={`${session.estimatedCalories}`} />
+        <MetricPill
+          label='Volume'
+          value={`${Math.round(session.totalVolumeLbs)} lbs`}
+        />
+        <MetricPill label='Calories' value={`${session.estimatedCalories}`} />
         {session.finishedAt ? (
           <MetricPill
-            label="Duration"
+            label='Duration'
             value={`${Math.max(
               10,
               Math.round(
@@ -292,7 +416,12 @@ const HistoryScreen = () => {
             key={`${exercise.exerciseId}-${idx}`}
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.medium }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.medium,
+              }}
+            >
               {exercise.name}
             </Text>
             <Text style={{ color: colors.textSecondary }}>
@@ -306,14 +435,22 @@ const HistoryScreen = () => {
           </Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
     <ScreenContainer scroll>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 6,
+        }}
+      >
         <View>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>History</Text>
+          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+            History
+          </Text>
           <Text style={{ color: colors.textSecondary }}>
             Track streaks, totals, and missed days.
           </Text>
@@ -330,7 +467,7 @@ const HistoryScreen = () => {
           })}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Ionicons name="add" color={colors.surface} size={18} />
+            <Ionicons name='add' color={colors.surface} size={18} />
             <Text
               style={{
                 color: colors.surface,
@@ -360,12 +497,14 @@ const HistoryScreen = () => {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ flex: 1 }}>
               <Text style={{ ...typography.title, color: colors.textPrimary }}>
-                {formatMonthLabel(monthCursor)}
+                This Week
               </Text>
-              <Text style={{ color: colors.textSecondary }}>Tap a date to view workouts</Text>
+              <Text style={{ color: colors.textSecondary }}>
+                Your weekly activity
+              </Text>
             </View>
             <Pressable
-              onPress={() => setShowMonth((prev) => !prev)}
+              onPress={handleToggleMonth}
               hitSlop={8}
               style={({ pressed }) => ({
                 padding: 8,
@@ -381,139 +520,85 @@ const HistoryScreen = () => {
             </Pressable>
           </View>
 
-          {!showMonth ? (
-            <View style={{ flexDirection: "row", gap: 8, justifyContent: "space-between" }}>
-              {weekDates.map((date) => {
-                const status = dayStatus(date);
-                const isSelected = isSameDay(date, selectedDate);
-                const baseColor =
-                  status === "done"
-                    ? colors.primary
-                    : status === "today"
-                    ? colors.secondary
-                    : colors.surfaceMuted;
-                return (
-                  <Pressable
-                    key={formatDateKey(date)}
-                    onPress={() => setSelectedDate(date)}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      paddingVertical: 10,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                      backgroundColor: pressed ? colors.surfaceMuted : baseColor + "22",
-                      alignItems: "center",
-                      gap: 4,
-                    })}
-                  >
-                    <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.medium }}>
-                      {date.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2)}
-                    </Text>
-                    <Text
-                      style={{
-                        color: isSelected ? colors.primary : colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 16,
-                      }}
-                    >
-                      {date.getUTCDate()}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : (
-            <ScrollView
-              ref={monthScrollRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handleMonthSwipe}
-              contentOffset={{ x: calendarWidth, y: 0 }}
-            >
-              {[addMonths(monthCursor, -1), monthCursor, addMonths(monthCursor, 1)].map(
-                (month, index) => (
-                  <View key={month.toISOString() + index} style={{ width: calendarWidth }}>
-                    <MonthGrid
-                      monthDate={month}
-                      matrix={buildMonthMatrix(month)}
-                      onSelect={setSelectedDate}
-                      selectedDate={selectedDate}
-                      dayStatus={dayStatus}
-                      hasWorkouts={hasWorkouts}
-                    />
-                  </View>
-                )
-              )}
-            </ScrollView>
-          )}
-        </View>
+          <WeekView
+            weekDates={getWeekDates(today)}
+            onSelect={handleDayClick}
+            dayStatus={dayStatus}
+            hasWorkouts={hasWorkouts}
+            today={today}
+          />
 
-        <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              {formatFriendlyDate(selectedDate)}
-            </Text>
-            <Pressable
-              onPress={() => refetch()}
-              hitSlop={8}
-              style={({ pressed }) => ({
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                opacity: pressed ? 0.9 : 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              })}
-            >
-              {isRefetching ? (
-                <ActivityIndicator color={colors.textSecondary} size="small" />
-              ) : (
-                <Ionicons name="refresh" color={colors.textSecondary} size={16} />
-              )}
-              <Text style={{ color: colors.textSecondary }}>Refresh</Text>
-            </Pressable>
-          </View>
-
-          {selectedDay && selectedDay.sessions.length > 0 ? (
-            selectedDay.sessions.map(renderSessionCard)
-          ) : (
-            <View
-              style={{
-                padding: 14,
-                backgroundColor: colors.surface,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-                Nothing logged
-              </Text>
-              <Text style={{ color: colors.textSecondary, textAlign: "center" }}>
-                Tap Add past to log a previous workout or swipe to another day.
-              </Text>
+          {showMonth && (
+            <View style={{ marginTop: 8, gap: 12 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Pressable
+                  onPress={handlePrevMonth}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    padding: 8,
+                    borderRadius: 10,
+                    backgroundColor: pressed
+                      ? colors.surfaceMuted
+                      : "transparent",
+                  })}
+                >
+                  <Ionicons
+                    name='chevron-back'
+                    color={colors.textPrimary}
+                    size={20}
+                  />
+                </Pressable>
+                <Text
+                  style={{
+                    ...typography.title,
+                    color: colors.textPrimary,
+                  }}
+                >
+                  {formatMonthLabel(monthCursor)}
+                </Text>
+                <Pressable
+                  onPress={handleNextMonth}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    padding: 8,
+                    borderRadius: 10,
+                    backgroundColor: pressed
+                      ? colors.surfaceMuted
+                      : "transparent",
+                  })}
+                >
+                  <Ionicons
+                    name='chevron-forward'
+                    color={colors.textPrimary}
+                    size={20}
+                  />
+                </Pressable>
+              </View>
+              <MonthGrid
+                monthDate={monthCursor}
+                matrix={monthMatrix}
+                onSelect={handleDayClick}
+                dayStatus={dayStatus}
+                hasWorkouts={hasWorkouts}
+                today={today}
+              />
             </View>
           )}
         </View>
 
         <View style={{ gap: 8 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>All history</Text>
-            <Text style={{ color: colors.textSecondary }}>
-              {allSessionsUnique.length} workouts
-            </Text>
-          </View>
+          <Text style={{ ...typography.title, color: colors.textPrimary }}>
+            All Workouts ({allSessions.length})
+          </Text>
           <View style={{ gap: 10 }}>
-            {allSessionsUnique.map((session) => (
-              <View key={`${session.id}-all`} style={{ opacity: 0.95 }}>
+            {allSessions.map((session) => (
+              <View key={`${session.id}-all`}>
                 {renderSessionCard(session)}
               </View>
             ))}
@@ -521,9 +606,12 @@ const HistoryScreen = () => {
         </View>
       </View>
 
-      {(isLoading || createManual.isPending || duplicate.isPending || deleteSession.isPending) && (
+      {(isLoading ||
+        createManual.isPending ||
+        duplicate.isPending ||
+        deleteSession.isPending) && (
         <View
-          pointerEvents="none"
+          pointerEvents='none'
           style={{
             position: "absolute",
             top: 0,
@@ -533,11 +621,18 @@ const HistoryScreen = () => {
             backgroundColor: colors.surface,
           }}
         >
-          <View style={{ flex: 1, backgroundColor: colors.primary, opacity: 0.9 }} />
+          <View
+            style={{ flex: 1, backgroundColor: colors.primary, opacity: 0.9 }}
+          />
         </View>
       )}
 
-      <Modal transparent animationType="fade" visible={!!menuSession} onRequestClose={() => setMenuSession(null)}>
+      <Modal
+        transparent
+        animationType='fade'
+        visible={!!menuSession}
+        onRequestClose={() => setMenuSession(null)}
+      >
         <TouchableWithoutFeedback onPress={() => setMenuSession(null)}>
           <View
             style={{
@@ -563,7 +658,9 @@ const HistoryScreen = () => {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                  <Text
+                    style={{ ...typography.title, color: colors.textPrimary }}
+                  >
                     Actions
                   </Text>
                   <Pressable onPress={() => setMenuSession(null)}>
@@ -578,16 +675,16 @@ const HistoryScreen = () => {
                   </Pressable>
                 </View>
                 <ActionRow
-                  icon="share-social"
-                  label="Share workout"
+                  icon='share-social'
+                  label='Share workout'
                   onPress={() => {
                     if (menuSession) handleShare(menuSession);
                     setMenuSession(null);
                   }}
                 />
                 <ActionRow
-                  icon="copy"
-                  label="Save as new workout"
+                  icon='copy'
+                  label='Save as new workout'
                   onPress={async () => {
                     if (menuSession) {
                       await duplicate.mutateAsync(menuSession.id);
@@ -596,17 +693,17 @@ const HistoryScreen = () => {
                   }}
                 />
                 <ActionRow
-                  icon="time"
-                  label="Edit duration"
+                  icon='time'
+                  label='Edit duration'
                   onPress={() => {
                     setDurationSession(menuSession);
                     setMenuSession(null);
                   }}
                 />
                 <ActionRow
-                  icon="trash"
+                  icon='trash'
                   destructive
-                  label="Delete workout"
+                  label='Delete workout'
                   onPress={() => {
                     if (!menuSession) return;
                     Alert.alert(
@@ -632,15 +729,26 @@ const HistoryScreen = () => {
         </TouchableWithoutFeedback>
       </Modal>
 
-      <Modal transparent animationType="slide" visible={!!durationSession} onRequestClose={() => setDurationSession(null)}>
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" }}>
+      <Modal
+        transparent
+        animationType='slide'
+        visible={!!durationSession}
+        onRequestClose={() => setDurationSession(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(0,0,0,0.45)",
+          }}
+        >
           <View
             style={{
               backgroundColor: colors.surface,
               padding: 16,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              gap: 12,
+              gap: 16,
             }}
           >
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
@@ -649,41 +757,200 @@ const HistoryScreen = () => {
             <Text style={{ color: colors.textSecondary }}>
               Keep the same start time, choose a new finish.
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {[30, 45, 60, 75, 90].map((minutes) => (
-                <Pressable
-                  key={minutes}
-                  onPress={() => durationSession && applyDuration(durationSession, minutes)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-                  })}
-                >
-                  <Text style={{ color: colors.textPrimary }}>{minutes} min</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              onPress={() => setDurationSession(null)}
+            <View
               style={{
-                paddingVertical: 12,
+                flexDirection: "row",
+                justifyContent: "center",
                 alignItems: "center",
-                borderRadius: 12,
-                backgroundColor: colors.surfaceMuted,
+                gap: 12,
+                paddingVertical: 20,
               }}
             >
-              <Text style={{ color: colors.textSecondary }}>Close</Text>
-            </Pressable>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Hours
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <Pressable
+                    onPress={() =>
+                      setDurationHours((prev) => Math.max(0, prev - 1))
+                    }
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    })}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontSize: 20 }}>
+                      −
+                    </Text>
+                  </Pressable>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 32,
+                      fontFamily: fontFamilies.semibold,
+                      minWidth: 50,
+                      textAlign: "center",
+                    }}
+                  >
+                    {durationHours}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      setDurationHours((prev) => Math.min(5, prev + 1))
+                    }
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    })}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontSize: 20 }}>
+                      +
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Minutes
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <Pressable
+                    onPress={() =>
+                      setDurationMinutes((prev) => Math.max(0, prev - 5))
+                    }
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    })}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontSize: 20 }}>
+                      −
+                    </Text>
+                  </Pressable>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 32,
+                      fontFamily: fontFamilies.semibold,
+                      minWidth: 50,
+                      textAlign: "center",
+                    }}
+                  >
+                    {durationMinutes}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      setDurationMinutes((prev) => Math.min(55, prev + 5))
+                    }
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    })}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontSize: 20 }}>
+                      +
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                onPress={applyDuration}
+                style={({ pressed }) => ({
+                  flex: 2,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  borderRadius: 12,
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Apply
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setDurationSession(null)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceMuted,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
 
-      <Modal transparent animationType="fade" visible={manualOpen} onRequestClose={() => setManualOpen(false)}>
-        <View style={{ flex: 1, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.55)" }}>
+      <Modal
+        transparent
+        animationType='fade'
+        visible={manualOpen}
+        onRequestClose={() => setManualOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.55)",
+          }}
+        >
           <View
             style={{
               marginHorizontal: 16,
@@ -702,40 +969,52 @@ const HistoryScreen = () => {
               Quick log a missed session. Use YYYY-MM-DD for date.
             </Text>
             <Field
-              label="Date (YYYY-MM-DD)"
+              label='Date (YYYY-MM-DD)'
               value={manualForm.date}
-              onChangeText={(text) => setManualForm((prev) => ({ ...prev, date: text }))}
+              onChangeText={(text) =>
+                setManualForm((prev) => ({ ...prev, date: text }))
+              }
             />
             <Field
-              label="Title"
+              label='Title'
               value={manualForm.templateName}
-              onChangeText={(text) => setManualForm((prev) => ({ ...prev, templateName: text }))}
+              onChangeText={(text) =>
+                setManualForm((prev) => ({ ...prev, templateName: text }))
+              }
             />
             <Field
-              label="Primary exercise"
+              label='Primary Muscles / Exercise'
               value={manualForm.exerciseName}
-              onChangeText={(text) => setManualForm((prev) => ({ ...prev, exerciseName: text }))}
+              onChangeText={(text) =>
+                setManualForm((prev) => ({ ...prev, exerciseName: text }))
+              }
             />
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
               <Field
-                label="Weight (lbs)"
+                label='Weight (lbs)'
                 value={manualForm.weight}
-                keyboardType="numeric"
-                onChangeText={(text) => setManualForm((prev) => ({ ...prev, weight: text }))}
+                keyboardType='numeric'
+                onChangeText={(text) =>
+                  setManualForm((prev) => ({ ...prev, weight: text }))
+                }
               />
               <Field
-                label="Reps"
+                label='Reps'
                 value={manualForm.reps}
-                keyboardType="numeric"
-                onChangeText={(text) => setManualForm((prev) => ({ ...prev, reps: text }))}
-              />
-              <Field
-                label="Duration (min)"
-                value={manualForm.duration}
-                keyboardType="numeric"
-                onChangeText={(text) => setManualForm((prev) => ({ ...prev, duration: text }))}
+                keyboardType='numeric'
+                onChangeText={(text) =>
+                  setManualForm((prev) => ({ ...prev, reps: text }))
+                }
               />
             </View>
+            <Field
+              label='Duration (min)'
+              value={manualForm.duration}
+              keyboardType='numeric'
+              onChangeText={(text) =>
+                setManualForm((prev) => ({ ...prev, duration: text }))
+              }
+            />
             <Pressable
               onPress={handleAddManual}
               style={({ pressed }) => ({
@@ -747,7 +1026,12 @@ const HistoryScreen = () => {
                 marginTop: 4,
               })}
             >
-              <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
                 Save workout
               </Text>
             </Pressable>
@@ -766,6 +1050,228 @@ const HistoryScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        transparent
+        animationType='fade'
+        visible={!!selectedDay}
+        onRequestClose={() => setSelectedDay(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setSelectedDay(null)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 18,
+                  padding: 18,
+                  gap: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  maxHeight: "80%",
+                }}
+              >
+                {selectedDay && (
+                  <>
+                    <Text
+                      style={{ ...typography.title, color: colors.textPrimary }}
+                    >
+                      {formatDateLong(selectedDay)}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {dayMap.get(formatDateKey(selectedDay))?.sessions.length ||
+                        0}{" "}
+                      workout(s)
+                    </Text>
+                    <View style={{ gap: 10 }}>
+                      {dayMap
+                        .get(formatDateKey(selectedDay))
+                        ?.sessions.map((session) => (
+                          <Pressable
+                            key={session.id}
+                            onPress={() => {
+                              setSelectedDay(null);
+                              handleSessionClick(session);
+                            }}
+                            style={({ pressed }) => ({
+                              backgroundColor: pressed
+                                ? colors.surfaceMuted
+                                : colors.surface,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              padding: 12,
+                              gap: 8,
+                            })}
+                          >
+                            <Text
+                              style={{
+                                color: colors.textPrimary,
+                                fontFamily: fontFamilies.semibold,
+                              }}
+                            >
+                              {session.templateName || "Logged workout"}
+                            </Text>
+                            <Text style={{ color: colors.textSecondary }}>
+                              {formatTime(new Date(session.startedAt))}{" "}
+                              · {session.exercises.length} exercises ·{" "}
+                              {Math.round(session.totalVolumeLbs)} lbs
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </View>
+                    <Pressable
+                      onPress={() => setSelectedDay(null)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 12,
+                        alignItems: "center",
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceMuted,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={{ color: colors.textSecondary }}>Close</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType='fade'
+        visible={!!selectedSession}
+        onRequestClose={() => setSelectedSession(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setSelectedSession(null)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 18,
+                  padding: 18,
+                  gap: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  maxHeight: "80%",
+                }}
+              >
+                {selectedSession && (
+                  <>
+                    <Text
+                      style={{ ...typography.title, color: colors.textPrimary }}
+                    >
+                      {selectedSession.templateName || "Logged workout"}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {formatDateTimeShort(new Date(selectedSession.startedAt))}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <MetricPill
+                        label='Volume'
+                        value={`${Math.round(
+                          selectedSession.totalVolumeLbs
+                        )} lbs`}
+                      />
+                      <MetricPill
+                        label='Calories'
+                        value={`${selectedSession.estimatedCalories}`}
+                      />
+                      {selectedSession.finishedAt && (
+                        <MetricPill
+                          label='Duration'
+                          value={`${Math.max(
+                            10,
+                            Math.round(
+                              (new Date(selectedSession.finishedAt).getTime() -
+                                new Date(
+                                  selectedSession.startedAt
+                                ).getTime()) /
+                                60000
+                            )
+                          )} min`}
+                        />
+                      )}
+                    </View>
+                    <View
+                      style={{
+                        borderTopWidth: 1,
+                        borderTopColor: colors.border,
+                        paddingTop: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                        }}
+                      >
+                        Exercises
+                      </Text>
+                      {selectedSession.exercises.map((exercise, idx) => (
+                        <View
+                          key={`${exercise.exerciseId}-${idx}`}
+                          style={{
+                            backgroundColor: colors.surfaceMuted,
+                            borderRadius: 10,
+                            padding: 10,
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.medium,
+                            }}
+                          >
+                            {exercise.name}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary }}>
+                            {exercise.sets} sets · {Math.round(exercise.volumeLbs)}{" "}
+                            lbs
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Pressable
+                      onPress={() => setSelectedSession(null)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 12,
+                        alignItems: "center",
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceMuted,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={{ color: colors.textSecondary }}>Close</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -773,8 +1279,14 @@ const HistoryScreen = () => {
 const SummaryRow = ({ stats }: { stats?: WorkoutHistoryStats }) => {
   const items = [
     { label: "Total workouts", value: stats?.totalWorkouts ?? "—" },
-    { label: "Weekly goal", value: `${stats?.weeklyCompleted ?? 0}/${stats?.weeklyGoal ?? 4}` },
-    { label: "Current streak", value: stats?.currentStreak ? `${stats.currentStreak} days` : "0" },
+    {
+      label: "Weekly goal",
+      value: `${stats?.weeklyCompleted ?? 0}/${stats?.weeklyGoal ?? 4}`,
+    },
+    {
+      label: "Current streak",
+      value: stats?.currentStreak ? `${stats.currentStreak} days` : "0",
+    },
   ];
 
   return (
@@ -792,10 +1304,21 @@ const SummaryRow = ({ stats }: { stats?: WorkoutHistoryStats }) => {
             gap: 4,
           }}
         >
-          <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.medium }}>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.medium,
+            }}
+          >
             {item.label}
           </Text>
-          <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.bold, fontSize: 18 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.bold,
+              fontSize: 18,
+            }}
+          >
             {item.value}
           </Text>
         </View>
@@ -818,7 +1341,100 @@ const MetricPill = ({ label, value }: { label: string; value: string }) => (
     }}
   >
     <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{label}</Text>
-    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>{value}</Text>
+    <Text
+      style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const WeekView = ({
+  weekDates,
+  onSelect,
+  dayStatus,
+  hasWorkouts,
+  today,
+}: {
+  weekDates: Date[];
+  onSelect: (date: Date) => void;
+  dayStatus: (date: Date) => string;
+  hasWorkouts: (date: Date) => boolean;
+  today: Date;
+}) => (
+  <View style={{ gap: 8 }}>
+    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+      {["M", "T", "W", "T", "F", "S", "S"].map((day, idx) => (
+        <Text
+          key={`${day}-${idx}`}
+          style={{
+            color: colors.textSecondary,
+            width: 44,
+            textAlign: "center",
+            fontFamily: fontFamilies.medium,
+            fontSize: 12,
+          }}
+        >
+          {day}
+        </Text>
+      ))}
+    </View>
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 6,
+        justifyContent: "space-between",
+      }}
+    >
+      {weekDates.map((date, dayIdx) => {
+        const status = dayStatus(date);
+        const isToday = isSameDay(date, today);
+        const background =
+          status === "done"
+            ? colors.primary + "33"
+            : status === "today"
+            ? colors.secondary + "33"
+            : colors.surface;
+        return (
+          <Pressable
+            key={`${formatDateKey(date)}-${dayIdx}`}
+            onPress={() => onSelect(date)}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 52,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: isToday ? colors.secondary : colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : background,
+              alignItems: "center",
+              justifyContent: "center",
+            })}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
+              {date.getUTCDate()}
+            </Text>
+            {hasWorkouts(date) ? (
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  marginTop: 4,
+                  backgroundColor:
+                    status === "done" ? colors.primary : colors.secondary,
+                }}
+              />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
   </View>
 );
 
@@ -826,22 +1442,22 @@ const MonthGrid = ({
   matrix,
   monthDate,
   onSelect,
-  selectedDate,
   dayStatus,
   hasWorkouts,
+  today,
 }: {
   matrix: Date[][];
   monthDate: Date;
-  selectedDate: Date;
   onSelect: (date: Date) => void;
   dayStatus: (date: Date) => string;
   hasWorkouts: (date: Date) => boolean;
+  today: Date;
 }) => (
   <View style={{ gap: 8 }}>
     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-      {["M", "T", "W", "T", "F", "S", "S"].map((day) => (
+      {["M", "T", "W", "T", "F", "S", "S"].map((day, idx) => (
         <Text
-          key={day}
+          key={`${day}-${idx}`}
           style={{
             color: colors.textSecondary,
             width: 38,
@@ -854,10 +1470,17 @@ const MonthGrid = ({
       ))}
     </View>
     {matrix.map((week, idx) => (
-      <View key={`week-${idx}`} style={{ flexDirection: "row", gap: 6, justifyContent: "space-between" }}>
+      <View
+        key={`week-${idx}`}
+        style={{
+          flexDirection: "row",
+          gap: 6,
+          justifyContent: "space-between",
+        }}
+      >
         {week.map((date, dayIdx) => {
           const status = dayStatus(date);
-          const isSelected = isSameDay(date, selectedDate);
+          const isToday = isSameDay(date, today);
           const dimmed = !isSameMonth(date, monthDate);
           const background =
             status === "done"
@@ -874,7 +1497,7 @@ const MonthGrid = ({
                 height: 44,
                 borderRadius: 12,
                 borderWidth: 1,
-                borderColor: isSelected ? colors.primary : colors.border,
+                borderColor: isToday ? colors.secondary : colors.border,
                 backgroundColor: pressed ? colors.surfaceMuted : background,
                 alignItems: "center",
                 justifyContent: "center",
@@ -895,7 +1518,8 @@ const MonthGrid = ({
                     height: 6,
                     borderRadius: 3,
                     marginTop: 4,
-                    backgroundColor: status === "done" ? colors.primary : colors.secondary,
+                    backgroundColor:
+                      status === "done" ? colors.primary : colors.secondary,
                   }}
                 />
               ) : null}
@@ -957,8 +1581,10 @@ const Field = ({
   onChangeText: (text: string) => void;
   keyboardType?: "default" | "numeric";
 }) => (
-  <View style={{ flexGrow: 1, flexBasis: "30%" }}>
-    <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>{label}</Text>
+  <View style={{ flexGrow: 1 }}>
+    <Text style={{ color: colors.textSecondary, marginBottom: 4 }}>
+      {label}
+    </Text>
     <TextInput
       value={value}
       onChangeText={onChangeText}

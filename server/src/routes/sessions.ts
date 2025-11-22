@@ -437,14 +437,30 @@ router.get("/history/range", async (req, res) => {
     const uniqueDates = Array.from(new Set(allDates));
 
     const currentWeekStart = startOfWeekUtc(today);
-    const weeklyCompleted = summaries.filter((summary) => {
-      const started = new Date(summary.startedAt);
-      return started >= currentWeekStart && started <= today;
-    }).length;
+    const currentWeekEnd = new Date(currentWeekStart);
+    currentWeekEnd.setUTCDate(currentWeekEnd.getUTCDate() + 7);
+
+    // Count unique workout DAYS in the current week, not total sessions
+    const uniqueWorkoutDaysThisWeek = new Set(
+      summaries
+        .filter((summary) => {
+          const started = new Date(summary.startedAt);
+          return started >= currentWeekStart && started < currentWeekEnd;
+        })
+        .map((summary) => formatDateKey(new Date(summary.startedAt)))
+    ).size;
+
+    const weeklyCompleted = uniqueWorkoutDaysThisWeek;
+
+    const userResult = await query<{ weekly_goal: number }>(
+      `SELECT weekly_goal FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    const weeklyGoal = userResult.rows[0]?.weekly_goal ?? 4;
 
     const stats = {
       totalWorkouts: summaries.length,
-      weeklyGoal: 4,
+      weeklyGoal,
       weeklyCompleted,
       currentStreak: computeStreak(uniqueDates, today),
     };

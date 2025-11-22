@@ -44,7 +44,8 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS training_style TEXT,
       ADD COLUMN IF NOT EXISTS gym_name TEXT,
-      ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden'
+      ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden',
+      ADD COLUMN IF NOT EXISTS weekly_goal INTEGER NOT NULL DEFAULT 4
   `);
 
   await query(`

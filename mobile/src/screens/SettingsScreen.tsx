@@ -49,6 +49,9 @@ const SettingsScreen = () => {
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
   const [draftTraining, setDraftTraining] = useState(user?.trainingStyle ?? "");
   const [draftGym, setDraftGym] = useState(user?.gymName ?? "");
+  const [draftWeeklyGoal, setDraftWeeklyGoal] = useState(
+    String(user?.weeklyGoal ?? 4)
+  );
   const [showGym, setShowGym] = useState(
     (user?.gymVisibility ?? "hidden") === "shown"
   );
@@ -71,6 +74,7 @@ const SettingsScreen = () => {
       setDraftBio(user.bio ?? "");
       setDraftTraining(user.trainingStyle ?? "");
       setDraftGym(user.gymName ?? "");
+      setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
       setShowGym((user.gymVisibility ?? "hidden") === "shown");
       setAvatarUri(user.avatarUrl ?? undefined);
       setIsEditing(false);
@@ -84,6 +88,7 @@ const SettingsScreen = () => {
     user?.gymName,
     user?.gymVisibility,
     user?.avatarUrl,
+    user?.weeklyGoal,
   ]);
 
   useFocusEffect(
@@ -361,6 +366,7 @@ const SettingsScreen = () => {
         trainingStyle: draftTraining.trim() || undefined,
         gymName: draftGym.trim() ? draftGym.trim() : null,
         gymVisibility: showGym ? "shown" : "hidden",
+        weeklyGoal: Number(draftWeeklyGoal) || 4,
         avatarUrl: avatarUri,
       };
 
@@ -653,6 +659,23 @@ const SettingsScreen = () => {
                 placeholderTextColor={colors.textSecondary}
                 style={inputStyle}
               />
+              <TextInput
+                value={draftWeeklyGoal}
+                onChangeText={setDraftWeeklyGoal}
+                placeholder='4'
+                placeholderTextColor={colors.textSecondary}
+                keyboardType='numeric'
+                style={inputStyle}
+              />
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: -4,
+                }}
+              >
+                Weekly workout goal (workouts per week)
+              </Text>
               <View
                 style={{
                   flexDirection: "row",
@@ -717,6 +740,7 @@ const SettingsScreen = () => {
                     setDraftBio(user.bio ?? "");
                     setDraftTraining(user.trainingStyle ?? "");
                     setDraftGym(user.gymName ?? "");
+                    setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
                     setShowGym((user.gymVisibility ?? "hidden") === "shown");
                     setAvatarUri(user.avatarUrl ?? undefined);
                   }}
