@@ -17,14 +17,14 @@ import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 
 const OnboardingScreen = () => {
-  const { completeOnboarding } = useCurrentUser();
-  const [name, setName] = useState("");
-  const [handle, setHandle] = useState("");
-  const [trainingStyle, setTrainingStyle] = useState("");
-  const [weeklyGoal, setWeeklyGoal] = useState("4");
+  const { completeOnboarding, user } = useCurrentUser();
+  const [name, setName] = useState(user?.name ?? "");
+  const [handle, setHandle] = useState(user?.handle ?? "");
+  const [trainingStyle, setTrainingStyle] = useState(user?.trainingStyle ?? "");
+  const [weeklyGoal, setWeeklyGoal] = useState(String(user?.weeklyGoal ?? 4));
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [avatarUri, setAvatarUri] = useState<string | undefined>();
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(user?.avatarUrl ?? undefined);
 
   const ensurePhotoPermission = async () => {
     const current = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -99,11 +99,12 @@ const OnboardingScreen = () => {
       >
         <View style={{ gap: 16, marginTop: 16 }}>
           <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-            Set up your profile
+            {user ? "Update your profile" : "Set up your profile"}
           </Text>
           <Text style={{ ...typography.body, color: colors.textSecondary }}>
-            Choose a name and handle so friends can find you. Handles are unique, so pick
-            one you want to keep.
+            {user
+              ? "Update your profile information. Your existing data has been pre-filled."
+              : "Choose a name and handle so friends can find you. Handles are unique, so pick one you want to keep."}
           </Text>
 
           <View style={{ gap: 10 }}>

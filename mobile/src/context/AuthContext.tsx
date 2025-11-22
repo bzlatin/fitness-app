@@ -115,11 +115,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       redirectUri,
       scopes: ["openid", "profile", "email", "offline_access"],
       usePKCE: true,
-      extraParams: AUTH0_AUDIENCE
-        ? {
-            audience: AUTH0_AUDIENCE,
-          }
-        : undefined,
+      extraParams: {
+        ...(AUTH0_AUDIENCE ? { audience: AUTH0_AUDIENCE } : {}),
+        prompt: "select_account",
+      },
     },
     discovery
   );
