@@ -173,6 +173,11 @@ export const initDb = async () => {
   `);
 
   await query(`
+    ALTER TABLE squads
+      ADD COLUMN IF NOT EXISTS max_members INTEGER NOT NULL DEFAULT 50
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS squad_members (
       squad_id TEXT NOT NULL REFERENCES squads(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -180,6 +185,32 @@ export const initDb = async () => {
       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (squad_id, user_id)
     )
+  `);
+
+  await query(`
+    ALTER TABLE squad_members
+      ADD COLUMN IF NOT EXISTS invited_by TEXT REFERENCES users(id) ON DELETE SET NULL
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS squad_invite_links (
+      id TEXT PRIMARY KEY,
+      squad_id TEXT NOT NULL REFERENCES squads(id) ON DELETE CASCADE,
+      code TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      is_revoked BOOLEAN NOT NULL DEFAULT false,
+      uses_count INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS squad_invite_links_code_idx ON squad_invite_links(code)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS squad_invite_links_squad_id_idx ON squad_invite_links(squad_id)
   `);
 
   await query(`

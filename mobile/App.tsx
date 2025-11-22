@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import { NavigationContainer, DarkTheme } from "@react-navigation/native";
+import { NavigationContainer, DarkTheme, LinkingOptions } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { ReactNode, useMemo } from "react";
@@ -21,6 +21,7 @@ import AuthGate from "./src/components/auth/AuthGate";
 import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
+import { RootStackParamList } from "./src/navigation/types";
 
 const App = () => {
   const [fontsLoaded] = useFonts({
@@ -53,6 +54,34 @@ const App = () => {
     },
   };
 
+  const linking: LinkingOptions<RootStackParamList> = {
+    prefixes: ["pushpullapp://", "push-pull://"],
+    config: {
+      screens: {
+        RootTabs: {
+          screens: {
+            Home: "home",
+            Squad: "squad",
+            History: "history",
+            Settings: "settings",
+          },
+        },
+        SquadJoin: {
+          path: "squad/join/:code",
+          parse: {
+            code: (code: string) => code,
+          },
+        },
+        WorkoutTemplateDetail: "workout/:templateId",
+        WorkoutTemplateBuilder: "workout/builder",
+        WorkoutSession: "session/:templateId",
+        Profile: "profile/:userId",
+        PostWorkoutShare: "share/:sessionId",
+        Onboarding: "onboarding",
+      },
+    },
+  };
+
   const content = fontsLoaded ? (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
@@ -60,7 +89,7 @@ const App = () => {
           <StatusBar style='light' />
           <AuthGate>
             <OnboardingGate>
-              <NavigationContainer theme={navTheme}>
+              <NavigationContainer theme={navTheme} linking={linking}>
                 <RootNavigator />
               </NavigationContainer>
             </OnboardingGate>

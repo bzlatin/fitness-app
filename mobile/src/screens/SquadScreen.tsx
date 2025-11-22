@@ -40,6 +40,9 @@ import {
 } from "../api/social";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { formatHandle } from "../utils/formatHandle";
+import * as Clipboard from "expo-clipboard";
+import { Share, Alert } from "react-native";
+import { API_URL } from "../config";
 
 type FeedItem =
   | { kind: "section"; title: string; subtitle?: string }
@@ -342,7 +345,7 @@ const SquadScreen = () => {
     deleteSquad: deleteSquadAction,
     isDeletingSquad,
   } = useSquads();
-  const { user } = useCurrentUser();
+  const { user, getAccessToken } = useCurrentUser();
   const [squadName, setSquadName] = useState("");
   const [inviteHandle, setInviteHandle] = useState("");
   const [inviteSquadId, setInviteSquadId] = useState<string | undefined>(
@@ -363,6 +366,8 @@ const SquadScreen = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [profilePreview, setProfilePreview] =
     useState<SocialUserSummary | null>(null);
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [currentInviteCode, setCurrentInviteCode] = useState<string | null>(null);
   const {
     data: selectedSquadData,
     isLoading: selectedSquadLoading,
@@ -478,6 +483,59 @@ const SquadScreen = () => {
     } finally {
       setDeletingSquadId(null);
       setConfirmDeleteId(null);
+    }
+  };
+
+  const handleGenerateInviteLink = async () => {
+    if (!inviteSquadId) return;
+
+    setGeneratingInvite(true);
+    try {
+      const token = await getAccessToken();
+
+      const response = await fetch(`${API_URL}/api/social/squads/${inviteSquadId}/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert("Error", data.error || "Failed to generate invite link");
+        return;
+      }
+
+      setCurrentInviteCode(data.code);
+    } catch (err) {
+      console.error("Failed to generate invite link", err);
+      Alert.alert("Error", "Failed to generate invite link");
+    } finally {
+      setGeneratingInvite(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!currentInviteCode) return;
+    const link = `pushpullapp://squad/join/${currentInviteCode}`;
+    await Clipboard.setStringAsync(link);
+    Alert.alert("Copied!", "Invite link copied to clipboard");
+  };
+
+  const handleShareInviteLink = async () => {
+    if (!currentInviteCode) return;
+    const link = `pushpullapp://squad/join/${currentInviteCode}`;
+    const selectedSquad = squads.find((s) => s.id === inviteSquadId);
+
+    try {
+      await Share.share({
+        message: `Join my squad "${selectedSquad?.name}" on Push/Pull! ${link}`,
+        title: `Join ${selectedSquad?.name}`,
+      });
+    } catch (err) {
+      console.error("Failed to share invite link", err);
     }
   };
 
@@ -1590,49 +1648,130 @@ const SquadScreen = () => {
                       <>
                         <CollapsibleSection
                           title='Invite to a squad'
-                          subtitle='Pick a squad then drop a handle.'
+                          subtitle='Generate an invite link or send a direct invite.'
                           open={showInviteSection}
                           onToggle={() => setShowInviteSection((prev) => !prev)}
                           iconName='send-outline'
                         >
-                          <TextInput
-                            value={inviteHandle}
-                            onChangeText={setInviteHandle}
-                            placeholder='Friend handle'
-                            placeholderTextColor={colors.textSecondary}
-                            style={inputStyle}
-                          />
                           <ScrollSquads
                             squads={squads}
                             activeId={inviteSquadId}
                             onSelect={(id) => setInviteSquadId(id)}
                           />
-                          <Pressable
-                            onPress={() => {
-                              void handleInvite();
-                            }}
-                            disabled={
-                              isInvitingToSquad ||
-                              !inviteSquadId ||
-                              !inviteHandle.trim()
-                            }
-                            style={({ pressed }) => ({
-                              paddingVertical: 10,
-                              borderRadius: 10,
-                              backgroundColor: colors.primary,
-                              alignItems: "center",
-                              opacity: pressed || isInvitingToSquad ? 0.7 : 1,
-                            })}
-                          >
-                            <Text
-                              style={{
-                                color: colors.surface,
-                                fontFamily: fontFamilies.semibold,
-                              }}
-                            >
-                              {isInvitingToSquad ? "Inviting…" : "Send invite"}
+
+                          {/* Invite Link Section */}
+                          <View style={{ gap: 10 }}>
+                            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                              Invite Link (expires in 7 days)
                             </Text>
-                          </Pressable>
+                            {currentInviteCode ? (
+                              <View style={{ gap: 8 }}>
+                                <View style={{
+                                  backgroundColor: colors.surface,
+                                  borderRadius: 10,
+                                  padding: 10,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                }}>
+                                  <Text style={{ ...typography.caption, color: colors.textPrimary, fontFamily: fontFamilies.mono }}>
+                                    pushpullapp://squad/join/{currentInviteCode}
+                                  </Text>
+                                </View>
+                                <View style={{ flexDirection: "row", gap: 8 }}>
+                                  <Pressable
+                                    onPress={() => void handleCopyInviteLink()}
+                                    style={({ pressed }) => ({
+                                      flex: 1,
+                                      paddingVertical: 10,
+                                      borderRadius: 10,
+                                      backgroundColor: colors.surface,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
+                                      alignItems: "center",
+                                      opacity: pressed ? 0.7 : 1,
+                                    })}
+                                  >
+                                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                                      Copy
+                                    </Text>
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() => void handleShareInviteLink()}
+                                    style={({ pressed }) => ({
+                                      flex: 1,
+                                      paddingVertical: 10,
+                                      borderRadius: 10,
+                                      backgroundColor: colors.primary,
+                                      alignItems: "center",
+                                      opacity: pressed ? 0.7 : 1,
+                                    })}
+                                  >
+                                    <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold }}>
+                                      Share
+                                    </Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ) : (
+                              <Pressable
+                                onPress={() => void handleGenerateInviteLink()}
+                                disabled={generatingInvite || !inviteSquadId}
+                                style={({ pressed }) => ({
+                                  paddingVertical: 10,
+                                  borderRadius: 10,
+                                  backgroundColor: colors.surface,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                  alignItems: "center",
+                                  opacity: pressed || generatingInvite ? 0.7 : 1,
+                                })}
+                              >
+                                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                                  {generatingInvite ? "Generating..." : "Generate Invite Link"}
+                                </Text>
+                              </Pressable>
+                            )}
+                          </View>
+
+                          {/* Direct Invite Section */}
+                          <View style={{ gap: 10 }}>
+                            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                              Or invite by handle
+                            </Text>
+                            <TextInput
+                              value={inviteHandle}
+                              onChangeText={setInviteHandle}
+                              placeholder='Friend handle'
+                              placeholderTextColor={colors.textSecondary}
+                              style={inputStyle}
+                            />
+                            <Pressable
+                              onPress={() => {
+                                void handleInvite();
+                              }}
+                              disabled={
+                                isInvitingToSquad ||
+                                !inviteSquadId ||
+                                !inviteHandle.trim()
+                              }
+                              style={({ pressed }) => ({
+                                paddingVertical: 10,
+                                borderRadius: 10,
+                                backgroundColor: colors.primary,
+                                alignItems: "center",
+                                opacity: pressed || isInvitingToSquad ? 0.7 : 1,
+                              })}
+                            >
+                              <Text
+                                style={{
+                                  color: colors.surface,
+                                  fontFamily: fontFamilies.semibold,
+                                }}
+                              >
+                                {isInvitingToSquad ? "Inviting…" : "Send invite"}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </CollapsibleSection>
 
                         <CollapsibleSection

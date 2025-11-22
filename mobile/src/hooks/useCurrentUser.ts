@@ -1,4 +1,5 @@
 import { useUserProfile } from "../context/UserProfileContext";
+import { useAuth } from "../context/AuthContext";
 
 export const useCurrentUser = () => {
   const {
@@ -10,6 +11,7 @@ export const useCurrentUser = () => {
     completeOnboarding,
     refresh,
   } = useUserProfile();
+  const { getAccessToken } = useAuth();
   return {
     user,
     isLoading,
@@ -18,5 +20,6 @@ export const useCurrentUser = () => {
     isOnboarded,
     completeOnboarding,
     refresh,
+    getAccessToken,
   };
 };
