@@ -18,6 +18,7 @@ type UserRow = {
   gym_name: string | null;
   gym_visibility: string | null;
   weekly_goal: number | null;
+  onboarding_data: unknown;
 };
 
 type SocialProfile = {
@@ -40,6 +41,7 @@ type SocialProfile = {
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
+  onboardingData?: unknown;
   friendsPreview?: {
     id: string;
     name: string;
@@ -200,6 +202,7 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   gymName: row.gym_name,
   gymVisibility: (row.gym_visibility as "hidden" | "shown" | null) ?? "hidden",
   weeklyGoal: row.weekly_goal ?? 4,
+  onboardingData: row.onboarding_data ?? undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -463,6 +466,7 @@ router.put("/me", async (req, res) => {
     gymName,
     gymVisibility,
     weeklyGoal,
+    onboardingData,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -529,6 +533,11 @@ router.put("/me", async (req, res) => {
   if (weeklyGoal !== undefined) {
     updates.push(`weekly_goal = $${idx}`);
     values.push(weeklyGoal);
+    idx += 1;
+  }
+  if (onboardingData !== undefined) {
+    updates.push(`onboarding_data = $${idx}`);
+    values.push(onboardingData); // pg driver automatically handles JSONB serialization
     idx += 1;
   }
 

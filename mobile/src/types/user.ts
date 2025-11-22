@@ -1,3 +1,5 @@
+import { OnboardingData } from "./onboarding";
+
 export type Plan = "free" | "pro" | "lifetime";
 
 export interface User {
@@ -9,11 +11,12 @@ export interface User {
   handle?: string | null;
   avatarUrl?: string;
   bio?: string;
-  profileCompletedAt?: string;
+  profileCompletedAt?: string | null;
   trainingStyle?: string;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
+  onboardingData?: OnboardingData | null;
 }
 
 export interface UserProfile extends User {

@@ -949,6 +949,63 @@ const SettingsScreen = () => {
           style={{
             padding: 16,
             borderRadius: 14,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 12,
+          }}
+        >
+          <View style={{ gap: 6 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
+              Training Preferences
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              Update your goals, equipment, schedule, and preferences
+            </Text>
+          </View>
+          <Pressable
+            onPress={async () => {
+              try {
+                await updateProfile({
+                  profileCompletedAt: null,
+                });
+                await refresh();
+              } catch (err) {
+                Alert.alert("Error", "Could not start preferences update. Please try again.");
+              }
+            }}
+            style={({ pressed }) => ({
+              paddingVertical: 14,
+              borderRadius: 12,
+              backgroundColor: colors.primary,
+              borderWidth: 1,
+              borderColor: colors.primary,
+              alignItems: "center",
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.surface,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 15,
+              }}
+            >
+              🎯 Update Training Preferences
+            </Text>
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: 14,
             backgroundColor: colors.surfaceMuted,
             borderWidth: 1,
             borderColor: colors.border,

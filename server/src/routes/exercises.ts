@@ -84,4 +84,22 @@ router.get("/search", (req, res) => {
   return res.json(results);
 });
 
+// Batch fetch exercises by IDs
+router.get("/batch", (req, res) => {
+  const { ids } = req.query;
+
+  if (!ids || typeof ids !== "string") {
+    return res.json([]);
+  }
+
+  const requestedIds = ids.split(",").map((id) => id.trim());
+  const source = largeExercises.length > 0 ? largeExercises : localExercises;
+
+  const results = source
+    .map(normalizeExercise)
+    .filter((ex) => requestedIds.includes(ex.id));
+
+  return res.json(results);
+});
+
 export default router;
