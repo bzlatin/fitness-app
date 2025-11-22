@@ -9,7 +9,6 @@ import {
   Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRoute } from "@react-navigation/native";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -21,7 +20,6 @@ import {
   TrainingSplit,
   PartialOnboardingData,
 } from "../types/onboarding";
-import { RootRoute } from "../navigation/types";
 import WelcomeStep from "../components/onboarding/WelcomeStep";
 import GoalsStep from "../components/onboarding/GoalsStep";
 import ExperienceLevelStep from "../components/onboarding/ExperienceLevelStep";
@@ -34,17 +32,9 @@ const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
-  // Try to get route params if we're inside navigation context
-  let routeParams: { isRetake?: boolean } | undefined;
-  try {
-    const route = useRoute<RootRoute<"Onboarding">>();
-    routeParams = route.params;
-  } catch {
-    // Not in navigation context (rendered via OnboardingGate)
-    routeParams = undefined;
-  }
-  // Check if this is a retake by looking at route params or if user has existing onboarding data
-  const isRetake = routeParams?.isRetake ?? Boolean(user?.onboardingData);
+  // Determine if this is a retake by checking if user has existing onboarding data
+  // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
+  const isRetake = Boolean(user?.onboardingData);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
