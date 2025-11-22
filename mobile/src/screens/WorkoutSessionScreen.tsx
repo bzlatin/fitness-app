@@ -27,6 +27,7 @@ import { WorkoutSet } from "../types/workouts";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
+import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -667,6 +668,11 @@ const WorkoutSessionScreen = () => {
               {sessionTitle}
             </Text>
           </View>
+          {template && (
+            <View style={{ marginTop: -4 }}>
+              <MuscleGroupBreakdown template={template} maxGroups={3} />
+            </View>
+          )}
           <View
             style={{
               flexDirection: "row",

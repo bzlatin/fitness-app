@@ -15,3 +15,11 @@ export const searchExercises = async ({
   });
   return res.data;
 };
+
+export const fetchExercisesByIds = async (ids: string[]) => {
+  if (ids.length === 0) return [];
+  const res = await apiClient.get<Exercise[]>("/exercises/batch", {
+    params: { ids: ids.join(",") },
+  });
+  return res.data;
+};

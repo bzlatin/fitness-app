@@ -17,6 +17,7 @@ import {
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { Visibility } from "../types/social";
+import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -206,6 +207,8 @@ const WorkoutTemplateDetailScreen = () => {
               Split: {template.splitType.toUpperCase()}
             </Text>
           ) : null}
+
+          <MuscleGroupBreakdown template={template} variant="detailed" />
 
           <View style={{ marginTop: 8 }}>
             <Text

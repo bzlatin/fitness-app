@@ -8,6 +8,7 @@ import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutTemplate } from "../types/workouts";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
+import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -222,7 +223,7 @@ const HomeScreen = () => {
           )}
         </View>
 
-        <TargetMuscles />
+        <MuscleGroupBreakdown template={upNext} />
       </View>
 
         <SwapModal
@@ -263,47 +264,6 @@ const Chip = ({ label }: { label: string }) => (
   </View>
 );
 
-const TargetMuscles = () => {
-  const items = [
-    { name: "Back", load: "84%" },
-    { name: "Chest", load: "63%" },
-    { name: "Legs", load: "91%" },
-  ];
-  return (
-    <View style={{ marginTop: 12, gap: 10 }}>
-      <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-        Target muscles
-      </Text>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {items.map((item) => (
-          <View
-            key={item.name}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 12,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              gap: 6,
-              alignItems: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              {item.name}
-            </Text>
-            <Text style={{ color: colors.secondary }}>{item.load}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
 
 const SwapModal = ({
   visible,
