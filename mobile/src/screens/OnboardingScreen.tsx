@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { NavigationContext } from "@react-navigation/native";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -32,6 +33,8 @@ const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
+  // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
+  const navigation = useContext(NavigationContext);
   // Determine if this is a retake by checking if user has existing onboarding data
   // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
   const isRetake = Boolean(user?.onboardingData);
@@ -128,6 +131,12 @@ const OnboardingScreen = () => {
         avatarUrl: avatarUri,
         onboardingData: onboardingData as any,
       });
+
+      // If editing preferences (isRetake) and inside a navigator, go back
+      if (isRetake && navigation) {
+        // @ts-ignore - navigation object from context
+        navigation.goBack();
+      }
     } catch (err) {
       console.error("Failed to complete onboarding:", err);
       const message =
@@ -208,13 +217,11 @@ const OnboardingScreen = () => {
         {
           text: "Cancel",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await updateProfile({
-                profileCompletedAt: user?.profileCompletedAt ?? new Date().toISOString(),
-              });
-            } catch (err) {
-              console.error("Failed to restore profile completion status:", err);
+          onPress: () => {
+            // Navigate back if inside a navigator
+            if (navigation) {
+              // @ts-ignore - navigation object from context
+              navigation.goBack();
             }
           },
         },
