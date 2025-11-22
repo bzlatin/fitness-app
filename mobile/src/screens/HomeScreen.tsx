@@ -138,9 +138,7 @@ const HomeScreen = () => {
               <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                 <Chip label='Duration · 60-75m' />
                 <Chip
-                  label={
-                    upNext.splitType ? upNext.splitType.toUpperCase() : "Custom"
-                  }
+                  label={upNext.splitType ?? "Custom"}
                 />
                 <Chip label='Hypertrophy' />
               </View>

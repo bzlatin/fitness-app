@@ -5,7 +5,7 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { RootRoute, RootNavigation } from "../navigation/RootNavigator";
-import { API_URL } from "../config";
+import { API_BASE_URL } from "../api/client";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
 type SquadInvitePreview = {
@@ -40,7 +40,7 @@ const SquadJoinScreen = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/social/squad-invite/${code}`);
+      const response = await fetch(`${API_BASE_URL}/social/squad-invite/${code}`);
       const data = await response.json();
 
       if (!response.ok) {

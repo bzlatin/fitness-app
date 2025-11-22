@@ -42,7 +42,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { formatHandle } from "../utils/formatHandle";
 import * as Clipboard from "expo-clipboard";
 import { Share, Alert } from "react-native";
-import { API_URL } from "../config";
+import { API_BASE_URL } from "../api/client";
 
 type FeedItem =
   | { kind: "section"; title: string; subtitle?: string }
@@ -493,7 +493,7 @@ const SquadScreen = () => {
     try {
       const token = await getAccessToken();
 
-      const response = await fetch(`${API_URL}/api/social/squads/${inviteSquadId}/invites`, {
+      const response = await fetch(`${API_BASE_URL}/social/squads/${inviteSquadId}/invites`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
