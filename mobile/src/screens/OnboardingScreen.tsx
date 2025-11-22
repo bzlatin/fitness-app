@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { NavigationContext } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -33,6 +34,7 @@ const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
+  const insets = useSafeAreaInsets();
   // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
   const navigation = useContext(NavigationContext);
   // Determine if this is a retake by checking if user has existing onboarding data
@@ -210,12 +212,12 @@ const OnboardingScreen = () => {
 
   const handleCancel = () => {
     Alert.alert(
-      "Cancel update?",
+      "Cancel editing?",
       "Your current preferences will remain unchanged.",
       [
         { text: "Keep editing", style: "cancel" },
         {
-          text: "Cancel",
+          text: "Cancel editing",
           style: "destructive",
           onPress: () => {
             // Navigate back if inside a navigator
@@ -294,7 +296,7 @@ const OnboardingScreen = () => {
           )}
 
           {/* Navigation buttons */}
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
             <Pressable
               onPress={currentStep === TOTAL_STEPS ? handleSubmit : handleNext}
               disabled={!canProceed() || isSubmitting}
