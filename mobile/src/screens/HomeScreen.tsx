@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -9,10 +11,15 @@ import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutTemplate } from "../types/workouts";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
+import {
+  TRAINING_SPLIT_LABELS,
+  EXPERIENCE_LEVEL_LABELS,
+} from "../types/onboarding";
 
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
+  const { user } = useCurrentUser();
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
@@ -224,6 +231,82 @@ const HomeScreen = () => {
         </View>
 
         <MuscleGroupBreakdown template={upNext} />
+
+        {user?.onboardingData && (
+          <View
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 14,
+                }}
+              >
+                Your Training Plan
+              </Text>
+              <Pressable
+                onPress={() => {
+                  try {
+                    // @ts-ignore - navigate to Settings tab
+                    navigation.getParent()?.getParent()?.navigate("Settings");
+                  } catch (err) {
+                    console.error("Navigation error:", err);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    fontFamily: fontFamilies.medium,
+                  }}
+                >
+                  Update
+                </Text>
+                <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {user.onboardingData.preferredSplit && (
+                <PrefsChip
+                  label={TRAINING_SPLIT_LABELS[user.onboardingData.preferredSplit]}
+                />
+              )}
+              {user.onboardingData.experienceLevel && (
+                <PrefsChip
+                  label={EXPERIENCE_LEVEL_LABELS[user.onboardingData.experienceLevel]}
+                />
+              )}
+              {user.onboardingData.weeklyFrequency && (
+                <PrefsChip label={`${user.onboardingData.weeklyFrequency}x/week`} />
+              )}
+              {user.onboardingData.sessionDuration && (
+                <PrefsChip label={`${user.onboardingData.sessionDuration} min`} />
+              )}
+            </View>
+          </View>
+        )}
       </View>
 
         <SwapModal
@@ -264,6 +347,28 @@ const Chip = ({ label }: { label: string }) => (
   </View>
 );
 
+const PrefsChip = ({ label }: { label: string }) => (
+  <View
+    style={{
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: `${colors.primary}15`,
+      borderWidth: 1,
+      borderColor: `${colors.primary}30`,
+    }}
+  >
+    <Text
+      style={{
+        color: colors.textPrimary,
+        fontFamily: fontFamilies.medium,
+        fontSize: 12,
+      }}
+    >
+      {label}
+    </Text>
+  </View>
+);
 
 const SwapModal = ({
   visible,

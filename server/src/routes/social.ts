@@ -537,7 +537,7 @@ router.put("/me", async (req, res) => {
   }
   if (onboardingData !== undefined) {
     updates.push(`onboarding_data = $${idx}`);
-    values.push(JSON.stringify(onboardingData));
+    values.push(onboardingData); // pg driver automatically handles JSONB serialization
     idx += 1;
   }
 

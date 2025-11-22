@@ -6,7 +6,10 @@ import {
   Text,
   View,
   ScrollView,
+  Alert,
 } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRoute } from "@react-navigation/native";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -18,6 +21,7 @@ import {
   TrainingSplit,
   PartialOnboardingData,
 } from "../types/onboarding";
+import { RootRoute } from "../navigation/types";
 import WelcomeStep from "../components/onboarding/WelcomeStep";
 import GoalsStep from "../components/onboarding/GoalsStep";
 import ExperienceLevelStep from "../components/onboarding/ExperienceLevelStep";
@@ -29,7 +33,10 @@ import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
-  const { completeOnboarding, user } = useCurrentUser();
+  const route = useRoute<RootRoute<"Onboarding">>();
+  const { completeOnboarding, updateProfile, user } = useCurrentUser();
+  // Check if this is a retake by looking at route params or if user has existing onboarding data
+  const isRetake = route.params?.isRetake ?? Boolean(user?.onboardingData);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +131,7 @@ const OnboardingScreen = () => {
         onboardingData: onboardingData as any,
       });
     } catch (err) {
+      console.error("Failed to complete onboarding:", err);
       const message =
         err instanceof Error && err.message.includes("Handle already taken")
           ? "That handle is taken. Try another."
@@ -192,6 +200,29 @@ const OnboardingScreen = () => {
     }
   };
 
+  const handleCancel = () => {
+    Alert.alert(
+      "Cancel update?",
+      "Your current preferences will remain unchanged.",
+      [
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateProfile({
+                profileCompletedAt: user?.profileCompletedAt ?? new Date().toISOString(),
+              });
+            } catch (err) {
+              console.error("Failed to restore profile completion status:", err);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScreenContainer>
       <KeyboardAvoidingView
@@ -201,9 +232,23 @@ const OnboardingScreen = () => {
         <View style={{ flex: 1, gap: 16, marginTop: 16 }}>
           {/* Progress indicator */}
           <View style={{ gap: 8 }}>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              Step {currentStep} of {TOTAL_STEPS}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                Step {currentStep} of {TOTAL_STEPS}
+              </Text>
+              {isRetake && (
+                <Pressable
+                  onPress={handleCancel}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    padding: 4,
+                    opacity: pressed || isSubmitting ? 0.6 : 1,
+                  })}
+                >
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </Pressable>
+              )}
+            </View>
             <View style={{ flexDirection: "row", gap: 6 }}>
               {Array.from({ length: TOTAL_STEPS }).map((_, index) => {
                 const stepNumber = index + 1;

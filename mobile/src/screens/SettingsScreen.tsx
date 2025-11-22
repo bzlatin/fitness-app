@@ -970,7 +970,16 @@ const SettingsScreen = () => {
             </Text>
           </View>
           <Pressable
-            onPress={() => navigation.navigate("Onboarding", { isRetake: true })}
+            onPress={async () => {
+              try {
+                await updateProfile({
+                  profileCompletedAt: null,
+                });
+                await refresh();
+              } catch (err) {
+                Alert.alert("Error", "Could not start preferences update. Please try again.");
+              }
+            }}
             style={({ pressed }) => ({
               paddingVertical: 14,
               borderRadius: 12,
@@ -1012,51 +1021,6 @@ const SettingsScreen = () => {
           >
             Account
           </Text>
-          <Pressable
-            onPress={() => {
-              Alert.alert(
-                "Retake onboarding",
-                "This will let you update your profile information through the onboarding flow. Your current data will be preserved.",
-                [
-                  {
-                    text: "Cancel",
-                    style: "cancel",
-                  },
-                  {
-                    text: "Continue",
-                    onPress: async () => {
-                      try {
-                        await updateProfile({
-                          profileCompletedAt: null,
-                        });
-                        await refresh();
-                      } catch (err) {
-                        Alert.alert("Error", "Could not start onboarding retake. Please try again.");
-                      }
-                    },
-                  },
-                ]
-              );
-            }}
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              borderRadius: 10,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              Retake onboarding
-            </Text>
-          </Pressable>
           <Pressable
             onPress={() => setIsDeleteOpen(true)}
             style={({ pressed }) => ({
