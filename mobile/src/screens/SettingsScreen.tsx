@@ -1015,8 +1015,8 @@ const SettingsScreen = () => {
           <Pressable
             onPress={() => {
               Alert.alert(
-                "Re-take Onboarding",
-                "This will let you update your fitness goals, experience level, and preferences. Your profile data will be preserved.",
+                "Retake onboarding",
+                "This will let you update your profile information through the onboarding flow. Your current data will be preserved.",
                 [
                   {
                     text: "Cancel",
@@ -1029,9 +1029,9 @@ const SettingsScreen = () => {
                         await updateProfile({
                           profileCompletedAt: null,
                         });
-                        Alert.alert("Success", "You'll be guided through onboarding on next restart.");
+                        await refresh();
                       } catch (err) {
-                        Alert.alert("Error", "Could not reset onboarding. Please try again.");
+                        Alert.alert("Error", "Could not start onboarding retake. Please try again.");
                       }
                     },
                   },
@@ -1054,7 +1054,7 @@ const SettingsScreen = () => {
                 fontFamily: fontFamilies.semibold,
               }}
             >
-              Re-take Onboarding
+              Retake onboarding
             </Text>
           </Pressable>
           <Pressable

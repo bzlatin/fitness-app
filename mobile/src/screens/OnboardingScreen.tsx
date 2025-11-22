@@ -29,36 +29,36 @@ import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
-  const { completeOnboarding } = useCurrentUser();
+  const { completeOnboarding, user } = useCurrentUser();
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 1: Welcome
-  const [name, setName] = useState("");
-  const [handle, setHandle] = useState("");
-  const [avatarUri, setAvatarUri] = useState<string | undefined>();
+  const [name, setName] = useState(user?.name ?? "");
+  const [handle, setHandle] = useState(user?.handle ?? "");
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(user?.avatarUrl ?? undefined);
 
   // Step 2: Goals
-  const [selectedGoals, setSelectedGoals] = useState<FitnessGoal[]>([]);
+  const [selectedGoals, setSelectedGoals] = useState<FitnessGoal[]>(user?.onboardingData?.goals ?? []);
 
   // Step 3: Experience
-  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | undefined>();
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | undefined>(user?.onboardingData?.experienceLevel);
 
   // Step 4: Equipment
-  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>([]);
-  const [customEquipment, setCustomEquipment] = useState<string[]>([]);
+  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>(user?.onboardingData?.availableEquipment ?? []);
+  const [customEquipment, setCustomEquipment] = useState<string[]>(user?.onboardingData?.customEquipment ?? []);
 
   // Step 5: Schedule
-  const [weeklyFrequency, setWeeklyFrequency] = useState<number | undefined>();
-  const [sessionDuration, setSessionDuration] = useState<number | undefined>();
+  const [weeklyFrequency, setWeeklyFrequency] = useState<number | undefined>(user?.onboardingData?.weeklyFrequency);
+  const [sessionDuration, setSessionDuration] = useState<number | undefined>(user?.onboardingData?.sessionDuration);
 
   // Step 6: Limitations
-  const [injuryNotes, setInjuryNotes] = useState("");
-  const [movementsToAvoid, setMovementsToAvoid] = useState<string[]>([]);
+  const [injuryNotes, setInjuryNotes] = useState(user?.onboardingData?.injuryNotes ?? "");
+  const [movementsToAvoid, setMovementsToAvoid] = useState<string[]>(user?.onboardingData?.movementsToAvoid ?? []);
 
   // Step 7: Training Style
-  const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>();
+  const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
 
   const canProceed = () => {
     switch (currentStep) {
