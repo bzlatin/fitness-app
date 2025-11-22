@@ -1,7 +1,7 @@
-import { RouteProp } from "@react-navigation/native";
+import { NavigatorScreenParams, RouteProp } from "@react-navigation/native";
 
 export type RootStackParamList = {
-  RootTabs: undefined;
+  RootTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   WorkoutTemplateDetail: { templateId: string };
   WorkoutTemplateBuilder: { templateId?: string };
   WorkoutSession: { templateId: string; sessionId?: string; initialVisibility?: Visibility };

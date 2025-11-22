@@ -17,6 +17,7 @@ export const createTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;
     }[];
@@ -33,6 +34,7 @@ export const updateTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;
     }[];
