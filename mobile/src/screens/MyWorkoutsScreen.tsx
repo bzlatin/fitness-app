@@ -1,5 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import { useState } from "react";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import {
@@ -10,31 +11,48 @@ import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
+import UpgradePrompt from "../components/premium/UpgradePrompt";
 
 const MyWorkoutsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data, isLoading } = useWorkoutTemplates();
   const duplicateMutation = useDuplicateTemplate();
   const { user } = useCurrentUser();
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const templates = data ?? [];
   const templateLimitReached = user
     ? !canCreateAnotherTemplate(user, templates.length)
     : false;
+  const isPro = user?.plan === "pro";
 
   const handleCreateTemplate = () => {
     if (templateLimitReached) {
       Alert.alert(
         "Free limit reached",
-        "You’ve reached the free template limit. Upgrades coming soon."
+        "You've reached the free template limit. Upgrades coming soon."
       );
       return;
     }
     navigation.navigate("WorkoutTemplateBuilder", {});
   };
 
+  const handleGenerateWithAI = () => {
+    if (!isPro) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+    navigation.navigate("WorkoutGenerator");
+  };
+
   return (
     <ScreenContainer scroll>
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        feature="AI Workout Generation"
+      />
+
       <View style={{ marginVertical: 12 }}>
         <Text
           style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}
@@ -46,19 +64,57 @@ const MyWorkoutsScreen = () => {
         </Text>
       </View>
 
+      {/* AI Generation Button (Pro Feature) */}
       <Pressable
-        onPress={handleCreateTemplate}
+        onPress={handleGenerateWithAI}
         style={({ pressed }) => ({
           backgroundColor: colors.primary,
           paddingVertical: 14,
           borderRadius: 12,
           alignItems: "center",
+          marginBottom: 12,
+          opacity: pressed ? 0.9 : 1,
+          flexDirection: "row",
+          justifyContent: "center",
+        })}
+      >
+        <Text style={{ fontSize: 18, marginRight: 8 }}>🤖</Text>
+        <Text style={{ color: "#0B1220", fontWeight: "700", fontSize: 16 }}>
+          Generate with AI
+        </Text>
+        {!isPro && (
+          <View
+            style={{
+              backgroundColor: "#0B1220",
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 6,
+              marginLeft: 8,
+            }}
+          >
+            <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700" }}>
+              PRO
+            </Text>
+          </View>
+        )}
+      </Pressable>
+
+      {/* Manual Creation Button */}
+      <Pressable
+        onPress={handleCreateTemplate}
+        style={({ pressed }) => ({
+          backgroundColor: colors.surface,
+          paddingVertical: 14,
+          borderRadius: 12,
+          alignItems: "center",
           marginBottom: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
           opacity: pressed ? 0.9 : 1,
         })}
       >
-        <Text style={{ color: "#0B1220", fontWeight: "700", fontSize: 16 }}>
-          New Workout
+        <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 16 }}>
+          Build Manually
         </Text>
       </Pressable>
       {templateLimitReached ? (

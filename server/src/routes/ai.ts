@@ -1,0 +1,229 @@
+import { Router } from "express";
+import { getAIProvider, WorkoutGenerationParams } from "../services/ai";
+import { calculateMuscleFatigue, getRecentWorkouts } from "../services/fatigue";
+import { requireProPlan } from "../middleware/planLimits";
+import { query } from "../db";
+import { nanoid } from "nanoid";
+import path from "path";
+import fs from "fs";
+
+const router = Router();
+
+// Load exercises database (same as exercises route)
+type LocalExercise = {
+  id: string;
+  name: string;
+  force?: string | null;
+  level?: string | null;
+  mechanic?: string | null;
+  equipment?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  instructions?: string[];
+  category?: string;
+  images?: string[];
+};
+
+const distPath = path.join(__dirname, "../data/dist/exercises.json");
+const localExercisesPath = path.join(__dirname, "../data/exercises.ts");
+
+let exercisesDatabase: LocalExercise[] = [];
+
+// Try to load from dist first
+if (fs.existsSync(distPath)) {
+  exercisesDatabase = JSON.parse(fs.readFileSync(distPath, "utf-8"));
+} else {
+  // Fallback to local exercises (this will be imported at runtime)
+  try {
+    const { exercises } = require("../data/exercises");
+    exercisesDatabase = exercises || [];
+  } catch (error) {
+    console.warn("[AI Routes] Could not load exercises database");
+  }
+}
+
+const normalizeExercise = (item: LocalExercise) => {
+  const primary =
+    item.primaryMuscles?.[0] ||
+    (Array.isArray((item as any).primaryMuscleGroup)
+      ? (item as any).primaryMuscleGroup[0]
+      : (item as any).primaryMuscleGroup) ||
+    "other";
+  const equipment =
+    item.equipment ||
+    (Array.isArray((item as any).equipments)
+      ? (item as any).equipments[0]
+      : (item as any).equipments) ||
+    "bodyweight";
+
+  return {
+    id: item.id || item.name.replace(/\s+/g, "_"),
+    name: item.name,
+    primaryMuscleGroup: primary.toLowerCase(),
+    equipment: equipment.toLowerCase(),
+  };
+};
+
+const normalizedExercises = exercisesDatabase.map(normalizeExercise);
+
+// Simple in-memory rate limiter (can be replaced with Redis in production)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: number = 60000) => {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+
+  if (!userLimit || now > userLimit.resetAt) {
+    // New window
+    rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (userLimit.count >= maxRequests) {
+    return false;
+  }
+
+  userLimit.count++;
+  return true;
+};
+
+/**
+ * POST /api/ai/generate-workout
+ * Generate a personalized workout using AI
+ * Requires Pro plan
+ */
+router.post("/generate-workout", requireProPlan, async (req, res) => {
+  const userId = res.locals.userId;
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Rate limiting: 10 requests per minute
+  if (!checkRateLimit(userId, 10, 60000)) {
+    return res.status(429).json({
+      error: "Rate limit exceeded",
+      message: "Too many workout generation requests. Please wait a minute and try again.",
+    });
+  }
+
+  try {
+    const { requestedSplit, specificRequest } = req.body;
+
+    // Get user profile data
+    const userResult = await query<{
+      onboarding_data: any;
+    }>(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+
+    const user = userResult.rows[0];
+    const onboardingData = user?.onboarding_data || {};
+
+    // Fetch recent workout history and muscle fatigue
+    const [recentWorkouts, muscleFatigue] = await Promise.all([
+      getRecentWorkouts(userId, 5),
+      calculateMuscleFatigue(userId),
+    ]);
+
+    const params: WorkoutGenerationParams = {
+      userId,
+      userProfile: {
+        goals: onboardingData.goals,
+        experienceLevel: onboardingData.experience_level,
+        availableEquipment: onboardingData.available_equipment,
+        weeklyFrequency: onboardingData.weekly_frequency,
+        sessionDuration: onboardingData.session_duration,
+        injuryNotes: onboardingData.injury_notes,
+        preferredSplit: onboardingData.preferred_split,
+      },
+      recentWorkouts,
+      muscleFatigue,
+      requestedSplit,
+      specificRequest,
+    };
+
+    console.log(`[AI] Generating workout for user ${userId}`);
+    console.log(
+      `[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`
+    );
+
+    const aiProvider = getAIProvider();
+    const generatedWorkout = await aiProvider.generateWorkout(params, normalizedExercises);
+
+    // Track AI usage
+    await query(
+      `
+      INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `,
+      [
+        nanoid(),
+        userId,
+        "workout",
+        JSON.stringify({ requestedSplit, specificRequest }),
+        JSON.stringify(generatedWorkout),
+      ]
+    );
+
+    console.log(`[AI] Successfully generated workout: "${generatedWorkout.name}"`);
+
+    return res.json({
+      success: true,
+      workout: generatedWorkout,
+    });
+  } catch (error) {
+    console.error("[AI] Error generating workout:", error);
+
+    // Check if it's an OpenAI API error
+    if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
+      return res.status(500).json({
+        error: "AI service not configured",
+        message: "The AI workout generation service is not properly configured. Please contact support.",
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to generate workout",
+      message: error instanceof Error ? error.message : "An unexpected error occurred",
+    });
+  }
+});
+
+/**
+ * GET /api/ai/usage
+ * Get AI usage stats for the current user
+ */
+router.get("/usage", requireProPlan, async (req, res) => {
+  const userId = res.locals.userId;
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const result = await query<{
+      total_generations: string;
+      last_generated_at: string;
+    }>(
+      `
+      SELECT
+        COUNT(*) as total_generations,
+        MAX(created_at) as last_generated_at
+      FROM ai_generations
+      WHERE user_id = $1
+    `,
+      [userId]
+    );
+
+    const stats = result.rows[0];
+
+    return res.json({
+      totalGenerations: parseInt(stats?.total_generations || "0"),
+      lastGeneratedAt: stats?.last_generated_at || null,
+    });
+  } catch (error) {
+    console.error("[AI] Error fetching usage:", error);
+    return res.status(500).json({ error: "Failed to fetch usage stats" });
+  }
+});
+
+export default router;

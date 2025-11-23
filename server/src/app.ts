@@ -5,6 +5,7 @@ import exercisesRouter from "./routes/exercises";
 import templatesRouter from "./routes/templates";
 import sessionsRouter from "./routes/sessions";
 import socialRouter from "./routes/social";
+import aiRouter from "./routes/ai";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
 
 const app = express();
@@ -21,6 +22,7 @@ const authChain = [maybeRequireAuth, attachUser, ensureUser];
 app.use("/api/templates", ...authChain, templatesRouter);
 app.use("/api/sessions", ...authChain, sessionsRouter);
 app.use("/api/social", ...authChain, socialRouter);
+app.use("/api/ai", ...authChain, aiRouter);
 
 app.use(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

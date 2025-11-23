@@ -9,6 +9,7 @@ import HistoryScreen from "../screens/HistoryScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import WorkoutTemplateDetailScreen from "../screens/WorkoutTemplateDetailScreen";
 import WorkoutTemplateBuilderScreen from "../screens/WorkoutTemplateBuilderScreen";
+import WorkoutGeneratorScreen from "../screens/WorkoutGeneratorScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
 import SquadScreen from "../screens/SquadScreen";
 import ProfileScreen from "../screens/ProfileScreen";
@@ -107,6 +108,11 @@ const RootNavigator = () => (
       name="WorkoutTemplateBuilder"
       component={WorkoutTemplateBuilderScreen}
       options={{ title: "Build Workout" }}
+    />
+    <Stack.Screen
+      name="WorkoutGenerator"
+      component={WorkoutGeneratorScreen}
+      options={{ title: "AI Workout Generator" }}
     />
     <Stack.Screen
       name="WorkoutSession"
