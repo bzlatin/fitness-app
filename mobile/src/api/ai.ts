@@ -40,7 +40,7 @@ export const generateWorkout = async (
   params: GenerateWorkoutRequest
 ): Promise<GeneratedWorkout> => {
   const response = await apiClient.post<GenerateWorkoutResponse>(
-    "/api/ai/generate-workout",
+    "ai/generate-workout",
     params
   );
   return response.data.workout;
@@ -50,6 +50,6 @@ export const generateWorkout = async (
  * Get AI usage statistics
  */
 export const getAIUsage = async (): Promise<AIUsageResponse> => {
-  const response = await apiClient.get<AIUsageResponse>("/api/ai/usage");
+  const response = await apiClient.get<AIUsageResponse>("ai/usage");
   return response.data;
 };
