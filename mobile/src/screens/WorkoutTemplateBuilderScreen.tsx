@@ -5,6 +5,8 @@ import DraggableFlatList, {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -46,8 +48,8 @@ const splitOptions: { value: WorkoutTemplate["splitType"]; label: string }[] = [
   { value: "push", label: "Push" },
   { value: "pull", label: "Pull" },
   { value: "legs", label: "Legs" },
-  { value: "upper", label: "Upper" },
-  { value: "lower", label: "Lower" },
+  { value: "upper", label: "Upper Body" },
+  { value: "lower", label: "Lower Body" },
   { value: "full_body", label: "Full Body" },
   { value: "custom", label: "Custom" },
 ];
@@ -95,6 +97,9 @@ const WorkoutTemplateBuilderScreen = () => {
   const queryClient = useQueryClient();
   const { data: listData } = useWorkoutTemplates();
   const { user } = useCurrentUser();
+  const insets = useSafeAreaInsets();
+  const [isNearTop, setIsNearTop] = useState(true);
+  const [isNearBottom, setIsNearBottom] = useState(false);
 
   const existingTemplate = useMemo(
     () => listData?.find((t) => t.id === route.params?.templateId),
@@ -688,7 +693,62 @@ const WorkoutTemplateBuilderScreen = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 24 }}
           keyboardShouldPersistTaps='handled'
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            const distanceFromTop = contentOffset.y;
+            const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+            setIsNearBottom(distanceFromBottom < 10);
+            setIsNearTop(distanceFromTop < 10);
+          }}
+          scrollEventThrottle={16}
         />
+
+        {!isNearTop && (
+          <LinearGradient
+            colors={[
+              colors.background,
+              `${colors.background}E0`,
+              `${colors.background}C0`,
+              `${colors.background}90`,
+              `${colors.background}60`,
+              `${colors.background}30`,
+              `${colors.background}10`,
+              'transparent',
+            ]}
+            locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -16,
+              right: -16,
+              height: 60,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        {!isNearBottom && (
+          <LinearGradient
+            colors={[
+              'transparent',
+              `${colors.background}10`,
+              `${colors.background}30`,
+              `${colors.background}60`,
+              `${colors.background}90`,
+              `${colors.background}C0`,
+              `${colors.background}E0`,
+              colors.background,
+            ]}
+            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: -16,
+              right: -16,
+              height: 60 + insets.bottom,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
 
         <ExercisePicker
           visible={pickerVisible}

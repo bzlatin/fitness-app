@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,7 +9,8 @@ import {
   Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRoute } from "@react-navigation/native";
+import { NavigationContext } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -21,7 +22,6 @@ import {
   TrainingSplit,
   PartialOnboardingData,
 } from "../types/onboarding";
-import { RootRoute } from "../navigation/types";
 import WelcomeStep from "../components/onboarding/WelcomeStep";
 import GoalsStep from "../components/onboarding/GoalsStep";
 import ExperienceLevelStep from "../components/onboarding/ExperienceLevelStep";
@@ -33,10 +33,13 @@ import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 const TOTAL_STEPS = 7;
 
 const OnboardingScreen = () => {
-  const route = useRoute<RootRoute<"Onboarding">>();
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
-  // Check if this is a retake by looking at route params or if user has existing onboarding data
-  const isRetake = route.params?.isRetake ?? Boolean(user?.onboardingData);
+  const insets = useSafeAreaInsets();
+  // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
+  const navigation = useContext(NavigationContext);
+  // Determine if this is a retake by checking if user has existing onboarding data
+  // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
+  const isRetake = Boolean(user?.onboardingData);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,6 +133,12 @@ const OnboardingScreen = () => {
         avatarUrl: avatarUri,
         onboardingData: onboardingData as any,
       });
+
+      // If editing preferences (isRetake) and inside a navigator, go back
+      if (isRetake && navigation) {
+        // @ts-ignore - navigation object from context
+        navigation.goBack();
+      }
     } catch (err) {
       console.error("Failed to complete onboarding:", err);
       const message =
@@ -153,6 +162,7 @@ const OnboardingScreen = () => {
             onNameChange={setName}
             onHandleChange={setHandle}
             onAvatarChange={setAvatarUri}
+            isRetake={isRetake}
           />
         );
       case 2:
@@ -202,20 +212,18 @@ const OnboardingScreen = () => {
 
   const handleCancel = () => {
     Alert.alert(
-      "Cancel update?",
+      "Cancel editing?",
       "Your current preferences will remain unchanged.",
       [
         { text: "Keep editing", style: "cancel" },
         {
-          text: "Cancel",
+          text: "Cancel editing",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await updateProfile({
-                profileCompletedAt: user?.profileCompletedAt ?? new Date().toISOString(),
-              });
-            } catch (err) {
-              console.error("Failed to restore profile completion status:", err);
+          onPress: () => {
+            // Navigate back if inside a navigator
+            if (navigation) {
+              // @ts-ignore - navigation object from context
+              navigation.goBack();
             }
           },
         },
@@ -288,7 +296,7 @@ const OnboardingScreen = () => {
           )}
 
           {/* Navigation buttons */}
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
             <Pressable
               onPress={currentStep === TOTAL_STEPS ? handleSubmit : handleNext}
               disabled={!canProceed() || isSubmitting}

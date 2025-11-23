@@ -15,6 +15,7 @@ export type RootStackParamList = {
     prCount?: number;
   };
   Onboarding: { isRetake?: boolean };
+  SquadJoin: { code: string };
 };
 
 export type RootTabParamList = {

@@ -324,9 +324,7 @@ const fetchWorkoutStats = async (userId: string) => {
   const formatIso = (value: string | Date) =>
     typeof value === "string" ? value : value.toISOString();
   const uniqueDays = Array.from(
-    new Set(
-      sessions.rows.map((row) => formatIso(row.finished_at).slice(0, 10))
-    )
+    new Set(sessions.rows.map((row) => formatIso(row.finished_at).slice(0, 10)))
   ).sort((a, b) => (a > b ? -1 : 1));
 
   let streak = 0;
@@ -905,6 +903,362 @@ router.delete("/followers/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to decline invite", err);
     return res.status(500).json({ error: "Failed to decline invite" });
+  }
+});
+
+// Squad invite link endpoints
+router.post("/squads/:squadId/invites", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { squadId } = req.params;
+
+  try {
+    // Verify user is admin/owner
+    const memberResult = await query<{ role: string }>(
+      `SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [squadId, userId]
+    );
+
+    if (memberResult.rowCount === 0) {
+      return res.status(403).json({ error: "Not a member of this squad" });
+    }
+
+    const role = memberResult.rows[0].role;
+    if (role !== "owner" && role !== "admin") {
+      return res
+        .status(403)
+        .json({ error: "Only admins can create invite links" });
+    }
+
+    // Check squad exists and get max_members
+    const squadResult = await query<{ max_members: number }>(
+      `SELECT max_members FROM squads WHERE id = $1 LIMIT 1`,
+      [squadId]
+    );
+
+    if (squadResult.rowCount === 0) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+
+    // Generate unique code
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const inviteId = generateId();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await query(
+      `
+        INSERT INTO squad_invite_links (id, squad_id, code, created_by, expires_at)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [inviteId, squadId, code, userId, expiresAt.toISOString()]
+    );
+
+    return res.status(201).json({
+      id: inviteId,
+      code,
+      expiresAt: expiresAt.toISOString(),
+    });
+  } catch (err) {
+    console.error("Failed to create invite link", err);
+    return res.status(500).json({ error: "Failed to create invite link" });
+  }
+});
+
+router.get("/squad-invite/:code", async (req, res) => {
+  const { code } = req.params;
+
+  try {
+    const result = await query<{
+      squad_id: string;
+      squad_name: string;
+      created_by: string;
+      expires_at: string;
+      is_revoked: boolean;
+      max_members: number;
+      member_count: string;
+    }>(
+      `
+        SELECT
+          sil.squad_id,
+          s.name as squad_name,
+          s.created_by,
+          sil.expires_at,
+          sil.is_revoked,
+          s.max_members,
+          COUNT(sm.user_id)::text as member_count
+        FROM squad_invite_links sil
+        JOIN squads s ON s.id = sil.squad_id
+        LEFT JOIN squad_members sm ON sm.squad_id = s.id
+        WHERE sil.code = $1
+        GROUP BY sil.squad_id, s.name, s.created_by, sil.expires_at, sil.is_revoked, s.max_members
+        LIMIT 1
+      `,
+      [code]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Invite link not found" });
+    }
+
+    const invite = result.rows[0];
+
+    if (invite.is_revoked) {
+      return res
+        .status(410)
+        .json({ error: "This invite link has been revoked" });
+    }
+
+    if (new Date(invite.expires_at) < new Date()) {
+      return res.status(410).json({ error: "This invite link has expired" });
+    }
+
+    const memberCount = Number(invite.member_count);
+    if (memberCount >= invite.max_members) {
+      return res.status(400).json({ error: "This squad is full" });
+    }
+
+    // Get squad member previews
+    const membersResult = await query<{
+      id: string;
+      name: string | null;
+      avatar_url: string | null;
+    }>(
+      `
+        SELECT u.id, u.name, u.avatar_url
+        FROM squad_members sm
+        JOIN users u ON u.id = sm.user_id
+        WHERE sm.squad_id = $1
+        ORDER BY sm.joined_at ASC
+        LIMIT 6
+      `,
+      [invite.squad_id]
+    );
+
+    return res.json({
+      squadId: invite.squad_id,
+      squadName: invite.squad_name,
+      memberCount,
+      maxMembers: invite.max_members,
+      membersPreview: membersResult.rows.map((m) => ({
+        id: m.id,
+        name: m.name ?? "Athlete",
+        avatarUrl: m.avatar_url ?? undefined,
+      })),
+    });
+  } catch (err) {
+    console.error("Failed to get invite preview", err);
+    return res.status(500).json({ error: "Failed to load invite" });
+  }
+});
+
+router.post("/squad-invite/:code/join", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { code } = req.params;
+
+  try {
+    // Get invite link details
+    const inviteResult = await query<{
+      id: string;
+      squad_id: string;
+      created_by: string;
+      expires_at: string;
+      is_revoked: boolean;
+      uses_count: number;
+    }>(
+      `
+        SELECT id, squad_id, created_by, expires_at, is_revoked, uses_count
+        FROM squad_invite_links
+        WHERE code = $1
+        LIMIT 1
+      `,
+      [code]
+    );
+
+    if (inviteResult.rowCount === 0) {
+      return res.status(404).json({ error: "Invite link not found" });
+    }
+
+    const invite = inviteResult.rows[0];
+
+    if (invite.is_revoked) {
+      return res
+        .status(410)
+        .json({ error: "This invite link has been revoked" });
+    }
+
+    if (new Date(invite.expires_at) < new Date()) {
+      return res.status(410).json({ error: "This invite link has expired" });
+    }
+
+    // Check if already a member
+    const membershipCheck = await query(
+      `SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [invite.squad_id, userId]
+    );
+
+    if ((membershipCheck.rowCount ?? 0) > 0) {
+      return res
+        .status(400)
+        .json({ error: "You're already a member of this squad" });
+    }
+
+    // Check squad capacity
+    const squadResult = await query<{
+      max_members: number;
+      member_count: string;
+    }>(
+      `
+        SELECT s.max_members, COUNT(sm.user_id)::text as member_count
+        FROM squads s
+        LEFT JOIN squad_members sm ON sm.squad_id = s.id
+        WHERE s.id = $1
+        GROUP BY s.id, s.max_members
+      `,
+      [invite.squad_id]
+    );
+
+    if (squadResult.rowCount === 0) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+
+    const squad = squadResult.rows[0];
+    const memberCount = Number(squad.member_count);
+
+    if (memberCount >= squad.max_members) {
+      return res.status(400).json({ error: "This squad is full" });
+    }
+
+    // Add user to squad
+    await query(
+      `
+        INSERT INTO squad_members (squad_id, user_id, role, invited_by)
+        VALUES ($1, $2, 'member', $3)
+      `,
+      [invite.squad_id, userId, invite.created_by]
+    );
+
+    // Increment uses count
+    await query(
+      `UPDATE squad_invite_links SET uses_count = uses_count + 1 WHERE id = $1`,
+      [invite.id]
+    );
+
+    // Return squad details
+    const squadDetails = await fetchSquadById(userId, invite.squad_id);
+    return res.status(201).json({ squad: squadDetails });
+  } catch (err) {
+    console.error("Failed to join squad", err);
+    return res.status(500).json({ error: "Failed to join squad" });
+  }
+});
+
+router.delete("/squads/:squadId/invites/:inviteId", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { squadId, inviteId } = req.params;
+
+  try {
+    // Verify user is admin/owner
+    const memberResult = await query<{ role: string }>(
+      `SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [squadId, userId]
+    );
+
+    if (memberResult.rowCount === 0) {
+      return res.status(403).json({ error: "Not a member of this squad" });
+    }
+
+    const role = memberResult.rows[0].role;
+    if (role !== "owner" && role !== "admin") {
+      return res
+        .status(403)
+        .json({ error: "Only admins can revoke invite links" });
+    }
+
+    // Revoke the invite
+    await query(
+      `
+        UPDATE squad_invite_links
+        SET is_revoked = true
+        WHERE id = $1 AND squad_id = $2
+      `,
+      [inviteId, squadId]
+    );
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to revoke invite", err);
+    return res.status(500).json({ error: "Failed to revoke invite" });
+  }
+});
+
+router.get("/squads/:squadId/invites", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { squadId } = req.params;
+
+  try {
+    // Verify user is admin/owner
+    const memberResult = await query<{ role: string }>(
+      `SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [squadId, userId]
+    );
+
+    if (memberResult.rowCount === 0) {
+      return res.status(403).json({ error: "Not a member of this squad" });
+    }
+
+    const role = memberResult.rows[0].role;
+    if (role !== "owner" && role !== "admin") {
+      return res
+        .status(403)
+        .json({ error: "Only admins can view invite links" });
+    }
+
+    // Get all active invites
+    const result = await query<{
+      id: string;
+      code: string;
+      created_at: string;
+      expires_at: string;
+      is_revoked: boolean;
+      uses_count: number;
+    }>(
+      `
+        SELECT id, code, created_at, expires_at, is_revoked, uses_count
+        FROM squad_invite_links
+        WHERE squad_id = $1
+        ORDER BY created_at DESC
+      `,
+      [squadId]
+    );
+
+    return res.json({
+      invites: result.rows.map((row) => ({
+        id: row.id,
+        code: row.code,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        isRevoked: row.is_revoked,
+        usesCount: row.uses_count,
+      })),
+    });
+  } catch (err) {
+    console.error("Failed to get invites", err);
+    return res.status(500).json({ error: "Failed to load invites" });
   }
 });
 

@@ -38,6 +38,7 @@ type AuthContextValue = {
   isAuthorizing: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
   error?: string | null;
 };
 
@@ -340,6 +341,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isSessionActive =
     Boolean(tokens?.accessToken) && !isTokenExpired(tokens?.expiresAt);
 
+  const getAccessToken = useCallback(async () => {
+    if (!tokens) return null;
+    if (isTokenExpired(tokens.expiresAt)) {
+      try {
+        const refreshed = await refreshTokens(tokens);
+        return refreshed.accessToken;
+      } catch {
+        return null;
+      }
+    }
+    return tokens.accessToken;
+  }, [tokens, refreshTokens]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isAuthenticated: isSessionActive,
@@ -347,9 +361,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isAuthorizing,
       login,
       logout,
+      getAccessToken,
       error,
     }),
-    [isSessionActive, isInitializing, isAuthorizing, login, logout, error]
+    [isSessionActive, isInitializing, isAuthorizing, login, logout, getAccessToken, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

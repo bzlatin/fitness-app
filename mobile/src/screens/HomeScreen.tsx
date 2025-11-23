@@ -138,9 +138,7 @@ const HomeScreen = () => {
               <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                 <Chip label='Duration · 60-75m' />
                 <Chip
-                  label={
-                    upNext.splitType ? upNext.splitType.toUpperCase() : "Custom"
-                  }
+                  label={upNext.splitType ?? "Custom"}
                 />
                 <Chip label='Hypertrophy' />
               </View>
@@ -261,12 +259,7 @@ const HomeScreen = () => {
               </Text>
               <Pressable
                 onPress={() => {
-                  try {
-                    // @ts-ignore - navigate to Settings tab
-                    navigation.getParent()?.getParent()?.navigate("Settings");
-                  } catch (err) {
-                    console.error("Navigation error:", err);
-                  }
+                  navigation.navigate("Onboarding", { isRetake: true });
                 }}
                 style={({ pressed }) => ({
                   flexDirection: "row",
