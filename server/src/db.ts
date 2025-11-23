@@ -288,6 +288,15 @@ export const initDb = async () => {
       )
   `);
 
+  // TEMPORARY: Force @exhibited to Pro plan for AI workout testing
+  // TODO: Remove once Stripe integration is complete (Roadmap 3.1)
+  await query(`
+    UPDATE users
+    SET plan = 'pro',
+        plan_expires_at = NOW() + INTERVAL '90 days'
+    WHERE handle = '@exhibited'
+  `);
+
   const seededValues = MOCK_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
   await query(`
     WITH seeded_users(id) AS (
