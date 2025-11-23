@@ -324,9 +324,7 @@ const fetchWorkoutStats = async (userId: string) => {
   const formatIso = (value: string | Date) =>
     typeof value === "string" ? value : value.toISOString();
   const uniqueDays = Array.from(
-    new Set(
-      sessions.rows.map((row) => formatIso(row.finished_at).slice(0, 10))
-    )
+    new Set(sessions.rows.map((row) => formatIso(row.finished_at).slice(0, 10)))
   ).sort((a, b) => (a > b ? -1 : 1));
 
   let streak = 0;
@@ -930,7 +928,9 @@ router.post("/squads/:squadId/invites", async (req, res) => {
 
     const role = memberResult.rows[0].role;
     if (role !== "owner" && role !== "admin") {
-      return res.status(403).json({ error: "Only admins can create invite links" });
+      return res
+        .status(403)
+        .json({ error: "Only admins can create invite links" });
     }
 
     // Check squad exists and get max_members
@@ -1006,7 +1006,9 @@ router.get("/squad-invite/:code", async (req, res) => {
     const invite = result.rows[0];
 
     if (invite.is_revoked) {
-      return res.status(410).json({ error: "This invite link has been revoked" });
+      return res
+        .status(410)
+        .json({ error: "This invite link has been revoked" });
     }
 
     if (new Date(invite.expires_at) < new Date()) {
@@ -1086,7 +1088,9 @@ router.post("/squad-invite/:code/join", async (req, res) => {
     const invite = inviteResult.rows[0];
 
     if (invite.is_revoked) {
-      return res.status(410).json({ error: "This invite link has been revoked" });
+      return res
+        .status(410)
+        .json({ error: "This invite link has been revoked" });
     }
 
     if (new Date(invite.expires_at) < new Date()) {
@@ -1099,12 +1103,17 @@ router.post("/squad-invite/:code/join", async (req, res) => {
       [invite.squad_id, userId]
     );
 
-    if (membershipCheck.rowCount > 0) {
-      return res.status(400).json({ error: "You're already a member of this squad" });
+    if ((membershipCheck.rowCount ?? 0) > 0) {
+      return res
+        .status(400)
+        .json({ error: "You're already a member of this squad" });
     }
 
     // Check squad capacity
-    const squadResult = await query<{ max_members: number; member_count: string }>(
+    const squadResult = await query<{
+      max_members: number;
+      member_count: string;
+    }>(
       `
         SELECT s.max_members, COUNT(sm.user_id)::text as member_count
         FROM squads s
@@ -1171,7 +1180,9 @@ router.delete("/squads/:squadId/invites/:inviteId", async (req, res) => {
 
     const role = memberResult.rows[0].role;
     if (role !== "owner" && role !== "admin") {
-      return res.status(403).json({ error: "Only admins can revoke invite links" });
+      return res
+        .status(403)
+        .json({ error: "Only admins can revoke invite links" });
     }
 
     // Revoke the invite
@@ -1212,7 +1223,9 @@ router.get("/squads/:squadId/invites", async (req, res) => {
 
     const role = memberResult.rows[0].role;
     if (role !== "owner" && role !== "admin") {
-      return res.status(403).json({ error: "Only admins can view invite links" });
+      return res
+        .status(403)
+        .json({ error: "Only admins can view invite links" });
     }
 
     // Get all active invites
