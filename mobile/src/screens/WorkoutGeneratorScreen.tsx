@@ -14,8 +14,10 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { generateWorkout, GeneratedWorkout } from "../api/ai";
 import { RootNavigation } from "../navigation/RootNavigator";
-import { nanoid } from "nanoid";
 import { createWorkoutTemplate } from "../api/templates";
+
+// Generate unique ID for React Native (no crypto dependency)
+const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
 const SPLIT_OPTIONS = [
   { value: "push", label: "Push", emoji: "💪" },
@@ -50,13 +52,13 @@ const WorkoutGeneratorScreen = () => {
   const saveMutation = useMutation({
     mutationFn: async (workout: GeneratedWorkout) => {
       const template = {
-        id: nanoid(),
+        id: generateId(),
         name: workout.name,
         description: workout.reasoning,
         splitType: workout.splitType as any,
         isFavorite: false,
         exercises: workout.exercises.map((ex) => ({
-          id: nanoid(),
+          id: generateId(),
           exerciseId: ex.exerciseId,
           orderIndex: ex.orderIndex,
           defaultSets: ex.sets,

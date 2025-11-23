@@ -3,7 +3,6 @@ import { Modal, Pressable, ScrollView, Text, View, ActivityIndicator, Alert } fr
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMutation } from "@tanstack/react-query";
-import { nanoid } from "nanoid";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -20,6 +19,9 @@ import {
   TRAINING_SPLIT_LABELS,
   EXPERIENCE_LEVEL_LABELS,
 } from "../types/onboarding";
+
+// Generate unique ID for React Native (no crypto dependency)
+const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -416,13 +418,13 @@ const SwapModal = ({
 
       // Auto-save the generated workout
       const template = {
-        id: nanoid(),
+        id: generateId(),
         name: workout.name,
         description: workout.reasoning,
         splitType: workout.splitType as any,
         isFavorite: false,
         exercises: workout.exercises.map((ex) => ({
-          id: nanoid(),
+          id: generateId(),
           exerciseId: ex.exerciseId,
           orderIndex: ex.orderIndex,
           defaultSets: ex.sets,
