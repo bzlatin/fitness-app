@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { forwardRef, ReactNode, useState } from "react";
 import {
   ScrollView,
   StatusBar,
@@ -22,23 +22,24 @@ type Props = {
   showTopGradient?: boolean; // Override to force show/hide top gradient
   paddingTop?: number; // Override top padding on the scroll/view wrapper
   includeTopInset?: boolean; // Disable top safe area when native header already provides it
+  refreshControl?: ReactNode;
 };
 
-const ScreenContainer = ({
+const ScreenContainer = forwardRef<ScrollView, Props>(({
   children,
   scroll = false,
   showGradient,
   showTopGradient,
   paddingTop = 16,
   includeTopInset = true,
-}: Props) => {
+  refreshControl,
+}, ref) => {
   const insets = useSafeAreaInsets();
   const [contentHeight, setContentHeight] = useState(0);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
   const [isNearBottom, setIsNearBottom] = useState(false);
   const [isNearTop, setIsNearTop] = useState(true);
 
-  const Wrapper = scroll ? ScrollView : View;
   const safeEdges: Edge[] = includeTopInset
     ? ["top", "left", "right"]
     : ["left", "right"];
@@ -60,7 +61,7 @@ const ScreenContainer = ({
       contentSize.height - layoutMeasurement.height - contentOffset.y;
     const distanceFromTop = contentOffset.y;
 
-    setIsNearTop(distanceFromTop < 50);
+    setIsNearTop(distanceFromTop < 10);
     setIsNearBottom(distanceFromBottom < 50);
   };
 
@@ -71,28 +72,25 @@ const ScreenContainer = ({
     >
       <StatusBar barStyle='light-content' backgroundColor={colors.background} />
       <View style={{ flex: 1 }}>
-        <Wrapper
-          style={{ flex: 1, paddingHorizontal: 16, paddingTop }}
-          contentContainerStyle={
-            scroll
-              ? { paddingBottom: Math.max(insets.bottom, 20) + 120 }
-              : undefined
-          }
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={
-            scroll ? (w, h) => setContentHeight(h) : undefined
-          }
-          onLayout={
-            scroll
-              ? (e: LayoutChangeEvent) =>
-                  setScrollViewHeight(e.nativeEvent.layout.height)
-              : undefined
-          }
-          onScroll={scroll ? handleScroll : undefined}
-          scrollEventThrottle={16}
-        >
-          {children}
-        </Wrapper>
+        {scroll ? (
+          <ScrollView
+            ref={ref}
+            style={{ flex: 1, paddingHorizontal: 16, paddingTop }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 120 }}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={(w, h) => setContentHeight(h)}
+            onLayout={(e: LayoutChangeEvent) => setScrollViewHeight(e.nativeEvent.layout.height)}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            refreshControl={refreshControl as any}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop }}>
+            {children}
+          </View>
+        )}
         {shouldShowTopGradient && (
           <LinearGradient
             colors={[
@@ -144,6 +142,8 @@ const ScreenContainer = ({
       </View>
     </SafeAreaView>
   );
-};
+});
+
+ScreenContainer.displayName = "ScreenContainer";
 
 export default ScreenContainer;

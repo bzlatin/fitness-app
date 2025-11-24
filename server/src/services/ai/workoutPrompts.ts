@@ -2,6 +2,7 @@ import {
   WorkoutGenerationParams,
   RecentWorkout,
   MuscleFatigueData,
+  FatigueTargets,
 } from "./AIProvider.interface";
 
 /**
@@ -35,7 +36,9 @@ export const determineNextInCycle = (
   }
 
   // Find where we are in the cycle
-  const lastIndex = cycle.findIndex((split) => lastSplit.includes(split) || split.includes(lastSplit));
+  const lastIndex = cycle.findIndex(
+    (split) => lastSplit.includes(split) || split.includes(lastSplit)
+  );
 
   if (lastIndex === -1) {
     return cycle[0]; // Not found, start from beginning
@@ -94,6 +97,20 @@ export const formatFatigueScores = (fatigue?: MuscleFatigueData): string => {
     .join("\n");
 
   return scores || "No fatigue data available.";
+};
+
+const formatFatigueTargets = (targets?: FatigueTargets) => {
+  if (!targets) return "No specific muscle bias provided.";
+  const prioritize = targets.prioritize?.filter(Boolean) ?? [];
+  const avoid = targets.avoid?.filter(Boolean) ?? [];
+
+  if (prioritize.length === 0 && avoid.length === 0) {
+    return "No specific muscle bias provided.";
+  }
+
+  return `Prioritize: ${
+    prioritize.length > 0 ? prioritize.join(", ") : "auto based on split"
+  }${avoid.length > 0 ? ` | Avoid/limit: ${avoid.join(", ")}` : ""}`;
 };
 
 /**
@@ -196,6 +213,9 @@ Split Type: ${requestedSplit}${
       : ""
   }${muscleGroupFilter}
 
+# RECOVERY-BASED GUIDANCE
+${formatFatigueTargets(params.fatigueTargets)}
+
 # AVAILABLE EXERCISES DATABASE
 You MUST select exercises ONLY from this list. Each exercise includes its ID, name, primary muscle, and required equipment:
 ${exercisesToUse
@@ -250,14 +270,20 @@ ${exercisesToUse
    - Include warm-up time in your estimate
 
 7. **Naming & Labeling**:
-   - If a specific muscle focus is requested (${focusLabel || "none"}), name the workout after those muscles (e.g., "Arms", "Glutes & Hamstrings") without prefixing generic split labels.
+   - Keep the workout name EXTREMELY brief (1-8 words max) - just a simple overview of what's trained
+   - Use simple muscle group names or split types: "Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Back & Biceps", "Chest", etc.
+   - NO descriptive words like "power", "volume", "focused", "day", "session", "workout", "training"
+   - NO emojis or special characters except "&" and "-"
+   - If a specific muscle focus is requested (${
+     focusLabel || "none"
+   }), name it after those muscles (e.g., "Arms", "Glutes & Hamstrings")
    - Use "custom" splitType for muscle-focus requests that are not standard splits.
 
 # OUTPUT FORMAT
 Respond with ONLY valid JSON matching this exact schema (no markdown, no additional text):
 
 {
-  "name": "Descriptive workout name (e.g., 'Upper Body Power', 'Leg Day - Quad Focus')",
+  "name": "Simple workout name (1-8 words, e.g., 'Push', 'Pull', 'Upper', 'Back & Biceps', 'Arms and Shoulder focus')",
   "splitType": "push|pull|legs|upper|lower|full_body|custom",
   "exercises": [
     {

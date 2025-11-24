@@ -26,10 +26,12 @@ import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import UpgradePrompt from "../components/premium/UpgradePrompt";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
+import { useFatigue } from "../hooks/useFatigue";
 import {
   TRAINING_SPLIT_LABELS,
   EXPERIENCE_LEVEL_LABELS,
 } from "../types/onboarding";
+import RecoveryBodyMap from "../components/RecoveryBodyMap";
 
 // Generate unique ID for React Native (no crypto dependency)
 const generateId = () =>
@@ -39,6 +41,7 @@ const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
   const { user } = useCurrentUser();
+  const { data: fatigue, isLoading: fatigueLoading } = useFatigue();
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
@@ -48,6 +51,14 @@ const HomeScreen = () => {
     if (!templates || templates.length === 0) return null;
     return templates.find((t) => t.id === selectedTemplateId) ?? templates[0];
   }, [templates, selectedTemplateId]);
+
+  const overallRecoveryLabel = useMemo(() => {
+    if (!fatigue) return "Recovery calibrating";
+    if (fatigue.totals.baselineVolume === null) return "Building baseline";
+    if (fatigue.totals.fatigueScore > 130) return "High fatigue";
+    if (fatigue.totals.fatigueScore < 70) return "Under-trained";
+    return "Ready to train";
+  }, [fatigue]);
 
   const startWorkout = (template: WorkoutTemplate | null) => {
     if (!template) return;
@@ -328,6 +339,80 @@ const HomeScreen = () => {
             </View>
           </View>
         )}
+
+        <View
+          style={{
+            backgroundColor: colors.surfaceMuted,
+            borderRadius: 16,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 10,
+            marginTop: 6,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <View style={{ gap: 4 }}>
+              <Text
+                style={{ ...typography.heading2, color: colors.textPrimary, fontSize: 18 }}
+              >
+                Recovery Status
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                {overallRecoveryLabel}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => navigation.navigate("Recovery")}
+              style={({ pressed }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.85 : 1,
+              })}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 13,
+              }}
+            >
+              View all
+            </Text>
+          </Pressable>
+        </View>
+        {fatigueLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={{ color: colors.textSecondary }}>Calibrating recovery...</Text>
+          </View>
+        ) : fatigue ? (
+          <View style={{ gap: 10 }}>
+            <RecoveryBodyMap
+              data={fatigue.perMuscle}
+              onSelectMuscle={() => navigation.navigate("Recovery")}
+              gender={(user?.onboardingData?.bodyGender as "male" | "female" | undefined) ?? "male"}
+            />
+            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+              Tap a muscle to open detailed recovery.
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ color: colors.textSecondary }}>
+            Log a workout to see what to target or hold back on today.
+          </Text>
+        )}
+        </View>
       </View>
 
       <SwapModal

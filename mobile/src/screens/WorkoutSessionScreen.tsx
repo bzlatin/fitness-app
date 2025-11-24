@@ -9,11 +9,19 @@ import {
   Text,
   TextInput,
   View,
+  Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from "react-native-draggable-flatlist";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import {
   completeSession,
@@ -28,6 +36,7 @@ import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
+import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -256,6 +265,10 @@ const WorkoutSessionScreen = () => {
   const [loggedSetIds, setLoggedSetIds] = useState<Set<string>>(new Set());
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
+  const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [showTopGradient, setShowTopGradient] = useState(false);
+  const [showBottomGradient, setShowBottomGradient] = useState(true);
   const { data: templates } = useWorkoutTemplates();
 
   const template = useMemo(
@@ -548,6 +561,116 @@ const WorkoutSessionScreen = () => {
     setAutoFocusEnabled(false);
   };
 
+  const handleSwapExercise = (
+    exerciseKey: string,
+    newExercise: {
+      exerciseId: string;
+      exerciseName: string;
+      sets?: number;
+      reps?: number;
+      restSeconds?: number;
+    }
+  ) => {
+    setSets((prev) =>
+      prev.map((set) => {
+        const setKey = set.templateExerciseId ?? set.exerciseId;
+        if (setKey === exerciseKey) {
+          return {
+            ...set,
+            exerciseId: newExercise.exerciseId,
+            exerciseName: newExercise.exerciseName,
+            targetReps: newExercise.reps ?? set.targetReps,
+            targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
+            actualReps: newExercise.reps ?? set.actualReps,
+          };
+        }
+        return set;
+      })
+    );
+    setSwapExerciseKey(null);
+  };
+
+  const handleReorderExercises = (newGroupedSets: ExerciseGroup[]) => {
+    // Update all set indices based on new order
+    const reorderedSets: WorkoutSet[] = [];
+    newGroupedSets.forEach((group, groupIndex) => {
+      group.sets.forEach((set, setIndex) => {
+        reorderedSets.push({
+          ...set,
+          setIndex: groupIndex * 100 + setIndex,
+        });
+      });
+    });
+
+    setSets(reorderedSets);
+  };
+
+  const handleAddSet = (exerciseKey: string) => {
+    const group = groupedSets.find((g) => g.key === exerciseKey);
+    if (!group) return;
+
+    const lastSet = group.sets[group.sets.length - 1];
+    if (!lastSet) return;
+
+    const newSet: WorkoutSet = {
+      id: `${Date.now()}-${Math.random()}`,
+      sessionId: sessionId!,
+      templateExerciseId: lastSet.templateExerciseId,
+      exerciseId: lastSet.exerciseId,
+      exerciseName: lastSet.exerciseName,
+      exerciseImageUrl: lastSet.exerciseImageUrl,
+      setIndex: lastSet.setIndex + 1,
+      targetReps: lastSet.targetReps,
+      targetWeight: lastSet.targetWeight,
+      targetRestSeconds: lastSet.targetRestSeconds,
+      actualReps: lastSet.actualReps,
+      actualWeight: lastSet.actualWeight,
+    };
+
+    setSets((prev) => [...prev, newSet]);
+  };
+
+  const handleRemoveSet = (setId: string) => {
+    const setToRemove = sets.find((s) => s.id === setId);
+    if (!setToRemove) return;
+
+    const groupKey = setToRemove.templateExerciseId ?? setToRemove.exerciseId;
+    const group = groupedSets.find((g) => g.key === groupKey);
+    if (!group || group.sets.length <= 1) {
+      Alert.alert(
+        "Cannot Remove",
+        "Each exercise must have at least one set. To remove this exercise, use the swap feature."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Remove Set",
+      "Are you sure you want to remove this set?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            setSets((prev) => prev.filter((s) => s.id !== setId));
+            setLoggedSetIds((prev) => {
+              const next = new Set(prev);
+              next.delete(setId);
+              return next;
+            });
+            if (activeSetId === setId) {
+              setActiveSetId(null);
+            }
+            if (lastLoggedSetId === setId) {
+              setLastLoggedSetId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const sessionTitle = templateName ?? "Workout Session";
   const stopwatchLabel = startTime ? formatStopwatch(elapsedSeconds) : "00:00";
   const timerStatusLabel = timerActive
@@ -589,8 +712,300 @@ const WorkoutSessionScreen = () => {
     );
   };
 
+  const swapExerciseGroup = groupedSets.find((g) => g.key === swapExerciseKey);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    const scrollY = contentOffset.y;
+    const scrollViewHeight = layoutMeasurement.height;
+    const contentHeight = contentSize.height;
+
+    // Show top gradient when scrolled down
+    setShowTopGradient(scrollY > 20);
+
+    // Show bottom gradient when not at the bottom
+    const isNearBottom = scrollY + scrollViewHeight >= contentHeight - 20;
+    setShowBottomGradient(!isNearBottom && contentHeight > scrollViewHeight);
+  };
+
+  const renderHeader = () => (
+    <View style={{ gap: 12, marginBottom: 12 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          alignSelf: "flex-start",
+          gap: 8,
+        }}
+      >
+        <Pressable
+          accessibilityLabel='Exit workout'
+          onPress={handleExitSession}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Ionicons name='close' size={18} color={colors.textPrimary} />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={timerActive ? "Pause workout timer" : "Resume workout timer"}
+          onPress={timerActive ? pauseTimer : resumeTimer}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 12,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <Ionicons
+            name={timerActive ? "pause" : "play"}
+            size={18}
+            color={colors.textPrimary}
+          />
+        </Pressable>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          padding: 14,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 14,
+        }}
+      >
+        <View style={{ gap: 4 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 20,
+              fontWeight: "700",
+            }}
+          >
+            {sessionTitle}
+          </Text>
+        </View>
+        {template && (
+          <View style={{ marginTop: -4 }}>
+            <MuscleGroupBreakdown template={template} maxGroups={3} />
+          </View>
+        )}
+        <View
+          style={{
+            flexDirection: "row",
+            gap: 10,
+            alignItems: "stretch",
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <View>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Session timer
+                </Text>
+                <Text
+                  style={{
+                    color: timerActive ? colors.primary : colors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    marginTop: 2,
+                  }}
+                >
+                  {timerStatusLabel}
+                </Text>
+              </View>
+              <Ionicons
+                name={timerActive ? "pause" : "play"}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 22,
+                fontWeight: "800",
+                letterSpacing: 0.5,
+              }}
+            >
+              {stopwatchLabel}
+            </Text>
+          </View>
+          <View
+            style={{
+              flex: 1,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 6,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Rest timer
+              </Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Switch
+                  value={autoRestTimer}
+                  onValueChange={setAutoRestTimer}
+                  trackColor={{
+                    false: colors.border,
+                    true: "rgba(34,197,94,0.35)",
+                  }}
+                  thumbColor={autoRestTimer ? colors.primary : "#6B7280"}
+                />
+              </View>
+            </View>
+            <Text
+              style={{
+                color:
+                  restRemaining !== null
+                    ? colors.primary
+                    : colors.textPrimary,
+                fontSize: 22,
+                fontWeight: "800",
+                letterSpacing: 0.5,
+              }}
+            >
+              {restLabel}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 10,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ gap: 4 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+              Live visibility
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Currently: {visibilityLabel}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setShowVisibilityModal(true)}
+            style={({ pressed }) => ({
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceMuted,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
+              Change
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderFooter = () => (
+    <View style={{ gap: 12, marginTop: 12 }}>
+      {groupedSets.length === 0 ? (
+        <View
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text style={{ color: colors.textSecondary }}>
+            No sets yet for this workout.
+          </Text>
+        </View>
+      ) : null}
+
+      <Pressable
+        disabled={!sessionId || finishMutation.isPending}
+        onPress={() => finishMutation.mutate()}
+        style={({ pressed }) => ({
+          backgroundColor: colors.primary,
+          paddingVertical: 16,
+          borderRadius: 14,
+          alignItems: "center",
+          marginTop: 12,
+          marginBottom: 24,
+          opacity:
+            !sessionId || finishMutation.isPending || pressed ? 0.8 : 1,
+          flexDirection: "row",
+          justifyContent: "center",
+          gap: 10,
+        })}
+      >
+        {finishMutation.isPending ? (
+          <ActivityIndicator color='#0B1220' />
+        ) : null}
+        <Text style={{ color: "#0B1220", fontWeight: "800", fontSize: 16 }}>
+          {finishMutation.isPending ? "Finishing..." : "Finish Workout"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer>
       <VisibilityModal
         visible={showVisibilityModal}
         value={visibility}
@@ -598,301 +1013,136 @@ const WorkoutSessionScreen = () => {
         onClose={() => setShowVisibilityModal(false)}
         disabled={isUpdating || !sessionId}
       />
-      <View style={{ gap: 12 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            alignSelf: "flex-start",
-            gap: 8,
+      {swapExerciseGroup && (
+        <ExerciseSwapModal
+          visible={!!swapExerciseKey}
+          onClose={() => setSwapExerciseKey(null)}
+          exercise={{
+            exerciseId: swapExerciseGroup.exerciseId,
+            exerciseName: swapExerciseGroup.name,
+            sets: swapExerciseGroup.sets.length,
+            reps: swapExerciseGroup.sets[0]?.targetReps,
+            restSeconds: swapExerciseGroup.restSeconds,
           }}
-        >
-          <Pressable
-            accessibilityLabel='Exit workout'
-            onPress={handleExitSession}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: 8,
-              paddingHorizontal: 10,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Ionicons name='close' size={18} color={colors.textPrimary} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel={timerActive ? "Pause workout timer" : "Resume workout timer"}
-            onPress={timerActive ? pauseTimer : resumeTimer}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: 8,
-              paddingHorizontal: 10,
-              borderRadius: 12,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Ionicons
-              name={timerActive ? "pause" : "play"}
-              size={18}
-              color={colors.textPrimary}
-            />
-          </Pressable>
-        </View>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
-          }}
-        >
-          <View style={{ gap: 4 }}>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 20,
-                fontWeight: "700",
-              }}
-            >
-              {sessionTitle}
-            </Text>
-          </View>
-          {template && (
-            <View style={{ marginTop: -4 }}>
-              <MuscleGroupBreakdown template={template} maxGroups={3} />
-            </View>
-          )}
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 10,
-              alignItems: "stretch",
-            }}
-          >
-            <View
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 12,
-                backgroundColor: colors.surfaceMuted,
-                borderWidth: 1,
-                borderColor: colors.border,
-                gap: 10,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Session timer
-                  </Text>
-                  <Text
-                    style={{
-                      color: timerActive ? colors.primary : colors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: "700",
-                      marginTop: 2,
-                    }}
-                  >
-                    {timerStatusLabel}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={timerActive ? "pause" : "play"}
-                  size={16}
-                  color={colors.textSecondary}
-                />
-              </View>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: 22,
-                  fontWeight: "800",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {stopwatchLabel}
-              </Text>
-            </View>
-            <View
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 12,
-                backgroundColor: colors.surfaceMuted,
-                borderWidth: 1,
-                borderColor: colors.border,
-                gap: 6,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Rest timer
-                </Text>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Switch
-                    value={autoRestTimer}
-                    onValueChange={setAutoRestTimer}
-                    trackColor={{
-                      false: colors.border,
-                      true: "rgba(34,197,94,0.35)",
-                    }}
-                    thumbColor={autoRestTimer ? colors.primary : "#6B7280"}
-                  />
-                </View>
-              </View>
-              <Text
-                style={{
-                  color:
-                    restRemaining !== null
-                      ? colors.primary
-                      : colors.textPrimary,
-                  fontSize: 22,
-                  fontWeight: "800",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {restLabel}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 14,
-            padding: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 10,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <View style={{ gap: 4 }}>
-              <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-                Live visibility
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Currently: {visibilityLabel}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => setShowVisibilityModal(true)}
-              style={({ pressed }) => ({
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surfaceMuted,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
-                Change
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {groupedSets.map((group) => (
-          <ExerciseCard
-            key={group.key}
-            group={group}
-            expanded={group.key === activeExerciseKey}
-            onToggle={() => {
-              setAutoFocusEnabled(false);
-              setActiveExerciseKey((prev) => {
-                const next = prev === group.key ? null : group.key;
-                if (next === group.key) {
-                  setActiveSetId(group.sets[0]?.id ?? null);
-                }
-                return next;
-              });
-            }}
-            onChangeSet={updateSet}
-            onLogSet={logSet}
-            activeSetId={activeSetId}
-            onSelectSet={setActiveSetId}
-            autoRestTimer={autoRestTimer}
-            loggedSetIds={loggedSetIds}
-            restRemaining={restRemaining}
-            lastLoggedSetId={lastLoggedSetId}
-            onUndo={undoSet}
-          />
-        ))}
-
-        {groupedSets.length === 0 ? (
-          <View
-            style={{
-              padding: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
-            }}
-          >
-            <Text style={{ color: colors.textSecondary }}>
-              No sets yet for this workout.
-            </Text>
-          </View>
-        ) : null}
-
+          onSwap={(newExercise) =>
+            handleSwapExercise(swapExerciseKey!, newExercise)
+          }
+        />
+      )}
+      <Modal
+        visible={!!imagePreviewUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImagePreviewUrl(null)}
+      >
         <Pressable
-          disabled={!sessionId || finishMutation.isPending}
-          onPress={() => finishMutation.mutate()}
-          style={({ pressed }) => ({
-            backgroundColor: colors.primary,
-            paddingVertical: 16,
-            borderRadius: 14,
-            alignItems: "center",
-            marginTop: 12,
-            marginBottom: 24,
-            opacity:
-              !sessionId || finishMutation.isPending || pressed ? 0.8 : 1,
-            flexDirection: "row",
+          onPress={() => setImagePreviewUrl(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.9)",
             justifyContent: "center",
-            gap: 10,
-          })}
+            alignItems: "center",
+          }}
         >
-          {finishMutation.isPending ? (
-            <ActivityIndicator color='#0B1220' />
-          ) : null}
-          <Text style={{ color: "#0B1220", fontWeight: "800", fontSize: 16 }}>
-            {finishMutation.isPending ? "Finishing..." : "Finish Workout"}
-          </Text>
+          {imagePreviewUrl && (
+            <Image
+              source={{ uri: imagePreviewUrl }}
+              style={{
+                width: Dimensions.get("window").width - 40,
+                height: Dimensions.get("window").width - 40,
+                borderRadius: 12,
+              }}
+              resizeMode="contain"
+            />
+          )}
+          <Pressable
+            onPress={() => setImagePreviewUrl(null)}
+            style={{
+              position: "absolute",
+              top: 60,
+              right: 20,
+              backgroundColor: colors.surface,
+              borderRadius: 20,
+              padding: 8,
+            }}
+          >
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
         </Pressable>
+      </Modal>
+      <View style={{ flex: 1 }}>
+        <DraggableFlatList
+          data={groupedSets}
+          keyExtractor={(item) => item.key}
+          onDragEnd={({ data }) => handleReorderExercises(data)}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
+          contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 16 }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item: group, drag, isActive }: RenderItemParams<ExerciseGroup>) => (
+            <ScaleDecorator>
+              <ExerciseCard
+                group={group}
+                expanded={group.key === activeExerciseKey}
+                onToggle={() => {
+                  setAutoFocusEnabled(false);
+                  setActiveExerciseKey((prev) => {
+                    const next = prev === group.key ? null : group.key;
+                    if (next === group.key) {
+                      setActiveSetId(group.sets[0]?.id ?? null);
+                    }
+                    return next;
+                  });
+                }}
+                onChangeSet={updateSet}
+                onLogSet={logSet}
+                activeSetId={activeSetId}
+                onSelectSet={setActiveSetId}
+                autoRestTimer={autoRestTimer}
+                loggedSetIds={loggedSetIds}
+                restRemaining={restRemaining}
+                lastLoggedSetId={lastLoggedSetId}
+                onUndo={undoSet}
+                onSwap={() => setSwapExerciseKey(group.key)}
+                onDrag={drag}
+                isDragging={isActive}
+                onAddSet={() => handleAddSet(group.key)}
+                onRemoveSet={handleRemoveSet}
+                onImagePress={() => group.imageUrl && setImagePreviewUrl(group.imageUrl)}
+              />
+            </ScaleDecorator>
+          )}
+        />
+        {/* Top gradient fade */}
+        {showTopGradient && (
+          <LinearGradient
+            colors={[colors.background, 'transparent']}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 60,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        {/* Bottom gradient fade */}
+        {showBottomGradient && (
+          <LinearGradient
+            colors={['transparent', colors.background]}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 80,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
       </View>
     </ScreenContainer>
   );
@@ -908,6 +1158,8 @@ type SetInputRowProps = {
   autoRestTimer: boolean;
   logged: boolean;
   onUndo: () => void;
+  onRemove: () => void;
+  canRemove: boolean;
 };
 
 const SetInputRow = ({
@@ -920,6 +1172,8 @@ const SetInputRow = ({
   autoRestTimer,
   logged,
   onUndo,
+  onRemove,
+  canRemove,
 }: SetInputRowProps) => {
   const targetLine = [
     set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
@@ -953,7 +1207,7 @@ const SetInputRow = ({
           gap: 8,
         }}
       >
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
             Set {displayIndex + 1}
           </Text>
@@ -961,54 +1215,72 @@ const SetInputRow = ({
             {targetLine ? `Target ${targetLine}` : "Log this effort"}
           </Text>
         </View>
-        <Pressable
-          onPress={logged ? undefined : onLog}
-          disabled={logged}
-          style={({ pressed }) => ({
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 10,
-            backgroundColor: logged ? colors.primary : colors.surfaceMuted,
-            borderWidth: 1,
-            borderColor: logged ? colors.primary : colors.border,
-            opacity: logged ? 1 : pressed ? 0.9 : 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-          })}
-        >
-          <Ionicons
-            name={logged ? "checkmark-circle" : "radio-button-off"}
-            color={logged ? "#0B1220" : colors.textSecondary}
-            size={18}
-          />
-          <Text
-            style={{
-              color: logged ? "#0B1220" : colors.textPrimary,
-              fontWeight: "800",
-            }}
-          >
-            {logged ? "Logged" : "Log set"}
-          </Text>
-        </Pressable>
-        {logged ? (
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {canRemove && (
+            <Pressable
+              onPress={onRemove}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceMuted,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name="trash-outline" color={colors.textSecondary} size={16} />
+            </Pressable>
+          )}
           <Pressable
-            onPress={onUndo}
+            onPress={logged ? undefined : onLog}
+            disabled={logged}
             style={({ pressed }) => ({
               paddingVertical: 8,
               paddingHorizontal: 12,
               borderRadius: 10,
+              backgroundColor: logged ? colors.primary : colors.surfaceMuted,
               borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surfaceMuted,
-              opacity: pressed ? 0.85 : 1,
+              borderColor: logged ? colors.primary : colors.border,
+              opacity: logged ? 1 : pressed ? 0.9 : 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
             })}
           >
-            <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
-              Undo
+            <Ionicons
+              name={logged ? "checkmark-circle" : "radio-button-off"}
+              color={logged ? "#0B1220" : colors.textSecondary}
+              size={18}
+            />
+            <Text
+              style={{
+                color: logged ? "#0B1220" : colors.textPrimary,
+                fontWeight: "800",
+              }}
+            >
+              {logged ? "Logged" : "Log set"}
             </Text>
           </Pressable>
-        ) : null}
+          {logged ? (
+            <Pressable
+              onPress={onUndo}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceMuted,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
+                Undo
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
@@ -1089,6 +1361,12 @@ type ExerciseCardProps = {
   restRemaining: number | null;
   lastLoggedSetId: string | null;
   onUndo: (setId: string) => void;
+  onSwap: () => void;
+  onDrag: () => void;
+  isDragging: boolean;
+  onAddSet: () => void;
+  onRemoveSet: (setId: string) => void;
+  onImagePress: () => void;
 };
 
 const ExerciseCard = ({
@@ -1104,6 +1382,12 @@ const ExerciseCard = ({
   restRemaining,
   lastLoggedSetId,
   onUndo,
+  onSwap,
+  onDrag,
+  isDragging,
+  onAddSet,
+  onRemoveSet,
+  onImagePress,
 }: ExerciseCardProps) => {
   const summaryLine = `${group.sets.length} sets · ${
     group.sets[0]?.targetReps
@@ -1123,80 +1407,103 @@ const ExerciseCard = ({
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: isDragging ? colors.primary : colors.border,
         backgroundColor: colors.surface,
+        marginBottom: 12,
+        opacity: isDragging ? 0.7 : 1,
       }}
     >
-      <Pressable
-        onPress={onToggle}
-        style={({ pressed }) => ({
+      <View
+        style={{
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
           padding: 12,
           gap: 10,
-          opacity: pressed ? 0.85 : 1,
-        })}
+        }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: 16,
-              fontWeight: "700",
-            }}
-          >
-            {group.name}
-          </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {summaryLine}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {statusLabel}
-          </Text>
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={colors.textPrimary}
-          />
-        </View>
-      </Pressable>
+        <Pressable
+          onLongPress={onDrag}
+          delayLongPress={100}
+          style={({ pressed }) => ({
+            padding: 4,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Ionicons name="menu" size={20} color={colors.textSecondary} />
+        </Pressable>
+        <Pressable
+          onPress={onToggle}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 16,
+                fontWeight: "700",
+              }}
+            >
+              {group.name}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {summaryLine}
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {statusLabel}
+            </Text>
+            <Ionicons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={colors.textPrimary}
+            />
+          </View>
+        </Pressable>
+      </View>
 
       {expanded ? (
         <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-            {group.imageUrl ? (
-              <Image
-                source={{ uri: group.imageUrl }}
-                style={{
-                  width: 96,
-                  height: 96,
-                  borderRadius: 12,
-                  backgroundColor: colors.surfaceMuted,
-                }}
-              />
-            ) : (
-              <View
-                style={{
-                  width: 96,
-                  height: 96,
-                  borderRadius: 12,
-                  backgroundColor: colors.surfaceMuted,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={{ color: colors.textSecondary, fontWeight: "700" }}
+            <Pressable onPress={onImagePress}>
+              {group.imageUrl ? (
+                <Image
+                  source={{ uri: group.imageUrl }}
+                  style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                  }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
-                  {group.name[0]?.toUpperCase() ?? "?"}
-                </Text>
-              </View>
-            )}
+                  <Text
+                    style={{ color: colors.textSecondary, fontWeight: "700" }}
+                  >
+                    {group.name[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
                 Fine tune before you log
@@ -1206,6 +1513,35 @@ const ExerciseCard = ({
               </Text>
             </View>
           </View>
+
+          {/* Action buttons */}
+          <Pressable
+            onPress={onSwap}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="swap-horizontal" size={16} color={colors.textPrimary} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 13,
+                fontWeight: "600",
+              }}
+            >
+              Swap Exercise
+            </Text>
+          </Pressable>
 
           {group.sets.map((set, displayIndex) => (
             <View key={set.id} style={{ gap: 8 }}>
@@ -1219,6 +1555,8 @@ const ExerciseCard = ({
                 autoRestTimer={autoRestTimer}
                 logged={loggedSetIds.has(set.id)}
                 onUndo={() => onUndo(set.id)}
+                onRemove={() => onRemoveSet(set.id)}
+                canRemove={group.sets.length > 1}
               />
               {restRemaining !== null && lastLoggedSetId === set.id ? (
                 <View
@@ -1260,6 +1598,35 @@ const ExerciseCard = ({
               ) : null}
             </View>
           ))}
+
+          {/* Add Set button */}
+          <Pressable
+            onPress={onAddSet}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+            <Text
+              style={{
+                color: colors.primary,
+                fontSize: 13,
+                fontWeight: "600",
+              }}
+            >
+              Add Set
+            </Text>
+          </Pressable>
         </View>
       ) : null}
     </View>

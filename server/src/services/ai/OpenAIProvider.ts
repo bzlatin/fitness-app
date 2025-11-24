@@ -115,6 +115,47 @@ export class OpenAIProvider implements AIProvider {
         throw new Error("No valid exercises generated");
       }
 
+      // Enforce concise naming (max 3 words, no filler words)
+      let workoutName = generatedWorkout.name;
+
+      // Remove emojis and special characters except & and -
+      workoutName = workoutName.replace(/[^a-zA-Z0-9\s&-]/g, "").trim();
+
+      // Remove common filler words
+      const fillerWords = [
+        "workout", "training", "session", "day", "focused", "focus",
+        "power", "volume", "fatigue", "baseline", "balanced", "optimal",
+        "emphasis", "intensity", "based", "oriented", "style", "routine"
+      ];
+      const words = workoutName.split(/\s+/).filter(word => {
+        const lowerWord = word.toLowerCase();
+        return word && !fillerWords.includes(lowerWord);
+      });
+
+      // Limit to 3 words
+      if (words.length > 3) {
+        workoutName = words.slice(0, 3).join(" ");
+      } else if (words.length > 0) {
+        workoutName = words.join(" ");
+      }
+
+      // Fallback based on split type if name is empty or invalid
+      if (!workoutName || workoutName.length < 2) {
+        const splitFallbacks: Record<string, string> = {
+          push: "Push",
+          pull: "Pull",
+          legs: "Legs",
+          upper: "Upper",
+          lower: "Lower",
+          full_body: "Full Body",
+          custom: "Custom"
+        };
+        const splitType = generatedWorkout.splitType || "custom";
+        workoutName = splitFallbacks[splitType] || "Training";
+      }
+
+      generatedWorkout.name = workoutName;
+
       console.log(
         `[OpenAI] Successfully generated workout: "${generatedWorkout.name}" with ${generatedWorkout.exercises.length} exercises`
       );

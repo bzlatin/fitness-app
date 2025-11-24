@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { getAIProvider, WorkoutGenerationParams } from "../services/ai";
-import { calculateMuscleFatigue, getRecentWorkouts } from "../services/fatigue";
+import { getAIProvider, MuscleFatigueData, WorkoutGenerationParams } from "../services/ai";
+import { getFatigueScores, getRecentWorkouts, getTrainingRecommendations } from "../services/fatigue";
 import { determineNextInCycle } from "../services/ai/workoutPrompts";
 import { requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
@@ -90,8 +90,27 @@ const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: numb
 
 const deriveFocusName = (specificRequest?: string) => {
   if (!specificRequest) return null;
+
+  // Check if this is a fatigue-aware request with instruction format
+  // Example: "Prioritize: chest, back | Limit volume for: biceps | Stay near recent baseline volume"
+  const prioritizeMatch = specificRequest.match(/Prioritize:\s*([^|]+)/i);
+
+  if (prioritizeMatch) {
+    // Extract just the prioritized muscles for the name
+    const muscles = prioritizeMatch[1]
+      .split(/,|and/)
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .slice(0, 3); // Limit to 3
+
+    if (muscles.length > 0) {
+      return muscles.join(" & ");
+    }
+  }
+
+  // Fallback: handle simple "focus on X" format
   const normalized = specificRequest
-    .replace(/focus on|target|emphasize|work on/gi, "")
+    .replace(/focus on|target|emphasize|work on|workout for|prioritize|limit volume for|stay near.*$/gi, "")
     .replace(/[^a-z,&/ ]/gi, " ")
     .replace(/\sand\s/gi, " & ")
     .replace(/\s+/g, " ")
@@ -99,21 +118,24 @@ const deriveFocusName = (specificRequest?: string) => {
 
   if (!normalized) return null;
 
+  // Split by delimiters and capitalize
   const parts = normalized
-    .split(/[,/&]/)
+    .split(/[,/&|]/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) =>
-      part
-        .split(" ")
-        .filter(Boolean)
+    .map((part) => {
+      const words = part.split(" ").filter(Boolean);
+      return words
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ")
-    );
+        .join(" ");
+    });
 
   if (parts.length === 0) return null;
 
-  return parts.join(" & ");
+  // Limit to max 3 muscle groups to keep names concise
+  const limitedParts = parts.slice(0, 3);
+
+  return limitedParts.join(" & ");
 };
 
 /**
@@ -148,10 +170,19 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
     const onboardingData = user?.onboarding_data || {};
 
     // Fetch recent workout history and muscle fatigue
-    const [recentWorkouts, muscleFatigue] = await Promise.all([
+    const [recentWorkouts, fatigueResult] = await Promise.all([
       getRecentWorkouts(userId, 5),
-      calculateMuscleFatigue(userId),
+      getFatigueScores(userId),
     ]);
+    const recommendations = await getTrainingRecommendations(userId, fatigueResult);
+
+    const muscleFatigue = fatigueResult.perMuscle.reduce<MuscleFatigueData>(
+      (acc, item) => {
+        acc[item.muscleGroup as keyof MuscleFatigueData] = Math.round(item.fatigueScore);
+        return acc;
+      },
+      {}
+    );
 
     // Determine the next workout in cycle if no specific split requested
     let finalRequestedSplit = requestedSplit;
@@ -166,6 +197,11 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       }
     }
 
+    const fatigueTargets = {
+      prioritize: recommendations.targetMuscles,
+      avoid: fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+    };
+
     const params: WorkoutGenerationParams = {
       userId,
       userProfile: {
@@ -179,6 +215,7 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       },
       recentWorkouts,
       muscleFatigue,
+      fatigueTargets,
       requestedSplit: finalRequestedSplit,
       specificRequest,
     };
@@ -186,6 +223,11 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
     console.log(`[AI] Generating workout for user ${userId}`);
     console.log(
       `[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`
+    );
+    console.log(
+      `[AI] Targeting muscles: ${fatigueTargets.prioritize.join(", ") || "auto"} | Avoid: ${
+        fatigueTargets.avoid.join(", ") || "none"
+      }`
     );
 
     const aiProvider = getAIProvider();
