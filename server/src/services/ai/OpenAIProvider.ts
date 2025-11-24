@@ -3,6 +3,7 @@ import {
   AIProvider,
   WorkoutGenerationParams,
   GeneratedWorkout,
+  ExerciseSwapResult,
 } from "./AIProvider.interface";
 import { Exercise } from "../../types/workouts";
 import {
@@ -147,6 +148,70 @@ export class OpenAIProvider implements AIProvider {
     } catch (error) {
       console.error("[OpenAI] Error suggesting substitution:", error);
       return null;
+    }
+  }
+
+  /**
+   * Swap an exercise for an alternative using AI
+   */
+  async swapExercise(
+    exerciseName: string,
+    primaryMuscleGroup: string,
+    reason: string,
+    availableEquipment: string[],
+    availableExercises: any[]
+  ): Promise<ExerciseSwapResult> {
+    try {
+      const prompt = buildSubstitutionPrompt(
+        exerciseName,
+        primaryMuscleGroup,
+        reason,
+        availableEquipment,
+        availableExercises
+      );
+
+      console.log(`[OpenAI] Swapping exercise: ${exerciseName}`);
+      console.log(`[OpenAI] Available alternatives: ${availableExercises.length}`);
+
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert personal trainer. Respond only with valid JSON.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.5,
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error("OpenAI returned empty response");
+      }
+
+      const result = JSON.parse(content) as ExerciseSwapResult;
+
+      if (result.exerciseId) {
+        console.log(`[OpenAI] Successfully swapped to: ${result.exerciseName}`);
+      } else {
+        console.log(`[OpenAI] No suitable alternative found`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error("[OpenAI] Error swapping exercise:", error);
+      throw new Error(
+        `Failed to swap exercise: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 }

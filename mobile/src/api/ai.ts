@@ -13,6 +13,7 @@ export interface GeneratedExercise {
   restSeconds: number;
   notes?: string;
   orderIndex: number;
+  primaryMuscleGroup?: string;
 }
 
 export interface GeneratedWorkout {
@@ -33,6 +34,24 @@ export interface AIUsageResponse {
   lastGeneratedAt: string | null;
 }
 
+export interface SwapExerciseRequest {
+  exerciseId: string;
+  exerciseName: string;
+  primaryMuscleGroup: string;
+  reason?: string;
+}
+
+export interface SwappedExercise {
+  exerciseId: string | null;
+  exerciseName?: string;
+  reasoning?: string;
+}
+
+export interface SwapExerciseResponse {
+  success: boolean;
+  exercise: SwappedExercise;
+}
+
 /**
  * Generate a workout using AI
  */
@@ -44,6 +63,19 @@ export const generateWorkout = async (
     params
   );
   return response.data.workout;
+};
+
+/**
+ * Swap an exercise for an alternative using AI
+ */
+export const swapExercise = async (
+  params: SwapExerciseRequest
+): Promise<SwappedExercise> => {
+  const response = await apiClient.post<SwapExerciseResponse>(
+    "ai/swap-exercise",
+    params
+  );
+  return response.data.exercise;
 };
 
 /**

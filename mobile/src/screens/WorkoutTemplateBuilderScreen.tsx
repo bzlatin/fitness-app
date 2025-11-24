@@ -3,10 +3,9 @@ import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigation, usePreventRemove, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -80,11 +79,17 @@ const mapPersistedExercise = (
   reps: exercise.defaultReps,
   restSeconds: exercise.defaultRestSeconds,
   weight:
-    exercise.defaultWeight !== undefined ? String(exercise.defaultWeight) : undefined,
+    exercise.defaultWeight !== undefined
+      ? String(exercise.defaultWeight)
+      : undefined,
   incline:
-    exercise.defaultIncline !== undefined ? String(exercise.defaultIncline) : undefined,
+    exercise.defaultIncline !== undefined
+      ? String(exercise.defaultIncline)
+      : undefined,
   distance:
-    exercise.defaultDistance !== undefined ? String(exercise.defaultDistance) : undefined,
+    exercise.defaultDistance !== undefined
+      ? String(exercise.defaultDistance)
+      : undefined,
   durationMinutes:
     exercise.defaultDurationMinutes !== undefined
       ? String(exercise.defaultDurationMinutes)
@@ -98,7 +103,6 @@ const WorkoutTemplateBuilderScreen = () => {
   const queryClient = useQueryClient();
   const { data: listData } = useWorkoutTemplates();
   const { user } = useCurrentUser();
-  const insets = useSafeAreaInsets();
   const [isNearTop, setIsNearTop] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(false);
 
@@ -127,7 +131,9 @@ const WorkoutTemplateBuilderScreen = () => {
       : []
   );
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [swapExerciseFormId, setSwapExerciseFormId] = useState<string | null>(null);
+  const [swapExerciseFormId, setSwapExerciseFormId] = useState<string | null>(
+    null
+  );
   const [errors, setErrors] = useState<{ name?: string; exercises?: string }>(
     {}
   );
@@ -151,6 +157,43 @@ const WorkoutTemplateBuilderScreen = () => {
       gestureEnabled: !hasUnsavedChanges,
       headerBackButtonMenuEnabled: false,
     });
+
+    // Add beforeRemove listener to handle back navigation
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+
+      // Prevent default behavior
+      e.preventDefault();
+
+      // Show alert
+      Alert.alert(
+        "Discard changes?",
+        "You have unsaved changes. Do you want to save before leaving?",
+        [
+          {
+            text: "Don't save",
+            style: "destructive",
+            onPress: () => {
+              setHasUnsavedChanges(false);
+              // Navigate back after clearing unsaved changes flag
+              setTimeout(() => navigation.dispatch(e.data.action), 0);
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save",
+            onPress: () => {
+              // save() will handle navigation via mutation onSuccess
+              save();
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
   }, [navigation, hasUnsavedChanges]);
 
   // Mark as having unsaved changes when form data changes
@@ -169,11 +212,19 @@ const WorkoutTemplateBuilderScreen = () => {
           description !== (original.description ?? "") ||
           splitType !== original.splitType ||
           exercises.length !== original.exercises.length ||
-          JSON.stringify(exercises) !== JSON.stringify(original.exercises.map(mapPersistedExercise));
+          JSON.stringify(exercises) !==
+            JSON.stringify(original.exercises.map(mapPersistedExercise));
         setHasUnsavedChanges(hasChanges);
       }
     }
-  }, [name, description, splitType, exercises, detailQuery.data, existingTemplate]);
+  }, [
+    name,
+    description,
+    splitType,
+    exercises,
+    detailQuery.data,
+    existingTemplate,
+  ]);
 
   const createMutation = useMutation({
     mutationFn: createTemplate,
@@ -259,7 +310,8 @@ const WorkoutTemplateBuilderScreen = () => {
         if (ex.formId !== formId) return ex;
         if (field === "sets" || field === "reps") {
           const parsed = Number(value);
-          const nextValue = value === "" ? 1 : Math.max(1, Math.round(parsed || 1));
+          const nextValue =
+            value === "" ? 1 : Math.max(1, Math.round(parsed || 1));
           return { ...ex, [field]: nextValue };
         }
         if (field === "restSeconds") {
@@ -355,34 +407,8 @@ const WorkoutTemplateBuilderScreen = () => {
     }
   };
 
-  // Prevent navigation if there are unsaved changes (supported on native stack)
-  usePreventRemove(hasUnsavedChanges, (e) => {
-    if (!hasUnsavedChanges) return;
-
-    e.preventDefault();
-    Alert.alert(
-      'Discard changes?',
-      'You have unsaved changes. Do you want to save before leaving?',
-      [
-        {
-          text: "Don't save",
-          style: 'destructive',
-          onPress: () => {
-            setHasUnsavedChanges(false);
-            navigation.dispatch(e.data.action);
-          }
-        },
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: () => save(),
-        },
-      ]
-    );
-  });
-
   const headerComponent = (
-    <View style={{ gap: 16, paddingBottom: 16 }}>
+    <View style={{ gap: 16, paddingBottom: 16, marginTop: 72 }}>
       <View style={{ gap: 4 }}>
         <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
           {isEditing ? "Edit workout" : "Build a workout"}
@@ -710,29 +736,29 @@ const WorkoutTemplateBuilderScreen = () => {
 
         {cardio ? (
           <View style={{ flexDirection: "row", gap: 10 }}>
-              <InlineNumberInput
-                label='Incline'
-                value={item.incline ?? ""}
-                onChangeText={(val) =>
-                  updateExerciseField(item.formId, "incline", val)
-                }
-                keyboardType='decimal-pad'
+            <InlineNumberInput
+              label='Incline'
+              value={item.incline ?? ""}
+              onChangeText={(val) =>
+                updateExerciseField(item.formId, "incline", val)
+              }
+              keyboardType='decimal-pad'
             />
-              <InlineNumberInput
-                label='Duration (min)'
-                value={item.durationMinutes ?? ""}
-                onChangeText={(val) =>
-                  updateExerciseField(item.formId, "durationMinutes", val)
-                }
-                keyboardType='decimal-pad'
+            <InlineNumberInput
+              label='Duration (min)'
+              value={item.durationMinutes ?? ""}
+              onChangeText={(val) =>
+                updateExerciseField(item.formId, "durationMinutes", val)
+              }
+              keyboardType='decimal-pad'
             />
-              <InlineNumberInput
-                label='Distance (mi)'
-                value={item.distance ?? ""}
-                onChangeText={(val) =>
-                  updateExerciseField(item.formId, "distance", val)
-                }
-                keyboardType='decimal-pad'
+            <InlineNumberInput
+              label='Distance (mi)'
+              value={item.distance ?? ""}
+              onChangeText={(val) =>
+                updateExerciseField(item.formId, "distance", val)
+              }
+              keyboardType='decimal-pad'
             />
           </View>
         ) : (
@@ -774,29 +800,18 @@ const WorkoutTemplateBuilderScreen = () => {
     );
   };
 
-  const currentSwapExercise = exercises.find((ex) => ex.formId === swapExerciseFormId);
+  const currentSwapExercise = exercises.find(
+    (ex) => ex.formId === swapExerciseFormId
+  );
 
   return (
-    <ScreenContainer>
+    <ScreenContainer
+      showGradient={!isNearBottom}
+      showTopGradient={!isNearTop}
+      paddingTop={0}
+      includeTopInset
+    >
       <View style={{ flex: 1 }}>
-        <LinearGradient
-          colors={[
-            `${colors.primary}30`,
-            `${colors.secondary}20`,
-            'transparent',
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: -16,
-            right: -16,
-            height: 160,
-            opacity: 0.9,
-            pointerEvents: 'none',
-          }}
-        />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -810,89 +825,45 @@ const WorkoutTemplateBuilderScreen = () => {
             ListHeaderComponent={headerComponent}
             ListFooterComponent={footerComponent}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 24 }}
+            contentContainerStyle={{ paddingBottom: 40 }}
             keyboardShouldPersistTaps='handled'
             onScroll={(e) => {
-              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+              const { contentOffset, contentSize, layoutMeasurement } =
+                e.nativeEvent;
               const distanceFromTop = contentOffset.y;
-              const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-              setIsNearBottom(distanceFromBottom < 10);
+              const distanceFromBottom =
+                contentSize.height - layoutMeasurement.height - contentOffset.y;
               setIsNearTop(distanceFromTop < 10);
+              setIsNearBottom(distanceFromBottom < 50);
             }}
             scrollEventThrottle={16}
           />
-
-          {!isNearTop && (
-            <LinearGradient
-              colors={[
-                colors.background,
-                `${colors.background}E0`,
-                `${colors.background}C0`,
-                `${colors.background}90`,
-                `${colors.background}60`,
-                `${colors.background}30`,
-                `${colors.background}10`,
-                'transparent',
-              ]}
-              locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: -16,
-                right: -16,
-                height: 60,
-                pointerEvents: 'none',
-              }}
-            />
-          )}
-          {!isNearBottom && (
-            <LinearGradient
-              colors={[
-                'transparent',
-                `${colors.background}10`,
-                `${colors.background}30`,
-                `${colors.background}60`,
-                `${colors.background}90`,
-                `${colors.background}C0`,
-                `${colors.background}E0`,
-                colors.background,
-              ]}
-              locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: -16,
-                right: -16,
-                height: 60 + insets.bottom,
-                pointerEvents: 'none',
-              }}
-            />
-          )}
-
-          <ExercisePicker
-            visible={pickerVisible}
-            onClose={() => setPickerVisible(false)}
-            selected={exercises}
-            onAdd={handleAddExercise}
-            onRemove={removeExerciseByExerciseId}
-          />
-
-          {currentSwapExercise && (
-            <ExerciseSwapModal
-              visible={swapExerciseFormId !== null}
-              onClose={() => setSwapExerciseFormId(null)}
-              exercise={{
-                exerciseId: currentSwapExercise.exercise.id,
-                exerciseName: currentSwapExercise.exercise.name,
-                primaryMuscleGroup: currentSwapExercise.exercise.primaryMuscleGroup,
-                sets: currentSwapExercise.sets,
-                reps: currentSwapExercise.reps,
-                restSeconds: currentSwapExercise.restSeconds,
-              }}
-              onSwap={handleSwapExercise}
-            />
-          )}
         </KeyboardAvoidingView>
+
+        <ExercisePicker
+          visible={pickerVisible}
+          onClose={() => setPickerVisible(false)}
+          selected={exercises}
+          onAdd={handleAddExercise}
+          onRemove={removeExerciseByExerciseId}
+        />
+
+        {currentSwapExercise && (
+          <ExerciseSwapModal
+            visible={swapExerciseFormId !== null}
+            onClose={() => setSwapExerciseFormId(null)}
+            exercise={{
+              exerciseId: currentSwapExercise.exercise.id,
+              exerciseName: currentSwapExercise.exercise.name,
+              primaryMuscleGroup:
+                currentSwapExercise.exercise.primaryMuscleGroup,
+              sets: currentSwapExercise.sets,
+              reps: currentSwapExercise.reps,
+              restSeconds: currentSwapExercise.restSeconds,
+            }}
+            onSwap={handleSwapExercise}
+          />
+        )}
       </View>
     </ScreenContainer>
   );

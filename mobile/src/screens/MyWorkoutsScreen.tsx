@@ -119,7 +119,7 @@ const MyWorkoutsScreen = () => {
       </Pressable>
       {templateLimitReached ? (
         <Text style={{ color: colors.textSecondary, marginBottom: 12 }}>
-          You’ve reached the free template limit. Upgrades coming soon.
+          You've reached the free template limit. Upgrades coming soon.
         </Text>
       ) : null}
 

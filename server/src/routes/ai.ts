@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getAIProvider, WorkoutGenerationParams } from "../services/ai";
 import { calculateMuscleFatigue, getRecentWorkouts } from "../services/fatigue";
+import { determineNextInCycle } from "../services/ai/workoutPrompts";
 import { requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
 import { nanoid } from "nanoid";
@@ -124,6 +125,19 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       calculateMuscleFatigue(userId),
     ]);
 
+    // Determine the next workout in cycle if no specific split requested
+    let finalRequestedSplit = requestedSplit;
+    if (!requestedSplit && !specificRequest) {
+      const nextInCycle = determineNextInCycle(
+        recentWorkouts,
+        onboardingData.preferred_split
+      );
+      if (nextInCycle) {
+        finalRequestedSplit = nextInCycle;
+        console.log(`[AI] Auto-detected next in cycle: ${nextInCycle}`);
+      }
+    }
+
     const params: WorkoutGenerationParams = {
       userId,
       userProfile: {
@@ -137,7 +151,7 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       },
       recentWorkouts,
       muscleFatigue,
-      requestedSplit,
+      requestedSplit: finalRequestedSplit,
       specificRequest,
     };
 
@@ -183,6 +197,115 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
 
     return res.status(500).json({
       error: "Failed to generate workout",
+      message: error instanceof Error ? error.message : "An unexpected error occurred",
+    });
+  }
+});
+
+/**
+ * POST /api/ai/swap-exercise
+ * Swap an exercise for an alternative using AI
+ * Requires Pro plan
+ */
+router.post("/swap-exercise", requireProPlan, async (req, res) => {
+  const userId = res.locals.userId;
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Rate limiting: 20 swaps per minute
+  if (!checkRateLimit(userId, 20, 60000)) {
+    return res.status(429).json({
+      error: "Rate limit exceeded",
+      message: "Too many swap requests. Please wait a minute and try again.",
+    });
+  }
+
+  try {
+    const { exerciseId, exerciseName, primaryMuscleGroup, reason } = req.body;
+
+    if (!exerciseId || !exerciseName || !primaryMuscleGroup) {
+      return res.status(400).json({
+        error: "Missing required fields",
+        message: "exerciseId, exerciseName, and primaryMuscleGroup are required",
+      });
+    }
+
+    // Get user profile for equipment
+    const userResult = await query<{
+      onboarding_data: any;
+    }>(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+
+    const user = userResult.rows[0];
+    const onboardingData = user?.onboarding_data || {};
+    const availableEquipment = onboardingData.available_equipment || ["barbell", "dumbbell", "machine"];
+
+    // Filter exercises by same muscle group
+    const similarExercises = normalizedExercises.filter(
+      (ex) => ex.primaryMuscleGroup === primaryMuscleGroup.toLowerCase() && ex.id !== exerciseId
+    );
+
+    if (similarExercises.length === 0) {
+      return res.status(404).json({
+        error: "No alternatives found",
+        message: "No alternative exercises available for this muscle group",
+      });
+    }
+
+    const aiProvider = getAIProvider();
+    const swapReason = reason || "User requested swap";
+
+    console.log(`[AI] Swapping exercise ${exerciseName} for user ${userId}`);
+
+    const result = await aiProvider.swapExercise(
+      exerciseName,
+      primaryMuscleGroup,
+      swapReason,
+      availableEquipment,
+      similarExercises
+    );
+
+    if (!result || !result.exerciseId) {
+      return res.status(404).json({
+        error: "No suitable alternative found",
+        message: "AI could not find a suitable replacement for this exercise",
+      });
+    }
+
+    // Track usage
+    await query(
+      `
+      INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `,
+      [
+        nanoid(),
+        userId,
+        "exercise_swap",
+        JSON.stringify({ exerciseId, exerciseName, reason }),
+        JSON.stringify(result),
+      ]
+    );
+
+    console.log(`[AI] Successfully swapped to: ${result.exerciseName}`);
+
+    return res.json({
+      success: true,
+      exercise: result,
+    });
+  } catch (error) {
+    console.error("[AI] Error swapping exercise:", error);
+
+    if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
+      return res.status(500).json({
+        error: "AI service not configured",
+        message: "The AI exercise swap service is not properly configured. Please contact support.",
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to swap exercise",
       message: error instanceof Error ? error.message : "An unexpected error occurred",
     });
   }

@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { NavigationProp, RouteProp } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../theme/colors";
@@ -17,6 +18,7 @@ import PostWorkoutShareScreen from "../screens/PostWorkoutShareScreen";
 import HomeScreen from "../screens/HomeScreen";
 import OnboardingScreen from "../screens/OnboardingScreen";
 import SquadJoinScreen from "../screens/SquadJoinScreen";
+import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -107,7 +109,18 @@ const RootNavigator = () => (
     <Stack.Screen
       name="WorkoutTemplateBuilder"
       component={WorkoutTemplateBuilderScreen}
-      options={{ title: "Build Workout" }}
+      options={{
+        title: "Build Workout",
+        headerTransparent: true,
+        headerShadowVisible: false,
+        headerBackground: () => (
+          <BlurView
+            tint="dark"
+            intensity={80}
+            style={{ flex: 1, backgroundColor: "rgba(5, 8, 22, 0.7)" }}
+          />
+        ),
+      }}
     />
     <Stack.Screen
       name="WorkoutGenerator"
@@ -138,6 +151,11 @@ const RootNavigator = () => (
       name="SquadJoin"
       component={SquadJoinScreen}
       options={{ title: "Join Squad" }}
+    />
+    <Stack.Screen
+      name="WorkoutPreview"
+      component={WorkoutPreviewScreen}
+      options={{ title: "AI Workout Preview", headerShown: false }}
     />
   </Stack.Navigator>
 );

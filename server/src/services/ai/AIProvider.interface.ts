@@ -70,6 +70,7 @@ export interface GeneratedExercise {
   restSeconds: number;
   notes?: string;
   orderIndex: number;
+  primaryMuscleGroup?: string;
 }
 
 /**
@@ -84,6 +85,15 @@ export interface GeneratedWorkout {
 }
 
 /**
+ * Exercise swap result from AI
+ */
+export interface ExerciseSwapResult {
+  exerciseId: string | null;
+  exerciseName?: string;
+  reasoning?: string;
+}
+
+/**
  * Model-agnostic AI provider interface
  * Allows easy swapping between OpenAI, Anthropic, or other providers
  */
@@ -91,7 +101,7 @@ export interface AIProvider {
   /**
    * Generate a personalized workout based on user data and history
    */
-  generateWorkout(params: WorkoutGenerationParams): Promise<GeneratedWorkout>;
+  generateWorkout(params: WorkoutGenerationParams, availableExercises: any[]): Promise<GeneratedWorkout>;
 
   /**
    * Suggest an alternative exercise based on a reason (injury, equipment, preference)
@@ -101,4 +111,15 @@ export interface AIProvider {
     reason: string,
     availableEquipment?: string[]
   ): Promise<Exercise | null>;
+
+  /**
+   * Swap an exercise for an alternative
+   */
+  swapExercise(
+    exerciseName: string,
+    primaryMuscleGroup: string,
+    reason: string,
+    availableEquipment: string[],
+    availableExercises: any[]
+  ): Promise<ExerciseSwapResult>;
 }
