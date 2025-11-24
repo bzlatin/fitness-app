@@ -61,4 +61,22 @@ export const exercises: Exercise[] = [
     primaryMuscleGroup: "chest",
     equipment: "bodyweight",
   },
+  {
+    id: "ex-dumbbell-curl",
+    name: "Dumbbell Curl",
+    primaryMuscleGroup: "biceps",
+    equipment: "dumbbell",
+  },
+  {
+    id: "ex-tricep-pushdown",
+    name: "Cable Pushdown",
+    primaryMuscleGroup: "triceps",
+    equipment: "cable",
+  },
+  {
+    id: "ex-lateral-raise",
+    name: "Dumbbell Lateral Raise",
+    primaryMuscleGroup: "shoulders",
+    equipment: "dumbbell",
+  },
 ];

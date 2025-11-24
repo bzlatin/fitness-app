@@ -19,6 +19,8 @@ export type TrainingSplit =
   | "full_body"
   | "custom";
 
+export type BodyGender = "male" | "female";
+
 export interface OnboardingData {
   // Step 1: Welcome (handled separately - name, handle)
 
@@ -40,7 +42,12 @@ export interface OnboardingData {
   injuryNotes?: string;
   movementsToAvoid?: string[];
 
-  // Step 7: Training Style
+  // Step 7: Body Profile (optional)
+  bodyGender?: BodyGender;
+  heightCm?: number;
+  weightKg?: number;
+
+  // Step 8: Training Style
   preferredSplit: TrainingSplit;
 }
 

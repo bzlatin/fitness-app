@@ -1,140 +1,447 @@
+import fs from "fs";
+import path from "path";
 import { query } from "../db";
+import { Exercise, MuscleGroup } from "../types/workouts";
+import { exercises as localExercises } from "../data/exercises";
 import { MuscleFatigueData, RecentWorkout } from "./ai/AIProvider.interface";
 
+export type MuscleFatigue = {
+  muscleGroup: string;
+  last7DaysVolume: number;
+  baselineVolume: number | null;
+  fatigueScore: number;
+  status: "under-trained" | "optimal" | "moderate-fatigue" | "high-fatigue" | "no-data";
+  color: "green" | "blue" | "yellow" | "red" | "gray";
+  fatigued: boolean;
+  underTrained: boolean;
+  baselineMissing: boolean;
+};
+
+export type FatigueResult = {
+  generatedAt: string;
+  windowDays: 7;
+  baselineWeeks: 4;
+  perMuscle: MuscleFatigue[];
+  deloadWeekDetected: boolean;
+  readinessScore: number;
+  freshMuscles: string[];
+  lastWorkoutAt: string | null;
+  totals: {
+    last7DaysVolume: number;
+    baselineVolume: number | null;
+    fatigueScore: number;
+  };
+};
+
+export type TrainingRecommendation = {
+  targetMuscles: string[];
+  recommendedWorkouts: Array<{
+    id: string;
+    name: string;
+    muscleGroups: string[];
+    reason: string;
+  }>;
+};
+
+type RawExercise = {
+  id?: string;
+  name: string;
+  primaryMuscles?: string[];
+  primaryMuscleGroup?: string | string[];
+  equipment?: string;
+  equipments?: string[];
+};
+
+type VolumeRow = {
+  muscle_group: string | null;
+  volume: string;
+};
+
+type TemplateMuscleRow = {
+  id: string;
+  name: string;
+  split_type: string | null;
+  muscle_groups: string[] | null;
+};
+
+const BODYWEIGHT_FALLBACK_LBS = 100;
+const TRACKED_MUSCLES: MuscleGroup[] = [
+  "chest",
+  "back",
+  "shoulders",
+  "biceps",
+  "triceps",
+  "legs",
+  "glutes",
+  "core",
+];
+
+const distExercisesPath = path.join(__dirname, "../data/dist/exercises.json");
+
+const statusColorMap: Record<MuscleFatigue["status"], MuscleFatigue["color"]> = {
+  "under-trained": "green",
+  optimal: "blue",
+  "moderate-fatigue": "yellow",
+  "high-fatigue": "red",
+  "no-data": "gray",
+};
+
+const statusOrder: Record<MuscleFatigue["status"], number> = {
+  "high-fatigue": 0,
+  "moderate-fatigue": 1,
+  optimal: 2,
+  "under-trained": 3,
+  "no-data": 4,
+};
+
+const safeDivide = (numerator: number, denominator: number | null | undefined) => {
+  if (!denominator || denominator === 0) return 0;
+  return numerator / denominator;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const statusFromScore = (score: number, hasData: boolean): MuscleFatigue["status"] => {
+  if (!hasData) return "no-data";
+  if (score < 70) return "under-trained";
+  if (score < 110) return "optimal";
+  if (score < 130) return "moderate-fatigue";
+  return "high-fatigue";
+};
+
+const normalizeExercise = (item: RawExercise): Exercise => {
+  const primary =
+    item.primaryMuscles?.[0] ||
+    (Array.isArray(item.primaryMuscleGroup)
+      ? item.primaryMuscleGroup[0]
+      : item.primaryMuscleGroup) ||
+    "other";
+  const equipment =
+    item.equipment ||
+    (Array.isArray(item.equipments) ? item.equipments[0] : item.equipments) ||
+    "bodyweight";
+
+  return {
+    id: item.id || item.name.replace(/\s+/g, "_"),
+    name: item.name,
+    primaryMuscleGroup: primary.toLowerCase() as MuscleGroup,
+    equipment: equipment.toLowerCase() as Exercise["equipment"],
+  };
+};
+
+let cachedExercises: Exercise[] | null = null;
+const getExerciseCatalog = (): Exercise[] => {
+  if (cachedExercises) return cachedExercises;
+  const rawExercises: RawExercise[] = fs.existsSync(distExercisesPath)
+    ? JSON.parse(fs.readFileSync(distExercisesPath, "utf-8"))
+    : localExercises;
+
+  const deduped = new Map<string, Exercise>();
+  rawExercises
+    .map(normalizeExercise)
+    .forEach((ex) => deduped.set(ex.id, ex));
+
+  cachedExercises = Array.from(deduped.values());
+  return cachedExercises;
+};
+
+let exercisesSeeded = false;
+const chunk = <T>(items: T[], size: number) => {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+};
+
+const seedExercisesTable = async () => {
+  if (exercisesSeeded) return;
+  const catalog = getExerciseCatalog();
+  if (catalog.length === 0) {
+    exercisesSeeded = true;
+    return;
+  }
+
+  const batches = chunk(catalog, 200);
+  for (const batch of batches) {
+    const values = batch
+      .map(
+        (_ex, idx) =>
+          `($${idx * 4 + 1}, $${idx * 4 + 2}, $${idx * 4 + 3}, $${idx * 4 + 4})`
+      )
+      .join(", ");
+    const params = batch.flatMap((ex) => [
+      ex.id,
+      ex.name,
+      ex.primaryMuscleGroup,
+      ex.equipment,
+    ]);
+
+    await query(
+      `
+        INSERT INTO exercises (id, name, primary_muscle_group, equipment)
+        VALUES ${values}
+        ON CONFLICT (id) DO UPDATE
+          SET name = EXCLUDED.name,
+              primary_muscle_group = COALESCE(EXCLUDED.primary_muscle_group, exercises.primary_muscle_group),
+              equipment = COALESCE(EXCLUDED.equipment, exercises.equipment)
+      `,
+      params
+    );
+  }
+  exercisesSeeded = true;
+};
+
+const subtractDays = (date: Date, days: number) => {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() - days);
+  return copy;
+};
+
+const fetchVolumeByMuscle = async (userId: string, start: Date, end: Date) => {
+  await seedExercisesTable();
+  const result = await query<VolumeRow>(
+    `
+      SELECT
+        COALESCE(e.primary_muscle_group, 'other') as muscle_group,
+        SUM(
+          COALESCE(ws.actual_reps, ws.target_reps, 0) *
+          COALESCE(
+            ws.actual_weight,
+            ws.target_weight,
+            CASE WHEN COALESCE(e.equipment, 'bodyweight') = 'bodyweight' THEN $4 ELSE 0 END
+          )
+        ) as volume
+      FROM workout_sets ws
+      JOIN workout_sessions s ON s.id = ws.session_id
+      LEFT JOIN exercises e ON e.id = ws.exercise_id
+      WHERE s.user_id = $1
+        AND s.finished_at IS NOT NULL
+        AND s.finished_at >= $2
+        AND s.finished_at < $3
+      GROUP BY COALESCE(e.primary_muscle_group, 'other')
+    `,
+    [userId, start.toISOString(), end.toISOString(), BODYWEIGHT_FALLBACK_LBS]
+  );
+
+  const volumes = new Map<string, number>();
+  result.rows.forEach((row) => {
+    volumes.set(row.muscle_group ?? "other", Number(row.volume) || 0);
+  });
+  return volumes;
+};
+
+const sortMuscles = (items: MuscleFatigue[]) =>
+  [...items].sort((a, b) => {
+    const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+    if (statusDiff !== 0) return statusDiff;
+    if (a.status === "under-trained") {
+      return a.fatigueScore - b.fatigueScore;
+    }
+    return b.fatigueScore - a.fatigueScore;
+  });
+
+export const getFatigueScores = async (userId: string): Promise<FatigueResult> => {
+  const now = new Date();
+  const last7Start = subtractDays(now, 7);
+  const baselineStart = subtractDays(now, 35);
+  const baselineEnd = subtractDays(now, 7);
+
+  const [last7Volumes, baselineVolumes] = await Promise.all([
+    fetchVolumeByMuscle(userId, last7Start, now),
+    fetchVolumeByMuscle(userId, baselineStart, baselineEnd),
+  ]);
+
+  const muscles = new Set<string>([
+    ...TRACKED_MUSCLES,
+    ...last7Volumes.keys(),
+    ...baselineVolumes.keys(),
+  ]);
+
+  const perMuscle: MuscleFatigue[] = [];
+  let last7Total = 0;
+  let baselineTotalWeekly = 0;
+
+  muscles.forEach((muscle) => {
+    const last7 = last7Volumes.get(muscle) ?? 0;
+    const baselineWeekly = (baselineVolumes.get(muscle) ?? 0) / 4;
+    const baselineMissing = baselineWeekly === 0;
+    const hasAnyData = last7 > 0 || !baselineMissing;
+
+    const fatigueScore = baselineMissing
+      ? last7 > 0
+        ? 100
+        : 0
+      : safeDivide(last7, baselineWeekly) * 100;
+
+    const status =
+      !hasAnyData && baselineMissing
+        ? "no-data"
+        : statusFromScore(fatigueScore, hasAnyData);
+
+    const entry: MuscleFatigue = {
+      muscleGroup: muscle,
+      last7DaysVolume: last7,
+      baselineVolume: baselineMissing ? null : baselineWeekly,
+      fatigueScore,
+      status,
+      color: statusColorMap[status],
+      fatigued: fatigueScore > 130,
+      underTrained: fatigueScore > 0 && fatigueScore < 70,
+      baselineMissing,
+    };
+
+    last7Total += last7;
+    baselineTotalWeekly += baselineWeekly;
+    perMuscle.push(entry);
+  });
+
+  const totalsBaseline = baselineTotalWeekly > 0 ? baselineTotalWeekly : null;
+  const totalFatigueScore =
+    totalsBaseline === null
+      ? last7Total > 0
+        ? 100
+        : 0
+      : safeDivide(last7Total, totalsBaseline) * 100;
+
+  const readinessScore = clamp(150 - totalFatigueScore, 0, 100);
+
+  const freshMuscles = perMuscle
+    .filter((m) => m.status === "under-trained" || m.fatigueScore <= 90)
+    .map((m) => m.muscleGroup);
+
+  const lastWorkoutRow = await query<{ finished_at: string }>(
+    `
+      SELECT finished_at
+      FROM workout_sessions
+      WHERE user_id = $1
+        AND finished_at IS NOT NULL
+      ORDER BY finished_at DESC
+      LIMIT 1
+    `,
+    [userId]
+  );
+
+  return {
+    generatedAt: now.toISOString(),
+    windowDays: 7,
+    baselineWeeks: 4,
+    perMuscle: sortMuscles(perMuscle),
+    deloadWeekDetected:
+      totalsBaseline !== null ? last7Total < totalsBaseline * 0.5 : false,
+    readinessScore,
+    freshMuscles,
+    lastWorkoutAt: lastWorkoutRow.rows[0]?.finished_at || null,
+    totals: {
+      last7DaysVolume: last7Total,
+      baselineVolume: totalsBaseline,
+      fatigueScore: totalFatigueScore,
+    },
+  };
+};
+
+const fetchTemplatesWithMuscles = async (userId: string) => {
+  await seedExercisesTable();
+  const result = await query<TemplateMuscleRow>(
+    `
+      SELECT
+        t.id,
+        t.name,
+        t.split_type,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(e.primary_muscle_group, 'other')), NULL) as muscle_groups
+      FROM workout_templates t
+      LEFT JOIN workout_template_exercises te ON te.template_id = t.id
+      LEFT JOIN exercises e ON e.id = te.exercise_id
+      WHERE t.user_id = $1
+      GROUP BY t.id
+    `,
+    [userId]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    splitType: row.split_type ?? undefined,
+    muscleGroups: (row.muscle_groups ?? []).filter(Boolean),
+  }));
+};
+
+export const getTrainingRecommendations = async (
+  userId: string,
+  existingFatigue?: FatigueResult
+): Promise<TrainingRecommendation> => {
+  const fatigue = existingFatigue ?? (await getFatigueScores(userId));
+  const fatigueList = fatigue.perMuscle;
+
+  const underTrained = fatigueList.filter((m) => m.underTrained);
+  const fatigued = fatigueList.filter((m) => m.fatigued);
+  const optimal = fatigueList.filter((m) => m.status === "optimal");
+
+  const targetMuscles =
+    underTrained.length > 0
+      ? underTrained.map((m) => m.muscleGroup)
+      : optimal
+          .filter((m) => !fatigued.some((f) => f.muscleGroup === m.muscleGroup))
+          .map((m) => m.muscleGroup);
+
+  const avoidMuscles = new Set(fatigued.map((m) => m.muscleGroup));
+  const targetSet = new Set(targetMuscles);
+
+  const templatesWithFlags = (await fetchTemplatesWithMuscles(userId)).map((tpl) => ({
+    ...tpl,
+    hitsTarget: tpl.muscleGroups.some((g) => targetSet.has(g)),
+    hitsAvoid: tpl.muscleGroups.some((g) => avoidMuscles.has(g)),
+  }));
+
+  const actionableTemplates = templatesWithFlags.filter((tpl) => tpl.hitsTarget && !tpl.hitsAvoid);
+
+  const rankedTemplates =
+    actionableTemplates.length > 0
+      ? actionableTemplates
+      : templatesWithFlags.filter((tpl) => !tpl.hitsAvoid);
+
+  const recommendations = rankedTemplates.slice(0, 3).map((tpl) => ({
+    id: tpl.id,
+    name: tpl.name,
+    muscleGroups: tpl.muscleGroups,
+    reason: tpl.hitsTarget
+      ? `Targets ${tpl.muscleGroups.filter((g) => targetSet.has(g)).join(", ")}`
+      : "Balanced option while avoiding fatigued muscles",
+  }));
+
+  if (recommendations.length === 0) {
+    return {
+      targetMuscles: targetMuscles.slice(0, 3),
+      recommendedWorkouts: [
+        {
+          id: "fallback-full-body",
+          name: "Full Body / Mobility",
+          muscleGroups: ["full_body"],
+          reason: "Light full-body or mobility session recommended while data is limited",
+        },
+      ],
+    };
+  }
+
+  return {
+    targetMuscles: targetMuscles.slice(0, 3),
+    recommendedWorkouts: recommendations,
+  };
+};
+
 /**
- * Calculate muscle group fatigue based on recent training volume
- * Returns a score where:
- * - 0-70: Under-trained
- * - 70-110: Optimal
- * - 110-130: Moderate fatigue
- * - 130+: High fatigue
+ * Legacy helper retained for AI prompt compatibility.
+ * Returns a map of muscle group -> fatigue score (0-200+).
  */
 export const calculateMuscleFatigue = async (
   userId: string
 ): Promise<MuscleFatigueData> => {
-  try {
-    // Get volume per muscle group for last 7 days
-    const last7DaysQuery = await query<{
-      muscle_group: string;
-      total_volume: string;
-    }>(
-      `
-      WITH exercise_data AS (
-        SELECT
-          e.id as exercise_id,
-          e.name as exercise_name,
-          e.primary_muscle_group
-        FROM exercises e
-      ),
-      recent_sets AS (
-        SELECT
-          ws.exercise_id,
-          ed.primary_muscle_group as muscle_group,
-          ws.actual_reps,
-          ws.actual_weight
-        FROM workout_sets ws
-        JOIN workout_sessions wss ON ws.session_id = wss.id
-        LEFT JOIN exercise_data ed ON ws.exercise_id = ed.exercise_id
-        WHERE wss.user_id = $1
-          AND wss.finished_at IS NOT NULL
-          AND wss.finished_at >= NOW() - INTERVAL '7 days'
-          AND ws.actual_reps IS NOT NULL
-      )
-      SELECT
-        muscle_group,
-        SUM(COALESCE(actual_reps, 0) * COALESCE(actual_weight, 0)) as total_volume
-      FROM recent_sets
-      WHERE muscle_group IS NOT NULL
-      GROUP BY muscle_group
-    `,
-      [userId]
-    );
-
-    // Get baseline volume (average from 4 weeks ago to 1 week ago)
-    const baselineQuery = await query<{
-      muscle_group: string;
-      avg_volume: string;
-    }>(
-      `
-      WITH exercise_data AS (
-        SELECT
-          e.id as exercise_id,
-          e.name as exercise_name,
-          e.primary_muscle_group
-        FROM exercises e
-      ),
-      baseline_sets AS (
-        SELECT
-          ws.exercise_id,
-          ed.primary_muscle_group as muscle_group,
-          ws.actual_reps,
-          ws.actual_weight
-        FROM workout_sets ws
-        JOIN workout_sessions wss ON ws.session_id = wss.id
-        LEFT JOIN exercise_data ed ON ws.exercise_id = ed.exercise_id
-        WHERE wss.user_id = $1
-          AND wss.finished_at IS NOT NULL
-          AND wss.finished_at >= NOW() - INTERVAL '4 weeks'
-          AND wss.finished_at < NOW() - INTERVAL '7 days'
-          AND ws.actual_reps IS NOT NULL
-      )
-      SELECT
-        muscle_group,
-        AVG(COALESCE(actual_reps, 0) * COALESCE(actual_weight, 0)) * 7 as avg_volume
-      FROM baseline_sets
-      WHERE muscle_group IS NOT NULL
-      GROUP BY muscle_group
-    `,
-      [userId]
-    );
-
-    const last7DaysVolume = new Map(
-      last7DaysQuery.rows.map((row) => [
-        row.muscle_group,
-        parseFloat(row.total_volume),
-      ])
-    );
-
-    const baselineVolume = new Map(
-      baselineQuery.rows.map((row) => [
-        row.muscle_group,
-        parseFloat(row.avg_volume),
-      ])
-    );
-
-    // Calculate fatigue scores
-    const fatigueScores: MuscleFatigueData = {};
-    const muscleGroups = [
-      "chest",
-      "back",
-      "shoulders",
-      "biceps",
-      "triceps",
-      "legs",
-      "glutes",
-      "core",
-    ];
-
-    for (const muscle of muscleGroups) {
-      const recent = last7DaysVolume.get(muscle) || 0;
-      const baseline = baselineVolume.get(muscle) || 0;
-
-      if (baseline === 0) {
-        // No baseline data - assume fresh
-        fatigueScores[muscle as keyof MuscleFatigueData] = 50;
-      } else {
-        // Calculate as percentage of baseline
-        const score = Math.round((recent / baseline) * 100);
-        fatigueScores[muscle as keyof MuscleFatigueData] = score;
-      }
-    }
-
-    return fatigueScores;
-  } catch (error) {
-    console.error("[Fatigue] Error calculating muscle fatigue:", error);
-    // Return default scores on error
-    return {};
-  }
+  const result = await getFatigueScores(userId);
+  return result.perMuscle.reduce<MuscleFatigueData>((acc, item) => {
+    acc[item.muscleGroup as keyof MuscleFatigueData] = Math.round(item.fatigueScore);
+    return acc;
+  }, {});
 };
 
 /**
@@ -170,7 +477,6 @@ export const getRecentWorkouts = async (
     const workouts: RecentWorkout[] = [];
 
     for (const session of sessionsResult.rows) {
-      // Get exercises for this session
       const exercisesResult = await query<{
         exercise_id: string;
         exercise_name: string;

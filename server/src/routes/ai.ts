@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { getAIProvider, WorkoutGenerationParams } from "../services/ai";
-import { calculateMuscleFatigue, getRecentWorkouts } from "../services/fatigue";
+import { getAIProvider, MuscleFatigueData, WorkoutGenerationParams } from "../services/ai";
+import { getFatigueScores, getRecentWorkouts, getTrainingRecommendations } from "../services/fatigue";
 import { determineNextInCycle } from "../services/ai/workoutPrompts";
 import { requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
@@ -148,10 +148,19 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
     const onboardingData = user?.onboarding_data || {};
 
     // Fetch recent workout history and muscle fatigue
-    const [recentWorkouts, muscleFatigue] = await Promise.all([
+    const [recentWorkouts, fatigueResult] = await Promise.all([
       getRecentWorkouts(userId, 5),
-      calculateMuscleFatigue(userId),
+      getFatigueScores(userId),
     ]);
+    const recommendations = await getTrainingRecommendations(userId, fatigueResult);
+
+    const muscleFatigue = fatigueResult.perMuscle.reduce<MuscleFatigueData>(
+      (acc, item) => {
+        acc[item.muscleGroup as keyof MuscleFatigueData] = Math.round(item.fatigueScore);
+        return acc;
+      },
+      {}
+    );
 
     // Determine the next workout in cycle if no specific split requested
     let finalRequestedSplit = requestedSplit;
@@ -166,6 +175,11 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       }
     }
 
+    const fatigueTargets = {
+      prioritize: recommendations.targetMuscles,
+      avoid: fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+    };
+
     const params: WorkoutGenerationParams = {
       userId,
       userProfile: {
@@ -179,6 +193,7 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       },
       recentWorkouts,
       muscleFatigue,
+      fatigueTargets,
       requestedSplit: finalRequestedSplit,
       specificRequest,
     };
@@ -186,6 +201,11 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
     console.log(`[AI] Generating workout for user ${userId}`);
     console.log(
       `[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`
+    );
+    console.log(
+      `[AI] Targeting muscles: ${fatigueTargets.prioritize.join(", ") || "auto"} | Avoid: ${
+        fatigueTargets.avoid.join(", ") || "none"
+      }`
     );
 
     const aiProvider = getAIProvider();

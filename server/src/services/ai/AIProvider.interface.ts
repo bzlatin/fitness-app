@@ -47,6 +47,11 @@ export interface MuscleFatigueData {
   core?: number;
 }
 
+export interface FatigueTargets {
+  prioritize?: string[];
+  avoid?: string[];
+}
+
 /**
  * Parameters for generating a workout
  */
@@ -55,6 +60,7 @@ export interface WorkoutGenerationParams {
   userProfile?: UserProfile;
   recentWorkouts?: RecentWorkout[];
   muscleFatigue?: MuscleFatigueData;
+  fatigueTargets?: FatigueTargets;
   requestedSplit?: string; // e.g., "upper", "push", "legs", "full_body"
   specificRequest?: string; // Optional: "focus on chest", "leg day with glutes"
 }

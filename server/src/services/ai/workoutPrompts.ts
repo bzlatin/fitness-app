@@ -2,6 +2,7 @@ import {
   WorkoutGenerationParams,
   RecentWorkout,
   MuscleFatigueData,
+  FatigueTargets,
 } from "./AIProvider.interface";
 
 /**
@@ -94,6 +95,20 @@ export const formatFatigueScores = (fatigue?: MuscleFatigueData): string => {
     .join("\n");
 
   return scores || "No fatigue data available.";
+};
+
+const formatFatigueTargets = (targets?: FatigueTargets) => {
+  if (!targets) return "No specific muscle bias provided.";
+  const prioritize = targets.prioritize?.filter(Boolean) ?? [];
+  const avoid = targets.avoid?.filter(Boolean) ?? [];
+
+  if (prioritize.length === 0 && avoid.length === 0) {
+    return "No specific muscle bias provided.";
+  }
+
+  return `Prioritize: ${prioritize.length > 0 ? prioritize.join(", ") : "auto based on split"}${
+    avoid.length > 0 ? ` | Avoid/limit: ${avoid.join(", ")}` : ""
+  }`;
 };
 
 /**
@@ -196,6 +211,9 @@ Split Type: ${requestedSplit}${
       : ""
   }${muscleGroupFilter}
 
+# RECOVERY-BASED GUIDANCE
+${formatFatigueTargets(params.fatigueTargets)}
+
 # AVAILABLE EXERCISES DATABASE
 You MUST select exercises ONLY from this list. Each exercise includes its ID, name, primary muscle, and required equipment:
 ${exercisesToUse
@@ -250,6 +268,7 @@ ${exercisesToUse
    - Include warm-up time in your estimate
 
 7. **Naming & Labeling**:
+   - Keep the workout name brief and general (2-3 words max). Avoid long descriptors or emojis.
    - If a specific muscle focus is requested (${focusLabel || "none"}), name the workout after those muscles (e.g., "Arms", "Glutes & Hamstrings") without prefixing generic split labels.
    - Use "custom" splitType for muscle-focus requests that are not standard splits.
 
@@ -257,7 +276,7 @@ ${exercisesToUse
 Respond with ONLY valid JSON matching this exact schema (no markdown, no additional text):
 
 {
-  "name": "Descriptive workout name (e.g., 'Upper Body Power', 'Leg Day - Quad Focus')",
+  "name": "Brief workout name (max 3 words, e.g., 'Upper Power', 'Leg Focus')",
   "splitType": "push|pull|legs|upper|lower|full_body|custom",
   "exercises": [
     {

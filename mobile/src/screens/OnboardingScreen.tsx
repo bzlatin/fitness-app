@@ -21,6 +21,7 @@ import {
   EquipmentType,
   TrainingSplit,
   PartialOnboardingData,
+  BodyGender,
 } from "../types/onboarding";
 import WelcomeStep from "../components/onboarding/WelcomeStep";
 import GoalsStep from "../components/onboarding/GoalsStep";
@@ -28,9 +29,10 @@ import ExperienceLevelStep from "../components/onboarding/ExperienceLevelStep";
 import EquipmentStep from "../components/onboarding/EquipmentStep";
 import ScheduleStep from "../components/onboarding/ScheduleStep";
 import LimitationsStep from "../components/onboarding/LimitationsStep";
+import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -67,7 +69,12 @@ const OnboardingScreen = () => {
   const [injuryNotes, setInjuryNotes] = useState(user?.onboardingData?.injuryNotes ?? "");
   const [movementsToAvoid, setMovementsToAvoid] = useState<string[]>(user?.onboardingData?.movementsToAvoid ?? []);
 
-  // Step 7: Training Style
+  // Step 7: Body profile (optional)
+  const [bodyGender, setBodyGender] = useState<BodyGender | undefined>(user?.onboardingData?.bodyGender);
+  const [heightCm, setHeightCm] = useState<number | undefined>(user?.onboardingData?.heightCm);
+  const [weightKg, setWeightKg] = useState<number | undefined>(user?.onboardingData?.weightKg);
+
+  // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
 
   const canProceed = () => {
@@ -85,6 +92,8 @@ const OnboardingScreen = () => {
       case 6:
         return true; // Optional step
       case 7:
+        return true; // Optional body profile
+      case 8:
         return preferredSplit !== undefined;
       default:
         return false;
@@ -123,6 +132,9 @@ const OnboardingScreen = () => {
       sessionDuration,
       injuryNotes: injuryNotes.trim() || undefined,
       movementsToAvoid: movementsToAvoid.length > 0 ? movementsToAvoid : undefined,
+      bodyGender,
+      heightCm,
+      weightKg,
       preferredSplit,
     };
 
@@ -202,6 +214,17 @@ const OnboardingScreen = () => {
           />
         );
       case 7:
+        return (
+          <BodyProfileStep
+            gender={bodyGender}
+            heightCm={heightCm}
+            weightKg={weightKg}
+            onGenderChange={setBodyGender}
+            onHeightChange={setHeightCm}
+            onWeightChange={setWeightKg}
+          />
+        );
+      case 8:
         return (
           <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
         );

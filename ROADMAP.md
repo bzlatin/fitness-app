@@ -223,7 +223,7 @@ CREATE TABLE squad_invite_links (
 
 ---
 
-### 🤖 Phase 2: AI & Premium Features (Weeks 3-6)
+### 🎯 Phase 2: AI & Premium Features (Weeks 3-6)
 
 #### 2.1 AI Workout Generator (Killer Feature) ✅ COMPLETE
 
@@ -386,13 +386,13 @@ fatigueScore = (last7DaysVolume / baselineVolume) * 100;
 
 **Implementation**:
 
-- [ ] Create fatigue calculation service
-- [ ] Add weekly volume aggregation query (by muscle group)
-- [ ] Build RecoveryDashboard component showing fatigue scores
-- [ ] Add "What should I train today?" recommendation feature
-- [ ] Integrate fatigue data into AI workout generation
-- [ ] Show recovery status on HomeScreen
-- [ ] Add deload week detection (total volume <50% baseline)
+- [x] Create fatigue calculation service
+- [x] Add weekly volume aggregation query (by muscle group)
+- [x] Build RecoveryDashboard component showing fatigue scores
+- [x] Add "What should I train today?" recommendation feature
+- [x] Integrate fatigue data into AI workout generation
+- [x] Show recovery status on HomeScreen
+- [x] Add deload week detection (total volume <50% baseline)
 
 **Database**:
 No new tables needed - calculate from existing `workout_sessions` and `workout_sets`.
@@ -788,7 +788,7 @@ CREATE TABLE workout_comments (
 ## Version History
 
 - **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
-- **v1.1** (Current): Target muscles, multi-step onboarding, squad invite links
-- **v1.2** (In Progress): AI workout generation shipped; Recovery tracking remaining
+- **v1.1**: Target muscles, multi-step onboarding, squad invite links
+- **v1.2** (Current): AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3** (Target: Week 9): Stripe integration + Paywall
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements

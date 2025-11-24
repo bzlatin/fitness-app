@@ -27,6 +27,7 @@ export type RootStackParamList = {
   };
   Onboarding: { isRetake?: boolean };
   SquadJoin: { code: string };
+  Recovery: undefined;
 };
 
 export type RootTabParamList = {

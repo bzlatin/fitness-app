@@ -19,6 +19,7 @@ import HomeScreen from "../screens/HomeScreen";
 import OnboardingScreen from "../screens/OnboardingScreen";
 import SquadJoinScreen from "../screens/SquadJoinScreen";
 import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
+import RecoveryScreen from "../screens/RecoveryScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -149,6 +150,11 @@ const RootNavigator = () => (
       name='Onboarding'
       component={OnboardingScreen}
       options={{ title: "Setup", headerShown: false }}
+    />
+    <Stack.Screen
+      name='Recovery'
+      component={RecoveryScreen}
+      options={{ title: "Recovery & Fatigue" }}
     />
     <Stack.Screen
       name='SquadJoin'

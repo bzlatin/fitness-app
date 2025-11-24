@@ -115,6 +115,23 @@ export class OpenAIProvider implements AIProvider {
         throw new Error("No valid exercises generated");
       }
 
+      // Enforce concise naming (max 3 words)
+      const words = generatedWorkout.name.split(/\s+/).filter(Boolean);
+      if (words.length > 3) {
+        generatedWorkout.name = words.slice(0, 3).join(" ");
+      }
+      const lowerName = generatedWorkout.name.toLowerCase();
+      if (
+        lowerName.includes("fatigue") ||
+        lowerName.includes("avoid") ||
+        lowerName.includes("over") ||
+        lowerName.includes("baseline") ||
+        lowerName.includes("volume")
+      ) {
+        generatedWorkout.name = "Balanced Session";
+      }
+      generatedWorkout.name = generatedWorkout.name.replace(/[^a-zA-Z0-9\s&-]/g, "").trim() || "Training Session";
+
       console.log(
         `[OpenAI] Successfully generated workout: "${generatedWorkout.name}" with ${generatedWorkout.exercises.length} exercises`
       );
