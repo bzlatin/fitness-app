@@ -69,6 +69,8 @@ const RecoveryScreen = () => {
       const highFatigue = (fatigue?.perMuscle ?? [])
         .filter((m) => m.fatigued)
         .map((m) => formatMuscleGroup(m.muscleGroup));
+
+      // Build the instruction for the AI
       const requestParts: string[] = [];
       if (targetMuscles.length > 0) {
         requestParts.push(
@@ -160,10 +162,10 @@ const RecoveryScreen = () => {
       : averageReadiness >= 85
       ? "Fresh"
       : averageReadiness >= 65
-      ? "Ready"
+      ? "Ready to train"
       : averageReadiness >= 45
-      ? "Caution"
-      : "Fatigued";
+      ? "Rest recommended"
+      : "Needs rest";
 
   const averageReadinessColor =
     averageReadiness === null
@@ -568,7 +570,7 @@ const RecoveryScreen = () => {
                         marginTop: 2,
                       }}
                     >
-                      {`${muscle.readiness.percent}%`}
+                      {`${muscle.readiness.percent}% ready`}
                     </Text>
                   </View>
                 ))}
@@ -619,7 +621,7 @@ const RecoveryScreen = () => {
                         marginTop: 2,
                       }}
                     >
-                      {`${muscle.readiness.percent}%`}
+                      {`${muscle.readiness.percent}% ready`}
                     </Text>
                   </View>
                 ))}

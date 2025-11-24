@@ -58,10 +58,10 @@ export const readinessFromFatigueScore = (score: number) => {
     percent >= 85
       ? "Fresh"
       : percent >= 65
-      ? "Ready"
+      ? "Ready to train"
       : percent >= 45
-      ? "Caution"
-      : "Fatigued";
+      ? "Rest recommended"
+      : "Needs rest";
 
   // Use new gradient color based on readiness percentage
   const color = getReadinessColor(percent);

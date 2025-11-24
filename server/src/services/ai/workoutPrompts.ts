@@ -36,7 +36,9 @@ export const determineNextInCycle = (
   }
 
   // Find where we are in the cycle
-  const lastIndex = cycle.findIndex((split) => lastSplit.includes(split) || split.includes(lastSplit));
+  const lastIndex = cycle.findIndex(
+    (split) => lastSplit.includes(split) || split.includes(lastSplit)
+  );
 
   if (lastIndex === -1) {
     return cycle[0]; // Not found, start from beginning
@@ -106,9 +108,9 @@ const formatFatigueTargets = (targets?: FatigueTargets) => {
     return "No specific muscle bias provided.";
   }
 
-  return `Prioritize: ${prioritize.length > 0 ? prioritize.join(", ") : "auto based on split"}${
-    avoid.length > 0 ? ` | Avoid/limit: ${avoid.join(", ")}` : ""
-  }`;
+  return `Prioritize: ${
+    prioritize.length > 0 ? prioritize.join(", ") : "auto based on split"
+  }${avoid.length > 0 ? ` | Avoid/limit: ${avoid.join(", ")}` : ""}`;
 };
 
 /**
@@ -268,15 +270,20 @@ ${exercisesToUse
    - Include warm-up time in your estimate
 
 7. **Naming & Labeling**:
-   - Keep the workout name brief and general (2-3 words max). Avoid long descriptors or emojis.
-   - If a specific muscle focus is requested (${focusLabel || "none"}), name the workout after those muscles (e.g., "Arms", "Glutes & Hamstrings") without prefixing generic split labels.
+   - Keep the workout name EXTREMELY brief (1-8 words max) - just a simple overview of what's trained
+   - Use simple muscle group names or split types: "Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Back & Biceps", "Chest", etc.
+   - NO descriptive words like "power", "volume", "focused", "day", "session", "workout", "training"
+   - NO emojis or special characters except "&" and "-"
+   - If a specific muscle focus is requested (${
+     focusLabel || "none"
+   }), name it after those muscles (e.g., "Arms", "Glutes & Hamstrings")
    - Use "custom" splitType for muscle-focus requests that are not standard splits.
 
 # OUTPUT FORMAT
 Respond with ONLY valid JSON matching this exact schema (no markdown, no additional text):
 
 {
-  "name": "Brief workout name (max 3 words, e.g., 'Upper Power', 'Leg Focus')",
+  "name": "Simple workout name (1-8 words, e.g., 'Push', 'Pull', 'Upper', 'Back & Biceps', 'Arms and Shoulder focus')",
   "splitType": "push|pull|legs|upper|lower|full_body|custom",
   "exercises": [
     {

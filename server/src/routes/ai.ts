@@ -90,8 +90,27 @@ const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: numb
 
 const deriveFocusName = (specificRequest?: string) => {
   if (!specificRequest) return null;
+
+  // Check if this is a fatigue-aware request with instruction format
+  // Example: "Prioritize: chest, back | Limit volume for: biceps | Stay near recent baseline volume"
+  const prioritizeMatch = specificRequest.match(/Prioritize:\s*([^|]+)/i);
+
+  if (prioritizeMatch) {
+    // Extract just the prioritized muscles for the name
+    const muscles = prioritizeMatch[1]
+      .split(/,|and/)
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .slice(0, 3); // Limit to 3
+
+    if (muscles.length > 0) {
+      return muscles.join(" & ");
+    }
+  }
+
+  // Fallback: handle simple "focus on X" format
   const normalized = specificRequest
-    .replace(/focus on|target|emphasize|work on/gi, "")
+    .replace(/focus on|target|emphasize|work on|workout for|prioritize|limit volume for|stay near.*$/gi, "")
     .replace(/[^a-z,&/ ]/gi, " ")
     .replace(/\sand\s/gi, " & ")
     .replace(/\s+/g, " ")
@@ -99,21 +118,24 @@ const deriveFocusName = (specificRequest?: string) => {
 
   if (!normalized) return null;
 
+  // Split by delimiters and capitalize
   const parts = normalized
-    .split(/[,/&]/)
+    .split(/[,/&|]/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) =>
-      part
-        .split(" ")
-        .filter(Boolean)
+    .map((part) => {
+      const words = part.split(" ").filter(Boolean);
+      return words
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ")
-    );
+        .join(" ");
+    });
 
   if (parts.length === 0) return null;
 
-  return parts.join(" & ");
+  // Limit to max 3 muscle groups to keep names concise
+  const limitedParts = parts.slice(0, 3);
+
+  return limitedParts.join(" & ");
 };
 
 /**

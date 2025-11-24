@@ -11,8 +11,6 @@ type FatigueIndicatorProps = {
 };
 
 const hintForItem = (item: MuscleFatigue) => {
-  if (item.fatigued) return "Needs rest";
-  if (item.underTrained) return "Good to target";
   if (item.baselineMissing && item.last7DaysVolume > 0) return "Building baseline";
   return null;
 };
@@ -56,7 +54,7 @@ const FatigueIndicator = ({ item, compact = false }: FatigueIndicatorProps) => {
               fontSize: compact ? 16 : 18,
             }}
           >
-            {readiness.percent}%
+            {readiness.percent}% ready
           </Text>
           <Text
             style={{
