@@ -213,6 +213,42 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS squad_invite_links_squad_id_idx ON squad_invite_links(squad_id)
   `);
 
+  // AI Workout Generation tracking
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_generations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      generation_type TEXT NOT NULL,
+      input_params JSONB,
+      output_data JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS ai_generations_user_id_idx ON ai_generations(user_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS ai_generations_created_at_idx ON ai_generations(created_at)
+  `);
+
+  // Add exercises table for fatigue calculations
+  await query(`
+    CREATE TABLE IF NOT EXISTS exercises (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      primary_muscle_group TEXT,
+      equipment TEXT
+    )
+  `);
+
+  await query(`
+    ALTER TABLE workout_sets
+      ADD COLUMN IF NOT EXISTS exercise_name TEXT,
+      ADD COLUMN IF NOT EXISTS exercise_image_url TEXT
+  `);
+
   await query(`
     INSERT INTO users (id, email, name, handle, bio, plan, plan_expires_at, profile_completed_at, training_style, gym_name, gym_visibility)
     VALUES 
@@ -250,6 +286,15 @@ export const initDb = async () => {
         WHERE handle = '@exhibited'
           AND id <> 'demo-user'
       )
+  `);
+
+  // TEMPORARY: Force @exhibited to Pro plan for AI workout testing
+  // TODO: Remove once Stripe integration is complete (Roadmap 3.1)
+  await query(`
+    UPDATE users
+    SET plan = 'pro',
+        plan_expires_at = NOW() + INTERVAL '90 days'
+    WHERE handle = '@exhibited'
   `);
 
   const seededValues = MOCK_USER_IDS.map((id) => `('${id}')`).join(",\n      ");

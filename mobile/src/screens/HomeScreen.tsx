@@ -1,7 +1,20 @@
-import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useMemo, useState, useEffect } from "react";
+import {
+  Modal,
+  Pressable,
+  Text,
+  View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -9,26 +22,31 @@ import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutTemplate } from "../types/workouts";
-import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
+import UpgradePrompt from "../components/premium/UpgradePrompt";
+import { generateWorkout } from "../api/ai";
+import { deleteTemplate } from "../api/templates";
 import {
   TRAINING_SPLIT_LABELS,
   EXPERIENCE_LEVEL_LABELS,
 } from "../types/onboarding";
+
+// Generate unique ID for React Native (no crypto dependency)
+const generateId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
   const { user } = useCurrentUser();
   const [swapOpen, setSwapOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null
+  );
 
   const upNext = useMemo<WorkoutTemplate | null>(() => {
     if (!templates || templates.length === 0) return null;
-    return (
-      templates.find((t) => t.id === selectedTemplateId) ??
-      templates[0]
-    );
+    return templates.find((t) => t.id === selectedTemplateId) ?? templates[0];
   }, [templates, selectedTemplateId]);
 
   const startWorkout = (template: WorkoutTemplate | null) => {
@@ -137,9 +155,7 @@ const HomeScreen = () => {
 
               <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                 <Chip label='Duration · 60-75m' />
-                <Chip
-                  label={upNext.splitType ?? "Custom"}
-                />
+                <Chip label={upNext.splitType ?? "Custom"} />
                 <Chip label='Hypertrophy' />
               </View>
 
@@ -167,7 +183,7 @@ const HomeScreen = () => {
                 </Pressable>
                 <Pressable
                   onPress={() =>
-                    navigation.navigate("WorkoutTemplateDetail", {
+                    navigation.navigate("WorkoutTemplateBuilder", {
                       templateId: upNext.id,
                     })
                   }
@@ -277,35 +293,47 @@ const HomeScreen = () => {
                 >
                   Update
                 </Text>
-                <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
+                <Ionicons
+                  name='settings-outline'
+                  size={14}
+                  color={colors.textSecondary}
+                />
               </Pressable>
             </View>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {user.onboardingData.preferredSplit && (
                 <PrefsChip
-                  label={TRAINING_SPLIT_LABELS[user.onboardingData.preferredSplit]}
+                  label={
+                    TRAINING_SPLIT_LABELS[user.onboardingData.preferredSplit]
+                  }
                 />
               )}
               {user.onboardingData.experienceLevel && (
                 <PrefsChip
-                  label={EXPERIENCE_LEVEL_LABELS[user.onboardingData.experienceLevel]}
+                  label={
+                    EXPERIENCE_LEVEL_LABELS[user.onboardingData.experienceLevel]
+                  }
                 />
               )}
               {user.onboardingData.weeklyFrequency && (
-                <PrefsChip label={`${user.onboardingData.weeklyFrequency}x/week`} />
+                <PrefsChip
+                  label={`${user.onboardingData.weeklyFrequency}x/week`}
+                />
               )}
               {user.onboardingData.sessionDuration && (
-                <PrefsChip label={`${user.onboardingData.sessionDuration} min`} />
+                <PrefsChip
+                  label={`${user.onboardingData.sessionDuration} min`}
+                />
               )}
             </View>
           </View>
         )}
       </View>
 
-        <SwapModal
-          visible={swapOpen}
-          onClose={() => setSwapOpen(false)}
-          templates={templates ?? []}
+      <SwapModal
+        visible={swapOpen}
+        onClose={() => setSwapOpen(false)}
+        templates={templates ?? []}
         onSelect={(t) => {
           setSelectedTemplateId(t.id);
           setSwapOpen(false);
@@ -363,6 +391,23 @@ const PrefsChip = ({ label }: { label: string }) => (
   </View>
 );
 
+const MUSCLE_GROUPS = [
+  { value: "chest", label: "Chest", emoji: "💪" },
+  { value: "back", label: "Back", emoji: "🦾" },
+  { value: "legs", label: "Legs", emoji: "🦵" },
+  { value: "shoulders", label: "Shoulders", emoji: "🏋️" },
+  { value: "arms", label: "Arms", emoji: "💪" },
+];
+
+const SPLIT_OPTIONS = [
+  { value: "push", label: "Push", emoji: "💪" },
+  { value: "pull", label: "Pull", emoji: "🦾" },
+  { value: "legs", label: "Legs", emoji: "🦵" },
+  { value: "upper", label: "Upper", emoji: "🏅" },
+  { value: "lower", label: "Lower", emoji: "🔥" },
+  { value: "full_body", label: "Full Body", emoji: "⚡" },
+];
+
 const SwapModal = ({
   visible,
   onClose,
@@ -377,140 +422,504 @@ const SwapModal = ({
   onOpenTemplate: (template: WorkoutTemplate) => void;
 }) => {
   const navigation = useNavigation<RootNavigation>();
+  const queryClient = useQueryClient();
+  const { user } = useCurrentUser();
+  const insets = useSafeAreaInsets();
   const [showSaved, setShowSaved] = useState(false);
+  const [showMuscleFocus, setShowMuscleFocus] = useState(false);
+  const [showAISplits, setShowAISplits] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]);
+  const [savedIsNearBottom, setSavedIsNearBottom] = useState(false);
+  const [savedIsNearTop, setSavedIsNearTop] = useState(true);
+
+  const isPro = user?.plan === "pro";
+  const templateCount = templates?.length ?? 0;
+  const safeBottomPadding = Math.max(insets.bottom, 12);
+
+  // Reset all state when modal is opened
+  const resetModalState = () => {
+    setShowSaved(false);
+    setShowMuscleFocus(false);
+    setShowAISplits(false);
+    setSelectedMuscles([]);
+    setSavedIsNearTop(true);
+    setSavedIsNearBottom(false);
+  };
+
+  // Reset state when modal visibility changes
+  useEffect(() => {
+    if (visible) {
+      resetModalState();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (showSaved) {
+      setSavedIsNearTop(true);
+      setSavedIsNearBottom(false);
+    }
+  }, [showSaved, templateCount]);
+
+  const generateMutation = useMutation({
+    mutationFn: async ({
+      split,
+      muscles,
+    }: {
+      split?: string;
+      muscles?: string[];
+    }) => {
+      const workout = await generateWorkout({
+        requestedSplit: split,
+        specificRequest:
+          muscles && muscles.length > 0
+            ? `Focus on ${muscles.join(", ")}`
+            : undefined,
+      });
+      return workout;
+    },
+    onSuccess: (workout) => {
+      onClose();
+      navigation.navigate("WorkoutPreview", { workout });
+    },
+    onError: (error: any) => {
+      Alert.alert(
+        "Generation Failed",
+        error?.response?.data?.message ||
+          "Failed to generate workout. Please try again."
+      );
+    },
+  });
+
+  const handleAIWorkout = (type: "muscle" | "split") => {
+    if (!isPro) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
+    if (type === "muscle") {
+      setShowMuscleFocus(true);
+      setShowSaved(false);
+      setShowAISplits(false);
+      setSelectedMuscles([]);
+    } else {
+      setShowAISplits(true);
+      setShowSaved(false);
+      setShowMuscleFocus(false);
+    }
+  };
+
+  const toggleMuscle = (muscle: string) => {
+    setSelectedMuscles((prev) =>
+      prev.includes(muscle)
+        ? prev.filter((m) => m !== muscle)
+        : [...prev, muscle]
+    );
+  };
+
+  // Determine next workout in split cycle based on recent history
+  const getNextInCycle = () => {
+    const preferredSplit = user?.onboardingData?.preferredSplit;
+
+    if (!preferredSplit) {
+      return "Smart AI-generated workout";
+    }
+
+    // Map splits to readable cycle names
+    const splitCycles: Record<string, string[]> = {
+      ppl: ["Push", "Pull", "Legs"],
+      upper_lower: ["Upper", "Lower"],
+      full_body: ["Full Body"],
+      bro_split: ["Chest", "Back", "Legs", "Shoulders", "Arms"],
+    };
+
+    const cycle = splitCycles[preferredSplit];
+    if (cycle && cycle.length > 1) {
+      return `Suggests next in ${cycle.join("/")} cycle`;
+    }
+
+    return "Optimized for your goals";
+  };
+
+  const handleSavedScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromTop = contentOffset.y;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+    setSavedIsNearTop(distanceFromTop < 10);
+    setSavedIsNearBottom(distanceFromBottom < 10);
+  };
+
+  const showSavedTopShadow = templateCount > 0 && !savedIsNearTop;
+  const showSavedBottomShadow = templateCount > 0 && !savedIsNearBottom;
+
   const actionOptions = [
     {
-      label: "Pick muscle focus",
-      helper: "Curated for chest, back, legs",
-      comingSoon: true,
+      label: "Smart Next Workout",
+      helper: isPro ? getNextInCycle() : "AI-generated (Pro)",
+      action: "ai" as const,
+      icon: "🎯",
     },
     {
-      label: "Saved workouts",
-      helper: "Use templates you built",
+      label: "Muscle Focus",
+      helper: isPro ? "Target specific muscles" : "AI muscle focus (Pro)",
+      action: "muscle" as const,
+      icon: "💪",
+    },
+    {
+      label: "Saved Workouts",
+      helper: "Your saved templates",
       action: "saved" as const,
+      icon: "📋",
     },
     {
-      label: "Create from scratch",
-      helper: "Build a fresh workout",
+      label: "Create New",
+      helper: "Build from scratch",
       action: "scratch" as const,
+      icon: "✏️",
     },
-    { label: "On-demand", helper: "Follow-along programs", comingSoon: true },
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <Pressable
-        onPress={onClose}
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.6)",
-          justifyContent: "flex-end",
-        }}
-      >
+    <>
+      <UpgradePrompt
+        visible={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        feature='AI Workout Generation'
+      />
+
+      <Modal visible={visible} animationType='slide' transparent>
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={onClose}
           style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            padding: 16,
-            maxHeight: "80%",
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
-            marginBottom: -1,
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "flex-end",
           }}
         >
-          <View
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 16,
+              paddingBottom: 16 + safeBottomPadding,
+              maxHeight: "80%",
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 12,
+              marginBottom: -1,
             }}
           >
-            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-              Choose a workout
-            </Text>
-            <Pressable onPress={onClose}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.semibold,
-                }}
+                style={{ ...typography.heading2, color: colors.textPrimary }}
               >
-                Close
+                Choose a workout
               </Text>
-            </Pressable>
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-              marginBottom: 16,
-            }}
-          >
-            {actionOptions.map((option) => {
-              const disabled = Boolean(option.comingSoon);
-              return (
-                <Pressable
-                  key={option.label}
-                  disabled={disabled}
-                  onPress={() => {
-                    if (option.action === "scratch") {
-                      onClose();
-                      navigation.navigate("WorkoutTemplateBuilder", {});
-                      return;
-                    }
-                    if (option.action === "saved") {
-                      setShowSaved((prev) => !prev);
-                    }
+              <Pressable onPress={onClose}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
                   }}
-                  style={({ pressed }) => ({
-                    flexBasis: "48%",
-                    padding: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: disabled ? colors.border : colors.primary,
-                    backgroundColor: disabled
-                      ? colors.surfaceMuted
-                      : "rgba(34,197,94,0.12)",
-                    opacity: pressed ? 0.9 : 1,
-                  })}
                 >
-                  <Text
-                    style={{
-                      color: disabled ? colors.textSecondary : colors.primary,
-                      fontFamily: fontFamilies.semibold,
-                    }}
-                  >
-                    {option.label}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginTop: 4,
-                    }}
-                  >
-                    {option.comingSoon ? "Coming soon" : option.helper}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                  Close
+                </Text>
+              </Pressable>
+            </View>
 
-          {showSaved ? (
-            <>
+            {generateMutation.isPending && (
               <View
                 style={{
-                  height: 1,
-                  backgroundColor: colors.border,
-                  marginVertical: 4,
+                  padding: 16,
+                  backgroundColor: colors.surfaceMuted,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  gap: 8,
                 }}
-              />
-              <ScrollView style={{ marginTop: 4 }}>
+              >
+                <ActivityIndicator color={colors.primary} size='large' />
+                <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
+                  Generating your personalized workout...
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  This may take 10-30 seconds
+                </Text>
+              </View>
+            )}
+
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {actionOptions.map((option) => {
+                const isActive =
+                  (option.action === "saved" && showSaved) ||
+                  (option.action === "muscle" && showMuscleFocus) ||
+                  (option.action === "ai" && showAISplits);
+
+                return (
+                  <Pressable
+                    key={option.label}
+                    disabled={generateMutation.isPending}
+                    onPress={() => {
+                      if (option.action === "scratch") {
+                        onClose();
+                        navigation.navigate("WorkoutTemplateBuilder", {});
+                        return;
+                      }
+                      if (option.action === "saved") {
+                        if (showSaved) {
+                          // Toggle off
+                          setShowSaved(false);
+                        } else {
+                          // Toggle on, turn others off
+                          setShowSaved(true);
+                          setShowMuscleFocus(false);
+                          setShowAISplits(false);
+                          setSavedIsNearTop(true);
+                          setSavedIsNearBottom(false);
+                        }
+                        return;
+                      }
+                      if (option.action === "muscle") {
+                        if (showMuscleFocus) {
+                          // Toggle off
+                          setShowMuscleFocus(false);
+                          setSelectedMuscles([]);
+                        } else {
+                          handleAIWorkout("muscle");
+                        }
+                        return;
+                      }
+                      if (option.action === "ai") {
+                        if (showAISplits) {
+                          // Toggle off
+                          setShowAISplits(false);
+                        } else {
+                          handleAIWorkout("split");
+                        }
+                        return;
+                      }
+                    }}
+                    style={({ pressed }) => ({
+                      width: "48%",
+                      padding: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: isActive ? colors.primary : colors.border,
+                      backgroundColor: isActive
+                        ? `${colors.primary}15`
+                        : pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      opacity: generateMutation.isPending ? 0.5 : 1,
+                      alignItems: "center",
+                      gap: 8,
+                    })}
+                  >
+                    <View
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 12,
+                        backgroundColor: `${colors.primary}15`,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ fontSize: 24 }}>{option.icon}</Text>
+                    </View>
+                    <View style={{ alignItems: "center" }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 14,
+                            textAlign: "center",
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                        {!isPro &&
+                          (option.action === "muscle" ||
+                            option.action === "ai") && (
+                            <View
+                              style={{
+                                backgroundColor: colors.primary,
+                                paddingHorizontal: 5,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#0B1220",
+                                  fontSize: 8,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                PRO
+                              </Text>
+                            </View>
+                          )}
+                      </View>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 11,
+                          marginTop: 4,
+                          textAlign: "center",
+                        }}
+                        numberOfLines={2}
+                      >
+                        {option.helper}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Muscle Group Selection */}
+            {showMuscleFocus && (
+              <>
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginVertical: 4,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    marginBottom: 4,
+                  }}
+                >
+                  Select muscle groups
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    marginBottom: 8,
+                  }}
+                >
+                  Choose one or more muscle groups to focus on
+                </Text>
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                >
+                  {MUSCLE_GROUPS.map((muscle) => {
+                    const isSelected = selectedMuscles.includes(
+                      muscle.label.toLowerCase()
+                    );
+                    return (
+                      <Pressable
+                        key={muscle.value}
+                        onPress={() => toggleMuscle(muscle.label.toLowerCase())}
+                        disabled={generateMutation.isPending}
+                        style={({ pressed }) => ({
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: isSelected
+                            ? colors.primary
+                            : colors.border,
+                          backgroundColor: isSelected
+                            ? `${colors.primary}20`
+                            : colors.surfaceMuted,
+                          opacity:
+                            pressed || generateMutation.isPending ? 0.6 : 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        })}
+                      >
+                        <Text style={{ fontSize: 18 }}>{muscle.emoji}</Text>
+                        <Text
+                          style={{
+                            color: isSelected
+                              ? colors.primary
+                              : colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          {muscle.label}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name='checkmark-circle'
+                            size={16}
+                            color={colors.primary}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {selectedMuscles.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      generateMutation.mutate({ muscles: selectedMuscles });
+                    }}
+                    disabled={generateMutation.isPending}
+                    style={({ pressed }) => ({
+                      marginTop: 12,
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      backgroundColor: colors.primary,
+                      alignItems: "center",
+                      opacity: pressed || generateMutation.isPending ? 0.8 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        color: colors.surface,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 16,
+                      }}
+                    >
+                      Generate Workout
+                    </Text>
+                  </Pressable>
+                )}
+              </>
+            )}
+
+            {/* AI Split Selection */}
+            {showAISplits && (
+              <>
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginVertical: 4,
+                  }}
+                />
                 <Text
                   style={{
                     color: colors.textPrimary,
@@ -518,29 +927,272 @@ const SwapModal = ({
                     marginBottom: 8,
                   }}
                 >
-                  Saved workouts
+                  Select workout split
                 </Text>
-                {templates.map((template) => (
-                  <WorkoutTemplateCard
-                    key={template.id}
-                    template={template}
-                    onPress={() => {
-                      onSelect(template);
-                      onClose();
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                >
+                  {SPLIT_OPTIONS.map((split) => (
+                    <Pressable
+                      key={split.value}
+                      onPress={() => {
+                        generateMutation.mutate({ split: split.value });
+                      }}
+                      disabled={generateMutation.isPending}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.primary,
+                        backgroundColor: colors.surfaceMuted,
+                        opacity:
+                          pressed || generateMutation.isPending ? 0.6 : 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        minWidth: 100,
+                      })}
+                    >
+                      <Text style={{ fontSize: 18 }}>{split.emoji}</Text>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                        }}
+                      >
+                        {split.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* Saved Workouts */}
+            {showSaved && (
+              <>
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginVertical: 8,
+                  }}
+                />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 16,
                     }}
-                  />
-                ))}
-                {templates.length === 0 ? (
-                  <Text style={{ color: colors.textSecondary }}>
-                    No saved workouts yet.
+                  >
+                    Saved Workouts
                   </Text>
-                ) : null}
-              </ScrollView>
-            </>
-          ) : null}
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                    {templates.length}{" "}
+                    {templates.length === 1 ? "template" : "templates"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    position: "relative",
+                    height: 420 + safeBottomPadding,
+                  }}
+                >
+                  {showSavedTopShadow && (
+                    <LinearGradient
+                      colors={[colors.surface, `${colors.surface}00`]}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 40,
+                        pointerEvents: "none",
+                        zIndex: 1,
+                      }}
+                    />
+                  )}
+                  <FlatList
+                    data={templates}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item: template }) => (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 10,
+                          backgroundColor: colors.surface,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          padding: 12,
+                        }}
+                      >
+                        <Pressable
+                          style={{ flex: 1 }}
+                          onPress={() => {
+                            onSelect(template);
+                            onClose();
+                          }}
+                        >
+                          <View>
+                            <Text
+                              style={{
+                                color: colors.textPrimary,
+                                fontFamily: fontFamilies.semibold,
+                                fontSize: 15,
+                                marginBottom: 4,
+                              }}
+                            >
+                              {template.name}
+                            </Text>
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                fontSize: 12,
+                              }}
+                            >
+                              {template.exercises.length} exercises
+                              {template.splitType && ` · ${template.splitType}`}
+                            </Text>
+                          </View>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            Alert.alert(
+                              "Delete Workout",
+                              `Are you sure you want to delete "${template.name}"? This cannot be undone.`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Delete",
+                                  style: "destructive",
+                                  onPress: async () => {
+                                    try {
+                                      await deleteTemplate(template.id);
+                                      // Invalidate and refetch the templates query to update UI
+                                      queryClient.invalidateQueries({
+                                        queryKey: ["templates"],
+                                      });
+                                    } catch (error) {
+                                      Alert.alert(
+                                        "Error",
+                                        "Failed to delete workout. Please try again."
+                                      );
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                          style={({ pressed }) => ({
+                            padding: 10,
+                            borderRadius: 8,
+                            backgroundColor: pressed
+                              ? `${colors.border}50`
+                              : "transparent",
+                          })}
+                        >
+                          <Ionicons
+                            name='trash-outline'
+                            size={20}
+                            color='#ef4444'
+                          />
+                        </Pressable>
+                      </View>
+                    )}
+                    contentContainerStyle={{
+                      paddingBottom: 48 + safeBottomPadding,
+                      paddingTop: templateCount > 3 ? 12 : 4,
+                      paddingHorizontal: 2,
+                    }}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled
+                    style={{ maxHeight: 420 + safeBottomPadding }}
+                    onScroll={handleSavedScroll}
+                    scrollEventThrottle={16}
+                    scrollIndicatorInsets={{
+                      right: 1,
+                      bottom: safeBottomPadding,
+                    }}
+                    ListHeaderComponent={<View style={{ height: 4 }} />}
+                    ListFooterComponent={
+                      <View style={{ height: safeBottomPadding + 64 }} />
+                    }
+                    ListEmptyComponent={
+                      <View
+                        style={{
+                          padding: 32,
+                          alignItems: "center",
+                          backgroundColor: colors.surfaceMuted,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderStyle: "dashed",
+                        }}
+                      >
+                        <Text style={{ fontSize: 40, marginBottom: 8 }}>
+                          📋
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                            marginBottom: 4,
+                          }}
+                        >
+                          No saved workouts yet
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: 13,
+                            textAlign: "center",
+                          }}
+                        >
+                          Create a workout template to get started
+                        </Text>
+                      </View>
+                    }
+                  />
+                  {showSavedBottomShadow && (
+                    <LinearGradient
+                      colors={[
+                        "transparent",
+                        `${colors.surface}10`,
+                        `${colors.surface}30`,
+                        `${colors.surface}60`,
+                        `${colors.surface}90`,
+                        colors.surface,
+                      ]}
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 80,
+                        pointerEvents: "none",
+                        zIndex: 1,
+                      }}
+                    />
+                  )}
+                </View>
+              </>
+            )}
+          </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </Modal>
+    </>
   );
 };
 

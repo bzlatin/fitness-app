@@ -1,6 +1,17 @@
 import { ReactNode, useState } from "react";
-import { ScrollView, StatusBar, View, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  ScrollView,
+  StatusBar,
+  View,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from "react-native";
+import {
+  Edge,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 
@@ -8,9 +19,19 @@ type Props = {
   children: ReactNode;
   scroll?: boolean;
   showGradient?: boolean; // Override to force show/hide gradient
+  showTopGradient?: boolean; // Override to force show/hide top gradient
+  paddingTop?: number; // Override top padding on the scroll/view wrapper
+  includeTopInset?: boolean; // Disable top safe area when native header already provides it
 };
 
-const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
+const ScreenContainer = ({
+  children,
+  scroll = false,
+  showGradient,
+  showTopGradient,
+  paddingTop = 16,
+  includeTopInset = true,
+}: Props) => {
   const insets = useSafeAreaInsets();
   const [contentHeight, setContentHeight] = useState(0);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
@@ -18,33 +39,55 @@ const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
   const [isNearTop, setIsNearTop] = useState(true);
 
   const Wrapper = scroll ? ScrollView : View;
+  const safeEdges: Edge[] = includeTopInset
+    ? ["top", "left", "right"]
+    : ["left", "right"];
 
   // Only show gradient if content is scrollable
   const isScrollable = contentHeight > scrollViewHeight;
-  const shouldShowBottomGradient = showGradient !== undefined
-    ? showGradient
-    : scroll && isScrollable && !isNearBottom;
-  const shouldShowTopGradient = scroll && isScrollable && !isNearTop;
+  const shouldShowBottomGradient =
+    showGradient !== undefined
+      ? showGradient
+      : scroll && isScrollable && !isNearBottom;
+  const shouldShowTopGradient =
+    showTopGradient !== undefined
+      ? showTopGradient
+      : scroll && isScrollable && !isNearTop;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
     const distanceFromTop = contentOffset.y;
 
-    setIsNearBottom(distanceFromBottom < 10);
-    setIsNearTop(distanceFromTop < 10);
+    setIsNearTop(distanceFromTop < 50);
+    setIsNearBottom(distanceFromBottom < 50);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={safeEdges}
+    >
+      <StatusBar barStyle='light-content' backgroundColor={colors.background} />
       <View style={{ flex: 1 }}>
         <Wrapper
-          style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}
-          contentContainerStyle={scroll ? { paddingBottom: Math.max(insets.bottom, 20) + 60 } : undefined}
+          style={{ flex: 1, paddingHorizontal: 16, paddingTop }}
+          contentContainerStyle={
+            scroll
+              ? { paddingBottom: Math.max(insets.bottom, 20) + 120 }
+              : undefined
+          }
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={scroll ? (w, h) => setContentHeight(h) : undefined}
-          onLayout={scroll ? (e: LayoutChangeEvent) => setScrollViewHeight(e.nativeEvent.layout.height) : undefined}
+          onContentSizeChange={
+            scroll ? (w, h) => setContentHeight(h) : undefined
+          }
+          onLayout={
+            scroll
+              ? (e: LayoutChangeEvent) =>
+                  setScrollViewHeight(e.nativeEvent.layout.height)
+              : undefined
+          }
           onScroll={scroll ? handleScroll : undefined}
           scrollEventThrottle={16}
         >
@@ -60,23 +103,24 @@ const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
               `${colors.background}60`,
               `${colors.background}30`,
               `${colors.background}10`,
-              'transparent',
+              "transparent",
             ]}
             locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
               right: 0,
-              height: 60,
-              pointerEvents: 'none',
+              height: 80,
+              pointerEvents: "none",
+              zIndex: 10,
             }}
           />
         )}
         {shouldShowBottomGradient && (
           <LinearGradient
             colors={[
-              'transparent',
+              "transparent",
               `${colors.background}10`,
               `${colors.background}30`,
               `${colors.background}60`,
@@ -87,12 +131,13 @@ const ScreenContainer = ({ children, scroll = false, showGradient }: Props) => {
             ]}
             locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
             style={{
-              position: 'absolute',
+              position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              height: 60 + insets.bottom,
-              pointerEvents: 'none',
+              height: 80 + insets.bottom,
+              pointerEvents: "none",
+              zIndex: 10,
             }}
           />
         )}

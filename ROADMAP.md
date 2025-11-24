@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-11-22
-> Status: MVP Complete - Moving to Growth & Monetization Phase
+> Last Updated: 2025-11-23
+> Status: Phase 1 complete — Phase 2 (AI & Premium) in progress
 
 ## Product Vision
 
@@ -75,7 +75,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 
 ---
 
-### 🎯 Phase 1: Core Experience & Foundation (Weeks 1-2)
+### ✅ Phase 1: Core Experience & Foundation (Weeks 1-2)
 
 #### 1.1 Target Muscle Display Accuracy ⚡ Quick Win ✅
 
@@ -142,27 +142,27 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 
 **Implementation**:
 
-- [ ] Design multi-step wizard UI with progress indicator
-- [ ] Create OnboardingStep components for each screen
-- [ ] Add `onboarding_data` JSONB column to users table
-- [ ] Create PATCH `/api/users/me/onboarding` endpoint
-- [ ] Update OnboardingScreen to multi-step flow
-- [ ] Store structured JSON in database
-- [ ] Add ability to re-take onboarding from settings
+- [x] Design multi-step wizard UI with progress indicator
+- [x] Create OnboardingStep components for each screen
+- [x] Add `onboarding_data` JSONB column to users table
+- [x] Add onboarding handling to `/api/social/me` profile update endpoint
+- [x] Update OnboardingScreen to multi-step flow
+- [x] Store structured JSON in database
+- [x] Add ability to re-take onboarding from settings
 
 **Files to Create/Modify**:
 
-- `/mobile/src/screens/OnboardingScreen.tsx` (refactor)
-- `/mobile/src/components/onboarding/` (new directory)
+- ✅ `/mobile/src/screens/OnboardingScreen.tsx` - Multi-step wizard + progress
+- ✅ `/mobile/src/components/onboarding/` (new directory)
   - `WelcomeStep.tsx`
   - `GoalsStep.tsx`
-  - `ExperienceStep.tsx`
+  - `ExperienceStep.tsx` / `ExperienceLevelStep.tsx`
   - `EquipmentStep.tsx`
   - `ScheduleStep.tsx`
   - `LimitationsStep.tsx`
-  - `TrainingSplitStep.tsx`
-- `/server/src/routes/users.ts` (add onboarding endpoint)
-- `/server/db.ts` (migration)
+  - `TrainingSplitStep.tsx` / `TrainingStyleStep.tsx`
+- ✅ `/server/src/routes/social.ts` - Profile update supports onboarding data + retake flow
+- ✅ `/server/src/db.ts` - Added `onboarding_data` column to users
 
 ---
 
@@ -174,26 +174,26 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 
 **Implementation**:
 
-- [ ] Generate unique invite code for each squad (nanoid)
-- [ ] Create `squad_invite_links` table with expiration support
-- [ ] Add "Share Invite Link" button to squad screen
-- [ ] Create deep link handler for `app://squad/join/{code}`
-- [ ] Build SquadJoinScreen that shows squad preview before joining
-- [ ] Implement join via link endpoint (validates code, adds member)
-- [ ] Track invite attribution (who invited whom)
+- [x] Generate unique invite code for each squad
+- [x] Create `squad_invite_links` table with expiration support
+- [x] Add "Share Invite Link" button to squad screen
+- [x] Create deep link handler for `app://squad/join/{code}`
+- [x] Build SquadJoinScreen that shows squad preview before joining
+- [x] Implement join via link endpoint (validates code, adds member)
+- [x] Track invite attribution (who invited whom)
 
 **Database Schema**:
 
 ```sql
 CREATE TABLE squad_invite_links (
-  id TEXT PRIMARY KEY DEFAULT nanoid(),
+  id TEXT PRIMARY KEY,
   squad_id TEXT REFERENCES squads(id) ON DELETE CASCADE,
+  code TEXT UNIQUE NOT NULL,
   created_by TEXT REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  expires_at TIMESTAMPTZ,
-  max_uses INTEGER,
-  use_count INTEGER DEFAULT 0,
-  is_active BOOLEAN DEFAULT TRUE
+  expires_at TIMESTAMPTZ NOT NULL,
+  is_revoked BOOLEAN DEFAULT FALSE,
+  uses_count INTEGER DEFAULT 0
 );
 ```
 
@@ -207,26 +207,27 @@ CREATE TABLE squad_invite_links (
 
 **Files to Create/Modify**:
 
-- `/server/src/routes/squads.ts` (add invite endpoints)
-- `/mobile/src/screens/SquadJoinScreen.tsx` (new)
-- `/mobile/src/screens/SquadScreen.tsx` (add share button)
-- `/mobile/src/navigation/linking.ts` (deep link config)
-- `/server/src/db.ts` (migration)
+- ✅ `/server/src/routes/social.ts` (invite endpoints + squad preview/join logic)
+- ✅ `/mobile/src/screens/SquadJoinScreen.tsx` (new)
+- ✅ `/mobile/src/screens/SquadScreen.tsx` (share button + invite management)
+- ✅ `/mobile/App.tsx` (deep link config for `squad/join/:code`)
+- ✅ `/server/src/db.ts` (migration + indexes for `squad_invite_links`)
 
 **API Endpoints**:
 
-- `POST /api/squads/:id/invite-links` - Create invite link
-- `GET /api/squads/join/:code` - Get squad preview
-- `POST /api/squads/join/:code` - Join squad via link
-- `DELETE /api/squads/invite-links/:id` - Revoke link
+- `POST /api/social/squads/:id/invites` - Create invite link
+- `GET /api/social/squad-invite/:code` - Get squad preview
+- `POST /api/social/squad-invite/:code/join` - Join squad via link
+- `GET /api/social/squads/:id/invites` - List + manage active links
+- `DELETE /api/social/squads/:id/invites/:inviteId` - Revoke link
 
 ---
 
 ### 🤖 Phase 2: AI & Premium Features (Weeks 3-6)
 
-#### 2.1 AI Workout Generator (Killer Feature)
+#### 2.1 AI Workout Generator (Killer Feature) ✅ COMPLETE
 
-**Priority**: CRITICAL | **Effort**: 10-14 days | **Impact**: VERY HIGH
+**Priority**: CRITICAL | **Effort**: 10-14 days | **Impact**: VERY HIGH | **Status**: ✅ IMPLEMENTED
 
 **Goal**: Generate personalized workout programs using OpenAI based on user profile and history.
 
@@ -261,15 +262,15 @@ class OpenAIProvider implements AIProvider { ... }
 
 **Implementation Steps**:
 
-- [ ] Create AIProvider interface and OpenAI implementation
-- [ ] Design prompt template with structured output (JSON mode)
-- [ ] Build workout generation endpoint with rate limiting
-- [ ] Create WorkoutGeneratorScreen UI
-- [ ] Add "Generate with AI" button to MyWorkoutsScreen
-- [ ] Implement template preview before saving
-- [ ] Add regeneration option if user doesn't like result
-- [ ] Track AI generation usage per user (for analytics)
-- [ ] Show upgrade prompt if user is on free tier
+- [x] Create AIProvider interface and OpenAI implementation
+- [x] Design prompt template with structured output (JSON mode)
+- [x] Build workout generation endpoint with rate limiting
+- [x] Integrated into HomeScreen swap modal (muscle focus + split selection)
+- [x] Auto-save generated workouts as templates
+- [x] Regeneration functionality built-in
+- [x] Track AI generation usage per user (for analytics)
+- [x] Show upgrade prompt if user is on free tier
+- [x] Pro plan enforcement with proper gating
 
 **Prompt Engineering**:
 
@@ -315,16 +316,21 @@ Output valid JSON matching this schema:
 }`;
 ```
 
-**Files to Create/Modify**:
+**Files Created/Modified**:
 
-- `/server/src/services/ai/` (new directory)
-  - `AIProvider.interface.ts`
-  - `OpenAIProvider.ts`
-  - `workoutPrompts.ts`
-- `/server/src/routes/ai.ts` (new)
-- `/mobile/src/screens/WorkoutGeneratorScreen.tsx` (new)
-- `/mobile/src/screens/MyWorkoutsScreen.tsx` (add generate button)
-- `/mobile/src/api/ai.ts` (new)
+- ✅ `/server/src/services/ai/` (new directory)
+  - `AIProvider.interface.ts` - Model-agnostic interface
+  - `OpenAIProvider.ts` - GPT-4o implementation
+  - `workoutPrompts.ts` - Prompt engineering
+  - `index.ts` - Factory function
+- ✅ `/server/src/services/fatigue.ts` - Muscle fatigue calculations
+- ✅ `/server/src/routes/ai.ts` - AI endpoints
+- ✅ `/server/src/middleware/planLimits.ts` - Pro plan enforcement
+- ✅ `/mobile/src/screens/HomeScreen.tsx` - Integrated AI into swap modal
+- ✅ `/mobile/src/components/premium/UpgradePrompt.tsx` - Paywall modal
+- ✅ `/mobile/src/api/ai.ts` - AI API client
+- ✅ `/server/src/db.ts` - Added ai_generations table
+- ✅ `AI_SETUP.md` - Complete documentation
 
 **API Endpoints**:
 
@@ -333,9 +339,23 @@ Output valid JSON matching this schema:
 
 **Rate Limiting**:
 
-- Free tier: Trigger trial on first use
+- Free tier: Blocked with upgrade prompt (no trial auto-start)
 - Pro tier: Unlimited (but track for abuse)
 - Rate limit: 10 requests per minute per user
+
+**Implementation Notes**:
+
+- AI generation integrated into HomeScreen "Swap" modal
+- Two flows: "Pick muscle focus" (Chest, Back, Legs, Shoulders, Arms) or "AI workout" (Push, Pull, Legs, Upper, Lower, Full Body)
+- Auto-saves generated workouts as templates
+- Loading state shows 10-30 second generation time
+- Uses GPT-4o for best workout programming quality (~$0.02 per generation)
+- Pro badges shown to free users
+- @exhibited user temporarily set to Pro for testing (remove after Stripe integration)
+
+**Cost Analysis**:
+- Per generation: ~$0.015-0.03
+- 100 Pro users × 10 workouts/month: ~$15-30/month API costs
 
 ---
 
@@ -767,8 +787,8 @@ CREATE TABLE workout_comments (
 
 ## Version History
 
-- **v1.0** (Current): MVP complete - Home, Workouts, History, Squad, Profile
-- **v1.1** (Target: Week 2): Target muscles + Onboarding + Invite links
-- **v1.2** (Target: Week 6): AI generation + Recovery tracking
+- **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
+- **v1.1** (Current): Target muscles, multi-step onboarding, squad invite links
+- **v1.2** (In Progress): AI workout generation shipped; Recovery tracking remaining
 - **v1.3** (Target: Week 9): Stripe integration + Paywall
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements
