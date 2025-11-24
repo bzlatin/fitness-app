@@ -3,7 +3,7 @@ import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, usePreventRemove, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +19,7 @@ import {
   Platform,
 } from "react-native";
 import ExercisePicker from "../components/workouts/ExercisePicker";
+import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import {
   createTemplate,
@@ -126,9 +127,11 @@ const WorkoutTemplateBuilderScreen = () => {
       : []
   );
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [swapExerciseFormId, setSwapExerciseFormId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ name?: string; exercises?: string }>(
     {}
   );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (detailQuery.data) {
@@ -136,14 +139,46 @@ const WorkoutTemplateBuilderScreen = () => {
       setDescription(detailQuery.data.description ?? "");
       setSplitType(detailQuery.data.splitType ?? "push");
       setExercises(detailQuery.data.exercises.map(mapPersistedExercise));
+      setHasUnsavedChanges(false);
     }
   }, [detailQuery.data]);
 
   const isEditing = Boolean(route.params?.templateId);
 
+  // Set navigation options to prevent native back gesture when there are unsaved changes
+  useEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: !hasUnsavedChanges,
+      headerBackButtonMenuEnabled: false,
+    });
+  }, [navigation, hasUnsavedChanges]);
+
+  // Mark as having unsaved changes when form data changes
+  useEffect(() => {
+    if (!detailQuery.data && !existingTemplate) {
+      // New template - mark as changed if any field has content
+      if (name.trim() || description.trim() || exercises.length > 0) {
+        setHasUnsavedChanges(true);
+      }
+    } else {
+      // Editing - compare with original
+      const original = detailQuery.data || existingTemplate;
+      if (original) {
+        const hasChanges =
+          name !== original.name ||
+          description !== (original.description ?? "") ||
+          splitType !== original.splitType ||
+          exercises.length !== original.exercises.length ||
+          JSON.stringify(exercises) !== JSON.stringify(original.exercises.map(mapPersistedExercise));
+        setHasUnsavedChanges(hasChanges);
+      }
+    }
+  }, [name, description, splitType, exercises, detailQuery.data, existingTemplate]);
+
   const createMutation = useMutation({
     mutationFn: createTemplate,
     onSuccess: (template) => {
+      setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: templatesKey });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
@@ -172,6 +207,7 @@ const WorkoutTemplateBuilderScreen = () => {
         payload as unknown as Partial<WorkoutTemplate>
       ),
     onSuccess: (template) => {
+      setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: templatesKey });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
@@ -244,6 +280,28 @@ const WorkoutTemplateBuilderScreen = () => {
     );
   };
 
+  const handleSwapExercise = (newExercise: {
+    exerciseId: string;
+    exerciseName: string;
+    sets?: number;
+    reps?: number;
+    restSeconds?: number;
+  }) => {
+    if (!swapExerciseFormId) return;
+
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.formId !== swapExerciseFormId) return ex;
+        return {
+          ...ex,
+          exercise: createFallbackExercise(newExercise.exerciseId),
+        };
+      })
+    );
+
+    setSwapExerciseFormId(null);
+  };
+
   const save = () => {
     const validationErrors: { name?: string; exercises?: string } = {};
     if (!name.trim()) {
@@ -296,6 +354,32 @@ const WorkoutTemplateBuilderScreen = () => {
       createMutation.mutate(payload);
     }
   };
+
+  // Prevent navigation if there are unsaved changes (supported on native stack)
+  usePreventRemove(hasUnsavedChanges, (e) => {
+    if (!hasUnsavedChanges) return;
+
+    e.preventDefault();
+    Alert.alert(
+      'Discard changes?',
+      'You have unsaved changes. Do you want to save before leaving?',
+      [
+        {
+          text: "Don't save",
+          style: 'destructive',
+          onPress: () => {
+            setHasUnsavedChanges(false);
+            navigation.dispatch(e.data.action);
+          }
+        },
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: () => save(),
+        },
+      ]
+    );
+  });
 
   const headerComponent = (
     <View style={{ gap: 16, paddingBottom: 16 }}>
@@ -598,6 +682,20 @@ const WorkoutTemplateBuilderScreen = () => {
             </Text>
           </View>
           <Pressable
+            onPress={() => setSwapExerciseFormId(item.formId)}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.7 : 1,
+              marginRight: 8,
+            })}
+          >
+            <Ionicons
+              name='swap-horizontal-outline'
+              color={colors.primary}
+              size={20}
+            />
+          </Pressable>
+          <Pressable
             onPress={() => removeExerciseByFormId(item.formId)}
             hitSlop={8}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
@@ -676,88 +774,126 @@ const WorkoutTemplateBuilderScreen = () => {
     );
   };
 
+  const currentSwapExercise = exercises.find((ex) => ex.formId === swapExerciseFormId);
+
   return (
     <ScreenContainer>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 32 : 0}
-      >
-        <DraggableFlatList
-          data={exercises}
-          keyExtractor={(item) => item.formId}
-          renderItem={renderExerciseItem}
-          onDragEnd={({ data }) => setExercises(data)}
-          ListHeaderComponent={headerComponent}
-          ListFooterComponent={footerComponent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          keyboardShouldPersistTaps='handled'
-          onScroll={(e) => {
-            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            const distanceFromTop = contentOffset.y;
-            const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-            setIsNearBottom(distanceFromBottom < 10);
-            setIsNearTop(distanceFromTop < 10);
+      <View style={{ flex: 1 }}>
+        <LinearGradient
+          colors={[
+            `${colors.primary}30`,
+            `${colors.secondary}20`,
+            'transparent',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: -16,
+            right: -16,
+            height: 160,
+            opacity: 0.9,
+            pointerEvents: 'none',
           }}
-          scrollEventThrottle={16}
         />
-
-        {!isNearTop && (
-          <LinearGradient
-            colors={[
-              colors.background,
-              `${colors.background}E0`,
-              `${colors.background}C0`,
-              `${colors.background}90`,
-              `${colors.background}60`,
-              `${colors.background}30`,
-              `${colors.background}10`,
-              'transparent',
-            ]}
-            locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: -16,
-              right: -16,
-              height: 60,
-              pointerEvents: 'none',
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 32 : 0}
+        >
+          <DraggableFlatList
+            data={exercises}
+            keyExtractor={(item) => item.formId}
+            renderItem={renderExerciseItem}
+            onDragEnd={({ data }) => setExercises(data)}
+            ListHeaderComponent={headerComponent}
+            ListFooterComponent={footerComponent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            keyboardShouldPersistTaps='handled'
+            onScroll={(e) => {
+              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+              const distanceFromTop = contentOffset.y;
+              const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+              setIsNearBottom(distanceFromBottom < 10);
+              setIsNearTop(distanceFromTop < 10);
             }}
+            scrollEventThrottle={16}
           />
-        )}
-        {!isNearBottom && (
-          <LinearGradient
-            colors={[
-              'transparent',
-              `${colors.background}10`,
-              `${colors.background}30`,
-              `${colors.background}60`,
-              `${colors.background}90`,
-              `${colors.background}C0`,
-              `${colors.background}E0`,
-              colors.background,
-            ]}
-            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: -16,
-              right: -16,
-              height: 60 + insets.bottom,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
 
-        <ExercisePicker
-          visible={pickerVisible}
-          onClose={() => setPickerVisible(false)}
-          selected={exercises}
-          onAdd={handleAddExercise}
-          onRemove={removeExerciseByExerciseId}
-        />
-      </KeyboardAvoidingView>
+          {!isNearTop && (
+            <LinearGradient
+              colors={[
+                colors.background,
+                `${colors.background}E0`,
+                `${colors.background}C0`,
+                `${colors.background}90`,
+                `${colors.background}60`,
+                `${colors.background}30`,
+                `${colors.background}10`,
+                'transparent',
+              ]}
+              locations={[0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: -16,
+                right: -16,
+                height: 60,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+          {!isNearBottom && (
+            <LinearGradient
+              colors={[
+                'transparent',
+                `${colors.background}10`,
+                `${colors.background}30`,
+                `${colors.background}60`,
+                `${colors.background}90`,
+                `${colors.background}C0`,
+                `${colors.background}E0`,
+                colors.background,
+              ]}
+              locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: -16,
+                right: -16,
+                height: 60 + insets.bottom,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+
+          <ExercisePicker
+            visible={pickerVisible}
+            onClose={() => setPickerVisible(false)}
+            selected={exercises}
+            onAdd={handleAddExercise}
+            onRemove={removeExerciseByExerciseId}
+          />
+
+          {currentSwapExercise && (
+            <ExerciseSwapModal
+              visible={swapExerciseFormId !== null}
+              onClose={() => setSwapExerciseFormId(null)}
+              exercise={{
+                exerciseId: currentSwapExercise.exercise.id,
+                exerciseName: currentSwapExercise.exercise.name,
+                primaryMuscleGroup: currentSwapExercise.exercise.primaryMuscleGroup,
+                sets: currentSwapExercise.sets,
+                reps: currentSwapExercise.reps,
+                restSeconds: currentSwapExercise.restSeconds,
+              }}
+              onSwap={handleSwapExercise}
+            />
+          )}
+        </KeyboardAvoidingView>
+      </View>
     </ScreenContainer>
   );
 };
