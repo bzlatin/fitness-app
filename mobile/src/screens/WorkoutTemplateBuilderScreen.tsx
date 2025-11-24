@@ -808,8 +808,8 @@ const WorkoutTemplateBuilderScreen = () => {
     <ScreenContainer
       showGradient={!isNearBottom}
       showTopGradient={!isNearTop}
-      paddingTop={0}
-      includeTopInset
+      paddingTop={16}
+      includeTopInset={false}
     >
       <View style={{ flex: 1 }}>
         <KeyboardAvoidingView
@@ -825,7 +825,7 @@ const WorkoutTemplateBuilderScreen = () => {
             ListHeaderComponent={headerComponent}
             ListFooterComponent={footerComponent}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{ paddingBottom: 40, paddingTop: 40 }}
             keyboardShouldPersistTaps='handled'
             onScroll={(e) => {
               const { contentOffset, contentSize, layoutMeasurement } =

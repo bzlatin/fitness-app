@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-11-22
-> Status: MVP Complete - Moving to Growth & Monetization Phase
+> Last Updated: 2025-11-23
+> Status: Phase 1 complete — Phase 2 (AI & Premium) in progress
 
 ## Product Vision
 
@@ -75,7 +75,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 
 ---
 
-### 🎯 Phase 1: Core Experience & Foundation (Weeks 1-2)
+### ✅ Phase 1: Core Experience & Foundation (Weeks 1-2)
 
 #### 1.1 Target Muscle Display Accuracy ⚡ Quick Win ✅
 
@@ -142,27 +142,27 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 
 **Implementation**:
 
-- [ ] Design multi-step wizard UI with progress indicator
-- [ ] Create OnboardingStep components for each screen
-- [ ] Add `onboarding_data` JSONB column to users table
-- [ ] Create PATCH `/api/users/me/onboarding` endpoint
-- [ ] Update OnboardingScreen to multi-step flow
-- [ ] Store structured JSON in database
-- [ ] Add ability to re-take onboarding from settings
+- [x] Design multi-step wizard UI with progress indicator
+- [x] Create OnboardingStep components for each screen
+- [x] Add `onboarding_data` JSONB column to users table
+- [x] Add onboarding handling to `/api/social/me` profile update endpoint
+- [x] Update OnboardingScreen to multi-step flow
+- [x] Store structured JSON in database
+- [x] Add ability to re-take onboarding from settings
 
 **Files to Create/Modify**:
 
-- `/mobile/src/screens/OnboardingScreen.tsx` (refactor)
-- `/mobile/src/components/onboarding/` (new directory)
+- ✅ `/mobile/src/screens/OnboardingScreen.tsx` - Multi-step wizard + progress
+- ✅ `/mobile/src/components/onboarding/` (new directory)
   - `WelcomeStep.tsx`
   - `GoalsStep.tsx`
-  - `ExperienceStep.tsx`
+  - `ExperienceStep.tsx` / `ExperienceLevelStep.tsx`
   - `EquipmentStep.tsx`
   - `ScheduleStep.tsx`
   - `LimitationsStep.tsx`
-  - `TrainingSplitStep.tsx`
-- `/server/src/routes/users.ts` (add onboarding endpoint)
-- `/server/db.ts` (migration)
+  - `TrainingSplitStep.tsx` / `TrainingStyleStep.tsx`
+- ✅ `/server/src/routes/social.ts` - Profile update supports onboarding data + retake flow
+- ✅ `/server/src/db.ts` - Added `onboarding_data` column to users
 
 ---
 
@@ -174,26 +174,26 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 
 **Implementation**:
 
-- [ ] Generate unique invite code for each squad (nanoid)
-- [ ] Create `squad_invite_links` table with expiration support
-- [ ] Add "Share Invite Link" button to squad screen
-- [ ] Create deep link handler for `app://squad/join/{code}`
-- [ ] Build SquadJoinScreen that shows squad preview before joining
-- [ ] Implement join via link endpoint (validates code, adds member)
-- [ ] Track invite attribution (who invited whom)
+- [x] Generate unique invite code for each squad
+- [x] Create `squad_invite_links` table with expiration support
+- [x] Add "Share Invite Link" button to squad screen
+- [x] Create deep link handler for `app://squad/join/{code}`
+- [x] Build SquadJoinScreen that shows squad preview before joining
+- [x] Implement join via link endpoint (validates code, adds member)
+- [x] Track invite attribution (who invited whom)
 
 **Database Schema**:
 
 ```sql
 CREATE TABLE squad_invite_links (
-  id TEXT PRIMARY KEY DEFAULT nanoid(),
+  id TEXT PRIMARY KEY,
   squad_id TEXT REFERENCES squads(id) ON DELETE CASCADE,
+  code TEXT UNIQUE NOT NULL,
   created_by TEXT REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  expires_at TIMESTAMPTZ,
-  max_uses INTEGER,
-  use_count INTEGER DEFAULT 0,
-  is_active BOOLEAN DEFAULT TRUE
+  expires_at TIMESTAMPTZ NOT NULL,
+  is_revoked BOOLEAN DEFAULT FALSE,
+  uses_count INTEGER DEFAULT 0
 );
 ```
 
@@ -207,18 +207,19 @@ CREATE TABLE squad_invite_links (
 
 **Files to Create/Modify**:
 
-- `/server/src/routes/squads.ts` (add invite endpoints)
-- `/mobile/src/screens/SquadJoinScreen.tsx` (new)
-- `/mobile/src/screens/SquadScreen.tsx` (add share button)
-- `/mobile/src/navigation/linking.ts` (deep link config)
-- `/server/src/db.ts` (migration)
+- ✅ `/server/src/routes/social.ts` (invite endpoints + squad preview/join logic)
+- ✅ `/mobile/src/screens/SquadJoinScreen.tsx` (new)
+- ✅ `/mobile/src/screens/SquadScreen.tsx` (share button + invite management)
+- ✅ `/mobile/App.tsx` (deep link config for `squad/join/:code`)
+- ✅ `/server/src/db.ts` (migration + indexes for `squad_invite_links`)
 
 **API Endpoints**:
 
-- `POST /api/squads/:id/invite-links` - Create invite link
-- `GET /api/squads/join/:code` - Get squad preview
-- `POST /api/squads/join/:code` - Join squad via link
-- `DELETE /api/squads/invite-links/:id` - Revoke link
+- `POST /api/social/squads/:id/invites` - Create invite link
+- `GET /api/social/squad-invite/:code` - Get squad preview
+- `POST /api/social/squad-invite/:code/join` - Join squad via link
+- `GET /api/social/squads/:id/invites` - List + manage active links
+- `DELETE /api/social/squads/:id/invites/:inviteId` - Revoke link
 
 ---
 
@@ -786,8 +787,8 @@ CREATE TABLE workout_comments (
 
 ## Version History
 
-- **v1.0** (Current): MVP complete - Home, Workouts, History, Squad, Profile
-- **v1.1** (Target: Week 2): Target muscles + Onboarding + Invite links
-- **v1.2** (Target: Week 6): AI generation + Recovery tracking
+- **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
+- **v1.1** (Current): Target muscles, multi-step onboarding, squad invite links
+- **v1.2** (In Progress): AI workout generation shipped; Recovery tracking remaining
 - **v1.3** (Target: Week 9): Stripe integration + Paywall
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements

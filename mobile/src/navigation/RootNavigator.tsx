@@ -26,7 +26,10 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 
 const tabIconMap: Record<
   keyof RootTabParamList,
-  { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }
+  {
+    focused: keyof typeof Ionicons.glyphMap;
+    unfocused: keyof typeof Ionicons.glyphMap;
+  }
 > = {
   Home: { focused: "barbell", unfocused: "barbell-outline" },
   Squad: { focused: "people", unfocused: "people-outline" },
@@ -62,27 +65,27 @@ const RootTabs = () => {
         },
       })}
     >
-    <Tab.Screen
-      name="Home"
-      component={HomeScreen}
-      options={{ tabBarLabel: "Workout" }}
-    />
-    <Tab.Screen
-      name="Squad"
-      component={SquadScreen}
-      options={{ tabBarLabel: "Squad" }}
-    />
-    <Tab.Screen
-      name="History"
-      component={HistoryScreen}
-      options={{ tabBarLabel: "History" }}
-    />
-    <Tab.Screen
-      name="Settings"
-      component={SettingsScreen}
-      options={{ tabBarLabel: "Profile" }}
-    />
-  </Tab.Navigator>
+      <Tab.Screen
+        name='Home'
+        component={HomeScreen}
+        options={{ tabBarLabel: "Workout" }}
+      />
+      <Tab.Screen
+        name='Squad'
+        component={SquadScreen}
+        options={{ tabBarLabel: "Squad" }}
+      />
+      <Tab.Screen
+        name='History'
+        component={HistoryScreen}
+        options={{ tabBarLabel: "History" }}
+      />
+      <Tab.Screen
+        name='Settings'
+        component={SettingsScreen}
+        options={{ tabBarLabel: "Profile" }}
+      />
+    </Tab.Navigator>
   );
 };
 
@@ -97,17 +100,17 @@ const RootNavigator = () => (
     }}
   >
     <Stack.Screen
-      name="RootTabs"
+      name='RootTabs'
       component={RootTabs}
       options={{ headerShown: false }}
     />
     <Stack.Screen
-      name="WorkoutTemplateDetail"
+      name='WorkoutTemplateDetail'
       component={WorkoutTemplateDetailScreen}
       options={{ title: "Workout" }}
     />
     <Stack.Screen
-      name="WorkoutTemplateBuilder"
+      name='WorkoutTemplateBuilder'
       component={WorkoutTemplateBuilderScreen}
       options={{
         title: "Build Workout",
@@ -115,45 +118,45 @@ const RootNavigator = () => (
         headerShadowVisible: false,
         headerBackground: () => (
           <BlurView
-            tint="dark"
+            tint='dark'
             intensity={80}
-            style={{ flex: 1, backgroundColor: "rgba(5, 8, 22, 0.7)" }}
+            style={{ flex: 1, backgroundColor: "rgba(5, 8, 22, 0.4)" }}
           />
         ),
       }}
     />
     <Stack.Screen
-      name="WorkoutGenerator"
+      name='WorkoutGenerator'
       component={WorkoutGeneratorScreen}
       options={{ title: "AI Workout Generator" }}
     />
     <Stack.Screen
-      name="WorkoutSession"
+      name='WorkoutSession'
       component={WorkoutSessionScreen}
       options={{ title: "Workout Session", headerShown: false }}
     />
     <Stack.Screen
-      name="Profile"
+      name='Profile'
       component={ProfileScreen}
       options={{ title: "Profile" }}
     />
     <Stack.Screen
-      name="PostWorkoutShare"
+      name='PostWorkoutShare'
       component={PostWorkoutShareScreen}
       options={{ title: "Share Workout" }}
     />
     <Stack.Screen
-      name="Onboarding"
+      name='Onboarding'
       component={OnboardingScreen}
       options={{ title: "Setup", headerShown: false }}
     />
     <Stack.Screen
-      name="SquadJoin"
+      name='SquadJoin'
       component={SquadJoinScreen}
       options={{ title: "Join Squad" }}
     />
     <Stack.Screen
-      name="WorkoutPreview"
+      name='WorkoutPreview'
       component={WorkoutPreviewScreen}
       options={{ title: "AI Workout Preview", headerShown: false }}
     />

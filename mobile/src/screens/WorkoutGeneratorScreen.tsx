@@ -9,15 +9,12 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { generateWorkout, GeneratedWorkout } from "../api/ai";
 import { RootNavigation } from "../navigation/RootNavigator";
-import { createWorkoutTemplate } from "../api/templates";
-
-// Generate unique ID for React Native (no crypto dependency)
-const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+import { createTemplate } from "../api/templates";
 
 const SPLIT_OPTIONS = [
   { value: "push", label: "Push", emoji: "💪" },
@@ -30,6 +27,7 @@ const SPLIT_OPTIONS = [
 
 const WorkoutGeneratorScreen = () => {
   const navigation = useNavigation<RootNavigation>();
+  const queryClient = useQueryClient();
   const [selectedSplit, setSelectedSplit] = useState<string | null>(null);
   const [specificRequest, setSpecificRequest] = useState("");
   const [generatedWorkout, setGeneratedWorkout] = useState<GeneratedWorkout | null>(null);
@@ -51,14 +49,11 @@ const WorkoutGeneratorScreen = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (workout: GeneratedWorkout) => {
-      const template = {
-        id: generateId(),
+      const payload = {
         name: workout.name,
         description: workout.reasoning,
         splitType: workout.splitType as any,
-        isFavorite: false,
         exercises: workout.exercises.map((ex) => ({
-          id: generateId(),
           exerciseId: ex.exerciseId,
           orderIndex: ex.orderIndex,
           defaultSets: ex.sets,
@@ -68,10 +63,11 @@ const WorkoutGeneratorScreen = () => {
         })),
       };
 
-      await createWorkoutTemplate(template);
+      const template = await createTemplate(payload);
       return template;
     },
     onSuccess: (template) => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
       Alert.alert("Success!", "Workout saved to your templates", [
         {
           text: "View Template",

@@ -143,31 +143,50 @@ export const MuscleGroupBreakdown = ({
       <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
         Target muscles
       </Text>
-      <View style={{ flexDirection: "row", gap: 10 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {topGroups.map((group) => (
           <View
             key={group.muscleGroup}
             style={{
               flex: 1,
-              padding: 12,
+              minWidth: 100,
+              paddingVertical: 14,
+              paddingHorizontal: 14,
               borderRadius: 12,
               backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.border,
-              gap: 6,
-              alignItems: "center",
             }}
           >
             <Text
+              numberOfLines={1}
               style={{
                 color: colors.textPrimary,
                 fontFamily: fontFamilies.semibold,
+                fontSize: 14,
+                marginBottom: 6,
               }}
             >
               {formatMuscleGroup(group.muscleGroup)}
             </Text>
-            <Text style={{ color: colors.secondary, fontWeight: "700" }}>
+            <Text
+              style={{
+                color: colors.secondary,
+                fontFamily: fontFamilies.bold,
+                fontSize: 22,
+                letterSpacing: -0.5,
+              }}
+            >
               {group.percentage}%
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 11,
+                marginTop: 4,
+              }}
+            >
+              {group.setCount} {group.setCount === 1 ? "set" : "sets"}
             </Text>
           </View>
         ))}

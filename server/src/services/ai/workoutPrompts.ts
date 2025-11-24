@@ -115,7 +115,14 @@ export const buildWorkoutGenerationPrompt = (
   const limitations = profile.injuryNotes || "None";
   const sessionDuration = profile.sessionDuration || 60;
   const requestedSplit =
-    params.requestedSplit || profile.preferredSplit || "full_body";
+    params.requestedSplit ||
+    (params.specificRequest ? "custom" : profile.preferredSplit || "full_body");
+  const focusLabel = params.specificRequest
+    ? params.specificRequest
+        .replace(/focus on/gi, "")
+        .replace(/target|emphasize|please/gi, "")
+        .trim()
+    : "";
 
   // Filter exercises if specific muscle groups are requested
   let exercisesToUse = availableExercises;
@@ -241,6 +248,10 @@ ${exercisesToUse
 6. **Workout Duration**:
    - Estimate total duration and try to stay within ${sessionDuration}±10 minutes
    - Include warm-up time in your estimate
+
+7. **Naming & Labeling**:
+   - If a specific muscle focus is requested (${focusLabel || "none"}), name the workout after those muscles (e.g., "Arms", "Glutes & Hamstrings") without prefixing generic split labels.
+   - Use "custom" splitType for muscle-focus requests that are not standard splits.
 
 # OUTPUT FORMAT
 Respond with ONLY valid JSON matching this exact schema (no markdown, no additional text):

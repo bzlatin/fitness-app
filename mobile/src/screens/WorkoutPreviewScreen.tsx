@@ -9,7 +9,8 @@ import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { createTemplate } from "../api/templates";
-import { RootNavigation, RootStackParamList } from "../navigation/RootNavigator";
+import { RootNavigation } from "../navigation/RootNavigator";
+import { RootStackParamList } from "../navigation/types";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 type WorkoutPreviewRouteProp = RouteProp<RootStackParamList, "WorkoutPreview">;
@@ -84,6 +85,20 @@ const WorkoutPreviewScreen = () => {
     });
 
     setSwapExerciseIndex(null);
+  };
+
+  const handleRemoveExercise = (index: number) => {
+    const nextExercises = workout.exercises
+      .filter((_, idx) => idx !== index)
+      .map((exercise, orderIndex) => ({
+        ...exercise,
+        orderIndex,
+      }));
+
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: nextExercises,
+    }));
   };
 
   const currentSwapExercise = swapExerciseIndex !== null ? workout.exercises[swapExerciseIndex] : null;
@@ -252,16 +267,41 @@ const WorkoutPreviewScreen = () => {
                         {idx + 1}. {ex.exerciseName}
                       </Text>
                     </View>
-                    <Pressable
-                      onPress={() => setSwapExerciseIndex(idx)}
-                      style={({ pressed }) => ({
-                        padding: 8,
-                        borderRadius: 8,
-                        backgroundColor: pressed ? colors.surfaceMuted : "transparent",
-                      })}
-                    >
-                      <Ionicons name="swap-horizontal-outline" size={20} color={colors.primary} />
-                    </Pressable>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      <Pressable
+                        onPress={() => setSwapExerciseIndex(idx)}
+                        style={({ pressed }) => ({
+                          padding: 8,
+                          borderRadius: 8,
+                          backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                        })}
+                      >
+                        <Ionicons name="swap-horizontal-outline" size={20} color={colors.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() =>
+                          Alert.alert(
+                            "Remove exercise?",
+                            "This will drop the exercise from this workout preview.",
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Remove",
+                                style: "destructive",
+                                onPress: () => handleRemoveExercise(idx),
+                              },
+                            ]
+                          )
+                        }
+                        style={({ pressed }) => ({
+                          padding: 8,
+                          borderRadius: 8,
+                          backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                        })}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      </Pressable>
+                    </View>
                   </View>
                   <View
                     style={{

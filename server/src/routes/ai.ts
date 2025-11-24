@@ -88,6 +88,34 @@ const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: numb
   return true;
 };
 
+const deriveFocusName = (specificRequest?: string) => {
+  if (!specificRequest) return null;
+  const normalized = specificRequest
+    .replace(/focus on|target|emphasize|work on/gi, "")
+    .replace(/[^a-z,&/ ]/gi, " ")
+    .replace(/\sand\s/gi, " & ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return null;
+
+  const parts = normalized
+    .split(/[,/&]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) =>
+      part
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ")
+    );
+
+  if (parts.length === 0) return null;
+
+  return parts.join(" & ");
+};
+
 /**
  * POST /api/ai/generate-workout
  * Generate a personalized workout using AI
@@ -162,6 +190,11 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
 
     const aiProvider = getAIProvider();
     const generatedWorkout = await aiProvider.generateWorkout(params, normalizedExercises);
+    const focusName = deriveFocusName(specificRequest);
+    if (focusName && !requestedSplit) {
+      generatedWorkout.name = focusName;
+      generatedWorkout.splitType = "custom";
+    }
 
     // Track AI usage
     await query(
