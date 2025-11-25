@@ -6,6 +6,11 @@ const productIds: Record<PlanChoice, string> = {
   annual: "pro_annual_subscription",
 };
 
+const log = (...args: unknown[]) => {
+  // Centralized logging to quickly trace IAP issues on device/Metro
+  console.log("[IAP]", ...args);
+};
+
 type IapPurchase = {
   transactionId?: string;
   originalTransactionIdentifier?: string;
@@ -34,10 +39,12 @@ export const fetchProducts = async () => {
   if (Platform.OS !== "ios") return [];
   const RNIap = getIap();
   await initIapConnection();
-  return RNIap.fetchProducts({
+  const products = await RNIap.fetchProducts({
     skus: Object.values(productIds),
     type: "subs",
   });
+  log("fetchProducts ->", products?.length ?? 0, "items", products);
+  return products;
 };
 
 export const purchaseSubscription = async (plan: PlanChoice) => {
@@ -48,16 +55,24 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   const RNIap = getIap();
   await initIapConnection();
   const productId = productIds[plan];
+  log("purchaseSubscription init", { plan, productId, bundleIdHint: "check Xcode target + EXPO_PUBLIC_IOS_BUNDLE_ID" });
 
-  const purchase = (await RNIap.requestPurchase({
-    type: "subs",
-    request: {
-      ios: {
-        sku: productId,
-        andDangerouslyFinishTransactionAutomatically: false,
+  let purchase: IapPurchase;
+  try {
+    purchase = (await RNIap.requestPurchase({
+      type: "subs",
+      request: {
+        ios: {
+          sku: productId,
+          andDangerouslyFinishTransactionAutomatically: false,
+        },
       },
-    },
-  })) as IapPurchase;
+    })) as IapPurchase;
+    log("purchase response", purchase);
+  } catch (err) {
+    log("requestPurchase error", err);
+    throw err;
+  }
 
   let transactionId =
     purchase.transactionId ??
@@ -71,6 +86,7 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
       latest?.transactionId ??
       latest?.originalTransactionIdentifier ??
       (latest as { originalTransactionId?: string })?.originalTransactionId;
+    log("latestTransactionIOS", { productId, latest, resolvedTransactionId: transactionId });
   }
 
   if (!transactionId) {
@@ -97,6 +113,7 @@ export const restorePurchases = async () => {
   const RNIap = getIap();
   await initIapConnection();
   const purchases = (await RNIap.getAvailablePurchases()) as IapPurchase[];
+  log("restore getAvailablePurchases", purchases);
   const active = purchases.find((purchase: IapPurchase) => {
     const id = purchase.productId ?? purchase.originalTransactionIdentifier;
     return id ? Object.values(productIds).includes(id) : false;
