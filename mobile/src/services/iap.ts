@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import * as RNIap from "react-native-iap";
 import { PlanChoice, validateIosReceipt } from "../api/subscriptions";
 
 const productIds: Record<PlanChoice, string> = {
@@ -7,15 +6,38 @@ const productIds: Record<PlanChoice, string> = {
   annual: "pro_yearly",
 };
 
+type IapPurchase = {
+  transactionId?: string;
+  originalTransactionIdentifier?: string;
+  productId?: string;
+  // Allow additional fields returned by the native module without strict typing
+  [key: string]: unknown;
+};
+
+let iapModule: any = null;
+const getIap = () => {
+  if (!iapModule) {
+    // Using require to avoid ESM resolution-mode warnings in this CJS-compiled module
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    iapModule = require("react-native-iap");
+  }
+  return iapModule;
+};
+
 export const initIapConnection = async () => {
   if (Platform.OS !== "ios") return;
+  const RNIap = getIap();
   await RNIap.initConnection();
 };
 
 export const fetchProducts = async () => {
   if (Platform.OS !== "ios") return [];
+  const RNIap = getIap();
   await initIapConnection();
-  return RNIap.getSubscriptions(Object.values(productIds));
+  return RNIap.fetchProducts({
+    skus: Object.values(productIds),
+    type: "subs",
+  });
 };
 
 export const purchaseSubscription = async (plan: PlanChoice) => {
@@ -23,13 +45,19 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
     throw new Error("Apple IAP is only available on iOS devices.");
   }
 
+  const RNIap = getIap();
   await initIapConnection();
   const productId = productIds[plan];
 
-  const purchase = await RNIap.requestSubscription({
-    sku: productId,
-    andDangerouslyFinishTransactionAutomaticallyIOS: false,
-  });
+  const purchase = (await RNIap.requestPurchase({
+    type: "subs",
+    request: {
+      ios: {
+        sku: productId,
+        andDangerouslyFinishTransactionAutomatically: false,
+      },
+    },
+  })) as IapPurchase;
 
   const transactionId = purchase.transactionId ?? purchase.originalTransactionIdentifier;
   if (!transactionId) {
@@ -39,7 +67,7 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   const validation = await validateIosReceipt({ transactionId });
 
   try {
-    await RNIap.finishTransaction(purchase, true);
+    await RNIap.finishTransaction({ purchase, isConsumable: false });
   } catch (err) {
     // If finishing fails, surface the validation response so the backend still captures entitlement.
     console.warn("Failed to finish Apple transaction", err);
@@ -53,9 +81,10 @@ export const restorePurchases = async () => {
     throw new Error("Restore purchases is only available on iOS.");
   }
 
+  const RNIap = getIap();
   await initIapConnection();
-  const purchases = await RNIap.getAvailablePurchases();
-  const active = purchases.find((purchase) => {
+  const purchases = (await RNIap.getAvailablePurchases()) as IapPurchase[];
+  const active = purchases.find((purchase: IapPurchase) => {
     const id = purchase.productId ?? purchase.originalTransactionIdentifier;
     return id ? Object.values(productIds).includes(id) : false;
   });
@@ -75,12 +104,13 @@ export const restorePurchases = async () => {
 
 export const settlePendingPurchases = async () => {
   if (Platform.OS !== "ios") return;
+  const RNIap = getIap();
   await initIapConnection();
-  const purchases = await RNIap.getAvailablePurchases();
+  const purchases = (await RNIap.getAvailablePurchases()) as IapPurchase[];
   await Promise.all(
-    purchases.map(async (purchase) => {
+    purchases.map(async (purchase: IapPurchase) => {
       try {
-        await RNIap.finishTransaction(purchase, true);
+        await RNIap.finishTransaction({ purchase, isConsumable: false });
       } catch (err) {
         console.warn("Failed to finish pending Apple transaction", err);
       }
