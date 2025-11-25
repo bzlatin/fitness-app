@@ -5,6 +5,7 @@ declare const process: any;
 
 const callbackScheme = process.env.EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME || "push-pull";
 const iosBundleId = process.env.EXPO_PUBLIC_IOS_BUNDLE_ID || "com.pushpull.app";
+const androidPackage = process.env.EXPO_PUBLIC_ANDROID_PACKAGE || "com.pushpull.app";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -21,6 +22,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ...config.ios?.infoPlist,
       ITSAppUsesNonExemptEncryption: false,
     },
+  },
+  android: {
+    ...config.android,
+    package: androidPackage,
   },
   plugins: [...(config.plugins ?? []), "react-native-iap"],
 });
