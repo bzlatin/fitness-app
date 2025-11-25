@@ -1,4 +1,4 @@
-import { Text, View, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { WorkoutTemplate } from "../types/workouts";
 import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution";
 import {
@@ -23,8 +23,12 @@ export const MuscleGroupBreakdown = ({
   maxGroups = 3,
   variant = "compact",
 }: MuscleGroupBreakdownProps) => {
-  const { distribution, isLoading, isError } =
+  const { distribution, isLoading, isError, refetch } =
     useMuscleGroupDistribution(template);
+
+  if (!template) {
+    return null;
+  }
 
   if (isLoading) {
     return (
@@ -35,13 +39,43 @@ export const MuscleGroupBreakdown = ({
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator size="small" color={colors.primary} />
+        <ActivityIndicator size='small' color={colors.primary} />
       </View>
     );
   }
 
-  if (isError || !template) {
-    return null;
+  if (isError) {
+    return (
+      <View style={{ gap: 8 }}>
+        <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+          Target muscles
+        </Text>
+        <Text style={{ color: colors.textSecondary }}>
+          Couldn&apos;t load muscle data for this workout.
+        </Text>
+        <Pressable
+          onPress={() => refetch()}
+          style={({ pressed }) => ({
+            alignSelf: "flex-start",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+          })}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
   }
 
   if (distribution.length === 0) {

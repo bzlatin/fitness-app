@@ -24,7 +24,7 @@ type LocalExercise = {
 };
 
 const distPath = path.join(__dirname, "../data/dist/exercises.json");
-const largeExercises: LocalExercise[] = fs.existsSync(distPath)
+const distExercises: LocalExercise[] = fs.existsSync(distPath)
   ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
   : [];
 
@@ -47,7 +47,11 @@ const normalizeExercise = (item: LocalExercise) => {
 };
 
 const exerciseIndex = new Map<string, { name: string; gifUrl?: string }>();
-(largeExercises.length > 0 ? largeExercises : localExercises).forEach((item) => {
+(localExercises as unknown as LocalExercise[]).forEach((item) => {
+  const normalized = normalizeExercise(item);
+  exerciseIndex.set(normalized.id, { name: normalized.name, gifUrl: normalized.gifUrl });
+});
+distExercises.forEach((item) => {
   const normalized = normalizeExercise(item as unknown as LocalExercise);
   exerciseIndex.set(normalized.id, { name: normalized.name, gifUrl: normalized.gifUrl });
 });

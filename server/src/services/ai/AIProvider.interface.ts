@@ -77,6 +77,7 @@ export interface GeneratedExercise {
   notes?: string;
   orderIndex: number;
   primaryMuscleGroup?: string;
+  gifUrl?: string;
 }
 
 /**

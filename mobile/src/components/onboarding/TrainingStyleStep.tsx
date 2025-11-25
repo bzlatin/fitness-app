@@ -99,6 +99,30 @@ const TrainingStyleStep = ({ selectedSplit, onSplitChange }: TrainingStyleStepPr
         style={{
           padding: 16,
           borderRadius: 12,
+          backgroundColor: `${colors.secondary}15`,
+          borderWidth: 1,
+          borderColor: `${colors.secondary}30`,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontFamily: fontFamilies.semibold,
+            fontSize: 15,
+            marginBottom: 4,
+          }}
+        >
+          Smart Progressive Overload
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+          We'll analyze your performance and suggest weight increases when you're ready to progress. You can enable or disable this in settings anytime.
+        </Text>
+      </View>
+
+      <View
+        style={{
+          padding: 16,
+          borderRadius: 12,
           backgroundColor: `${colors.primary}15`,
           borderWidth: 1,
           borderColor: `${colors.primary}30`,

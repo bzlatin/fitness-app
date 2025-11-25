@@ -24,6 +24,7 @@ import {
   createTemplate,
   fetchTemplate,
   updateTemplate,
+  deleteTemplate,
 } from "../api/templates";
 import {
   templatesKey,
@@ -60,10 +61,13 @@ const formatExerciseName = (id: string) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
-const createFallbackExercise = (exerciseId: string): Exercise => ({
+const createFallbackExercise = (
+  exerciseId: string,
+  options?: { name?: string; primaryMuscleGroup?: Exercise["primaryMuscleGroup"] }
+): Exercise => ({
   id: exerciseId,
-  name: formatExerciseName(exerciseId),
-  primaryMuscleGroup: "custom",
+  name: options?.name ?? formatExerciseName(exerciseId),
+  primaryMuscleGroup: options?.primaryMuscleGroup ?? "custom",
   equipment: "custom",
 });
 
@@ -74,7 +78,10 @@ const mapPersistedExercise = (
   exercise: WorkoutTemplateExercise
 ): TemplateExerciseForm => ({
   formId: exercise.id,
-  exercise: createFallbackExercise(exercise.exerciseId),
+  exercise: createFallbackExercise(exercise.exerciseId, {
+    name: exercise.exerciseName,
+    primaryMuscleGroup: exercise.primaryMuscleGroup as Exercise["primaryMuscleGroup"],
+  }),
   sets: exercise.defaultSets,
   reps: exercise.defaultReps,
   restSeconds: exercise.defaultRestSeconds,
@@ -151,51 +158,6 @@ const WorkoutTemplateBuilderScreen = () => {
 
   const isEditing = Boolean(route.params?.templateId);
 
-  // Set navigation options to prevent native back gesture when there are unsaved changes
-  useEffect(() => {
-    navigation.setOptions({
-      gestureEnabled: !hasUnsavedChanges,
-      headerBackButtonMenuEnabled: false,
-    });
-
-    // Add beforeRemove listener to handle back navigation
-    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-      if (!hasUnsavedChanges) {
-        return;
-      }
-
-      // Prevent default behavior
-      e.preventDefault();
-
-      // Show alert
-      Alert.alert(
-        "Discard changes?",
-        "You have unsaved changes. Do you want to save before leaving?",
-        [
-          {
-            text: "Don't save",
-            style: "destructive",
-            onPress: () => {
-              setHasUnsavedChanges(false);
-              // Navigate back after clearing unsaved changes flag
-              setTimeout(() => navigation.dispatch(e.data.action), 0);
-            },
-          },
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Save",
-            onPress: () => {
-              // save() will handle navigation via mutation onSuccess
-              save();
-            },
-          },
-        ]
-      );
-    });
-
-    return unsubscribe;
-  }, [navigation, hasUnsavedChanges]);
-
   // Mark as having unsaved changes when form data changes
   useEffect(() => {
     if (!detailQuery.data && !existingTemplate) {
@@ -266,7 +228,120 @@ const WorkoutTemplateBuilderScreen = () => {
       Alert.alert("Could not update template", "Please try again."),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTemplate(route.params!.templateId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: templatesKey });
+      navigation.goBack();
+    },
+    onError: () =>
+      Alert.alert("Could not delete workout", "Please try again."),
+  });
+
   const saving = createMutation.isPending || updateMutation.isPending;
+
+  const save = () => {
+    const validationErrors: { name?: string; exercises?: string } = {};
+    if (!name.trim()) {
+      validationErrors.name = "Name is required.";
+    }
+    if (exercises.length < 1) {
+      validationErrors.exercises = "Add at least one exercise.";
+    }
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
+
+    if (!isEditing) {
+      const templateCount = listData?.length ?? 0;
+      if (!canCreateAnotherTemplate(user, templateCount)) {
+        Alert.alert(
+          "Free limit reached",
+          "You’ve reached the free template limit. Upgrades coming soon."
+        );
+        return;
+      }
+    }
+
+    const parseDecimal = (input?: string) => {
+      if (input === undefined) return undefined;
+      const normalized = input.replace(",", ".");
+      const parsed = Number(normalized);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    };
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      splitType,
+      exercises: exercises.map((ex) => ({
+        exerciseId: ex.exercise.id,
+        defaultSets: ex.sets,
+        defaultReps: ex.reps,
+        defaultRestSeconds: ex.restSeconds,
+        defaultWeight: parseDecimal(ex.weight),
+        defaultIncline: parseDecimal(ex.incline),
+        defaultDistance: parseDecimal(ex.distance),
+        defaultDurationMinutes: parseDecimal(ex.durationMinutes),
+        notes: ex.notes,
+      })),
+    };
+
+    if (isEditing) {
+      updateMutation.mutate(payload);
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  // Set navigation options to prevent native back gesture when there are unsaved changes
+  useEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: !hasUnsavedChanges,
+      headerBackButtonMenuEnabled: false,
+    });
+
+    // Add beforeRemove listener to handle back navigation or close gestures
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (!hasUnsavedChanges || saving) {
+        return;
+      }
+
+      const actionType = e.data.action.type;
+      if (actionType !== "GO_BACK" && actionType !== "POP") {
+        return;
+      }
+
+      // Prevent default behavior
+      e.preventDefault();
+
+      // Show alert
+      Alert.alert(
+        "Discard changes?",
+        "You have unsaved changes. Do you want to save before leaving?",
+        [
+          {
+            text: "Don't save",
+            style: "destructive",
+            onPress: () => {
+              setHasUnsavedChanges(false);
+              // Navigate back after clearing unsaved changes flag
+              setTimeout(() => navigation.dispatch(e.data.action), 0);
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save",
+            onPress: () => {
+              // save() will handle navigation via mutation onSuccess
+              save();
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, hasUnsavedChanges, save, saving]);
 
   const handleAddExercise = (
     exerciseForm: Omit<TemplateExerciseForm, "formId">
@@ -346,7 +421,9 @@ const WorkoutTemplateBuilderScreen = () => {
         if (ex.formId !== swapExerciseFormId) return ex;
         return {
           ...ex,
-          exercise: createFallbackExercise(newExercise.exerciseId),
+          exercise: createFallbackExercise(newExercise.exerciseId, {
+            name: newExercise.exerciseName,
+          }),
         };
       })
     );
@@ -354,57 +431,19 @@ const WorkoutTemplateBuilderScreen = () => {
     setSwapExerciseFormId(null);
   };
 
-  const save = () => {
-    const validationErrors: { name?: string; exercises?: string } = {};
-    if (!name.trim()) {
-      validationErrors.name = "Name is required.";
-    }
-    if (exercises.length < 1) {
-      validationErrors.exercises = "Add at least one exercise.";
-    }
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
-
-    if (!isEditing) {
-      const templateCount = listData?.length ?? 0;
-      if (!canCreateAnotherTemplate(user, templateCount)) {
-        Alert.alert(
-          "Free limit reached",
-          "You’ve reached the free template limit. Upgrades coming soon."
-        );
-        return;
-      }
-    }
-
-    const parseDecimal = (input?: string) => {
-      if (input === undefined) return undefined;
-      const normalized = input.replace(",", ".");
-      const parsed = Number(normalized);
-      return Number.isNaN(parsed) ? undefined : parsed;
-    };
-
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      splitType,
-      exercises: exercises.map((ex) => ({
-        exerciseId: ex.exercise.id,
-        defaultSets: ex.sets,
-        defaultReps: ex.reps,
-        defaultRestSeconds: ex.restSeconds,
-        defaultWeight: parseDecimal(ex.weight),
-        defaultIncline: parseDecimal(ex.incline),
-        defaultDistance: parseDecimal(ex.distance),
-        defaultDurationMinutes: parseDecimal(ex.durationMinutes),
-        notes: ex.notes,
-      })),
-    };
-
-    if (isEditing) {
-      updateMutation.mutate(payload);
-    } else {
-      createMutation.mutate(payload);
-    }
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Workout",
+      "Are you sure you want to delete this workout? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteMutation.mutate(),
+        },
+      ]
+    );
   };
 
   const headerComponent = (
@@ -655,6 +694,35 @@ const WorkoutTemplateBuilderScreen = () => {
           Add another exercise
         </Text>
       </Pressable>
+      {isEditing && (
+        <Pressable
+          onPress={handleDelete}
+          disabled={deleteMutation.isPending}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 14,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#ef4444",
+            backgroundColor: colors.surface,
+            opacity: pressed || deleteMutation.isPending ? 0.7 : 1,
+            gap: 8,
+          })}
+        >
+          <Ionicons
+            name='trash-outline'
+            size={20}
+            color="#ef4444"
+          />
+          <Text
+            style={{ color: "#ef4444", fontFamily: fontFamilies.semibold }}
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete workout"}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 

@@ -31,6 +31,9 @@ export interface WorkoutTemplateExercise {
   id: string;
   exerciseId: string;
   orderIndex: number;
+  exerciseName?: string;
+  primaryMuscleGroup?: string;
+  exerciseImageUrl?: string;
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;

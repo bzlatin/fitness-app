@@ -26,22 +26,32 @@ type LocalExercise = {
 };
 
 const distPath = path.join(__dirname, "../data/dist/exercises.json");
-const localExercisesPath = path.join(__dirname, "../data/exercises.ts");
+const dedupeId = (id: string) => id.replace(/\s+/g, "_");
+const formatExerciseName = (value: string) =>
+  value
+    .replace(/^ex[-_]/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
 
-let exercisesDatabase: LocalExercise[] = [];
-
-// Try to load from dist first
-if (fs.existsSync(distPath)) {
-  exercisesDatabase = JSON.parse(fs.readFileSync(distPath, "utf-8"));
-} else {
-  // Fallback to local exercises (this will be imported at runtime)
-  try {
-    const { exercises } = require("../data/exercises");
-    exercisesDatabase = exercises || [];
-  } catch (error) {
-    console.warn("[AI Routes] Could not load exercises database");
+const loadExercisesDatabase = (): LocalExercise[] => {
+  if (!fs.existsSync(distPath)) {
+    console.error("[AI Routes] Exercises database not found at:", distPath);
+    return [];
   }
-}
+
+  try {
+    const distExercises = JSON.parse(fs.readFileSync(distPath, "utf-8")) as LocalExercise[];
+    console.log(`[AI Routes] Loaded ${distExercises.length} exercises from database`);
+    return distExercises;
+  } catch (error) {
+    console.error("[AI Routes] Failed to load exercises database:", error);
+    return [];
+  }
+};
+
+const exercisesDatabase: LocalExercise[] = loadExercisesDatabase();
 
 const normalizeExercise = (item: LocalExercise) => {
   const primary =
@@ -57,15 +67,26 @@ const normalizeExercise = (item: LocalExercise) => {
       : (item as any).equipments) ||
     "bodyweight";
 
+  const images = item.images ?? [];
+  const imageUrl =
+    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
+  const normalizedId = item.id || dedupeId(item.name || "exercise");
+  const displayName =
+    (item.name && formatExerciseName(item.name)) || formatExerciseName(normalizedId);
+
   return {
-    id: item.id || item.name.replace(/\s+/g, "_"),
-    name: item.name,
+    id: normalizedId,
+    name: displayName,
     primaryMuscleGroup: primary.toLowerCase(),
     equipment: equipment.toLowerCase(),
+    gifUrl: imageUrl,
   };
 };
 
 const normalizedExercises = exercisesDatabase.map(normalizeExercise);
+const exerciseLookup = new Map<string, ReturnType<typeof normalizeExercise>>(
+  normalizedExercises.map((item) => [item.id, item])
+);
 
 // Simple in-memory rate limiter (can be replaced with Redis in production)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -238,6 +259,108 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       generatedWorkout.splitType = "custom";
     }
 
+    const enrichedWorkout = {
+      ...generatedWorkout,
+      exercises: generatedWorkout.exercises.map((ex) => {
+        // First try direct lookup
+        let meta = exerciseLookup.get(ex.exerciseId);
+
+        // If not found, try case-insensitive lookup
+        if (!meta) {
+          const normalizedId = ex.exerciseId.toLowerCase();
+          for (const [key, value] of exerciseLookup.entries()) {
+            if (key.toLowerCase() === normalizedId) {
+              meta = value;
+              break;
+            }
+          }
+        }
+
+        // If still not found, try matching by name (exact match)
+        if (!meta && ex.exerciseName) {
+          const normalizedName = ex.exerciseName.toLowerCase().trim();
+          for (const [_, value] of exerciseLookup.entries()) {
+            if (value.name.toLowerCase().trim() === normalizedName) {
+              meta = value;
+              break;
+            }
+          }
+        }
+
+        // If still not found, try fuzzy matching by removing prefixes and special chars
+        if (!meta) {
+          // Remove common prefixes like 'ex-', 'exercise-', etc and normalize
+          const cleanId = ex.exerciseId
+            .replace(/^ex[-_]/i, '')
+            .replace(/[-_]/g, ' ')
+            .toLowerCase()
+            .trim();
+
+          const cleanName = ex.exerciseName
+            ?.replace(/^ex[-_]/i, '')
+            .replace(/[-_]/g, ' ')
+            .toLowerCase()
+            .trim();
+
+          // First try to find exact word matches (all words present)
+          if (cleanName) {
+            const searchWords = cleanName.split(/\s+/).filter(Boolean);
+            for (const [_, value] of exerciseLookup.entries()) {
+              const dbName = value.name.toLowerCase().trim();
+              // Check if all search words are in the database name
+              if (searchWords.every(word => dbName.includes(word))) {
+                meta = value;
+                break;
+              }
+            }
+          }
+
+          // If still not found, try partial matching
+          if (!meta) {
+            for (const [_, value] of exerciseLookup.entries()) {
+              const dbName = value.name.toLowerCase().trim();
+              const dbId = value.id.replace(/[-_]/g, ' ').toLowerCase().trim();
+
+              // Check if database name/id contains the cleaned search term
+              if (cleanName && dbName.includes(cleanName)) {
+                meta = value;
+                break;
+              }
+              if (cleanId && dbName.includes(cleanId)) {
+                meta = value;
+                break;
+              }
+              // Also check reverse - if search term contains db name (for generic terms)
+              if (cleanName && cleanName.includes(dbName)) {
+                meta = value;
+                break;
+              }
+              if (cleanId && cleanId.includes(dbId)) {
+                meta = value;
+                break;
+              }
+            }
+          }
+        }
+
+        // Log if we couldn't find metadata or image
+        if (!meta) {
+          console.warn(`[AI] No metadata found for exercise: ${ex.exerciseId} (${ex.exerciseName})`);
+        } else if (!meta.gifUrl) {
+          console.warn(`[AI] Exercise found but has no image: ${meta.id} (${meta.name})`);
+        }
+
+        const resolvedName =
+          meta?.name ?? formatExerciseName(ex.exerciseName || ex.exerciseId);
+        return {
+          ...ex,
+          exerciseName: resolvedName,
+          primaryMuscleGroup: meta?.primaryMuscleGroup ?? ex.primaryMuscleGroup,
+          gifUrl: meta?.gifUrl ?? ex.gifUrl,
+        };
+      }),
+    };
+
     // Track AI usage
     await query(
       `
@@ -249,15 +372,15 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
         userId,
         "workout",
         JSON.stringify({ requestedSplit, specificRequest }),
-        JSON.stringify(generatedWorkout),
+        JSON.stringify(enrichedWorkout),
       ]
     );
 
-    console.log(`[AI] Successfully generated workout: "${generatedWorkout.name}"`);
+    console.log(`[AI] Successfully generated workout: "${enrichedWorkout.name}"`);
 
     return res.json({
       success: true,
-      workout: generatedWorkout,
+      workout: enrichedWorkout,
     });
   } catch (error) {
     console.error("[AI] Error generating workout:", error);

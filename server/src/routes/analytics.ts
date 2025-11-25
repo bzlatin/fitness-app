@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { getFatigueScores, getTrainingRecommendations } from "../services/fatigue";
+import {
+  getProgressionSuggestions,
+  applyProgressionSuggestions,
+} from "../services/progression";
 
 const router = Router();
 
@@ -31,6 +35,48 @@ router.get("/recommendations", async (_req, res) => {
   } catch (err) {
     console.error("[Analytics] Failed to fetch training recommendations", err);
     return res.status(500).json({ error: "Failed to fetch recommendations" });
+  }
+});
+
+router.get("/progression/:templateId", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { templateId } = req.params;
+  if (!templateId) {
+    return res.status(400).json({ error: "Template ID is required" });
+  }
+
+  try {
+    const data = await getProgressionSuggestions(userId, templateId);
+    return res.json({ data });
+  } catch (err) {
+    console.error("[Analytics] Failed to fetch progression suggestions", err);
+    return res.status(500).json({ error: "Failed to fetch progression suggestions" });
+  }
+});
+
+router.post("/progression/:templateId/apply", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { templateId } = req.params;
+  if (!templateId) {
+    return res.status(400).json({ error: "Template ID is required" });
+  }
+
+  const { exerciseIds } = req.body as { exerciseIds?: string[] };
+
+  try {
+    const result = await applyProgressionSuggestions(userId, templateId, exerciseIds);
+    return res.json({ data: result });
+  } catch (err) {
+    console.error("[Analytics] Failed to apply progression suggestions", err);
+    return res.status(500).json({ error: "Failed to apply progression suggestions" });
   }
 });
 

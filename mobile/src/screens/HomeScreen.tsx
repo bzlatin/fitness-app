@@ -227,28 +227,27 @@ const HomeScreen = () => {
                 No saved workouts yet
               </Text>
               <Text style={{ color: colors.textSecondary }}>
-                Create a template to get personalized Up Next suggestions.
+                Choose how to get started with your first workout.
               </Text>
               <Pressable
-                onPress={() =>
-                  navigation.navigate("WorkoutTemplateBuilder", {})
-                }
+                onPress={() => setSwapOpen(true)}
                 style={({ pressed }) => ({
                   paddingVertical: 12,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: colors.secondary,
+                  borderColor: colors.primary,
+                  backgroundColor: colors.primary,
                   alignItems: "center",
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
                 <Text
                   style={{
-                    color: colors.secondary,
+                    color: colors.surface,
                     fontFamily: fontFamilies.semibold,
                   }}
                 >
-                  Build a workout
+                  Get Started
                 </Text>
               </Pressable>
             </View>

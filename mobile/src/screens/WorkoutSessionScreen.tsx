@@ -37,6 +37,14 @@ import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
+import ProgressionSuggestionModal, {
+  ProgressionData,
+} from "../components/ProgressionSuggestion";
+import {
+  fetchProgressionSuggestions,
+  applyProgressionSuggestions,
+} from "../api/analytics";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -269,7 +277,14 @@ const WorkoutSessionScreen = () => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [showTopGradient, setShowTopGradient] = useState(false);
   const [showBottomGradient, setShowBottomGradient] = useState(true);
+  const [progressionData, setProgressionData] = useState<ProgressionData | null>(null);
+  const [showProgressionModal, setShowProgressionModal] = useState(false);
+  const [progressionChecked, setProgressionChecked] = useState(false);
+  const [progressionModalBlockingTimer, setProgressionModalBlockingTimer] = useState(false);
+  const [isUpdatingProgressionSetting, setIsUpdatingProgressionSetting] = useState(false);
+  const [progressionModalAcknowledged, setProgressionModalAcknowledged] = useState(false);
   const { data: templates } = useWorkoutTemplates();
+  const { user, updateProfile } = useCurrentUser();
 
   const template = useMemo(
     () => templates?.find((t) => t.id === route.params.templateId),
@@ -346,6 +361,27 @@ const WorkoutSessionScreen = () => {
     onError: () => Alert.alert("Could not start session", "Please try again."),
   });
 
+  const applyProgressionMutation = useMutation({
+    mutationFn: (exerciseIds?: string[]) =>
+      applyProgressionSuggestions(route.params.templateId, exerciseIds),
+    onSuccess: (result) => {
+      setShowProgressionModal(false);
+      Alert.alert(
+        "Progression Applied",
+        `Updated ${result.updated} exercise${result.updated === 1 ? "" : "s"} in your template. The new weights will be used in future workouts.`,
+        [{ text: "Got it" }]
+      );
+      // Optionally refresh the template
+      // refetch templates if needed
+    },
+    onError: () => {
+      Alert.alert(
+        "Could not apply progression",
+        "Please try again or update weights manually."
+      );
+    },
+  });
+
   useEffect(() => {
     if (!route.params.sessionId) {
       startMutation.mutate();
@@ -384,6 +420,64 @@ const WorkoutSessionScreen = () => {
     );
     setDefaultsApplied(true);
   }, [defaultsApplied, sets.length]);
+
+  // Check for progression suggestions when session starts
+  useEffect(() => {
+    const checkProgression = async () => {
+      // Only check once per session load
+      if (progressionChecked || !route.params.templateId || !sessionId) return;
+
+      // Check user and template settings
+      const userEnabled = user?.progressiveOverloadEnabled !== false;
+      const templateEnabled = template?.progressiveOverloadEnabled !== false;
+
+      if (!userEnabled || !templateEnabled) {
+        setProgressionChecked(true);
+        return;
+      }
+
+      try {
+        const data = await fetchProgressionSuggestions(route.params.templateId);
+
+        // Only show if we have significant data and suggestions
+        if (data.hasSignificantData && data.readyForProgression) {
+          setProgressionData(data);
+          setProgressionModalAcknowledged(false);
+          // Small delay to let the workout screen render first
+          setTimeout(() => setShowProgressionModal(true), 1500);
+        }
+      } catch (err) {
+        console.error("Failed to fetch progression suggestions:", err);
+      } finally {
+        setProgressionChecked(true);
+      }
+    };
+
+    checkProgression();
+  }, [sessionId, route.params.templateId, progressionChecked, user, template]);
+
+  useEffect(() => {
+    if (showProgressionModal && !progressionModalAcknowledged) {
+      if (!progressionModalBlockingTimer) {
+        pauseTimer();
+        setElapsedBaseSeconds(0);
+        setElapsedSeconds(0);
+        setTimerAnchor(null);
+        setTimerActive(false);
+        setProgressionModalBlockingTimer(true);
+      }
+      return;
+    }
+
+    if (!showProgressionModal && progressionModalBlockingTimer) {
+      resumeTimer();
+      setProgressionModalBlockingTimer(false);
+    }
+  }, [
+    showProgressionModal,
+    progressionModalAcknowledged,
+    progressionModalBlockingTimer,
+  ]);
 
   const templateName = useMemo(
     () => template?.name ?? sessionQuery.data?.templateName,
@@ -427,6 +521,46 @@ const WorkoutSessionScreen = () => {
     },
     [endActiveStatus]
   );
+
+  const acknowledgeProgressionModal = () => {
+    if (!progressionModalAcknowledged) {
+      setProgressionModalAcknowledged(true);
+    }
+    if (progressionModalBlockingTimer) {
+      setProgressionModalBlockingTimer(false);
+    }
+    resumeTimer();
+  };
+
+  const handleProgressionSettingChange = async (enabled: boolean) => {
+    setIsUpdatingProgressionSetting(true);
+    try {
+      await updateProfile({ progressiveOverloadEnabled: enabled });
+      if (!enabled) {
+        acknowledgeProgressionModal();
+        setShowProgressionModal(false);
+      }
+    } catch (err) {
+      Alert.alert("Could not update setting", "Please try again.");
+    } finally {
+      setIsUpdatingProgressionSetting(false);
+    }
+  };
+
+  const handleCloseProgressionModal = () => {
+    acknowledgeProgressionModal();
+    setShowProgressionModal(false);
+  };
+
+  const handleApplyAllProgression = () => {
+    acknowledgeProgressionModal();
+    applyProgressionMutation.mutate(undefined);
+  };
+
+  const handleApplySelectedProgression = (exerciseIds: string[]) => {
+    acknowledgeProgressionModal();
+    applyProgressionMutation.mutate(exerciseIds);
+  };
 
   const applySetUpdates = (updatedList: WorkoutSet[]) => {
     setSets((prev) =>
@@ -1029,6 +1163,17 @@ const WorkoutSessionScreen = () => {
           }
         />
       )}
+      <ProgressionSuggestionModal
+        visible={showProgressionModal}
+        data={progressionData}
+        onClose={handleCloseProgressionModal}
+        onApplyAll={handleApplyAllProgression}
+        onApplySelected={handleApplySelectedProgression}
+        isApplying={applyProgressionMutation.isPending}
+        progressiveOverloadEnabled={user?.progressiveOverloadEnabled ?? true}
+        onToggleProgressiveOverload={handleProgressionSettingChange}
+        isUpdatingPreference={isUpdatingProgressionSetting}
+      />
       <Modal
         visible={!!imagePreviewUrl}
         transparent

@@ -1,11 +1,9 @@
 import express, { Router } from "express";
 import path from "path";
 import fs from "fs";
-import { exercises as localExercises } from "../data/exercises";
 
 const router = Router();
 
-// Load the big local dataset from dist.
 type LocalExercise = {
   id: string;
   name: string;
@@ -21,7 +19,7 @@ type LocalExercise = {
 };
 
 const distPath = path.join(__dirname, "../data/dist/exercises.json");
-const largeExercises: LocalExercise[] = fs.existsSync(distPath)
+const distExercises: LocalExercise[] = fs.existsSync(distPath)
   ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
   : [];
 
@@ -55,6 +53,13 @@ const normalizeExercise = (item: LocalExercise) => {
   };
 };
 
+// Build catalog from the JSON database
+const normalizedCatalog = distExercises.map(normalizeExercise);
+
+const exerciseMap = new Map<string, ReturnType<typeof normalizeExercise>>(
+  normalizedCatalog.map((item) => [item.id, item])
+);
+
 // Serve static exercise images (dist dataset first, then raw exercises folder as fallback)
 const imagesDirDist = path.join(__dirname, "../data/dist");
 const imagesDirLegacy = path.join(__dirname, "../data/exercises");
@@ -67,10 +72,7 @@ router.get("/search", (req, res) => {
   const muscleValue =
     typeof muscleGroup === "string" ? muscleGroup.toLowerCase() : "";
 
-  const source = largeExercises.length > 0 ? largeExercises : localExercises;
-
-  const results = source
-    .map(normalizeExercise)
+  const results = normalizedCatalog
     .filter((ex) => {
       const matchesQuery =
         !searchValue || ex.name.toLowerCase().includes(searchValue);
@@ -93,11 +95,9 @@ router.get("/batch", (req, res) => {
   }
 
   const requestedIds = ids.split(",").map((id) => id.trim());
-  const source = largeExercises.length > 0 ? largeExercises : localExercises;
-
-  const results = source
-    .map(normalizeExercise)
-    .filter((ex) => requestedIds.includes(ex.id));
+  const results = requestedIds
+    .map((id) => exerciseMap.get(id))
+    .filter((ex): ex is NonNullable<typeof ex> => Boolean(ex));
 
   return res.json(results);
 });

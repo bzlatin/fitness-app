@@ -17,6 +17,7 @@ export interface User {
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
   onboardingData?: OnboardingData | null;
+  progressiveOverloadEnabled?: boolean;
 }
 
 export interface UserProfile extends User {
