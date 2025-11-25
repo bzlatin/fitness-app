@@ -2,8 +2,8 @@ import { Platform } from "react-native";
 import { PlanChoice, validateIosReceipt } from "../api/subscriptions";
 
 const productIds: Record<PlanChoice, string> = {
-  monthly: "pro_monthly",
-  annual: "pro_yearly",
+  monthly: "pro_monthly_subscription",
+  annual: "pro_annual_subscription",
 };
 
 type IapPurchase = {
