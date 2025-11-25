@@ -57,6 +57,14 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   const productId = productIds[plan];
   log("purchaseSubscription init", { plan, productId, bundleIdHint: "check Xcode target + EXPO_PUBLIC_IOS_BUNDLE_ID" });
 
+  // Probe the store catalog before requesting purchase to catch SKU visibility issues
+  try {
+    const catalog = await RNIap.fetchProducts({ skus: Object.values(productIds), type: "subs" });
+    log("purchaseSubscription fetchProducts", catalog);
+  } catch (err) {
+    log("purchaseSubscription fetchProducts error", err);
+  }
+
   let purchase: IapPurchase;
   try {
     purchase = (await RNIap.requestPurchase({
