@@ -69,6 +69,35 @@ const SettingsScreen = () => {
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const isHandleLocked = Boolean(user?.handle);
 
+  const {
+    data: subscriptionStatus,
+    isLoading: isSubscriptionLoading,
+    isError: isSubscriptionError,
+    refetch: refetchSubscriptionStatus,
+  } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: getSubscriptionStatus,
+    enabled: Boolean(user),
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnMount: false, // Don't refetch on every mount
+  });
+  const isPro = (user?.plan ?? "free") === "pro";
+  const formatDate = (value?: number | null | string) => {
+    if (!value) return undefined;
+    const date =
+      typeof value === "number" ? new Date(value * 1000) : new Date(value);
+    return date.toLocaleDateString();
+  };
+  const renewalDate =
+    subscriptionStatus?.currentPeriodEnd && isPro
+      ? formatDate(subscriptionStatus.currentPeriodEnd)
+      : user?.planExpiresAt
+      ? formatDate(user.planExpiresAt)
+      : undefined;
+  const trialEnds = subscriptionStatus?.trialEndsAt
+    ? formatDate(subscriptionStatus.trialEndsAt)
+    : undefined;
+
   useEffect(() => {
     if (user) {
       setDraftName(user.name ?? "");
@@ -96,8 +125,8 @@ const SettingsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       void refresh();
-      void subscriptionStatus.refetch();
-    }, [refresh, subscriptionStatus.refetch])
+      void refetchSubscriptionStatus();
+    }, [refresh, refetchSubscriptionStatus])
   );
 
   const connectionsQuery = useQuery({
@@ -149,28 +178,6 @@ const SettingsScreen = () => {
     onSettled: () => setPendingActionId(null),
     onSuccess: refreshConnections,
   });
-
-  const subscriptionStatus = useQuery({
-    queryKey: ["subscription", "status"],
-    queryFn: getSubscriptionStatus,
-    enabled: Boolean(user),
-  });
-  const isPro = (user?.plan ?? "free") === "pro";
-  const formatDate = (value?: number | null | string) => {
-    if (!value) return undefined;
-    const date =
-      typeof value === "number" ? new Date(value * 1000) : new Date(value);
-    return date.toLocaleDateString();
-  };
-  const renewalDate =
-    subscriptionStatus.data?.currentPeriodEnd && isPro
-      ? formatDate(subscriptionStatus.data.currentPeriodEnd)
-      : user?.planExpiresAt
-      ? formatDate(user.planExpiresAt)
-      : undefined;
-  const trialEnds = subscriptionStatus.data?.trialEndsAt
-    ? formatDate(subscriptionStatus.data.trialEndsAt)
-    : undefined;
 
   const renderConnectionGroup = (
     title: string,
@@ -836,8 +843,12 @@ const SettingsScreen = () => {
             >
               {isPro ? "Pro plan" : "Free plan"}
             </Text>
-            {subscriptionStatus.isFetching ? (
+            {isSubscriptionLoading ? (
               <ActivityIndicator color={colors.primary} />
+            ) : isSubscriptionError ? (
+              <Text style={{ color: colors.error, fontSize: 12 }}>
+                Unable to load billing status.
+              </Text>
             ) : (
               <>
                 {trialEnds ? (
@@ -847,7 +858,7 @@ const SettingsScreen = () => {
                 ) : null}
                 {renewalDate ? (
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {subscriptionStatus.data?.cancelAtPeriodEnd
+                    {subscriptionStatus?.cancelAtPeriodEnd
                       ? `Ends on ${renewalDate}`
                       : `Renews on ${renewalDate}`}
                   </Text>

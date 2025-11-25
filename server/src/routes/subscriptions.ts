@@ -14,6 +14,24 @@ type StatusResponse = {
   cancelAtPeriodEnd?: boolean;
   currentPeriodEnd?: number | null;
   stripeSubscriptionId?: string | null;
+  currentPriceLookupKey?: string | null;
+  currentInterval?: BillingPlan | null;
+};
+
+const getSubscriptionPlanDetails = (subscription: Stripe.Subscription) => {
+  const firstItem = subscription.items.data[0];
+  const lookupKey = firstItem?.price?.lookup_key ?? null;
+  const interval = firstItem?.price?.recurring?.interval;
+  const mappedInterval: BillingPlan | null =
+    interval === "year" || interval === "yearly" || interval === "annual"
+      ? "annual"
+      : interval === "month" || interval === "monthly"
+      ? "monthly"
+      : null;
+  return {
+    lookupKey,
+    interval: mappedInterval,
+  };
 };
 
 router.get("/status", async (_req, res) => {
@@ -43,6 +61,7 @@ router.get("/status", async (_req, res) => {
           : billing.trial_ends_at
           ? Math.floor(new Date(billing.trial_ends_at).getTime() / 1000)
           : null;
+      const planMeta = getSubscriptionPlanDetails(subscription);
       stripeStatus = {
         status: subscription.status,
         plan: subscription.status === "active" || subscription.status === "trialing" ? "pro" : "free",
@@ -51,6 +70,8 @@ router.get("/status", async (_req, res) => {
         cancelAtPeriodEnd: subscription.cancel_at_period_end ?? undefined,
         currentPeriodEnd: subscription.current_period_end ?? null,
         stripeSubscriptionId: subscription.id,
+        currentPriceLookupKey: planMeta.lookupKey,
+        currentInterval: planMeta.interval,
       };
     }
 
@@ -209,6 +230,69 @@ router.post("/billing-portal", async (req, res) => {
   } catch (err) {
     console.error("Failed to create billing portal session", err);
     return res.status(500).json({ error: "Failed to create billing portal session" });
+  }
+});
+
+router.post("/switch", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const plan = (req.body?.plan ?? "monthly") as BillingPlan;
+  if (plan !== "monthly" && plan !== "annual") {
+    return res.status(400).json({ error: "Invalid plan" });
+  }
+
+  try {
+    const billing = await fetchUserBilling(userId);
+    if (!billing.stripe_subscription_id) {
+      return res
+        .status(400)
+        .json({ error: "No active subscription to switch. Start a subscription first." });
+    }
+
+    const priceId = resolvePriceId(plan);
+    const subscription = await stripe.subscriptions.retrieve(billing.stripe_subscription_id, {
+      expand: ["items"],
+    });
+    const item = subscription.items.data[0];
+    if (!item?.id) {
+      return res.status(500).json({ error: "Subscription item missing" });
+    }
+
+    const updated = await stripe.subscriptions.update(subscription.id, {
+      items: [
+        {
+          id: item.id,
+          price: priceId,
+        },
+      ],
+      proration_behavior: "create_prorations",
+    });
+
+    const planMeta = getSubscriptionPlanDetails(updated);
+    await query(
+      `
+        UPDATE users
+        SET plan = 'pro',
+            plan_expires_at = to_timestamp($2),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [userId, updated.current_period_end ?? null]
+    );
+
+    return res.json({
+      status: updated.status,
+      cancelAtPeriodEnd: updated.cancel_at_period_end ?? undefined,
+      currentPeriodEnd: updated.current_period_end ?? null,
+      currentPriceLookupKey: planMeta.lookupKey,
+      currentInterval: planMeta.interval,
+    });
+  } catch (err) {
+    console.error("Failed to switch subscription", err);
+    return res.status(500).json({ error: "Failed to switch subscription" });
   }
 });
 

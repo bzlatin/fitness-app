@@ -10,6 +10,8 @@ export type SubscriptionStatus = {
   cancelAtPeriodEnd?: boolean;
   currentPeriodEnd?: number | null;
   stripeSubscriptionId?: string | null;
+  currentPriceLookupKey?: string | null;
+  currentInterval?: "monthly" | "annual" | null;
 };
 
 export type CheckoutSessionPayload = {
@@ -46,5 +48,16 @@ export const createBillingPortalSession = async (returnUrl?: string) => {
   const { data } = await apiClient.post<{ url: string }>("/subscriptions/billing-portal", {
     returnUrl,
   });
+  return data;
+};
+
+export const switchSubscriptionPlan = async (plan: PlanChoice) => {
+  const { data } = await apiClient.post<{
+    status: string;
+    cancelAtPeriodEnd?: boolean;
+    currentPeriodEnd?: number | null;
+    currentPriceLookupKey?: string | null;
+    currentInterval?: PlanChoice | null;
+  }>("/subscriptions/switch", { plan });
   return data;
 };

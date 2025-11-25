@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 declare const process: any;
 
 const DEFAULT_API_URL = "http://localhost:4000/api";
+const DEFAULT_TIMEOUT_MS = 15000;
 
 type TokenProvider = () => string | null | undefined;
 
@@ -44,6 +45,7 @@ type RequestConfig = {
   params?: Record<string, string | number | boolean | undefined>;
   headers?: Record<string, string>;
   body?: unknown;
+  timeoutMs?: number;
 };
 
 const buildUrl = (path: string, params?: RequestConfig["params"]) => {
@@ -81,10 +83,31 @@ const request = async <T>(
     console.warn("No auth token set for /social/me request");
   }
 
-  const response = await fetch(url, {
-    ...init,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    config?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    const isAbort =
+      err instanceof Error &&
+      (err.name === "AbortError" || err.message.toLowerCase().includes("aborted"));
+    if (isAbort) {
+      throw new Error("Request timed out. Check your connection and try again.");
+    }
+    throw err instanceof Error ? err : new Error("Request failed. Please try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const raw = await response.text().catch(() => response.statusText);
