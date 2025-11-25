@@ -27,5 +27,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config.android,
     package: androidPackage,
   },
+  extra: {
+    ...config.extra,
+    eas: {
+      // Required by EAS for project linking
+      projectId: "f1c3583d-410a-4715-b4ce-6fc6386ba345",
+    },
+  },
   plugins: [...(config.plugins ?? []), "react-native-iap"],
 });

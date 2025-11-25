@@ -55,11 +55,28 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   const RNIap = getIap();
   await initIapConnection();
   const productId = productIds[plan];
-  log("purchaseSubscription init", { plan, productId, bundleIdHint: "check Xcode target + EXPO_PUBLIC_IOS_BUNDLE_ID" });
+  // Resolve bundle id lazily to avoid static module imports when types aren't available
+  let bundleId: string | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const AppModule = require("expo-application");
+    bundleId = AppModule?.applicationId ?? null;
+  } catch {
+    bundleId = null;
+  }
+  log("purchaseSubscription init", {
+    plan,
+    productId,
+    bundleId,
+    bundleIdHint: "check Xcode target + EXPO_PUBLIC_IOS_BUNDLE_ID",
+  });
 
   // Probe the store catalog before requesting purchase to catch SKU visibility issues
   try {
-    const catalog = await RNIap.fetchProducts({ skus: Object.values(productIds), type: "subs" });
+    const catalog = await RNIap.fetchProducts({
+      skus: Object.values(productIds),
+      type: "subs",
+    });
     log("purchaseSubscription fetchProducts", catalog);
   } catch (err) {
     log("purchaseSubscription fetchProducts error", err);
@@ -94,7 +111,11 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
       latest?.transactionId ??
       latest?.originalTransactionIdentifier ??
       (latest as { originalTransactionId?: string })?.originalTransactionId;
-    log("latestTransactionIOS", { productId, latest, resolvedTransactionId: transactionId });
+    log("latestTransactionIOS", {
+      productId,
+      latest,
+      resolvedTransactionId: transactionId,
+    });
   }
 
   if (!transactionId) {
@@ -131,7 +152,8 @@ export const restorePurchases = async () => {
     throw new Error("No App Store purchases to restore.");
   }
 
-  const transactionId = active.transactionId ?? active.originalTransactionIdentifier;
+  const transactionId =
+    active.transactionId ?? active.originalTransactionIdentifier;
   if (!transactionId) {
     throw new Error("Apple did not return a transaction id to restore.");
   }
