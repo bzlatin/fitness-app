@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-11-23
-> Status: Phase 1 complete — Phase 2 (AI & Premium) in progress
+> Last Updated: 2025-11-24
+> Status: Phase 1 & 2 complete — Phase 3 (Monetization) ready to begin
 
 ## Product Vision
 
@@ -412,9 +412,9 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 ---
 
-#### 2.3 Progressive Overload Automation
+#### 2.3 Progressive Overload Automation ✅ COMPLETE
 
-**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM
+**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ✅ IMPLEMENTED
 
 **Goal**: Analyze performance trends and suggest weight increases when user is ready.
 
@@ -427,24 +427,48 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 **Implementation**:
 
-- [ ] Create progressive overload analysis service
-- [ ] Query last 3 sessions for each exercise in template
-- [ ] Calculate readiness score for weight increase
-- [ ] Add "Smart Progression" badge to exercises
-- [ ] Show "+5 lb recommended" indicator in workout session
-- [ ] Add one-tap to apply suggestion
-- [ ] Track acceptance rate of suggestions (for refinement)
+- [x] Create progressive overload analysis service
+- [x] Query last 3 sessions for each exercise in template
+- [x] Calculate readiness score for weight increase
+- [x] Add progression suggestion modal before workout starts
+- [x] Show weight increase recommendations in modal
+- [x] Add one-tap to apply suggestions (all or selected)
+- [x] User preference toggle in Settings screen
+- [x] Template-level override option
+- [x] Support bodyweight exercises with rep progression suggestions
+- [x] Smart increment calculation based on exercise type and current weight
+- [x] Confidence levels (high/medium/low) for each suggestion
+- [x] Modal blocks workout timer until dismissed
 
-**Files to Create/Modify**:
+**Files Created/Modified**:
 
-- `/server/src/services/progression.ts` (new)
-- `/server/src/routes/analytics.ts` (add progression endpoint)
-- `/mobile/src/components/ProgressionSuggestion.tsx` (new)
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` (show suggestions)
+- ✅ `/server/src/services/progression.ts` - Complete progression analysis logic
+- ✅ `/server/src/routes/analytics.ts` - Progression endpoints
+- ✅ `/mobile/src/components/ProgressionSuggestion.tsx` - Full-featured modal UI
+- ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Auto-check on workout start
+- ✅ `/mobile/src/screens/SettingsScreen.tsx` - Global toggle setting
+- ✅ `/mobile/src/api/analytics.ts` - API client functions
+- ✅ `/server/src/db.ts` - Added `progressive_overload_enabled` columns
+- ✅ `/mobile/src/types/user.ts` - Added preference type
+- ✅ `/mobile/src/types/workouts.ts` - Added template-level setting
 
 **API Endpoints**:
 
 - `GET /api/analytics/progression/:templateId` - Get progression suggestions
+- `POST /api/analytics/progression/:templateId/apply` - Apply selected/all suggestions
+
+**Features Implemented**:
+
+- **Smart Weight Increments**:
+  - Compound exercises: 5-10 lb increases
+  - Isolation exercises: 2.5-5 lb increases
+  - Bodyweight exercises: Rep progression suggestions (no weight)
+  - Weight-based scaling: Heavier lifts get larger increments
+- **Confidence Scoring**: High/medium/low based on consistency
+- **Selective Application**: Users can apply all or choose specific exercises
+- **User Preferences**: Global toggle + template-level overrides
+- **Modal Timing**: Shows 1.5s after workout loads, pauses timer until dismissed
+- **Data Requirements**: Needs at least 3 sessions for suggestions
 
 ---
 
@@ -789,6 +813,7 @@ CREATE TABLE workout_comments (
 
 - **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
-- **v1.2** (Current): AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
-- **v1.3** (Target: Week 9): Stripe integration + Paywall
+- **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
+- **v1.3** (Current): Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
+- **v1.4** (Target: Week 9): Stripe integration + Paywall
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements
