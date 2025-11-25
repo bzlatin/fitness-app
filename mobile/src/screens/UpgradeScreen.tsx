@@ -8,19 +8,19 @@ import {
   TouchableOpacity,
   View,
   Linking,
+  Platform,
 } from "react-native";
 import { useStripe } from "@stripe/stripe-react-native";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
 import {
-  CheckoutSessionPayload,
   PlanChoice,
   createBillingPortalSession,
-  createCheckoutSession,
   getSubscriptionStatus,
   switchSubscriptionPlan,
 } from "../api/subscriptions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { startSubscription } from "../services/payments";
 
 const plans: Record<
   PlanChoice,
@@ -40,10 +40,10 @@ const plans: Record<
   },
   annual: {
     title: "Annual",
-    price: "$47.99",
-    blurb: "Billed yearly. Save $12 compared to monthly.",
+    price: "$49.99",
+    blurb: "Billed yearly. Save about $10 compared to monthly.",
     badge: "Best value",
-    savings: "Save 20%",
+    savings: "Save ~$10/yr",
   },
 };
 
@@ -58,6 +58,7 @@ const UpgradeScreen = () => {
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
   const stripe = useStripe();
+  const isIOS = Platform.OS === "ios";
 
   const statusQuery = useQuery({
     queryKey: ["subscription", "status"],
@@ -68,6 +69,7 @@ const UpgradeScreen = () => {
 
   const currentInterval = statusQuery.data?.currentInterval ?? null;
   const isPro = statusQuery.data?.plan === "pro";
+  const isAppleSubscription = statusQuery.data?.subscriptionPlatform === "apple";
 
   useEffect(() => {
     if (isPro && currentInterval) {
@@ -76,39 +78,19 @@ const UpgradeScreen = () => {
   }, [isPro, currentInterval]);
 
   const startCheckout = useMutation({
-    mutationFn: (payload: CheckoutSessionPayload) => createCheckoutSession(payload),
+    mutationFn: (plan: PlanChoice) =>
+      startSubscription({
+        plan,
+        stripe,
+        userEmail: user?.email ?? null,
+        userName: user?.name ?? null,
+      }),
     onError: (err: Error) => {
-      Alert.alert("Checkout failed", err.message);
+      Alert.alert(isIOS ? "Purchase failed" : "Checkout failed", err.message);
     },
-    onSuccess: async (session) => {
-      const initResult = await stripe.initPaymentSheet({
-        merchantDisplayName: "Push / Pull",
-        customerId: session.customerId,
-        customerEphemeralKeySecret: session.customerEphemeralKeySecret,
-        paymentIntentClientSecret: session.paymentIntentClientSecret,
-        setupIntentClientSecret: session.setupIntentClientSecret,
-        allowsDelayedPaymentMethods: false,
-        defaultBillingDetails: {
-          email: user?.email,
-          name: user?.name,
-        },
-      });
-
-      if (initResult.error) {
-        Alert.alert("Payment sheet error", initResult.error.message);
-        return;
-      }
-
-      const presentResult = await stripe.presentPaymentSheet();
-      if (presentResult.error) {
-        if (presentResult.error.code !== "Canceled") {
-          Alert.alert("Payment failed", presentResult.error.message);
-        }
-        return;
-      }
-
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
-      Alert.alert("Success", "Your subscription is active.");
+      Alert.alert("Success", isIOS ? "Your Apple subscription is active." : "Your subscription is active.");
     },
   });
 
@@ -147,22 +129,31 @@ const UpgradeScreen = () => {
     ? formatDate(statusQuery.data.trialEndsAt)
     : undefined;
 
-  // Determine the screen title and description based on user status
   const screenTitle = isPro
-    ? currentInterval
+    ? isAppleSubscription
+      ? "Manage with Apple"
+      : currentInterval
       ? "Switch Plans"
       : "Manage Subscription"
+    : isIOS
+    ? "Upgrade with Apple"
     : "Upgrade to Pro";
 
   const screenDescription = isPro
     ? currentInterval
       ? `You're currently on the ${currentInterval === "annual" ? "annual" : "monthly"} plan. Switch to save or get more flexibility.`
+      : isAppleSubscription
+      ? "Manage your Pro subscription from your Apple ID subscriptions."
       : "Manage your Pro subscription and billing details."
     : "Unlock AI workouts, analytics, and premium templates. First-time upgrades get a 7-day trial.";
 
   // Determine which plans to show
   const availablePlans: PlanChoice[] =
-    isPro && currentInterval
+    isPro && isAppleSubscription
+      ? currentInterval
+        ? [currentInterval]
+        : ["monthly"]
+      : isPro && currentInterval
       ? [currentInterval === "annual" ? "monthly" : "annual"]
       : ["monthly", "annual"];
 
@@ -271,12 +262,13 @@ const UpgradeScreen = () => {
           const details = plans[plan];
           const isSelected = plan === selectedPlan;
           const isCurrentPlan = isPro && currentInterval === plan;
+          const isSelectionLocked = isAppleSubscription && isPro;
 
           return (
             <TouchableOpacity
               key={plan}
               onPress={() => setSelectedPlan(plan)}
-              disabled={isCurrentPlan}
+              disabled={isCurrentPlan || isSelectionLocked}
               style={{
                 borderRadius: 16,
                 borderWidth: 2,
@@ -288,7 +280,7 @@ const UpgradeScreen = () => {
                   : colors.surface,
                 padding: 18,
                 gap: 10,
-                opacity: isCurrentPlan ? 0.6 : 1,
+                opacity: isCurrentPlan || isSelectionLocked ? 0.6 : 1,
               }}
             >
               <View
@@ -375,7 +367,7 @@ const UpgradeScreen = () => {
                     {details.blurb}
                   </Text>
                 </View>
-                {isSelected && !isCurrentPlan ? (
+                {isSelected && !isCurrentPlan && !isSelectionLocked ? (
                   <View
                     style={{
                       width: 24,
@@ -434,7 +426,7 @@ const UpgradeScreen = () => {
       ) : null}
 
       {/* Billing Change Notice for Pro users switching plans */}
-      {isPro && currentInterval && currentInterval !== selectedPlan ? (
+      {isPro && currentInterval && currentInterval !== selectedPlan && !isAppleSubscription ? (
         <View
           style={{
             padding: 14,
@@ -462,7 +454,7 @@ const UpgradeScreen = () => {
             }}
           >
             {selectedPlan === "annual"
-              ? `You'll be charged $47.99 for annual billing, minus a prorated credit for the unused time on your current monthly plan. Your new billing cycle starts today.`
+              ? `You'll be charged $49.99 for annual billing, minus a prorated credit for the unused time on your current monthly plan. Your new billing cycle starts today.`
               : "You'll switch to monthly billing now and receive a prorated credit for any unused time on your annual plan. Your billing date will change."}
           </Text>
         </View>
@@ -477,12 +469,16 @@ const UpgradeScreen = () => {
           switchPlan.isPending
         }
         onPress={() => {
+          if (isPro && isAppleSubscription) {
+            void Linking.openURL("https://apps.apple.com/account/subscriptions");
+            return;
+          }
           if (isPro && currentInterval) {
             switchPlan.mutate(selectedPlan);
           } else if (isPro) {
             portalMutation.mutate();
           } else {
-            startCheckout.mutate({ plan: selectedPlan });
+            startCheckout.mutate(selectedPlan);
           }
         }}
         style={{
@@ -512,9 +508,13 @@ const UpgradeScreen = () => {
             }}
           >
             {isPro
-              ? currentInterval
+              ? isAppleSubscription
+                ? "Manage in App Store"
+                : currentInterval
                 ? `Switch to ${selectedPlan === "annual" ? "Annual" : "Monthly"} Plan`
                 : "Manage Subscription"
+              : isIOS
+              ? "Subscribe with Apple"
               : "Start 7-Day Trial"}
           </Text>
         )}
@@ -552,24 +552,23 @@ const UpgradeScreen = () => {
               fontSize: 13,
               textAlign: "center",
             }}
-          >
-            Need to update payment methods or cancel?
+            >
+            {isAppleSubscription
+              ? "Manage your subscription from your Apple ID."
+              : "Need to update payment methods or cancel?"}
           </Text>
-          <TouchableOpacity
-            onPress={() => portalMutation.mutate()}
-            disabled={portalMutation.isPending}
-            style={{
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingVertical: 14,
-              alignItems: "center",
-              backgroundColor: colors.surface,
-            }}
-          >
-            {portalMutation.isPending ? (
-              <ActivityIndicator color={colors.textPrimary} />
-            ) : (
+          {isAppleSubscription ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL("https://apps.apple.com/account/subscriptions")}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingVertical: 14,
+                alignItems: "center",
+                backgroundColor: colors.surface,
+              }}
+            >
               <Text
                 style={{
                   color: colors.textPrimary,
@@ -577,10 +576,37 @@ const UpgradeScreen = () => {
                   fontSize: 15,
                 }}
               >
-                Manage Billing & Payment
+                Open Apple Subscriptions
               </Text>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => portalMutation.mutate()}
+              disabled={portalMutation.isPending}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingVertical: 14,
+                alignItems: "center",
+                backgroundColor: colors.surface,
+              }}
+            >
+              {portalMutation.isPending ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Manage Billing & Payment
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       ) : null}
     </ScrollView>

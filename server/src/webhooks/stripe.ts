@@ -33,6 +33,7 @@ const updateUserPlanFromSubscription = async (userId: string, subscription: Stri
           stripe_subscription_id = $4,
           trial_started_at = COALESCE(trial_started_at, $5),
           trial_ends_at = COALESCE(trial_ends_at, $6),
+          subscription_platform = 'stripe',
           updated_at = NOW()
       WHERE id = $1
     `,
@@ -88,6 +89,7 @@ router.post(
                   SET plan = 'free',
                       plan_expires_at = NULL,
                       stripe_subscription_id = NULL,
+                      subscription_platform = NULL,
                       updated_at = NOW()
                   WHERE id = $1
                 `,

@@ -45,6 +45,9 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
       ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS apple_original_transaction_id TEXT,
+      ADD COLUMN IF NOT EXISTS apple_subscription_id TEXT,
+      ADD COLUMN IF NOT EXISTS subscription_platform TEXT,
       ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS training_style TEXT,
       ADD COLUMN IF NOT EXISTS gym_name TEXT,
@@ -69,6 +72,26 @@ export const initDb = async () => {
       payload JSONB,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS appstore_notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id),
+      notification_type TEXT NOT NULL,
+      transaction_id TEXT,
+      original_transaction_id TEXT,
+      payload JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_appstore_notifications_user ON appstore_notifications(user_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_appstore_notifications_original_tx ON appstore_notifications(original_transaction_id)
   `);
 
   await query(`UPDATE users SET plan = 'free' WHERE plan IS NULL`);

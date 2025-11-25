@@ -2,7 +2,7 @@ import "react-native-gesture-handler";
 import { NavigationContainer, DarkTheme, LinkingOptions } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useEffect, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
@@ -23,6 +23,7 @@ import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import { RootStackParamList } from "./src/navigation/types";
+import { bootstrapPayments } from "./src/services/payments";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -35,6 +36,10 @@ const App = () => {
     [fontFamilies.semibold]: SpaceGrotesk_600SemiBold,
     [fontFamilies.bold]: SpaceGrotesk_700Bold,
   });
+
+  useEffect(() => {
+    void bootstrapPayments();
+  }, []);
 
   const queryClient = useMemo(
     () =>

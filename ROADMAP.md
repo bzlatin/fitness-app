@@ -21,7 +21,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 - ✅ Complete exercise library access
 - ✅ Workout history tracking
 
-### Pro Tier: $4.99/month or $47.99/year
+### Pro Tier: $4.99/month or $49.99/year
 
 - ✅ Unlimited workout templates
 - ✅ AI workout generation (unlimited)
@@ -31,7 +31,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 - ✅ Priority support
 - ✅ 7-day free trial
 
-**Competitive Positioning**: Priced at $47.99/year vs Fitbod's $60/year (~20% cheaper)
+**Competitive Positioning**: Priced at $49.99/year vs Fitbod's $60/year (~17% cheaper)
 
 ---
 
@@ -483,7 +483,7 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 **Stripe Products**:
 
 1. **Pro Monthly**: $4.99/month (product ID: `prod_pro_monthly`)
-2. **Pro Annual**: $47.99/year (product ID: `prod_pro_annual`)
+2. **Pro Annual**: $49.99/year (product ID: `prod_pro_annual`)
 
 **Implementation**:
 
@@ -571,7 +571,7 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 **Apple IAP Products** (to create in App Store Connect):
 
 1. **Pro Monthly**: $4.99/month (product ID: `pro_monthly_subscription`)
-2. **Pro Annual**: $47.99/year (product ID: `pro_annual_subscription`)
+2. **Pro Annual**: $49.99/year (product ID: `pro_annual_subscription`)
 
 **Revenue Split**:
 - Apple: 30% first year, 15% after 1 year of continuous subscription
@@ -583,20 +583,20 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 - [ ] Create Apple Developer account ($99/year)
 - [ ] Register app in App Store Connect
 - [ ] Create two subscription products in App Store Connect
-- [ ] Set up StoreKit Configuration file for local testing
-- [ ] Add iOS bundle identifier to `app.config.ts`
+- [x] Set up StoreKit Configuration file for local testing
+- [x] Add iOS bundle identifier to `app.config.ts`
 - [ ] Configure Apple Team ID in Expo build settings
 
 **Backend:**
-- [ ] Install `node-app-store-server-api` or `@apple/app-store-server-library`
-- [ ] Create iOS receipt validation service (`/server/src/services/appstore.ts`)
-- [ ] Add `apple_original_transaction_id` column to users table
-- [ ] Add `apple_subscription_id` column to users table
-- [ ] Create unified subscription service that handles both Stripe and Apple
-- [ ] Add endpoints for iOS receipt validation:
+- [x] Install `node-app-store-server-api` or `@apple/app-store-server-library`
+- [x] Create iOS receipt validation service (`/server/src/services/appstore.ts`)
+- [x] Add `apple_original_transaction_id` column to users table
+- [x] Add `apple_subscription_id` column to users table
+- [x] Create unified subscription service that handles both Stripe and Apple
+- [x] Add endpoints for iOS receipt validation:
   - `POST /api/subscriptions/ios/validate-receipt` - Validate and activate subscription
   - `GET /api/subscriptions/ios/status` - Check App Store subscription status
-- [ ] Add Apple App Store Server Notification webhook handler (`/webhooks/appstore`)
+- [x] Add Apple App Store Server Notification webhook handler (`/webhooks/appstore`)
 - [ ] Handle App Store notification types:
   - `INITIAL_BUY` → Activate Pro plan
   - `DID_RENEW` → Extend plan expiration
@@ -606,19 +606,19 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
   - `REFUND` → Immediate plan revocation
 
 **Frontend:**
-- [ ] Install `react-native-iap` (most popular library)
-- [ ] Create platform-agnostic payment service (`/mobile/src/services/payments.ts`)
-- [ ] Implement iOS IAP flow:
+- [x] Install `react-native-iap` (most popular library)
+- [x] Create platform-agnostic payment service (`/mobile/src/services/payments.ts`)
+- [x] Implement iOS IAP flow:
   - Initialize IAP connection on app start
   - Fetch available products from App Store
   - Purchase product via `requestSubscription()`
   - Send receipt to backend for validation
   - Update local subscription status
-- [ ] Update UpgradeScreen to detect platform and route to correct payment flow
-- [ ] Add iOS-specific subscription management UI
+- [x] Update UpgradeScreen to detect platform and route to correct payment flow
+- [x] Add iOS-specific subscription management UI
 - [ ] Handle App Store subscription states (trial, active, grace period, expired)
-- [ ] Add restore purchases functionality (required by Apple)
-- [ ] Handle pending purchases on app launch
+- [x] Add restore purchases functionality (required by Apple)
+- [x] Handle pending purchases on app launch
 
 **Database Schema**:
 
@@ -683,12 +683,12 @@ export const startSubscription = async (plan: 'monthly' | 'annual') => {
 
 **iOS-Specific Requirements**:
 
-- [ ] Add "Restore Purchases" button (Apple requires this)
+- [x] Add "Restore Purchases" button (Apple requires this)
 - [ ] Handle subscription groups in App Store Connect
 - [ ] Configure introductory offers (7-day free trial)
 - [ ] Add subscription terms URL (required for App Store)
 - [ ] Add privacy policy URL (required for App Store)
-- [ ] Implement "Manage Subscription" deep link to iOS Settings
+- [x] Implement "Manage Subscription" deep link to iOS Settings
 - [ ] Test with Sandbox users in App Store Connect
 - [ ] Submit subscription details for App Review
 
@@ -714,13 +714,19 @@ export const startSubscription = async (plan: 'monthly' | 'annual') => {
 - Implement idempotency for webhook handlers
 - Rate limit receipt validation endpoint
 
+**Remaining Compliance TODO (iOS IAP)**
+- Add subscription terms URL and privacy policy URL to product metadata (and in-app links).
+- Configure Apple Team ID in Expo/EAS build settings.
+- Finalize subscription group + intro offer settings in App Store Connect to match StoreKit config.
+- Run sandbox tests (purchase, restore, renewal, cancellation, refund) and capture screenshots for App Review.
+
 **Cost Analysis**:
 
 - **Apple Commission**: 30% year 1, 15% after (vs Stripe's 2.9% + $0.30)
 - **Example**: $4.99/month subscription
   - Apple IAP: You get $3.49 (30% = $1.50 to Apple)
   - Stripe: You get $4.70 (2.9% + $0.30 = $0.29 to Stripe)
-- **Annual**: $47.99/year
+- **Annual**: $49.99/year
   - Apple IAP: You get $33.59 (30% = $14.40 to Apple)
   - Stripe: You get $46.60 (2.9% + $0.30 = $1.39 to Stripe)
 

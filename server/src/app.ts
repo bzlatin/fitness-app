@@ -9,12 +9,14 @@ import aiRouter from "./routes/ai";
 import analyticsRouter from "./routes/analytics";
 import subscriptionsRouter from "./routes/subscriptions";
 import stripeWebhookRouter from "./webhooks/stripe";
+import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
 
 const app = express();
 
 // Stripe webhooks need the raw body, so mount before JSON parsing.
 app.use("/webhooks/stripe", stripeWebhookRouter);
+app.use("/webhooks/appstore", appStoreWebhookRouter);
 
 app.use(cors());
 app.use(express.json());

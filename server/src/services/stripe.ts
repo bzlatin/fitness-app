@@ -29,6 +29,9 @@ type UserBillingRow = {
   name: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  apple_original_transaction_id: string | null;
+  apple_subscription_id: string | null;
+  subscription_platform: string | null;
   trial_started_at: string | null;
   trial_ends_at: string | null;
   plan: string | null;
@@ -38,7 +41,17 @@ type UserBillingRow = {
 export const fetchUserBilling = async (userId: string) => {
   const result = await query<UserBillingRow>(
     `
-      SELECT email, name, stripe_customer_id, stripe_subscription_id, trial_started_at, trial_ends_at, plan, plan_expires_at
+      SELECT email,
+             name,
+             stripe_customer_id,
+             stripe_subscription_id,
+             apple_original_transaction_id,
+             apple_subscription_id,
+             subscription_platform,
+             trial_started_at,
+             trial_ends_at,
+             plan,
+             plan_expires_at
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -62,6 +75,8 @@ export const ensureStripeCustomer = async (userId: string) => {
       currentSubscriptionId: user.stripe_subscription_id ?? undefined,
       trialStartedAt: user.trial_started_at ?? undefined,
       trialEndsAt: user.trial_ends_at ?? undefined,
+      subscriptionPlatform: user.subscription_platform ?? undefined,
+      appleOriginalTransactionId: user.apple_original_transaction_id ?? undefined,
     };
   }
 
@@ -88,6 +103,8 @@ export const ensureStripeCustomer = async (userId: string) => {
     currentSubscriptionId: undefined,
     trialStartedAt: undefined,
     trialEndsAt: undefined,
+    subscriptionPlatform: user.subscription_platform ?? undefined,
+    appleOriginalTransactionId: user.apple_original_transaction_id ?? undefined,
   };
 };
 

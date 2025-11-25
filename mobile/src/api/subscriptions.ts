@@ -12,6 +12,9 @@ export type SubscriptionStatus = {
   stripeSubscriptionId?: string | null;
   currentPriceLookupKey?: string | null;
   currentInterval?: "monthly" | "annual" | null;
+  subscriptionPlatform?: "stripe" | "apple" | null;
+  appleOriginalTransactionId?: string | null;
+  appleEnvironment?: string | null;
 };
 
 export type CheckoutSessionPayload = {
@@ -59,5 +62,29 @@ export const switchSubscriptionPlan = async (plan: PlanChoice) => {
     currentPriceLookupKey?: string | null;
     currentInterval?: PlanChoice | null;
   }>("/subscriptions/switch", { plan });
+  return data;
+};
+
+export const validateIosReceipt = async (payload: { transactionId: string }) => {
+  const { data } = await apiClient.post<{
+    status: string;
+    plan: string;
+    planExpiresAt?: string | null;
+    originalTransactionId?: string;
+    transactionId?: string;
+    environment?: string;
+  }>("/subscriptions/ios/validate-receipt", payload);
+  return data;
+};
+
+export const getIosSubscriptionStatus = async () => {
+  const { data } = await apiClient.get<{
+    status: string;
+    plan: string;
+    planExpiresAt?: string | null;
+    originalTransactionId?: string;
+    transactionId?: string;
+    environment?: string;
+  }>("/subscriptions/ios/status");
   return data;
 };

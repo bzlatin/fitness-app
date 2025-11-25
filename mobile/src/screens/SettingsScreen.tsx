@@ -12,6 +12,7 @@ import {
   Switch,
   ActivityIndicator,
   Linking,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -31,6 +32,7 @@ import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { restorePurchases } from "../services/payments";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -82,6 +84,8 @@ const SettingsScreen = () => {
     refetchOnMount: false, // Don't refetch on every mount
   });
   const isPro = (user?.plan ?? "free") === "pro";
+  const isIOS = Platform.OS === "ios";
+  const isAppleSubscription = subscriptionStatus?.subscriptionPlatform === "apple";
   const formatDate = (value?: number | null | string) => {
     if (!value) return undefined;
     const date =
@@ -128,6 +132,18 @@ const SettingsScreen = () => {
       void refetchSubscriptionStatus();
     }, [refresh, refetchSubscriptionStatus])
   );
+
+  const restorePurchasesMutation = useMutation({
+    mutationFn: () => restorePurchases(),
+    onError: (err: Error) => {
+      Alert.alert("Restore failed", err.message);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      await refresh();
+      Alert.alert("Restored", "Your Apple subscription has been restored.");
+    },
+  });
 
   const connectionsQuery = useQuery({
     queryKey: ["social", "connections", "settings"],
@@ -866,7 +882,13 @@ const SettingsScreen = () => {
               </>
             )}
             <Pressable
-              onPress={() => navigation.navigate("Upgrade", { plan: "monthly" })}
+              onPress={() => {
+                if (isPro && isAppleSubscription) {
+                  void Linking.openURL("https://apps.apple.com/account/subscriptions");
+                  return;
+                }
+                navigation.navigate("Upgrade", { plan: "monthly" });
+              }}
               style={({ pressed }) => ({
                 marginTop: 10,
                 paddingVertical: 10,
@@ -883,9 +905,42 @@ const SettingsScreen = () => {
                   fontFamily: fontFamilies.semibold,
                 }}
               >
-                {isPro ? "Manage subscription" : "Upgrade to Pro"}
+                {isPro
+                  ? isAppleSubscription
+                    ? "Manage in App Store"
+                    : "Manage subscription"
+                  : "Upgrade to Pro"}
               </Text>
             </Pressable>
+            {isIOS ? (
+              <Pressable
+                onPress={() => restorePurchasesMutation.mutate()}
+                disabled={restorePurchasesMutation.isPending}
+                style={({ pressed }) => ({
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                  alignItems: "center",
+                  opacity: restorePurchasesMutation.isPending ? 0.6 : 1,
+                })}
+              >
+                {restorePurchasesMutation.isPending ? (
+                  <ActivityIndicator color={colors.textPrimary} />
+                ) : (
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    Restore purchases (iOS)
+                  </Text>
+                )}
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
