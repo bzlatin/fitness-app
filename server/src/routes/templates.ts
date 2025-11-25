@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
+import path from "path";
+import fs from "fs";
 import { generateId } from "../utils/id";
 import { WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
 import { pool, query } from "../db";
+import { exercises as localExercises } from "../data/exercises";
 
 const router = Router();
 
@@ -32,22 +35,89 @@ type ExerciseRow = {
   notes: string | null;
 };
 
+type LocalExercise = {
+  id: string;
+  name: string;
+  primaryMuscles?: string[];
+  primaryMuscleGroup?: string | string[];
+  equipment?: string | string[];
+  category?: string;
+  images?: string[];
+};
+
+const distPath = path.join(__dirname, "../data/dist/exercises.json");
+const distExercises: LocalExercise[] = fs.existsSync(distPath)
+  ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
+  : [];
+
+const dedupeId = (id: string) => id.replace(/\s+/g, "_");
+const formatExerciseId = (id: string) =>
+  id
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+
+const normalizeExercise = (item: LocalExercise) => {
+  const primary =
+    item.primaryMuscles?.[0] ||
+    (Array.isArray(item.primaryMuscleGroup)
+      ? item.primaryMuscleGroup[0]
+      : item.primaryMuscleGroup) ||
+    "other";
+
+  const images = item.images ?? [];
+  const imageUrl =
+    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
+
+  return {
+    id: item.id || dedupeId(item.name),
+    name: item.name,
+    primaryMuscleGroup: primary.toLowerCase(),
+    gifUrl: imageUrl,
+  };
+};
+
+const exerciseIndex = new Map<
+  string,
+  { name: string; primaryMuscleGroup: string; gifUrl?: string }
+>();
+(localExercises as unknown as LocalExercise[]).forEach((item) => {
+  const normalized = normalizeExercise(item);
+  exerciseIndex.set(normalized.id, normalized);
+});
+distExercises.forEach((item) => {
+  const normalized = normalizeExercise(item);
+  exerciseIndex.set(normalized.id, normalized);
+});
+
+const describeExercise = (exerciseId: string) =>
+  exerciseIndex.get(exerciseId) ?? {
+    name: formatExerciseId(exerciseId),
+    primaryMuscleGroup: "other",
+  };
+
 const numberOrUndefined = (value: string | number | null) =>
   value === null || value === undefined ? undefined : Number(value);
 
-const mapExercise = (row: ExerciseRow): WorkoutTemplateExercise => ({
-  id: row.id,
-  exerciseId: row.exercise_id,
-  orderIndex: row.order_index,
-  defaultSets: row.default_sets,
-  defaultReps: row.default_reps,
-  defaultRestSeconds: row.default_rest_seconds ?? undefined,
-  defaultWeight: numberOrUndefined(row.default_weight),
-  defaultIncline: numberOrUndefined(row.default_incline),
-  defaultDistance: numberOrUndefined(row.default_distance),
-  defaultDurationMinutes: numberOrUndefined(row.default_duration_minutes),
-  notes: row.notes ?? undefined,
-});
+const mapExercise = (row: ExerciseRow): WorkoutTemplateExercise => {
+  const meta = describeExercise(row.exercise_id);
+  return {
+    id: row.id,
+    exerciseId: row.exercise_id,
+    orderIndex: row.order_index,
+    exerciseName: meta.name,
+    primaryMuscleGroup: meta.primaryMuscleGroup,
+    exerciseImageUrl: meta.gifUrl,
+    defaultSets: row.default_sets,
+    defaultReps: row.default_reps,
+    defaultRestSeconds: row.default_rest_seconds ?? undefined,
+    defaultWeight: numberOrUndefined(row.default_weight),
+    defaultIncline: numberOrUndefined(row.default_incline),
+    defaultDistance: numberOrUndefined(row.default_distance),
+    defaultDurationMinutes: numberOrUndefined(row.default_duration_minutes),
+    notes: row.notes ?? undefined,
+  };
+};
 
 const mapTemplate = (
   row: TemplateRow,

@@ -234,6 +234,7 @@ ${exercisesToUse
    }
    - ONLY use exercises from the available exercises list above
    - ALWAYS include the exact exercise ID in your response
+   - Use the human-friendly exercise name from the list (never the ID/slug) so photos and labels render correctly
    - Respect equipment limitations (only select exercises matching available equipment)
    - Avoid exercises that conflict with stated injuries/limitations
    - ${
@@ -288,7 +289,7 @@ Respond with ONLY valid JSON matching this exact schema (no markdown, no additio
   "exercises": [
     {
       "exerciseId": "exact ID from available exercises list",
-      "exerciseName": "exact name from available exercises list",
+      "exerciseName": "exact name from available exercises list (never the ID/slug)",
       "primaryMuscleGroup": "exact muscle group from available exercises list",
       "sets": number,
       "reps": number,

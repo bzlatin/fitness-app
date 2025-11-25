@@ -26,13 +26,15 @@ export const calculateMuscleGroupDistribution = (
 
   template.exercises.forEach((templateExercise) => {
     const exercise = exercisesMap.get(templateExercise.exerciseId);
-    if (!exercise) return;
-
-    // Use "cardio" as the muscle group for cardio exercises
     const muscleGroup =
-      exercise.category?.toLowerCase() === "cardio"
-        ? "cardio"
-        : exercise.primaryMuscleGroup;
+      templateExercise.primaryMuscleGroup ??
+      (exercise
+        ? exercise.category?.toLowerCase() === "cardio"
+          ? "cardio"
+          : exercise.primaryMuscleGroup
+        : undefined);
+    if (!muscleGroup) return;
+
     const sets = templateExercise.defaultSets;
 
     muscleGroupCounts.set(

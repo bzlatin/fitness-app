@@ -47,6 +47,7 @@ export interface SocialProfile extends SocialUserSummary {
   trainingStyle?: string | null;
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
+  progressiveOverloadEnabled?: boolean;
   friendsPreview?: SocialUserSummary[];
 }
 

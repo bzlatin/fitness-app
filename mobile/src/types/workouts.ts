@@ -11,6 +11,9 @@ export interface WorkoutTemplateExercise {
   id: string;
   exerciseId: string;
   orderIndex: number;
+  exerciseName?: string;
+  primaryMuscleGroup?: string;
+  exerciseImageUrl?: string;
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;
@@ -30,6 +33,7 @@ export interface WorkoutTemplate {
   exercises: WorkoutTemplateExercise[];
   createdAt: string;
   updatedAt: string;
+  progressiveOverloadEnabled?: boolean;
 }
 
 export interface WorkoutSet {

@@ -65,6 +65,7 @@ const SettingsScreen = () => {
   const [selectedConnection, setSelectedConnection] =
     useState<SocialUserSummary | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const isHandleLocked = Boolean(user?.handle);
 
   useEffect(() => {
@@ -969,6 +970,54 @@ const SettingsScreen = () => {
               Update your goals, equipment, schedule, and preferences
             </Text>
           </View>
+
+          {/* Progressive Overload Toggle */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: colors.surfaceMuted,
+              padding: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Progressive Overload Suggestions
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                Get smart weight increase recommendations based on your performance
+              </Text>
+            </View>
+            <Switch
+              value={user.progressiveOverloadEnabled ?? true}
+              disabled={isTogglingProgression}
+              onValueChange={async (value) => {
+                setIsTogglingProgression(true);
+                try {
+                  await updateProfile({ progressiveOverloadEnabled: value });
+                } catch (err) {
+                  Alert.alert(
+                    "Could not update setting",
+                    "Please try again."
+                  );
+                } finally {
+                  setIsTogglingProgression(false);
+                }
+              }}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={(user.progressiveOverloadEnabled ?? true) ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+
           <Pressable
             onPress={() => {
               navigation.navigate("Onboarding", { isRetake: true });

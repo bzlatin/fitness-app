@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, Text, View, Pressable, Alert, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, Pressable, Alert, ActivityIndicator, Image } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,7 @@ import { createTemplate } from "../api/templates";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { RootStackParamList } from "../navigation/types";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { API_BASE_URL } from "../api/client";
 
 type WorkoutPreviewRouteProp = RouteProp<RootStackParamList, "WorkoutPreview">;
 
@@ -21,6 +22,7 @@ const WorkoutPreviewScreen = () => {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { workout: initialWorkout } = route.params;
+  const apiHost = API_BASE_URL.replace(/\/api$/, "");
 
   const [workout, setWorkout] = useState(initialWorkout);
   const [swapExerciseIndex, setSwapExerciseIndex] = useState<number | null>(null);
@@ -151,221 +153,270 @@ const WorkoutPreviewScreen = () => {
         </View>
 
         {/* Workout Details */}
-        <View style={{ flex: 1, position: 'relative' }}>
+        <View style={{ flex: 1, position: "relative" }}>
           <LinearGradient
-            colors={[colors.background, 'transparent']}
+            colors={[colors.background, "transparent"]}
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
               right: 0,
               height: 40,
-              pointerEvents: 'none',
+              pointerEvents: "none",
               zIndex: 1,
             }}
           />
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 20 }}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingTop: 20 }}
+          >
             <View style={{ gap: 16, paddingBottom: 120 }}>
-            {/* Header Card */}
-            <View
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 16,
-                padding: 20,
-                borderWidth: 1,
-                borderColor: colors.primary,
-                gap: 12,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <View
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 16,
-                    backgroundColor: `${colors.primary}20`,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 32 }}>🎯</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-                    {workout.name}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 4 }}>
-                    {workout.exercises.length} exercises · ~{workout.estimatedDurationMinutes} min
-                  </Text>
-                </View>
-              </View>
-
+              {/* Header Card */}
               <View
                 style={{
-                  paddingTop: 12,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
+                  backgroundColor: colors.surfaceMuted,
+                  borderRadius: 16,
+                  padding: 20,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  gap: 12,
                 }}
               >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      backgroundColor: `${colors.primary}20`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 32 }}>🎯</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+                      {workout.name}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 4 }}>
+                      {workout.exercises.length} exercises · ~{workout.estimatedDurationMinutes} min
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={{
+                    paddingTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 14,
+                      fontStyle: "italic",
+                      lineHeight: 20,
+                    }}
+                  >
+                    {workout.reasoning}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                  {workout.splitType && <Chip label={workout.splitType} />}
+                  <Chip label={`${workout.estimatedDurationMinutes} min`} />
+                  <Chip label="AI Generated" />
+                </View>
+              </View>
+
+              {/* Exercises List */}
+              <View style={{ gap: 12 }}>
                 <Text
                   style={{
-                    color: colors.textSecondary,
-                    fontSize: 14,
-                    fontStyle: "italic",
-                    lineHeight: 20,
+                    ...typography.heading2,
+                    color: colors.textPrimary,
+                    marginLeft: 4,
                   }}
                 >
-                  {workout.reasoning}
+                  Exercises
                 </Text>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                {workout.splitType && <Chip label={workout.splitType} />}
-                <Chip label={`${workout.estimatedDurationMinutes} min`} />
-                <Chip label="AI Generated" />
-              </View>
-            </View>
-
-            {/* Exercises List */}
-            <View style={{ gap: 12 }}>
-              <Text
-                style={{
-                  ...typography.heading2,
-                  color: colors.textPrimary,
-                  marginLeft: 4,
-                }}
-              >
-                Exercises
-              </Text>
-              {workout.exercises.map((ex: any, idx: number) => (
-                <View
-                  key={idx}
-                  style={{
-                    backgroundColor: colors.surface,
-                    padding: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    gap: 8,
-                  }}
-                >
+                {workout.exercises.map((ex: any, idx: number) => (
                   <View
+                    key={idx}
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
+                      backgroundColor: colors.surface,
+                      padding: 16,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      gap: 8,
                     }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 16,
-                        }}
-                      >
-                        {idx + 1}. {ex.exerciseName}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 6 }}>
-                      <Pressable
-                        onPress={() => setSwapExerciseIndex(idx)}
-                        style={({ pressed }) => ({
-                          padding: 8,
-                          borderRadius: 8,
-                          backgroundColor: pressed ? colors.surfaceMuted : "transparent",
-                        })}
-                      >
-                        <Ionicons name="swap-horizontal-outline" size={20} color={colors.primary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() =>
-                          Alert.alert(
-                            "Remove exercise?",
-                            "This will drop the exercise from this workout preview.",
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Remove",
-                                style: "destructive",
-                                onPress: () => handleRemoveExercise(idx),
-                              },
-                            ]
-                          )
+                    <View style={{ flexDirection: "row", gap: 12 }}>
+                      {(() => {
+                        const imageUri =
+                          ex.gifUrl && typeof ex.gifUrl === "string"
+                            ? ex.gifUrl.startsWith("http")
+                              ? ex.gifUrl
+                              : `${apiHost}${ex.gifUrl}`
+                            : undefined;
+                        if (imageUri) {
+                          return (
+                            <Image
+                              source={{ uri: imageUri }}
+                              style={{
+                                width: 68,
+                                height: 68,
+                                borderRadius: 12,
+                                backgroundColor: colors.surfaceMuted,
+                              }}
+                            />
+                          );
                         }
-                        style={({ pressed }) => ({
-                          padding: 8,
-                          borderRadius: 8,
-                          backgroundColor: pressed ? colors.surfaceMuted : "transparent",
-                        })}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                      </Pressable>
+                        return (
+                          <View
+                            style={{
+                              width: 68,
+                              height: 68,
+                              borderRadius: 12,
+                              backgroundColor: colors.surfaceMuted,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Ionicons
+                              name="fitness-outline"
+                              size={26}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                        );
+                      })()}
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                color: colors.textPrimary,
+                                fontFamily: fontFamilies.semibold,
+                                fontSize: 16,
+                              }}
+                            >
+                              {idx + 1}. {ex.exerciseName}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 6 }}>
+                            <Pressable
+                              onPress={() => setSwapExerciseIndex(idx)}
+                              style={({ pressed }) => ({
+                                padding: 8,
+                                borderRadius: 8,
+                                backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                              })}
+                            >
+                              <Ionicons name="swap-horizontal-outline" size={20} color={colors.primary} />
+                            </Pressable>
+                            <Pressable
+                              onPress={() =>
+                                Alert.alert(
+                                  "Remove exercise?",
+                                  "This will drop the exercise from this workout preview.",
+                                  [
+                                    { text: "Cancel", style: "cancel" },
+                                    {
+                                      text: "Remove",
+                                      style: "destructive",
+                                      onPress: () => handleRemoveExercise(idx),
+                                    },
+                                  ]
+                                )
+                              }
+                              style={({ pressed }) => ({
+                                padding: 8,
+                                borderRadius: 8,
+                                backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                              })}
+                            >
+                              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                            </Pressable>
+                          </View>
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            gap: 16,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Ionicons name="barbell-outline" size={16} color={colors.textSecondary} />
+                            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                              {ex.sets} sets
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Ionicons name="repeat-outline" size={16} color={colors.textSecondary} />
+                            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                              {ex.reps} reps
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                              {ex.restSeconds}s rest
+                            </Text>
+                          </View>
+                        </View>
+                        {ex.notes && (
+                          <View
+                            style={{
+                              backgroundColor: colors.surfaceMuted,
+                              padding: 10,
+                              borderRadius: 8,
+                              marginTop: 4,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                fontSize: 13,
+                                fontStyle: "italic",
+                              }}
+                            >
+                              💡 {ex.notes}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 16,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Ionicons name="barbell-outline" size={16} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-                        {ex.sets} sets
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Ionicons name="repeat-outline" size={16} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-                        {ex.reps} reps
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-                        {ex.restSeconds}s rest
-                      </Text>
-                    </View>
-                  </View>
-                  {ex.notes && (
-                    <View
-                      style={{
-                        backgroundColor: colors.surfaceMuted,
-                        padding: 10,
-                        borderRadius: 8,
-                        marginTop: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontSize: 13,
-                          fontStyle: "italic",
-                        }}
-                      >
-                        💡 {ex.notes}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
-        </ScrollView>
-        <LinearGradient
-          colors={['transparent', colors.background]}
-          style={{
-            position: 'absolute',
-            bottom: Math.max(insets.bottom, 16) + 74,
-            left: 0,
-            right: 0,
-            height: 60,
-            pointerEvents: 'none',
-          }}
-        />
-      </View>
+          </ScrollView>
+          <LinearGradient
+            colors={["transparent", colors.background]}
+            style={{
+              position: "absolute",
+              bottom: Math.max(insets.bottom, 16) + 74,
+              left: 0,
+              right: 0,
+              height: 60,
+              pointerEvents: "none",
+            }}
+          />
+        </View>
 
         {/* Action Buttons - Fixed at bottom */}
         <View

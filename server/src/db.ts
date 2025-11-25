@@ -46,7 +46,8 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS gym_name TEXT,
       ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden',
       ADD COLUMN IF NOT EXISTS weekly_goal INTEGER NOT NULL DEFAULT 4,
-      ADD COLUMN IF NOT EXISTS onboarding_data JSONB
+      ADD COLUMN IF NOT EXISTS onboarding_data JSONB,
+      ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true
   `);
 
   await query(`
@@ -68,6 +69,11 @@ export const initDb = async () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+
+  await query(`
+    ALTER TABLE workout_templates
+      ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN
   `);
 
   await query(`

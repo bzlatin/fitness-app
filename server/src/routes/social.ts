@@ -19,6 +19,7 @@ type UserRow = {
   gym_visibility: string | null;
   weekly_goal: number | null;
   onboarding_data: unknown;
+  progressive_overload_enabled: boolean | null;
 };
 
 type SocialProfile = {
@@ -42,6 +43,7 @@ type SocialProfile = {
   gymVisibility?: "hidden" | "shown";
   weeklyGoal?: number;
   onboardingData?: unknown;
+  progressiveOverloadEnabled?: boolean;
   friendsPreview?: {
     id: string;
     name: string;
@@ -203,6 +205,7 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   gymVisibility: (row.gym_visibility as "hidden" | "shown" | null) ?? "hidden",
   weeklyGoal: row.weekly_goal ?? 4,
   onboardingData: row.onboarding_data ?? undefined,
+  progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -465,6 +468,7 @@ router.put("/me", async (req, res) => {
     gymVisibility,
     weeklyGoal,
     onboardingData,
+    progressiveOverloadEnabled,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -482,6 +486,12 @@ router.put("/me", async (req, res) => {
     gymVisibility !== "shown"
   ) {
     return res.status(400).json({ error: "Invalid gym visibility" });
+  }
+  if (
+    progressiveOverloadEnabled !== undefined &&
+    typeof progressiveOverloadEnabled !== "boolean"
+  ) {
+    return res.status(400).json({ error: "Invalid progressive overload flag" });
   }
 
   const updates: string[] = [];
@@ -536,6 +546,11 @@ router.put("/me", async (req, res) => {
   if (onboardingData !== undefined) {
     updates.push(`onboarding_data = $${idx}`);
     values.push(onboardingData); // pg driver automatically handles JSONB serialization
+    idx += 1;
+  }
+  if (progressiveOverloadEnabled !== undefined) {
+    updates.push(`progressive_overload_enabled = $${idx}`);
+    values.push(progressiveOverloadEnabled);
     idx += 1;
   }
 
