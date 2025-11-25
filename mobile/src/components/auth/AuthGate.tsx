@@ -57,6 +57,7 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
             color: colors.textSecondary,
             fontFamily: fontFamilies.regular,
             textAlign: "center",
+            fontSize: 15,
           }}
         >
           Sign in to log your workouts, track your progress, and stay motivated.
@@ -72,6 +73,7 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
             paddingVertical: 14,
             borderRadius: 999,
             width: "100%",
+            marginTop: 8,
           }}
         >
           <Text
@@ -82,15 +84,27 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
               fontSize: 16,
             }}
           >
-            {isAuthorizing ? "Connecting..." : "Sign In / Sign Up"}
+            {isAuthorizing ? "Connecting..." : "Continue"}
           </Text>
         </TouchableOpacity>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontFamily: fontFamilies.regular,
+            fontSize: 13,
+            textAlign: "center",
+            marginTop: 12,
+          }}
+        >
+          Sign in with Google, Apple, or Email
+        </Text>
         {error ? (
           <Text
             style={{
               color: colors.error ?? "#f87171",
               textAlign: "center",
               fontFamily: fontFamilies.regular,
+              marginTop: 8,
             }}
           >
             {error}

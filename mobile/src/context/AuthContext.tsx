@@ -118,7 +118,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       usePKCE: true,
       extraParams: {
         ...(AUTH0_AUDIENCE ? { audience: AUTH0_AUDIENCE } : {}),
-        prompt: "select_account",
+        // Use "login" to always show the login screen and prevent auto-login
+        // This allows users to choose their authentication method or switch accounts
+        prompt: "login",
       },
     },
     discovery
