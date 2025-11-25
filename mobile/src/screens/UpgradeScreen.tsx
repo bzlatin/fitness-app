@@ -49,7 +49,11 @@ const plans: Record<
 
 const formatDate = (timestamp?: number | null, fallback?: string | null) => {
   if (!timestamp && !fallback) return undefined;
-  const date = timestamp ? new Date(timestamp * 1000) : fallback ? new Date(fallback) : null;
+  const date = timestamp
+    ? new Date(timestamp * 1000)
+    : fallback
+    ? new Date(fallback)
+    : null;
   return date ? date.toLocaleDateString() : undefined;
 };
 
@@ -69,7 +73,8 @@ const UpgradeScreen = () => {
 
   const currentInterval = statusQuery.data?.currentInterval ?? null;
   const isPro = statusQuery.data?.plan === "pro";
-  const isAppleSubscription = statusQuery.data?.subscriptionPlatform === "apple";
+  const isAppleSubscription =
+    statusQuery.data?.subscriptionPlatform === "apple";
 
   useEffect(() => {
     if (isPro && currentInterval) {
@@ -89,8 +94,15 @@ const UpgradeScreen = () => {
       Alert.alert(isIOS ? "Purchase failed" : "Checkout failed", err.message);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
-      Alert.alert("Success", isIOS ? "Your Apple subscription is active." : "Your subscription is active.");
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", "status"],
+      });
+      Alert.alert(
+        "Success",
+        isIOS
+          ? "Your Apple subscription is active."
+          : "Your subscription is active."
+      );
     },
   });
 
@@ -107,10 +119,13 @@ const UpgradeScreen = () => {
     mutationFn: (plan: PlanChoice) => switchSubscriptionPlan(plan),
     onError: (err: Error) => Alert.alert("Unable to switch", err.message),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", "status"],
+      });
 
       // Stripe applies prorations immediately for both upgrades and downgrades
-      const isUpgrade = currentInterval === "monthly" && selectedPlan === "annual";
+      const isUpgrade =
+        currentInterval === "monthly" && selectedPlan === "annual";
       const message = isUpgrade
         ? "Your plan has been upgraded to annual. You were charged the difference after applying a credit for your unused monthly time."
         : "Your plan has been switched to monthly. You received a prorated credit for your unused annual time.";
@@ -121,7 +136,10 @@ const UpgradeScreen = () => {
 
   const nextRenewal = useMemo(
     () =>
-      formatDate(statusQuery.data?.currentPeriodEnd, statusQuery.data?.planExpiresAt ?? undefined),
+      formatDate(
+        statusQuery.data?.currentPeriodEnd,
+        statusQuery.data?.planExpiresAt ?? undefined
+      ),
     [statusQuery.data?.currentPeriodEnd, statusQuery.data?.planExpiresAt]
   );
 
@@ -136,12 +154,14 @@ const UpgradeScreen = () => {
       ? "Switch Plans"
       : "Manage Subscription"
     : isIOS
-    ? "Upgrade with Apple"
+    ? "Upgrade to Pro"
     : "Upgrade to Pro";
 
   const screenDescription = isPro
     ? currentInterval
-      ? `You're currently on the ${currentInterval === "annual" ? "annual" : "monthly"} plan. Switch to save or get more flexibility.`
+      ? `You're currently on the ${
+          currentInterval === "annual" ? "annual" : "monthly"
+        } plan. Switch to save or get more flexibility.`
       : isAppleSubscription
       ? "Manage your Pro subscription from your Apple ID subscriptions."
       : "Manage your Pro subscription and billing details."
@@ -203,7 +223,9 @@ const UpgradeScreen = () => {
               justifyContent: "space-between",
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
               <View
                 style={{
                   width: 8,
@@ -219,7 +241,8 @@ const UpgradeScreen = () => {
                   fontSize: 15,
                 }}
               >
-                Current Plan: {currentInterval === "annual" ? "Annual" : "Monthly"}
+                Current Plan:{" "}
+                {currentInterval === "annual" ? "Annual" : "Monthly"}
               </Text>
             </View>
             <Text
@@ -418,15 +441,18 @@ const UpgradeScreen = () => {
           >
             What's included
           </Text>
-          <FeatureRow title="AI workout generator" />
-          <FeatureRow title="Progression analytics" />
-          <FeatureRow title="Premium templates & swaps" />
-          <FeatureRow title="Priority support" />
+          <FeatureRow title='AI workout generator' />
+          <FeatureRow title='Progression analytics' />
+          <FeatureRow title='Premium templates & swaps' />
+          <FeatureRow title='Priority support' />
         </View>
       ) : null}
 
       {/* Billing Change Notice for Pro users switching plans */}
-      {isPro && currentInterval && currentInterval !== selectedPlan && !isAppleSubscription ? (
+      {isPro &&
+      currentInterval &&
+      currentInterval !== selectedPlan &&
+      !isAppleSubscription ? (
         <View
           style={{
             padding: 14,
@@ -470,7 +496,9 @@ const UpgradeScreen = () => {
         }
         onPress={() => {
           if (isPro && isAppleSubscription) {
-            void Linking.openURL("https://apps.apple.com/account/subscriptions");
+            void Linking.openURL(
+              "https://apps.apple.com/account/subscriptions"
+            );
             return;
           }
           if (isPro && currentInterval) {
@@ -498,7 +526,7 @@ const UpgradeScreen = () => {
         {startCheckout.isPending ||
         portalMutation.isPending ||
         switchPlan.isPending ? (
-          <ActivityIndicator color="#041108" />
+          <ActivityIndicator color='#041108' />
         ) : (
           <Text
             style={{
@@ -511,7 +539,9 @@ const UpgradeScreen = () => {
               ? isAppleSubscription
                 ? "Manage in App Store"
                 : currentInterval
-                ? `Switch to ${selectedPlan === "annual" ? "Annual" : "Monthly"} Plan`
+                ? `Switch to ${
+                    selectedPlan === "annual" ? "Annual" : "Monthly"
+                  } Plan`
                 : "Manage Subscription"
               : isIOS
               ? "Subscribe with Apple"
@@ -531,8 +561,8 @@ const UpgradeScreen = () => {
             marginTop: -8,
           }}
         >
-          Your trial starts today. Cancel anytime during the trial period and you
-          won't be charged.
+          Your trial starts today. Cancel anytime during the trial period and
+          you won't be charged.
         </Text>
       ) : null}
 
@@ -552,14 +582,16 @@ const UpgradeScreen = () => {
               fontSize: 13,
               textAlign: "center",
             }}
-            >
+          >
             {isAppleSubscription
               ? "Manage your subscription from your Apple ID."
               : "Need to update payment methods or cancel?"}
           </Text>
           {isAppleSubscription ? (
             <TouchableOpacity
-              onPress={() => Linking.openURL("https://apps.apple.com/account/subscriptions")}
+              onPress={() =>
+                Linking.openURL("https://apps.apple.com/account/subscriptions")
+              }
               style={{
                 borderRadius: 12,
                 borderWidth: 1,

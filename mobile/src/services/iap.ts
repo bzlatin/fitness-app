@@ -59,7 +59,20 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
     },
   })) as IapPurchase;
 
-  const transactionId = purchase.transactionId ?? purchase.originalTransactionIdentifier;
+  let transactionId =
+    purchase.transactionId ??
+    purchase.originalTransactionIdentifier ??
+    (purchase as { originalTransactionId?: string }).originalTransactionId;
+
+  // Fallback: ask iOS for the latest transaction on this SKU
+  if (!transactionId) {
+    const latest = await RNIap.latestTransactionIOS(productId);
+    transactionId =
+      latest?.transactionId ??
+      latest?.originalTransactionIdentifier ??
+      (latest as { originalTransactionId?: string })?.originalTransactionId;
+  }
+
   if (!transactionId) {
     throw new Error("Missing transaction id from Apple receipt.");
   }
