@@ -108,6 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: AUTH0_SCHEME,
+    path: "redirect", // ensure native builds use push-pull://redirect (avoids bare scheme redirects)
   });
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
