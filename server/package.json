@@ -15,7 +15,8 @@
     "express-oauth2-jwt-bearer": "^1.7.1",
     "nanoid": "^4.0.2",
     "openai": "^6.9.1",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "stripe": "^14.25.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

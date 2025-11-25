@@ -6,6 +6,7 @@ import { ReactNode, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import {
   SpaceGrotesk_400Regular,
   SpaceGrotesk_500Medium,
@@ -22,6 +23,10 @@ import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import { RootStackParamList } from "./src/navigation/types";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const process: any;
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
 const App = () => {
   const [fontsLoaded] = useFonts({
@@ -78,25 +83,36 @@ const App = () => {
         Profile: "profile/:userId",
         PostWorkoutShare: "share/:sessionId",
         Onboarding: "onboarding",
+        Upgrade: "upgrade",
       },
     },
   };
 
   const content = fontsLoaded ? (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <UserProfileProvider>
-          <StatusBar style='light' />
-          <AuthGate>
-            <OnboardingGate>
-              <NavigationContainer theme={navTheme} linking={linking}>
-                <RootNavigator />
-              </NavigationContainer>
-            </OnboardingGate>
-          </AuthGate>
-        </UserProfileProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    STRIPE_PUBLISHABLE_KEY ? (
+      <StripeProvider
+        publishableKey={STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier='com.pushpull.app'
+        urlScheme='push-pull'
+      >
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            <UserProfileProvider>
+              <StatusBar style='light' />
+              <AuthGate>
+                <OnboardingGate>
+                  <NavigationContainer theme={navTheme} linking={linking}>
+                    <RootNavigator />
+                  </NavigationContainer>
+                </OnboardingGate>
+              </AuthGate>
+            </UserProfileProvider>
+          </QueryClientProvider>
+        </AuthProvider>
+      </StripeProvider>
+    ) : (
+      <MissingStripeKey />
+    )
   ) : (
     <View
       style={{
@@ -153,3 +169,35 @@ const OnboardingGate = ({ children }: { children: ReactNode }) => {
   }
   return <>{children}</>;
 };
+
+const MissingStripeKey = () => (
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      paddingHorizontal: 24,
+    }}
+  >
+    <Text
+      style={{
+        color: colors.textPrimary,
+        fontFamily: fontFamilies.semibold,
+        fontSize: 18,
+      }}
+    >
+      Stripe not configured
+    </Text>
+    <Text
+      style={{
+        color: colors.textSecondary,
+        fontFamily: fontFamilies.regular,
+        textAlign: "center",
+      }}
+    >
+      Add EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY to your env to enable upgrades.
+    </Text>
+  </View>
+);

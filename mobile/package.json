@@ -16,6 +16,7 @@
     "@react-navigation/bottom-tabs": "^6.5.16",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.18",
+    "@stripe/stripe-react-native": "^0.37.2",
     "@tanstack/react-query": "^4.36.1",
     "axios": "^1.6.7",
     "expo": "~54.0.0",

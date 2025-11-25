@@ -20,6 +20,7 @@ import OnboardingScreen from "../screens/OnboardingScreen";
 import SquadJoinScreen from "../screens/SquadJoinScreen";
 import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
 import RecoveryScreen from "../screens/RecoveryScreen";
+import UpgradeScreen from "../screens/UpgradeScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -165,6 +166,11 @@ const RootNavigator = () => (
       name='WorkoutPreview'
       component={WorkoutPreviewScreen}
       options={{ title: "AI Workout Preview", headerShown: false }}
+    />
+    <Stack.Screen
+      name='Upgrade'
+      component={UpgradeScreen}
+      options={{ title: "Upgrade to Pro" }}
     />
   </Stack.Navigator>
 );

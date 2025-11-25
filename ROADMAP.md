@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
 > Last Updated: 2025-11-24
-> Status: Phase 1 & 2 complete — Phase 3 (Monetization) ready to begin
+> Status: Phase 1 & 2 complete — Phase 3 (Monetization) 🎯 In progress
 
 ## Product Vision
 
@@ -487,17 +487,17 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 **Implementation**:
 
-- [ ] Install Stripe React Native SDK
-- [ ] Create Stripe account and get API keys
-- [ ] Set up Stripe products and prices in dashboard
-- [ ] Create payment backend service
-- [ ] Implement subscription checkout flow
-- [ ] Build webhook handler for subscription events
-- [ ] Update user plan status on successful payment
-- [ ] Handle trial period (7 days)
-- [ ] Implement subscription cancellation
-- [ ] Build billing portal link
-- [ ] Add subscription status to profile screen
+- [x] Install Stripe React Native SDK
+- [x] Create Stripe account and get API keys
+- [x] Set up Stripe products and prices in dashboard
+- [x] Create payment backend service
+- [x] Implement subscription checkout flow
+- [x] Build webhook handler for subscription events
+- [x] Update user plan status on successful payment
+- [x] Handle trial period (7 days)
+- [x] Implement subscription cancellation
+- [x] Build billing portal link
+- [x] Add subscription status to profile screen
 
 **Database Schema**:
 
@@ -815,5 +815,5 @@ CREATE TABLE workout_comments (
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3** (Current): Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
-- **v1.4** (Target: Week 9): Stripe integration + Paywall
+- **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements

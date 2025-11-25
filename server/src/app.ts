@@ -7,9 +7,14 @@ import sessionsRouter from "./routes/sessions";
 import socialRouter from "./routes/social";
 import aiRouter from "./routes/ai";
 import analyticsRouter from "./routes/analytics";
+import subscriptionsRouter from "./routes/subscriptions";
+import stripeWebhookRouter from "./webhooks/stripe";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
 
 const app = express();
+
+// Stripe webhooks need the raw body, so mount before JSON parsing.
+app.use("/webhooks/stripe", stripeWebhookRouter);
 
 app.use(cors());
 app.use(express.json());
@@ -25,6 +30,7 @@ app.use("/api/sessions", ...authChain, sessionsRouter);
 app.use("/api/social", ...authChain, socialRouter);
 app.use("/api/ai", ...authChain, aiRouter);
 app.use("/api/analytics", ...authChain, analyticsRouter);
+app.use("/api/subscriptions", ...authChain, subscriptionsRouter);
 
 app.use(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

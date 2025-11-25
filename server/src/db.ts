@@ -41,6 +41,10 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS bio TEXT,
       ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free',
       ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT,
+      ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
+      ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS training_style TEXT,
       ADD COLUMN IF NOT EXISTS gym_name TEXT,
@@ -54,6 +58,17 @@ export const initDb = async () => {
     CREATE UNIQUE INDEX IF NOT EXISTS users_handle_unique_idx
     ON users(handle)
     WHERE handle IS NOT NULL
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscription_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id),
+      event_type TEXT NOT NULL,
+      stripe_event_id TEXT UNIQUE,
+      payload JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
   `);
 
   await query(`UPDATE users SET plan = 'free' WHERE plan IS NULL`);
@@ -315,15 +330,6 @@ export const initDb = async () => {
         WHERE handle = '@exhibited'
           AND id <> 'demo-user'
       )
-  `);
-
-  // TEMPORARY: Force @exhibited to Pro plan for AI workout testing
-  // TODO: Remove once Stripe integration is complete (Roadmap 3.1)
-  await query(`
-    UPDATE users
-    SET plan = 'pro',
-        plan_expires_at = NOW() + INTERVAL '90 days'
-    WHERE handle = '@exhibited'
   `);
 
   const exhibitedUserIdResult = await query<{ id: string }>(

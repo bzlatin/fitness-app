@@ -26,6 +26,7 @@ import {
   removeFollower,
   unfollowUser,
 } from "../api/social";
+import { getSubscriptionStatus } from "../api/subscriptions";
 import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
@@ -95,7 +96,8 @@ const SettingsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh])
+      void subscriptionStatus.refetch();
+    }, [refresh, subscriptionStatus.refetch])
   );
 
   const connectionsQuery = useQuery({
@@ -147,6 +149,28 @@ const SettingsScreen = () => {
     onSettled: () => setPendingActionId(null),
     onSuccess: refreshConnections,
   });
+
+  const subscriptionStatus = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: getSubscriptionStatus,
+    enabled: Boolean(user),
+  });
+  const isPro = (user?.plan ?? "free") === "pro";
+  const formatDate = (value?: number | null | string) => {
+    if (!value) return undefined;
+    const date =
+      typeof value === "number" ? new Date(value * 1000) : new Date(value);
+    return date.toLocaleDateString();
+  };
+  const renewalDate =
+    subscriptionStatus.data?.currentPeriodEnd && isPro
+      ? formatDate(subscriptionStatus.data.currentPeriodEnd)
+      : user?.planExpiresAt
+      ? formatDate(user.planExpiresAt)
+      : undefined;
+  const trialEnds = subscriptionStatus.data?.trialEndsAt
+    ? formatDate(subscriptionStatus.data.trialEndsAt)
+    : undefined;
 
   const renderConnectionGroup = (
     title: string,
@@ -768,6 +792,90 @@ const SettingsScreen = () => {
               </View>
             </View>
           ) : null}
+        </View>
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: 14,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 14,
+          }}
+        >
+          <View style={{ gap: 6 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
+              Billing
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              Manage your subscription and billing details.
+            </Text>
+          </View>
+          <View
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 4,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {isPro ? "Pro plan" : "Free plan"}
+            </Text>
+            {subscriptionStatus.isFetching ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                {trialEnds ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Trial ends {trialEnds}
+                  </Text>
+                ) : null}
+                {renewalDate ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {subscriptionStatus.data?.cancelAtPeriodEnd
+                      ? `Ends on ${renewalDate}`
+                      : `Renews on ${renewalDate}`}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            <Pressable
+              onPress={() => navigation.navigate("Upgrade", { plan: "monthly" })}
+              style={({ pressed }) => ({
+                marginTop: 10,
+                paddingVertical: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.primary,
+                backgroundColor: pressed ? colors.primary : "transparent",
+                alignItems: "center",
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {isPro ? "Manage subscription" : "Upgrade to Pro"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <View
