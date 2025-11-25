@@ -24,6 +24,7 @@ import {
   createTemplate,
   fetchTemplate,
   updateTemplate,
+  deleteTemplate,
 } from "../api/templates";
 import {
   templatesKey,
@@ -227,6 +228,16 @@ const WorkoutTemplateBuilderScreen = () => {
       Alert.alert("Could not update template", "Please try again."),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTemplate(route.params!.templateId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: templatesKey });
+      navigation.goBack();
+    },
+    onError: () =>
+      Alert.alert("Could not delete workout", "Please try again."),
+  });
+
   const saving = createMutation.isPending || updateMutation.isPending;
 
   const save = () => {
@@ -418,6 +429,21 @@ const WorkoutTemplateBuilderScreen = () => {
     );
 
     setSwapExerciseFormId(null);
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Workout",
+      "Are you sure you want to delete this workout? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteMutation.mutate(),
+        },
+      ]
+    );
   };
 
   const headerComponent = (
@@ -668,6 +694,35 @@ const WorkoutTemplateBuilderScreen = () => {
           Add another exercise
         </Text>
       </Pressable>
+      {isEditing && (
+        <Pressable
+          onPress={handleDelete}
+          disabled={deleteMutation.isPending}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 14,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#ef4444",
+            backgroundColor: colors.surface,
+            opacity: pressed || deleteMutation.isPending ? 0.7 : 1,
+            gap: 8,
+          })}
+        >
+          <Ionicons
+            name='trash-outline'
+            size={20}
+            color="#ef4444"
+          />
+          <Text
+            style={{ color: "#ef4444", fontFamily: fontFamilies.semibold }}
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete workout"}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 

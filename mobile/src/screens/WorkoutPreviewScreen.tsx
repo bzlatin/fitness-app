@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
+import ExercisePicker from "../components/workouts/ExercisePicker";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { createTemplate } from "../api/templates";
@@ -13,6 +14,7 @@ import { RootNavigation } from "../navigation/RootNavigator";
 import { RootStackParamList } from "../navigation/types";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { API_BASE_URL } from "../api/client";
+import { TemplateExerciseForm } from "../types/workouts";
 
 type WorkoutPreviewRouteProp = RouteProp<RootStackParamList, "WorkoutPreview">;
 
@@ -26,6 +28,7 @@ const WorkoutPreviewScreen = () => {
 
   const [workout, setWorkout] = useState(initialWorkout);
   const [swapExerciseIndex, setSwapExerciseIndex] = useState<number | null>(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   const saveMutation = useMutation({
     mutationFn: async (workoutData: any) => {
@@ -92,6 +95,40 @@ const WorkoutPreviewScreen = () => {
   const handleRemoveExercise = (index: number) => {
     const nextExercises = workout.exercises
       .filter((_, idx) => idx !== index)
+      .map((exercise, orderIndex) => ({
+        ...exercise,
+        orderIndex,
+      }));
+
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: nextExercises,
+    }));
+  };
+
+  const handleAddExercise = (exerciseForm: Omit<TemplateExerciseForm, "formId">) => {
+    const newExercise = {
+      exerciseId: exerciseForm.exercise.id,
+      exerciseName: exerciseForm.exercise.name,
+      sets: exerciseForm.sets,
+      reps: exerciseForm.reps,
+      restSeconds: exerciseForm.restSeconds,
+      orderIndex: workout.exercises.length,
+      notes: exerciseForm.notes,
+      primaryMuscleGroup: exerciseForm.exercise.primaryMuscleGroup,
+      gifUrl: (exerciseForm.exercise as any).gifUrl,
+    };
+
+    setWorkout((prev) => ({
+      ...prev,
+      exercises: [...prev.exercises, newExercise],
+    }));
+    setPickerVisible(false);
+  };
+
+  const removeExerciseByExerciseId = (exerciseId: string) => {
+    const nextExercises = workout.exercises
+      .filter((ex) => ex.exerciseId !== exerciseId)
       .map((exercise, orderIndex) => ({
         ...exercise,
         orderIndex,
@@ -234,15 +271,49 @@ const WorkoutPreviewScreen = () => {
 
               {/* Exercises List */}
               <View style={{ gap: 12 }}>
-                <Text
+                <View
                   style={{
-                    ...typography.heading2,
-                    color: colors.textPrimary,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
                     marginLeft: 4,
                   }}
                 >
-                  Exercises
-                </Text>
+                  <Text
+                    style={{
+                      ...typography.heading2,
+                      color: colors.textPrimary,
+                    }}
+                  >
+                    Exercises
+                  </Text>
+                  <Pressable
+                    onPress={() => setPickerVisible(true)}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.secondary,
+                      backgroundColor: colors.surfaceMuted,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Ionicons name="add" size={18} color={colors.secondary} />
+                    <Text
+                      style={{
+                        fontFamily: fontFamilies.semibold,
+                        color: colors.secondary,
+                        fontSize: 14,
+                      }}
+                    >
+                      Add exercise
+                    </Text>
+                  </Pressable>
+                </View>
                 {workout.exercises.map((ex: any, idx: number) => (
                   <View
                     key={idx}
@@ -476,6 +547,26 @@ const WorkoutPreviewScreen = () => {
           onSwap={handleSwapExercise}
         />
       )}
+
+      <ExercisePicker
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        selected={workout.exercises.map((ex: any) => ({
+          formId: ex.exerciseId,
+          exercise: {
+            id: ex.exerciseId,
+            name: ex.exerciseName,
+            primaryMuscleGroup: ex.primaryMuscleGroup || "chest",
+            equipment: "custom",
+          },
+          sets: ex.sets,
+          reps: ex.reps,
+          restSeconds: ex.restSeconds,
+          notes: ex.notes,
+        }))}
+        onAdd={handleAddExercise}
+        onRemove={removeExerciseByExerciseId}
+      />
     </ScreenContainer>
   );
 };
