@@ -96,6 +96,22 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
     log("purchase response", purchase);
   } catch (err) {
     log("requestPurchase error", err);
+    const code =
+      (err as { code?: string | number })?.code ??
+      (err as { nativeStackIOS?: { code?: string | number }[] })?.nativeStackIOS?.[0]
+        ?.code;
+
+    // Map known user-cancel flows to a normalized sentinel
+    if (
+      code === "E_USER_CANCELLED" ||
+      code === "E_CANCELLED" ||
+      code === "USER_CANCELLED"
+    ) {
+      const cancelError = new Error("USER_CANCELLED");
+      (cancelError as { code?: string }).code = "USER_CANCELLED";
+      throw cancelError;
+    }
+
     throw err;
   }
 
@@ -119,7 +135,10 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   }
 
   if (!transactionId) {
-    throw new Error("Missing transaction id from Apple receipt.");
+    log("no transaction id after requestPurchase + latestTransactionIOS; treating as user cancel");
+    const cancelError = new Error("USER_CANCELLED");
+    (cancelError as { code?: string }).code = "USER_CANCELLED";
+    throw cancelError;
   }
 
   const validation = await validateIosReceipt({ transactionId });

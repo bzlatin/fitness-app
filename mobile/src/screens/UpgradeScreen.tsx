@@ -90,8 +90,16 @@ const UpgradeScreen = () => {
         userEmail: user?.email ?? null,
         userName: user?.name ?? null,
       }),
-    onError: (err: Error) => {
-      Alert.alert(isIOS ? "Purchase failed" : "Checkout failed", err.message);
+    onError: (err: unknown) => {
+      const error = err as { message?: string; code?: string };
+      if (error.code === "USER_CANCELLED" || error.message === "USER_CANCELLED") {
+        // Silent no-op for user-initiated cancellations
+        return;
+      }
+      Alert.alert(
+        isIOS ? "Purchase failed" : "Checkout failed",
+        error.message || "Something went wrong. Please try again."
+      );
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
