@@ -1,4 +1,10 @@
 import { Pool, QueryResultRow } from "pg";
+import dns from "dns";
+
+// Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 import { MOCK_USER_IDS } from "./data/mockUsers";
 
 const connectionString = process.env.DATABASE_URL;
