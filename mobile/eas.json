@@ -14,7 +14,11 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://push-pull.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://push-pull.onrender.com/api",
+        "EXPO_PUBLIC_AUTH0_DOMAIN": "dev-u4u5zoxx7i0wbi1d.us.auth0.com",
+        "EXPO_PUBLIC_AUTH0_CLIENT_ID": "oQH0ECq4PcmN4JAgYax5Mm9CqHtLKWvi",
+        "EXPO_PUBLIC_AUTH0_AUDIENCE": "https://push-pull-app-api",
+        "EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME": "push-pull"
       }
     }
   },
