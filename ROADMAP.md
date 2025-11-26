@@ -354,6 +354,7 @@ Output valid JSON matching this schema:
 - @exhibited user temporarily set to Pro for testing (remove after Stripe integration)
 
 **Cost Analysis**:
+
 - Per generation: ~$0.015-0.03
 - 100 Pro users × 10 workouts/month: ~$15-30/month API costs
 
@@ -571,15 +572,17 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 **Apple IAP Products** (to create in App Store Connect):
 
 1. **Pro Monthly**: $4.99/month (product ID: `pro_monthly_subscription`)
-2. **Pro Annual**: $49.99/year (product ID: `pro_annual_subscription`)
+2. **Pro Annual**: $49.99/year (product ID: `pro_yearly_subscription`)
 
 **Revenue Split**:
+
 - Apple: 30% first year, 15% after 1 year of continuous subscription
 - Your app: 70% first year, 85% after 1 year
 
 **Implementation Tasks**:
 
 **Setup & Configuration:**
+
 - [ ] Create Apple Developer account ($99/year)
 - [ ] Register app in App Store Connect
 - [ ] Create two subscription products in App Store Connect
@@ -588,6 +591,7 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 - [ ] Configure Apple Team ID in Expo build settings
 
 **Backend:**
+
 - [x] Install `node-app-store-server-api` or `@apple/app-store-server-library`
 - [x] Create iOS receipt validation service (`/server/src/services/appstore.ts`)
 - [x] Add `apple_original_transaction_id` column to users table
@@ -606,6 +610,7 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
   - `REFUND` → Immediate plan revocation
 
 **Frontend:**
+
 - [x] Install `react-native-iap` (most popular library)
 - [x] Create platform-agnostic payment service (`/mobile/src/services/payments.ts`)
 - [x] Implement iOS IAP flow:
@@ -669,12 +674,12 @@ CREATE INDEX idx_appstore_notifications_original_tx ON appstore_notifications(or
 
 ```typescript
 // /mobile/src/services/payments.ts
-import { Platform } from 'react-native';
-import * as IAP from './iap'; // iOS implementation
-import * as StripePayments from './stripe'; // Android/web implementation
+import { Platform } from "react-native";
+import * as IAP from "./iap"; // iOS implementation
+import * as StripePayments from "./stripe"; // Android/web implementation
 
-export const startSubscription = async (plan: 'monthly' | 'annual') => {
-  if (Platform.OS === 'ios') {
+export const startSubscription = async (plan: "monthly" | "annual") => {
+  if (Platform.OS === "ios") {
     return IAP.purchaseSubscription(plan);
   }
   return StripePayments.startCheckout(plan);
@@ -715,6 +720,7 @@ export const startSubscription = async (plan: 'monthly' | 'annual') => {
 - Rate limit receipt validation endpoint
 
 **Remaining Compliance TODO (iOS IAP)**
+
 - Add subscription terms URL and privacy policy URL to product metadata (and in-app links).
 - Configure Apple Team ID in Expo/EAS build settings.
 - Finalize subscription group + intro offer settings in App Store Connect to match StoreKit config.
@@ -733,6 +739,7 @@ export const startSubscription = async (plan: 'monthly' | 'annual') => {
 **Migration Path**:
 
 Since this is pre-launch with no existing iOS users:
+
 1. Implement iOS IAP alongside Stripe (not a migration, just addition)
 2. Backend handles both payment platforms simultaneously
 3. User record stores `subscription_platform` to know which system to check
@@ -776,6 +783,7 @@ Since this is pre-launch with no existing iOS users:
 **Implementation Status**:
 
 ✅ **Completed**:
+
 - [x] Create plan enforcement middleware (`requireProPlan`, `checkTemplateLimit`)
 - [x] Create UpgradePrompt component (reusable)
 - [x] Add upgrade prompts to AI generation button
@@ -784,6 +792,7 @@ Since this is pre-launch with no existing iOS users:
 ⚠️ **Remaining Tasks**:
 
 **Backend:**
+
 - [ ] Apply `checkTemplateLimit` middleware to `POST /api/templates` endpoint
 - [ ] Apply `requireProPlan` middleware to `GET /api/analytics/fatigue` endpoint
 - [ ] Apply `requireProPlan` middleware to `GET /api/analytics/recommendations` endpoint
@@ -791,22 +800,26 @@ Since this is pre-launch with no existing iOS users:
 - [ ] Apply `requireProPlan` middleware to `POST /api/analytics/progression/:templateId/apply` endpoint
 
 **Frontend - Template Limits:**
+
 - [ ] Fix template limit constant: Change from 5 to 3 in `/mobile/src/utils/featureGating.ts`
 - [ ] Add "X/3 templates" counter UI to MyWorkoutsScreen header (always visible for free users)
 - [ ] Update template limit error message in MyWorkoutsScreen to show UpgradePrompt modal instead of Alert
 - [ ] Apply template limit check in WorkoutTemplateBuilderScreen before save
 
 **Frontend - Recovery/Fatigue Paywall:**
+
 - [ ] Add Pro plan check to RecoveryScreen
 - [ ] Show upgrade prompt when free users try to access recovery features
 - [ ] Navigate to UpgradeScreen from UpgradePrompt component (currently just console.log)
 
 **Frontend - Progression Paywall:**
+
 - [ ] Add Pro plan check before showing ProgressionSuggestion modal in WorkoutSessionScreen
 - [ ] Show upgrade prompt when free users would see progression suggestions
 - [ ] Disable progression toggle in SettingsScreen for free users (gray out with "Pro" badge)
 
 **Frontend - Trial Experience:**
+
 - [ ] Create TrialBanner component showing "X days left in trial" countdown
 - [ ] Add TrialBanner to HomeScreen (show only during active trial)
 - [ ] Add TrialBanner to top of RecoveryScreen (show only during active trial)
@@ -814,11 +827,13 @@ Since this is pre-launch with no existing iOS users:
 - [ ] Add "Upgrade Now" CTA button in TrialBanner
 
 **Error Handling:**
+
 - [ ] Handle 403 errors from analytics endpoints gracefully (show upgrade prompt instead of crash)
 - [ ] Handle 403 errors from template save endpoint (show upgrade prompt)
 - [ ] Add error boundary for subscription status fetch failures
 
 **Testing Checklist:**
+
 - [ ] Test free user cannot create 4th template
 - [ ] Test free user sees upgrade prompt on AI generation attempt
 - [ ] Test free user cannot access RecoveryScreen (or sees upgrade prompt)

@@ -3,7 +3,7 @@ import { PlanChoice, validateIosReceipt } from "../api/subscriptions";
 
 const productIds: Record<PlanChoice, string> = {
   monthly: "pro_monthly_subscription",
-  annual: "pro_annual_subscription",
+  annual: "pro_yearly_subscription",
 };
 
 const log = (...args: unknown[]) => {
