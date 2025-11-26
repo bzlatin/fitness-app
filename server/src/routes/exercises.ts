@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import path from "path";
-import fs from "fs";
+import { loadExercisesJson } from "../utils/exerciseData";
+import { exercises as localExercises } from "../data/exercises";
 
 const router = Router();
 
@@ -18,10 +19,9 @@ type LocalExercise = {
   images?: string[];
 };
 
-const distPath = path.join(__dirname, "../data/dist/exercises.json");
-const distExercises: LocalExercise[] = fs.existsSync(distPath)
-  ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
-  : [];
+const distExercises = loadExercisesJson<LocalExercise>();
+const exercisesSource =
+  distExercises.length > 0 ? distExercises : (localExercises as LocalExercise[]);
 
 const dedupeId = (id: string) => id.replace(/\s+/g, "_");
 
@@ -54,7 +54,7 @@ const normalizeExercise = (item: LocalExercise) => {
 };
 
 // Build catalog from the JSON database
-const normalizedCatalog = distExercises.map(normalizeExercise);
+const normalizedCatalog = exercisesSource.map(normalizeExercise);
 
 const exerciseMap = new Map<string, ReturnType<typeof normalizeExercise>>(
   normalizedCatalog.map((item) => [item.id, item])

@@ -5,8 +5,8 @@ import { determineNextInCycle } from "../services/ai/workoutPrompts";
 import { requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
 import { nanoid } from "nanoid";
-import path from "path";
-import fs from "fs";
+import { loadExercisesJson } from "../utils/exerciseData";
+import { exercises as localExercises } from "../data/exercises";
 
 const router = Router();
 
@@ -25,7 +25,6 @@ type LocalExercise = {
   images?: string[];
 };
 
-const distPath = path.join(__dirname, "../data/dist/exercises.json");
 const dedupeId = (id: string) => id.replace(/\s+/g, "_");
 const formatExerciseName = (value: string) =>
   value
@@ -36,19 +35,16 @@ const formatExerciseName = (value: string) =>
     .trim();
 
 const loadExercisesDatabase = (): LocalExercise[] => {
-  if (!fs.existsSync(distPath)) {
-    console.error("[AI Routes] Exercises database not found at:", distPath);
-    return [];
-  }
-
-  try {
-    const distExercises = JSON.parse(fs.readFileSync(distPath, "utf-8")) as LocalExercise[];
+  const distExercises = loadExercisesJson<LocalExercise>();
+  if (distExercises.length > 0) {
     console.log(`[AI Routes] Loaded ${distExercises.length} exercises from database`);
     return distExercises;
-  } catch (error) {
-    console.error("[AI Routes] Failed to load exercises database:", error);
-    return [];
   }
+
+  console.warn(
+    "[AI Routes] Exercises database missing. Falling back to small local seed dataset."
+  );
+  return localExercises as LocalExercise[];
 };
 
 const exercisesDatabase: LocalExercise[] = loadExercisesDatabase();

@@ -1,9 +1,8 @@
-import fs from "fs";
-import path from "path";
 import { query } from "../db";
 import { Exercise, MuscleGroup } from "../types/workouts";
 import { exercises as localExercises } from "../data/exercises";
 import { MuscleFatigueData, RecentWorkout } from "./ai/AIProvider.interface";
+import { loadExercisesJson } from "../utils/exerciseData";
 
 export type MuscleFatigue = {
   muscleGroup: string;
@@ -76,8 +75,6 @@ const TRACKED_MUSCLES: MuscleGroup[] = [
   "core",
 ];
 
-const distExercisesPath = path.join(__dirname, "../data/dist/exercises.json");
-
 const statusColorMap: Record<MuscleFatigue["status"], MuscleFatigue["color"]> = {
   "under-trained": "green",
   optimal: "blue",
@@ -133,9 +130,10 @@ const normalizeExercise = (item: RawExercise): Exercise => {
 let cachedExercises: Exercise[] | null = null;
 const getExerciseCatalog = (): Exercise[] => {
   if (cachedExercises) return cachedExercises;
-  const rawExercises: RawExercise[] = fs.existsSync(distExercisesPath)
-    ? JSON.parse(fs.readFileSync(distExercisesPath, "utf-8"))
-    : localExercises;
+  const rawExercises: RawExercise[] = (() => {
+    const bundled = loadExercisesJson<RawExercise>();
+    return bundled.length > 0 ? bundled : (localExercises as RawExercise[]);
+  })();
 
   const deduped = new Map<string, Exercise>();
   rawExercises

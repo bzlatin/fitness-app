@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
-import path from "path";
-import fs from "fs";
 import { pool, query } from "../db";
 import { WorkoutSession, WorkoutSet } from "../types/workouts";
 import { generateId } from "../utils/id";
 import { exercises as localExercises } from "../data/exercises";
+import { loadExercisesJson } from "../utils/exerciseData";
 
 const router = Router();
 
@@ -23,10 +22,7 @@ type LocalExercise = {
   images?: string[];
 };
 
-const distPath = path.join(__dirname, "../data/dist/exercises.json");
-const distExercises: LocalExercise[] = fs.existsSync(distPath)
-  ? JSON.parse(fs.readFileSync(distPath, "utf-8"))
-  : [];
+const distExercises = loadExercisesJson<LocalExercise>();
 
 const dedupeId = (id: string) => id.replace(/\s+/g, "_");
 const formatExerciseId = (id: string) =>
