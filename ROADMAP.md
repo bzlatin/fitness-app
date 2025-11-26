@@ -789,42 +789,47 @@ Since this is pre-launch with no existing iOS users:
 - [x] Add upgrade prompts to AI generation button
 - [x] Basic template limit enforcement in UI
 
-⚠️ **Remaining Tasks**:
+✅ **Completed Tasks**:
 
 **Backend:**
 
-- [ ] Apply `checkTemplateLimit` middleware to `POST /api/templates` endpoint
-- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/fatigue` endpoint
-- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/recommendations` endpoint
-- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/progression/:templateId` endpoint
-- [ ] Apply `requireProPlan` middleware to `POST /api/analytics/progression/:templateId/apply` endpoint
+- [x] Apply `checkTemplateLimit` middleware to `POST /api/templates` endpoint
+- [x] Apply `requireProPlan` middleware to `GET /api/analytics/fatigue` endpoint
+- [x] Apply `requireProPlan` middleware to `GET /api/analytics/recommendations` endpoint
+- [x] Apply `requireProPlan` middleware to `GET /api/analytics/progression/:templateId` endpoint
+- [x] Apply `requireProPlan` middleware to `POST /api/analytics/progression/:templateId/apply` endpoint
 
 **Frontend - Template Limits:**
 
-- [ ] Fix template limit constant: Change from 5 to 3 in `/mobile/src/utils/featureGating.ts`
-- [ ] Add "X/3 templates" counter UI to MyWorkoutsScreen header (always visible for free users)
-- [ ] Update template limit error message in MyWorkoutsScreen to show UpgradePrompt modal instead of Alert
+- [x] Fix template limit constant: Change from 5 to 3 in `/mobile/src/utils/featureGating.ts`
+- [x] Add "X/3 templates" counter UI to MyWorkoutsScreen header (always visible for free users)
+- [x] Update template limit error message in MyWorkoutsScreen to show PaywallComparisonModal instead of Alert
 - [ ] Apply template limit check in WorkoutTemplateBuilderScreen before save
 
 **Frontend - Recovery/Fatigue Paywall:**
 
-- [ ] Add Pro plan check to RecoveryScreen
-- [ ] Show upgrade prompt when free users try to access recovery features
-- [ ] Navigate to UpgradeScreen from UpgradePrompt component (currently just console.log)
+- [x] Add Pro plan check to RecoveryScreen
+- [x] Show PaywallComparisonModal when free users try to access AI workout generation
+- [x] Navigate to UpgradeScreen from PaywallComparisonModal
 
 **Frontend - Progression Paywall:**
 
-- [ ] Add Pro plan check before showing ProgressionSuggestion modal in WorkoutSessionScreen
-- [ ] Show upgrade prompt when free users would see progression suggestions
-- [ ] Disable progression toggle in SettingsScreen for free users (gray out with "Pro" badge)
+- [x] Add Pro plan check before showing ProgressionSuggestion modal in WorkoutSessionScreen
+- [x] Show PaywallComparisonModal when free users try to access progression
+- [x] Disable progression toggle in SettingsScreen for free users (gray out with "Pro" badge)
 
 **Frontend - Trial Experience:**
 
-- [ ] Create TrialBanner component showing "X days left in trial" countdown
-- [ ] Add TrialBanner to HomeScreen (show only during active trial)
-- [ ] Add TrialBanner to top of RecoveryScreen (show only during active trial)
-- [ ] Calculate days remaining from `subscriptionStatus.trialEndsAt` timestamp
-- [ ] Add "Upgrade Now" CTA button in TrialBanner
+- [x] Create TrialBanner component showing "X days left in trial" countdown
+- [x] Add TrialBanner to HomeScreen (show only during active trial)
+- [x] Calculate days remaining from `subscriptionStatus.trialEndsAt` timestamp
+- [x] Add "Upgrade Now" CTA button in TrialBanner
+
+**Frontend - Onboarding Enhancement:**
+
+- [x] Create PlanSelectionStep component (step 9 of onboarding)
+- [x] Add plan selection to OnboardingScreen (Free vs Pro comparison)
+- [x] Allow users to start 7-day trial or continue with free during onboarding
 
 **Error Handling:**
 
@@ -842,20 +847,22 @@ Since this is pre-launch with no existing iOS users:
 - [ ] Test trial expires and user reverts to free tier
 - [ ] Test Pro user has no limits
 
-**Files to Create/Modify**:
+**Files Created/Modified**:
 
-- ✅ `/server/src/middleware/planLimits.ts` - Already created with `requireProPlan` and `checkTemplateLimit`
-- ✅ `/mobile/src/components/premium/UpgradePrompt.tsx` - Already created
-- [ ] `/mobile/src/components/premium/TrialBanner.tsx` - **NEW** - Trial countdown banner
-- [ ] `/mobile/src/utils/featureGating.ts` - **UPDATE** - Fix template limit from 5 to 3
-- [ ] `/mobile/src/screens/MyWorkoutsScreen.tsx` - **UPDATE** - Add template counter, use UpgradePrompt modal
-- [ ] `/mobile/src/screens/RecoveryScreen.tsx` - **UPDATE** - Add Pro check and upgrade prompt
-- [ ] `/mobile/src/screens/WorkoutSessionScreen.tsx` - **UPDATE** - Add Pro check for progression
-- [ ] `/mobile/src/screens/SettingsScreen.tsx` - **UPDATE** - Disable progression toggle for free users
-- [ ] `/mobile/src/screens/HomeScreen.tsx` - **UPDATE** - Add TrialBanner during trial
-- [ ] `/mobile/src/components/premium/UpgradePrompt.tsx` - **UPDATE** - Navigate to UpgradeScreen instead of console.log
-- [ ] `/server/src/routes/templates.ts` - **UPDATE** - Apply checkTemplateLimit to POST /
-- [ ] `/server/src/routes/analytics.ts` - **UPDATE** - Apply requireProPlan to fatigue/recommendations/progression endpoints
+- ✅ `/server/src/middleware/planLimits.ts` - Created with `requireProPlan` and `checkTemplateLimit`
+- ✅ `/mobile/src/components/premium/UpgradePrompt.tsx` - Created (deprecated in favor of PaywallComparisonModal)
+- ✅ `/mobile/src/components/premium/PaywallComparisonModal.tsx` - Created full-featured comparison modal
+- ✅ `/mobile/src/components/premium/TrialBanner.tsx` - Created trial countdown banner
+- ✅ `/mobile/src/components/onboarding/PlanSelectionStep.tsx` - Created plan selection for onboarding
+- ✅ `/mobile/src/utils/featureGating.ts` - Fixed template limit from 5 to 3
+- ✅ `/mobile/src/screens/MyWorkoutsScreen.tsx` - Added template counter, PaywallComparisonModal integration
+- ✅ `/mobile/src/screens/RecoveryScreen.tsx` - Added Pro check and PaywallComparisonModal for AI generation
+- ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Added Pro check for progression with PaywallComparisonModal
+- ✅ `/mobile/src/screens/SettingsScreen.tsx` - Disabled progression toggle for free users with upgrade prompt
+- ✅ `/mobile/src/screens/HomeScreen.tsx` - Added TrialBanner during trial
+- ✅ `/mobile/src/screens/OnboardingScreen.tsx` - Added plan selection step (9 steps total)
+- ✅ `/server/src/routes/templates.ts` - Applied checkTemplateLimit to POST /
+- ✅ `/server/src/routes/analytics.ts` - Applied requireProPlan to fatigue/recommendations/progression endpoints
 
 **Upgrade Prompt Copy**:
 

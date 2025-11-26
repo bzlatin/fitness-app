@@ -13,7 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -23,7 +23,6 @@ import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
-import UpgradePrompt from "../components/premium/UpgradePrompt";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
 import { useFatigue } from "../hooks/useFatigue";
@@ -32,6 +31,10 @@ import {
   EXPERIENCE_LEVEL_LABELS,
 } from "../types/onboarding";
 import RecoveryBodyMap from "../components/RecoveryBodyMap";
+import TrialBanner from "../components/premium/TrialBanner";
+import { getSubscriptionStatus } from "../api/subscriptions";
+import { isPro as checkIsPro } from "../utils/featureGating";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 
 // Generate unique ID for React Native (no crypto dependency)
 const generateId = () =>
@@ -41,11 +44,24 @@ const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
   const { user } = useCurrentUser();
-  const { data: fatigue, isLoading: fatigueLoading } = useFatigue();
+
+  // Check if user has Pro or Lifetime plan
+  const isPro = checkIsPro(user);
+
+  // Fetch fatigue data for all users (free users can see heatmap)
+  const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
   );
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+
+  // Check subscription status for trial banner
+  const { data: subscriptionStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: getSubscriptionStatus,
+    staleTime: 30000,
+  });
 
   const upNext = useMemo<WorkoutTemplate | null>(() => {
     if (!templates || templates.length === 0) return null;
@@ -67,6 +83,14 @@ const HomeScreen = () => {
 
   return (
     <ScreenContainer scroll>
+      {/* Trial Banner */}
+      {subscriptionStatus && subscriptionStatus.trialEndsAt && (
+        <TrialBanner
+          trialEndsAt={new Date(subscriptionStatus.trialEndsAt).toISOString()}
+          onUpgrade={() => navigation.navigate("Upgrade")}
+        />
+      )}
+
       <View style={{ gap: 12 }}>
         <View
           style={{
@@ -378,39 +402,42 @@ const HomeScreen = () => {
                 backgroundColor: colors.surface,
                 opacity: pressed ? 0.85 : 1,
               })}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 13,
-              }}
             >
-              View all
-            </Text>
-          </Pressable>
-        </View>
-        {fatigueLoading ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={{ color: colors.textSecondary }}>Calibrating recovery...</Text>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 13,
+                }}
+              >
+                View all
+              </Text>
+            </Pressable>
           </View>
-        ) : fatigue ? (
-          <View style={{ gap: 10 }}>
-            <RecoveryBodyMap
-              data={fatigue.perMuscle}
-              onSelectMuscle={() => navigation.navigate("Recovery")}
-              gender={(user?.onboardingData?.bodyGender as "male" | "female" | undefined) ?? "male"}
-            />
-            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
-              Tap a muscle to open detailed recovery.
-            </Text>
-          </View>
-        ) : (
-          <Text style={{ color: colors.textSecondary }}>
-            Log a workout to see what to target or hold back on today.
-          </Text>
-        )}
+
+          {/* Always show body heatmap for all users */}
+          {fatigue && fatigue.perMuscle.length > 0 ? (
+            <View style={{ gap: 10 }}>
+              <RecoveryBodyMap
+                data={fatigue.perMuscle}
+                onSelectMuscle={() => navigation.navigate("Recovery")}
+                gender={(user?.onboardingData?.bodyGender as "male" | "female" | undefined) ?? "male"}
+              />
+              <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+                {isPro
+                  ? "Tap a muscle to see detailed recovery insights."
+                  : "Tap the body map to explore recovery features."}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10, paddingVertical: 8 }}>
+              <Text style={{ color: colors.textSecondary, textAlign: "center" }}>
+                {fatigueLoading
+                  ? "Loading recovery data..."
+                  : "Log a few workouts to see your muscle recovery heatmap and track which muscles need rest."}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -428,6 +455,15 @@ const HomeScreen = () => {
             templateId: t.id,
           });
         }}
+        showPaywallModal={() => {
+          setSwapOpen(false);
+          setShowPaywallModal(true);
+        }}
+      />
+
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
       />
     </ScreenContainer>
   );
@@ -498,12 +534,14 @@ const SwapModal = ({
   templates,
   onSelect,
   onOpenTemplate,
+  showPaywallModal,
 }: {
   visible: boolean;
   onClose: () => void;
   templates: WorkoutTemplate[];
   onSelect: (template: WorkoutTemplate) => void;
   onOpenTemplate: (template: WorkoutTemplate) => void;
+  showPaywallModal: () => void;
 }) => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
@@ -512,12 +550,11 @@ const SwapModal = ({
   const [showSaved, setShowSaved] = useState(false);
   const [showMuscleFocus, setShowMuscleFocus] = useState(false);
   const [showAISplits, setShowAISplits] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]);
   const [savedIsNearBottom, setSavedIsNearBottom] = useState(false);
   const [savedIsNearTop, setSavedIsNearTop] = useState(true);
 
-  const isPro = user?.plan === "pro";
+  const isPro = checkIsPro(user);
   const templateCount = templates?.length ?? 0;
   const safeBottomPadding = Math.max(insets.bottom, 12);
 
@@ -575,9 +612,9 @@ const SwapModal = ({
     },
   });
 
-  const handleAIWorkout = (type: "muscle" | "split") => {
+  const handleAIWorkout = (type: "muscle" | "split", showPaywallCallback: () => void) => {
     if (!isPro) {
-      setShowUpgradePrompt(true);
+      showPaywallCallback();
       return;
     }
 
@@ -666,13 +703,6 @@ const SwapModal = ({
   ];
 
   return (
-    <>
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        feature='AI Workout Generation'
-      />
-
       <Modal visible={visible} animationType='slide' transparent>
         <Pressable
           onPress={onClose}
@@ -785,7 +815,7 @@ const SwapModal = ({
                           setShowMuscleFocus(false);
                           setSelectedMuscles([]);
                         } else {
-                          handleAIWorkout("muscle");
+                          handleAIWorkout("muscle", showPaywallModal);
                         }
                         return;
                       }
@@ -794,7 +824,7 @@ const SwapModal = ({
                           // Toggle off
                           setShowAISplits(false);
                         } else {
-                          handleAIWorkout("split");
+                          handleAIWorkout("split", showPaywallModal);
                         }
                         return;
                       }
@@ -1276,7 +1306,6 @@ const SwapModal = ({
           </Pressable>
         </Pressable>
       </Modal>
-    </>
   );
 };
 

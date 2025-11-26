@@ -1156,25 +1156,42 @@ const SettingsScreen = () => {
               borderRadius: 10,
               borderWidth: 1,
               borderColor: colors.border,
+              opacity: !isPro ? 0.6 : 1,
             }}
           >
             <View style={{ flex: 1, marginRight: 12 }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
-                }}
-              >
-                Progressive Overload Suggestions
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Progressive Overload Suggestions
+                </Text>
+                {!isPro && (
+                  <Text style={{ fontSize: 14 }}>👑</Text>
+                )}
+              </View>
               <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
                 Get smart weight increase recommendations based on your performance
               </Text>
             </View>
             <Switch
-              value={user.progressiveOverloadEnabled ?? true}
-              disabled={isTogglingProgression}
+              value={isPro ? (user.progressiveOverloadEnabled ?? true) : false}
+              disabled={!isPro || isTogglingProgression}
               onValueChange={async (value) => {
+                if (!isPro) {
+                  Alert.alert(
+                    "Pro Feature",
+                    "Progressive overload suggestions are available with Pro. Upgrade to get smart weight recommendations.",
+                    [
+                      { text: "Not Now", style: "cancel" },
+                      { text: "Upgrade", onPress: () => navigation.navigate("Upgrade", { plan: "monthly" }) }
+                    ]
+                  );
+                  return;
+                }
                 setIsTogglingProgression(true);
                 try {
                   await updateProfile({ progressiveOverloadEnabled: value });
@@ -1188,7 +1205,7 @@ const SettingsScreen = () => {
                 }
               }}
               trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={(user.progressiveOverloadEnabled ?? true) ? "#fff" : "#f4f3f4"}
+              thumbColor={(isPro && (user.progressiveOverloadEnabled ?? true)) ? "#fff" : "#f4f3f4"}
             />
           </View>
 

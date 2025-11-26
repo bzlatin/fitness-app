@@ -5,6 +5,7 @@ import { WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
 import { pool, query } from "../db";
 import { exercises as localExercises } from "../data/exercises";
 import { loadExercisesJson } from "../utils/exerciseData";
+import { checkTemplateLimit } from "../middleware/planLimits";
 
 const router = Router();
 
@@ -218,7 +219,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", (req, res) => {
+router.post("/", checkTemplateLimit, (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });

@@ -17,8 +17,8 @@ const requireProPlan = async (req, res, next) => {
             return res.status(404).json({ error: "User not found" });
         }
         const user = result.rows[0];
-        // Check if user has pro plan
-        if (user.plan !== "pro") {
+        // Check if user has pro or lifetime plan
+        if (user.plan !== "pro" && user.plan !== "lifetime") {
             return res.status(403).json({
                 error: "Pro plan required",
                 message: "This feature requires a Pro subscription. Upgrade to access AI workout generation.",
@@ -59,8 +59,8 @@ const checkTemplateLimit = async (req, res, next) => {
             return res.status(404).json({ error: "User not found" });
         }
         const user = userResult.rows[0];
-        // Pro users have no limit
-        if (user.plan === "pro") {
+        // Pro and lifetime users have no limit
+        if (user.plan === "pro" || user.plan === "lifetime") {
             return next();
         }
         // Free users: check template count

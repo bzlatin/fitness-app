@@ -31,8 +31,9 @@ import ScheduleStep from "../components/onboarding/ScheduleStep";
 import LimitationsStep from "../components/onboarding/LimitationsStep";
 import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
+import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -77,6 +78,9 @@ const OnboardingScreen = () => {
   // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
 
+  // Step 9: Plan Selection
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("free");
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
@@ -95,6 +99,8 @@ const OnboardingScreen = () => {
         return true; // Optional body profile
       case 8:
         return preferredSplit !== undefined;
+      case 9:
+        return true; // Plan selection step - always can proceed
       default:
         return false;
     }
@@ -227,6 +233,15 @@ const OnboardingScreen = () => {
       case 8:
         return (
           <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
+        );
+      case 9:
+        return (
+          <PlanSelectionStep
+            selectedPlan={selectedPlan}
+            onPlanChange={setSelectedPlan}
+            onContinueFree={handleSubmit}
+            onStartTrial={handleSubmit}
+          />
         );
       default:
         return null;

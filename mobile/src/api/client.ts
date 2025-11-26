@@ -113,18 +113,19 @@ const request = async <T>(
     const raw = await response.text().catch(() => response.statusText);
     const parsedError = (() => {
       try {
-        return raw ? (JSON.parse(raw) as { error?: string }) : null;
+        return raw ? (JSON.parse(raw) as { error?: string; requiresUpgrade?: boolean }) : null;
       } catch {
         return null;
       }
     })();
 
-    const isUnauthorized =
+    // Only trigger sign-out for actual auth errors, not plan restrictions
+    const isAuthError =
       response.status === 401 ||
-      response.status === 403 ||
+      (response.status === 403 && !parsedError?.requiresUpgrade) ||
       (response.status === 400 && parsedError?.error?.toLowerCase() === "unauthorized");
 
-    if (isUnauthorized) {
+    if (isAuthError) {
       authErrorHandler?.();
     }
 

@@ -4,6 +4,7 @@ import {
   getProgressionSuggestions,
   applyProgressionSuggestions,
 } from "../services/progression";
+import { requireProPlan } from "../middleware/planLimits";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get("/fatigue", async (_req, res) => {
   }
 });
 
-router.get("/recommendations", async (_req, res) => {
+router.get("/recommendations", requireProPlan, async (_req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -38,7 +39,7 @@ router.get("/recommendations", async (_req, res) => {
   }
 });
 
-router.get("/progression/:templateId", async (req, res) => {
+router.get("/progression/:templateId", requireProPlan, async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -58,7 +59,7 @@ router.get("/progression/:templateId", async (req, res) => {
   }
 });
 
-router.post("/progression/:templateId/apply", async (req, res) => {
+router.post("/progression/:templateId/apply", requireProPlan, async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });

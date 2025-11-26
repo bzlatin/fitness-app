@@ -1,6 +1,9 @@
 import React from "react";
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../theme/colors";
+import { RootNavigation } from "../../navigation/RootNavigator";
 
 interface UpgradePromptProps {
   visible: boolean;
@@ -27,13 +30,15 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   feature = "AI Workout Generation",
   benefits = DEFAULT_BENEFITS,
 }) => {
+  const navigation = useNavigation<RootNavigation>();
+  const insets = useSafeAreaInsets();
+
   const handleUpgrade = () => {
     onClose();
     if (onUpgrade) {
       onUpgrade();
     } else {
-      // TODO: Navigate to upgrade screen when implemented
-      console.log("Navigate to upgrade screen");
+      navigation.navigate("Upgrade");
     }
   };
 
@@ -44,149 +49,174 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0, 0, 0, 0.7)",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 20,
-        }}
-        onPress={onClose}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <Pressable
+        <View
           style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 24,
-            width: "100%",
-            maxWidth: 400,
-            borderWidth: 1,
-            borderColor: colors.border,
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 20,
           }}
-          onPress={(e) => e.stopPropagation()}
         >
-          {/* Icon */}
+          <Pressable
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+            onPress={onClose}
+          />
           <View
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: colors.primary + "20",
-              justifyContent: "center",
-              alignItems: "center",
-              marginBottom: 16,
+              backgroundColor: colors.surface,
+              borderRadius: 16,
+              width: "88%",
+              maxWidth: 380,
+              maxHeight: "75%",
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: "hidden",
             }}
           >
-            <Text style={{ fontSize: 28 }}>🚀</Text>
-          </View>
-
-          {/* Title */}
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: 24,
-              fontWeight: "700",
-              marginBottom: 8,
-            }}
-          >
-            Unlock {feature}
-          </Text>
-
-          {/* Description */}
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 16,
-              marginBottom: 20,
-              lineHeight: 22,
-            }}
-          >
-            This feature requires a Pro subscription.
-          </Text>
-
-          {/* Benefits */}
-          <View
-            style={{
-              backgroundColor: colors.background,
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 20,
-            }}
-          >
-            <Text
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                padding: 20,
+                paddingBottom: 24,
+              }}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+            {/* Icon */}
+            <View
               style={{
-                color: colors.textPrimary,
-                fontSize: 14,
-                fontWeight: "600",
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: colors.primary + "20",
+                justifyContent: "center",
+                alignItems: "center",
                 marginBottom: 12,
               }}
             >
-              Upgrade to Pro to get:
+              <Text style={{ fontSize: 24 }}>🚀</Text>
+            </View>
+
+            {/* Title */}
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 22,
+                fontWeight: "700",
+                marginBottom: 6,
+              }}
+            >
+              Unlock {feature}
             </Text>
-            {benefits.map((benefit, index) => (
-              <View
-                key={index}
+
+            {/* Description */}
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 14,
+                marginBottom: 16,
+                lineHeight: 20,
+              }}
+            >
+              This feature requires a Pro subscription.
+            </Text>
+
+            {/* Benefits */}
+            <View
+              style={{
+                backgroundColor: colors.background,
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 16,
+              }}
+            >
+              <Text
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 8,
+                  color: colors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  marginBottom: 10,
                 }}
               >
-                <Text style={{ color: colors.primary, marginRight: 8 }}>✓</Text>
-                <Text style={{ color: colors.textSecondary, flex: 1 }}>
-                  {benefit}
-                </Text>
-              </View>
-            ))}
-          </View>
+                Upgrade to Pro to get:
+              </Text>
+              {benefits.map((benefit, index) => (
+                <View
+                  key={index}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text style={{ color: colors.primary, marginRight: 8, fontSize: 14 }}>✓</Text>
+                  <Text style={{ color: colors.textSecondary, flex: 1, fontSize: 13, lineHeight: 18 }}>
+                    {benefit}
+                  </Text>
+                </View>
+              ))}
+            </View>
 
-          {/* Pricing */}
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 14,
-              textAlign: "center",
-              marginBottom: 20,
-            }}
-          >
-            $4.99/month or $49.99/year • 7-day free trial
-          </Text>
-
-          {/* Buttons */}
-          <Pressable
-            onPress={handleUpgrade}
-            style={({ pressed }) => ({
-              backgroundColor: colors.primary,
-              paddingVertical: 14,
-              borderRadius: 12,
-              alignItems: "center",
-              marginBottom: 12,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
+            {/* Pricing */}
             <Text
-              style={{ color: "#0B1220", fontWeight: "700", fontSize: 16 }}
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                textAlign: "center",
+                marginBottom: 16,
+              }}
             >
-              Start Free Trial
+              $4.99/month or $49.99/year • 7-day free trial
             </Text>
-          </Pressable>
 
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              borderRadius: 12,
-              alignItems: "center",
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
-              Maybe Later
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+            {/* Buttons */}
+            <Pressable
+              onPress={handleUpgrade}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                paddingVertical: 13,
+                borderRadius: 12,
+                alignItems: "center",
+                marginBottom: 10,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{ color: "#0B1220", fontWeight: "700", fontSize: 15 }}
+              >
+                Start Free Trial
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: "600", fontSize: 14 }}>
+                Maybe Later
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

@@ -45,6 +45,8 @@ import {
   applyProgressionSuggestions,
 } from "../api/analytics";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { isPro as checkIsPro } from "../utils/featureGating";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -283,8 +285,12 @@ const WorkoutSessionScreen = () => {
   const [progressionModalBlockingTimer, setProgressionModalBlockingTimer] = useState(false);
   const [isUpdatingProgressionSetting, setIsUpdatingProgressionSetting] = useState(false);
   const [progressionModalAcknowledged, setProgressionModalAcknowledged] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
+
+  // Check if user has Pro or Lifetime plan
+  const isPro = checkIsPro(user);
 
   const template = useMemo(
     () => templates?.find((t) => t.id === route.params.templateId),
@@ -427,6 +433,12 @@ const WorkoutSessionScreen = () => {
       // Only check once per session load
       if (progressionChecked || !route.params.templateId || !sessionId) return;
 
+      // Check if user has Pro access
+      if (!isPro) {
+        setProgressionChecked(true);
+        return;
+      }
+
       // Check user and template settings
       const userEnabled = user?.progressiveOverloadEnabled !== false;
       const templateEnabled = template?.progressiveOverloadEnabled !== false;
@@ -454,7 +466,7 @@ const WorkoutSessionScreen = () => {
     };
 
     checkProgression();
-  }, [sessionId, route.params.templateId, progressionChecked, user, template]);
+  }, [sessionId, route.params.templateId, progressionChecked, user, template, isPro]);
 
   useEffect(() => {
     if (showProgressionModal && !progressionModalAcknowledged) {
@@ -1173,6 +1185,16 @@ const WorkoutSessionScreen = () => {
         progressiveOverloadEnabled={user?.progressiveOverloadEnabled ?? true}
         onToggleProgressiveOverload={handleProgressionSettingChange}
         isUpdatingPreference={isUpdatingProgressionSetting}
+        isPro={isPro}
+        onUpgrade={() => {
+          setShowProgressionModal(false);
+          setShowPaywallModal(true);
+        }}
+      />
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+        triggeredBy="progression"
       />
       <Modal
         visible={!!imagePreviewUrl}
