@@ -12,6 +12,11 @@ export const resolveExercisesPath = () => {
     // When running from repository root or during build
     path.resolve(process.cwd(), "dist/data/dist/exercises.json"),
     path.resolve(process.cwd(), "src/data/dist/exercises.json"),
+    // When start/build is executed from repo root and server/ is nested
+    path.resolve(process.cwd(), "server/dist/data/dist/exercises.json"),
+    path.resolve(process.cwd(), "server/src/data/dist/exercises.json"),
+    // When running from compiled folder but need to reach back to source
+    path.resolve(__dirname, "../../src/data/dist/exercises.json"),
   ];
 
   for (const candidate of candidates) {
