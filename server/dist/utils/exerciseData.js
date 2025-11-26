@@ -17,6 +17,11 @@ const resolveExercisesPath = () => {
         // When running from repository root or during build
         path_1.default.resolve(process.cwd(), "dist/data/dist/exercises.json"),
         path_1.default.resolve(process.cwd(), "src/data/dist/exercises.json"),
+        // When start/build is executed from repo root and server/ is nested
+        path_1.default.resolve(process.cwd(), "server/dist/data/dist/exercises.json"),
+        path_1.default.resolve(process.cwd(), "server/src/data/dist/exercises.json"),
+        // When running from compiled folder but need to reach back to source
+        path_1.default.resolve(__dirname, "../../src/data/dist/exercises.json"),
     ];
     for (const candidate of candidates) {
         if (fs_1.default.existsSync(candidate)) {

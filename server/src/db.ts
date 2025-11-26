@@ -1,11 +1,11 @@
 import { Pool, QueryResultRow } from "pg";
 import dns from "dns";
+import { MOCK_USER_IDS } from "./data/mockUsers";
 
 // Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder("ipv4first");
 }
-import { MOCK_USER_IDS } from "./data/mockUsers";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -18,6 +18,11 @@ const ssl =
   connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
+
+// Skip TLS verification for managed hosts with self-signed chains (e.g., Supabase session pooler)
+if (ssl) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
 
 export const pool = new Pool({
   connectionString,

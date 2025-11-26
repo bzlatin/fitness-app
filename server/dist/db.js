@@ -1,8 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initDb = exports.query = exports.pool = void 0;
 const pg_1 = require("pg");
+const dns_1 = __importDefault(require("dns"));
 const mockUsers_1 = require("./data/mockUsers");
+// Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
+if (dns_1.default.setDefaultResultOrder) {
+    dns_1.default.setDefaultResultOrder("ipv4first");
+}
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Please add it to your .env.");
@@ -11,6 +19,10 @@ const ssl = connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
+// Skip TLS verification for managed hosts with self-signed chains (e.g., Supabase session pooler)
+if (ssl) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
 exports.pool = new pg_1.Pool({
     connectionString,
     ssl,
