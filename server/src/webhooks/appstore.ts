@@ -17,7 +17,8 @@ router.post("/", express.json({ limit: "2mb" }), async (req, res) => {
   try {
     const { payload, transaction, renewalInfo } = decodeNotification(signedPayload);
     const originalTransactionId = transaction?.originalTransactionId;
-    const notificationType = payload.notificationType ?? "UNKNOWN";
+    const notificationType: string =
+      ((payload as { notificationType?: string } | null)?.notificationType ?? "UNKNOWN");
 
     let userId: string | null = null;
     if (originalTransactionId) {

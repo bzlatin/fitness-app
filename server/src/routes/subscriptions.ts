@@ -25,7 +25,7 @@ type StatusResponse = {
 const getSubscriptionPlanDetails = (subscription: Stripe.Subscription) => {
   const firstItem = subscription.items.data[0];
   const lookupKey = firstItem?.price?.lookup_key ?? null;
-  const interval = firstItem?.price?.recurring?.interval;
+  const interval = (firstItem?.price?.recurring?.interval ?? null) as Stripe.Price.Recurring.Interval | string | null;
   const mappedInterval: BillingPlan | null =
     interval === "year" || interval === "yearly" || interval === "annual"
       ? "annual"
@@ -395,18 +395,19 @@ router.get("/ios/status", async (_req, res) => {
     }
 
     const status = await fetchAppleSubscriptionStatus(billing.apple_original_transaction_id);
-    if (!status) {
+    if (!status || !status.status) {
       return res.status(404).json({ error: "No Apple subscription status available" });
     }
+    const statusInfo = status.status;
 
     return res.json({
-      status: status.status.status,
-      plan: status.status.plan,
-      planExpiresAt: status.status.planExpiresAt,
-      originalTransactionId: status.status.originalTransactionId,
-      transactionId: status.status.transactionId,
-      environment: status.status.environment,
-      currentInterval: status.status.interval ?? null,
+      status: statusInfo.status,
+      plan: statusInfo.plan,
+      planExpiresAt: statusInfo.planExpiresAt,
+      originalTransactionId: statusInfo.originalTransactionId,
+      transactionId: statusInfo.transactionId,
+      environment: statusInfo.environment,
+      currentInterval: statusInfo.interval ?? null,
     });
   } catch (err) {
     console.error("Failed to fetch Apple subscription status", err);
