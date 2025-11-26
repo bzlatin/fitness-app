@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc -p tsconfig.json && npm run copy-data",
-    "copy-data": "node -e \"const fs=require('fs');fs.rmSync('dist/data/dist',{recursive:true,force:true});fs.cpSync('src/data/dist','dist/data/dist',{recursive:true});fs.cpSync('src/data/exercises','dist/data/exercises',{recursive:true});\"",
+    "copy-data": "node scripts/copyData.js",
     "start": "node dist/index.js"
   },
   "dependencies": {
