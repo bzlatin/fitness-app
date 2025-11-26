@@ -43,7 +43,10 @@ export const fetchProducts = async () => {
     skus: Object.values(productIds),
     type: "subs",
   });
-  log("fetchProducts ->", products?.length ?? 0, "items", products);
+  log("fetchProducts ->", {
+    count: products?.length ?? 0,
+    productIds: products?.map((p: { productId?: string; id?: string }) => p.productId ?? p.id),
+  });
   return products;
 };
 
@@ -77,7 +80,10 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
       skus: Object.values(productIds),
       type: "subs",
     });
-    log("purchaseSubscription fetchProducts", catalog);
+    log("purchaseSubscription fetchProducts", {
+      count: catalog?.length ?? 0,
+      productIds: catalog?.map((p: { productId?: string; id?: string }) => p.productId ?? p.id),
+    });
   } catch (err) {
     log("purchaseSubscription fetchProducts error", err);
   }
@@ -93,7 +99,13 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
         },
       },
     })) as IapPurchase;
-    log("purchase response", purchase);
+    log("purchase response", {
+      productId: purchase?.productId,
+      transactionId:
+        purchase?.transactionId ??
+        purchase?.originalTransactionIdentifier ??
+        (purchase as { originalTransactionId?: string })?.originalTransactionId,
+    });
   } catch (err) {
     log("requestPurchase error", err);
     const code =
@@ -161,7 +173,12 @@ export const restorePurchases = async () => {
   const RNIap = getIap();
   await initIapConnection();
   const purchases = (await RNIap.getAvailablePurchases()) as IapPurchase[];
-  log("restore getAvailablePurchases", purchases);
+  log("restore getAvailablePurchases", {
+    count: purchases.length,
+    productIds: purchases.map(
+      (purchase: IapPurchase) => purchase.productId ?? purchase.originalTransactionIdentifier
+    ),
+  });
   const active = purchases.find((purchase: IapPurchase) => {
     const id = purchase.productId ?? purchase.originalTransactionIdentifier;
     return id ? Object.values(productIds).includes(id) : false;
