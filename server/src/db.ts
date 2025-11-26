@@ -13,14 +13,35 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set. Please add it to your .env.");
 }
 
-const ssl =
-  connectionString.includes("localhost") ||
-  connectionString.includes("127.0.0.1")
-    ? undefined
-    : { rejectUnauthorized: false };
+const normalizeConnectionString = (raw: string) => {
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.toLowerCase();
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+
+    // Strip ssl directives from provider URLs so our explicit config isn't overwritten by pg's parser
+    url.searchParams.delete("ssl");
+    url.searchParams.delete("sslmode");
+
+    if (!isLocalHost) {
+      url.searchParams.set("sslmode", "no-verify");
+    }
+
+    return { normalized: url.toString(), isLocalHost };
+  } catch {
+    const isLocalHost =
+      raw.includes("localhost") || raw.includes("127.0.0.1");
+    return { normalized: raw, isLocalHost };
+  }
+};
+
+const { normalized: normalizedConnectionString, isLocalHost } =
+  normalizeConnectionString(connectionString);
+
+const ssl = isLocalHost ? false : { rejectUnauthorized: false };
 
 // Force pg to apply the same relaxed SSL policy (avoids self-signed chain errors from poolers)
-pgDefaults.ssl = ssl ?? false;
+pgDefaults.ssl = ssl;
 
 // Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
 if (!ssl) {
@@ -30,7 +51,7 @@ if (!ssl) {
 }
 
 export const pool = new Pool({
-  connectionString,
+  connectionString: normalizedConnectionString,
   ssl,
 });
 
