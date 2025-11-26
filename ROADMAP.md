@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
 > Last Updated: 2025-11-24
-> Status: Phase 1 & 2 complete — Phase 3 (Monetization) ready to begin
+> Status: Phase 1 & 2 complete — Phase 3 (Monetization) 🎯 In progress
 
 ## Product Vision
 
@@ -21,7 +21,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 - ✅ Complete exercise library access
 - ✅ Workout history tracking
 
-### Pro Tier: $4.99/month or $47.99/year
+### Pro Tier: $4.99/month or $49.99/year
 
 - ✅ Unlimited workout templates
 - ✅ AI workout generation (unlimited)
@@ -31,7 +31,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 - ✅ Priority support
 - ✅ 7-day free trial
 
-**Competitive Positioning**: Priced at $47.99/year vs Fitbod's $60/year (~20% cheaper)
+**Competitive Positioning**: Priced at $49.99/year vs Fitbod's $60/year (~17% cheaper)
 
 ---
 
@@ -483,21 +483,21 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 **Stripe Products**:
 
 1. **Pro Monthly**: $4.99/month (product ID: `prod_pro_monthly`)
-2. **Pro Annual**: $47.99/year (product ID: `prod_pro_annual`)
+2. **Pro Annual**: $49.99/year (product ID: `prod_pro_annual`)
 
 **Implementation**:
 
-- [ ] Install Stripe React Native SDK
-- [ ] Create Stripe account and get API keys
-- [ ] Set up Stripe products and prices in dashboard
-- [ ] Create payment backend service
-- [ ] Implement subscription checkout flow
-- [ ] Build webhook handler for subscription events
-- [ ] Update user plan status on successful payment
-- [ ] Handle trial period (7 days)
-- [ ] Implement subscription cancellation
-- [ ] Build billing portal link
-- [ ] Add subscription status to profile screen
+- [x] Install Stripe React Native SDK
+- [x] Create Stripe account and get API keys
+- [x] Set up Stripe products and prices in dashboard
+- [x] Create payment backend service
+- [x] Implement subscription checkout flow
+- [x] Build webhook handler for subscription events
+- [x] Update user plan status on successful payment
+- [x] Handle trial period (7 days)
+- [x] Implement subscription cancellation
+- [x] Build billing portal link
+- [x] Add subscription status to profile screen
 
 **Database Schema**:
 
@@ -550,6 +550,208 @@ CREATE TABLE subscription_events (
 
 ---
 
+#### 3.1b iOS In-App Purchases (IAP)
+
+**Priority**: CRITICAL | **Effort**: 12-15 days | **Impact**: VERY HIGH | **Status**: ⚠️ BLOCKING iOS LAUNCH
+
+**Goal**: Implement Apple In-App Purchases for iOS to comply with App Store guidelines. Maintain Stripe for Android/web.
+
+**Why This Is Required**:
+
+Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscriptions use Apple's IAP system. The current Stripe-only implementation will be **rejected during iOS App Store review**. This is non-negotiable for iOS deployment.
+
+**Implementation Strategy**: Platform-Specific Payments
+
+- **iOS** → Apple In-App Purchases (StoreKit 2)
+- **Android** → Stripe (current implementation)
+- **Backend** → Unified subscription management handling both sources
+
+**Note**: No web app version planned. Web presence will be a landing page only (see Phase 5).
+
+**Apple IAP Products** (to create in App Store Connect):
+
+1. **Pro Monthly**: $4.99/month (product ID: `pro_monthly_subscription`)
+2. **Pro Annual**: $49.99/year (product ID: `pro_annual_subscription`)
+
+**Revenue Split**:
+- Apple: 30% first year, 15% after 1 year of continuous subscription
+- Your app: 70% first year, 85% after 1 year
+
+**Implementation Tasks**:
+
+**Setup & Configuration:**
+- [ ] Create Apple Developer account ($99/year)
+- [ ] Register app in App Store Connect
+- [ ] Create two subscription products in App Store Connect
+- [x] Set up StoreKit Configuration file for local testing
+- [x] Add iOS bundle identifier to `app.config.ts`
+- [ ] Configure Apple Team ID in Expo build settings
+
+**Backend:**
+- [x] Install `node-app-store-server-api` or `@apple/app-store-server-library`
+- [x] Create iOS receipt validation service (`/server/src/services/appstore.ts`)
+- [x] Add `apple_original_transaction_id` column to users table
+- [x] Add `apple_subscription_id` column to users table
+- [x] Create unified subscription service that handles both Stripe and Apple
+- [x] Add endpoints for iOS receipt validation:
+  - `POST /api/subscriptions/ios/validate-receipt` - Validate and activate subscription
+  - `GET /api/subscriptions/ios/status` - Check App Store subscription status
+- [x] Add Apple App Store Server Notification webhook handler (`/webhooks/appstore`)
+- [ ] Handle App Store notification types:
+  - `INITIAL_BUY` → Activate Pro plan
+  - `DID_RENEW` → Extend plan expiration
+  - `DID_FAIL_TO_RENEW` → Grace period warning
+  - `DID_CHANGE_RENEWAL_STATUS` → Handle cancellation
+  - `EXPIRED` → Revert to free plan
+  - `REFUND` → Immediate plan revocation
+
+**Frontend:**
+- [x] Install `react-native-iap` (most popular library)
+- [x] Create platform-agnostic payment service (`/mobile/src/services/payments.ts`)
+- [x] Implement iOS IAP flow:
+  - Initialize IAP connection on app start
+  - Fetch available products from App Store
+  - Purchase product via `requestSubscription()`
+  - Send receipt to backend for validation
+  - Update local subscription status
+- [x] Update UpgradeScreen to detect platform and route to correct payment flow
+- [x] Add iOS-specific subscription management UI
+- [ ] Handle App Store subscription states (trial, active, grace period, expired)
+- [x] Add restore purchases functionality (required by Apple)
+- [x] Handle pending purchases on app launch
+
+**Database Schema**:
+
+```sql
+ALTER TABLE users ADD COLUMN apple_original_transaction_id TEXT;
+ALTER TABLE users ADD COLUMN apple_subscription_id TEXT;
+ALTER TABLE users ADD COLUMN subscription_platform TEXT; -- 'stripe', 'apple', null
+
+CREATE TABLE appstore_notifications (
+  id TEXT PRIMARY KEY DEFAULT nanoid(),
+  user_id TEXT REFERENCES users(id),
+  notification_type TEXT NOT NULL,
+  transaction_id TEXT,
+  original_transaction_id TEXT,
+  payload JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_appstore_notifications_user ON appstore_notifications(user_id);
+CREATE INDEX idx_appstore_notifications_original_tx ON appstore_notifications(original_transaction_id);
+```
+
+**Files to Create**:
+
+- `/server/src/services/appstore.ts` - Receipt validation and status checks
+- `/server/src/webhooks/appstore.ts` - Apple Server-to-Server notifications
+- `/mobile/src/services/payments.ts` - Platform-agnostic payment abstraction
+- `/mobile/src/services/iap.ts` - iOS-specific IAP logic
+- `/mobile/ios/StoreKit/Configuration.storekit` - Local testing configuration
+
+**Files to Modify**:
+
+- `/server/src/db.ts` - Add Apple-specific columns and table
+- `/server/src/index.ts` - Register App Store webhook route
+- `/mobile/src/screens/UpgradeScreen.tsx` - Add platform detection and iOS IAP flow
+- `/mobile/src/screens/SettingsScreen.tsx` - Add "Restore Purchases" button for iOS
+- `/mobile/App.tsx` - Initialize IAP connection on startup
+- `/mobile/app.config.ts` - Add iOS bundle ID and StoreKit config path
+- `/mobile/package.json` - Add react-native-iap dependency
+
+**API Endpoints** (New):
+
+- `POST /api/subscriptions/ios/validate-receipt` - Validate App Store receipt
+- `GET /api/subscriptions/ios/status` - Get subscription status from App Store
+- `POST /webhooks/appstore` - Handle Apple Server Notifications (no auth)
+
+**Platform Detection Logic**:
+
+```typescript
+// /mobile/src/services/payments.ts
+import { Platform } from 'react-native';
+import * as IAP from './iap'; // iOS implementation
+import * as StripePayments from './stripe'; // Android/web implementation
+
+export const startSubscription = async (plan: 'monthly' | 'annual') => {
+  if (Platform.OS === 'ios') {
+    return IAP.purchaseSubscription(plan);
+  }
+  return StripePayments.startCheckout(plan);
+};
+```
+
+**iOS-Specific Requirements**:
+
+- [x] Add "Restore Purchases" button (Apple requires this)
+- [ ] Handle subscription groups in App Store Connect
+- [ ] Configure introductory offers (7-day free trial)
+- [ ] Add subscription terms URL (required for App Store)
+- [ ] Add privacy policy URL (required for App Store)
+- [x] Implement "Manage Subscription" deep link to iOS Settings
+- [ ] Test with Sandbox users in App Store Connect
+- [ ] Submit subscription details for App Review
+
+**Testing Checklist**:
+
+- [ ] Test iOS purchase flow in TestFlight
+- [ ] Test Android purchase flow (Stripe should still work)
+- [ ] Test trial period on iOS (7 days)
+- [ ] Test restore purchases on new iOS device
+- [ ] Test subscription renewal via App Store sandbox
+- [ ] Test subscription cancellation from iOS Settings
+- [ ] Test receipt validation with Apple servers
+- [ ] Test webhook handling from App Store
+- [ ] Test subscription status sync between platforms
+- [ ] Verify 403 errors work correctly when subscription expires
+
+**Security & Best Practices**:
+
+- Validate all receipts server-side (never trust client)
+- Use Apple's production servers for validation (not verifyReceipt - deprecated)
+- Store original_transaction_id as source of truth for iOS
+- Handle edge cases: refunds, subscription upgrades/downgrades
+- Implement idempotency for webhook handlers
+- Rate limit receipt validation endpoint
+
+**Remaining Compliance TODO (iOS IAP)**
+- Add subscription terms URL and privacy policy URL to product metadata (and in-app links).
+- Configure Apple Team ID in Expo/EAS build settings.
+- Finalize subscription group + intro offer settings in App Store Connect to match StoreKit config.
+- Run sandbox tests (purchase, restore, renewal, cancellation, refund) and capture screenshots for App Review.
+
+**Cost Analysis**:
+
+- **Apple Commission**: 30% year 1, 15% after (vs Stripe's 2.9% + $0.30)
+- **Example**: $4.99/month subscription
+  - Apple IAP: You get $3.49 (30% = $1.50 to Apple)
+  - Stripe: You get $4.70 (2.9% + $0.30 = $0.29 to Stripe)
+- **Annual**: $49.99/year
+  - Apple IAP: You get $33.59 (30% = $14.40 to Apple)
+  - Stripe: You get $46.60 (2.9% + $0.30 = $1.39 to Stripe)
+
+**Migration Path**:
+
+Since this is pre-launch with no existing iOS users:
+1. Implement iOS IAP alongside Stripe (not a migration, just addition)
+2. Backend handles both payment platforms simultaneously
+3. User record stores `subscription_platform` to know which system to check
+
+**Documentation to Create**:
+
+- [ ] `IOS_IAP_SETUP.md` - Setup guide for App Store Connect
+- [ ] Update README with iOS testing instructions
+- [ ] Document subscription platform switching (if user moves from Android to iOS)
+
+**Deployment Considerations**:
+
+- App Store review typically takes 1-3 days
+- First submission with subscriptions may take longer (extra scrutiny)
+- Need screenshots of subscription UI for App Store listing
+- Must provide test account for Apple reviewers
+
+---
+
 #### 3.2 Paywall Implementation
 
 **Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH
@@ -566,32 +768,79 @@ CREATE TABLE subscription_events (
 
 **Trial Logic**:
 
-- First AI generation attempt → auto-start 7-day trial (no CC required)
-- Trial grants full Pro access
-- After 7 days → show upgrade prompt
-- If user doesn't upgrade → revert to free limits
+- User navigates to UpgradeScreen → starts 7-day trial via Stripe checkout
+- Trial grants full Pro access (managed by Stripe subscription status)
+- After 7 days → Stripe auto-charges if payment method added, or subscription expires
+- If trial expires without payment → user reverts to free limits automatically
 
-**Implementation**:
+**Implementation Status**:
 
-- [ ] Create plan enforcement middleware
-- [ ] Add template count limit on save (free tier)
-- [ ] Show "2/3 templates" indicator on MyWorkoutsScreen
-- [ ] Create UpgradePrompt component (reusable)
-- [ ] Add upgrade prompts to:
-  - Template builder (when at limit)
-  - AI generation button
-  - Recovery screen
-  - Progression suggestions
-- [ ] Build trial countdown component
-- [ ] Add trial CTA to HomeScreen during trial period
+✅ **Completed**:
+- [x] Create plan enforcement middleware (`requireProPlan`, `checkTemplateLimit`)
+- [x] Create UpgradePrompt component (reusable)
+- [x] Add upgrade prompts to AI generation button
+- [x] Basic template limit enforcement in UI
+
+⚠️ **Remaining Tasks**:
+
+**Backend:**
+- [ ] Apply `checkTemplateLimit` middleware to `POST /api/templates` endpoint
+- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/fatigue` endpoint
+- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/recommendations` endpoint
+- [ ] Apply `requireProPlan` middleware to `GET /api/analytics/progression/:templateId` endpoint
+- [ ] Apply `requireProPlan` middleware to `POST /api/analytics/progression/:templateId/apply` endpoint
+
+**Frontend - Template Limits:**
+- [ ] Fix template limit constant: Change from 5 to 3 in `/mobile/src/utils/featureGating.ts`
+- [ ] Add "X/3 templates" counter UI to MyWorkoutsScreen header (always visible for free users)
+- [ ] Update template limit error message in MyWorkoutsScreen to show UpgradePrompt modal instead of Alert
+- [ ] Apply template limit check in WorkoutTemplateBuilderScreen before save
+
+**Frontend - Recovery/Fatigue Paywall:**
+- [ ] Add Pro plan check to RecoveryScreen
+- [ ] Show upgrade prompt when free users try to access recovery features
+- [ ] Navigate to UpgradeScreen from UpgradePrompt component (currently just console.log)
+
+**Frontend - Progression Paywall:**
+- [ ] Add Pro plan check before showing ProgressionSuggestion modal in WorkoutSessionScreen
+- [ ] Show upgrade prompt when free users would see progression suggestions
+- [ ] Disable progression toggle in SettingsScreen for free users (gray out with "Pro" badge)
+
+**Frontend - Trial Experience:**
+- [ ] Create TrialBanner component showing "X days left in trial" countdown
+- [ ] Add TrialBanner to HomeScreen (show only during active trial)
+- [ ] Add TrialBanner to top of RecoveryScreen (show only during active trial)
+- [ ] Calculate days remaining from `subscriptionStatus.trialEndsAt` timestamp
+- [ ] Add "Upgrade Now" CTA button in TrialBanner
+
+**Error Handling:**
+- [ ] Handle 403 errors from analytics endpoints gracefully (show upgrade prompt instead of crash)
+- [ ] Handle 403 errors from template save endpoint (show upgrade prompt)
+- [ ] Add error boundary for subscription status fetch failures
+
+**Testing Checklist:**
+- [ ] Test free user cannot create 4th template
+- [ ] Test free user sees upgrade prompt on AI generation attempt
+- [ ] Test free user cannot access RecoveryScreen (or sees upgrade prompt)
+- [ ] Test free user cannot access progression suggestions
+- [ ] Test trial user has full Pro access for 7 days
+- [ ] Test trial expires and user reverts to free tier
+- [ ] Test Pro user has no limits
 
 **Files to Create/Modify**:
 
-- `/server/src/middleware/planLimits.ts` (new)
-- `/mobile/src/components/UpgradePrompt.tsx` (new)
-- `/mobile/src/components/TrialBanner.tsx` (new)
-- `/mobile/src/screens/MyWorkoutsScreen.tsx` (add limit indicator)
-- `/server/src/routes/templates.ts` (enforce limit)
+- ✅ `/server/src/middleware/planLimits.ts` - Already created with `requireProPlan` and `checkTemplateLimit`
+- ✅ `/mobile/src/components/premium/UpgradePrompt.tsx` - Already created
+- [ ] `/mobile/src/components/premium/TrialBanner.tsx` - **NEW** - Trial countdown banner
+- [ ] `/mobile/src/utils/featureGating.ts` - **UPDATE** - Fix template limit from 5 to 3
+- [ ] `/mobile/src/screens/MyWorkoutsScreen.tsx` - **UPDATE** - Add template counter, use UpgradePrompt modal
+- [ ] `/mobile/src/screens/RecoveryScreen.tsx` - **UPDATE** - Add Pro check and upgrade prompt
+- [ ] `/mobile/src/screens/WorkoutSessionScreen.tsx` - **UPDATE** - Add Pro check for progression
+- [ ] `/mobile/src/screens/SettingsScreen.tsx` - **UPDATE** - Disable progression toggle for free users
+- [ ] `/mobile/src/screens/HomeScreen.tsx` - **UPDATE** - Add TrialBanner during trial
+- [ ] `/mobile/src/components/premium/UpgradePrompt.tsx` - **UPDATE** - Navigate to UpgradeScreen instead of console.log
+- [ ] `/server/src/routes/templates.ts` - **UPDATE** - Apply checkTemplateLimit to POST /
+- [ ] `/server/src/routes/analytics.ts` - **UPDATE** - Apply requireProPlan to fatigue/recommendations/progression endpoints
 
 **Upgrade Prompt Copy**:
 
@@ -694,6 +943,76 @@ CREATE TABLE workout_comments (
 - [ ] Add reactions to feed items
 - [ ] Add comment section to workout shares
 - [ ] Push notifications for reactions (future)
+
+---
+
+### 🌐 Phase 5: Marketing & Growth (Post-Launch)
+
+#### 5.1 Landing Page & App Store Presence
+
+**Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH
+
+**Goal**: Create professional landing page to drive app downloads and provide web presence.
+
+**Landing Page Requirements**:
+
+- [ ] Modern, mobile-responsive design
+- [ ] Hero section with app screenshots (iOS + Android)
+- [ ] Feature showcase (AI workouts, squad tracking, progressive overload)
+- [ ] Pricing comparison (Free vs Pro)
+- [ ] App Store & Google Play download badges
+- [ ] Social proof section (testimonials when available)
+- [ ] FAQ section addressing common questions
+- [ ] Footer with privacy policy, terms of service, contact
+
+**Technical Stack**:
+
+- Next.js 14 (App Router) or simple static site (Vercel/Netlify)
+- Tailwind CSS for styling
+- Framer Motion for animations (optional)
+- Analytics (Plausible or Google Analytics)
+
+**Pages to Create**:
+
+- `/` - Home (main landing page)
+- `/privacy` - Privacy Policy (required for App Store)
+- `/terms` - Terms of Service (required for App Store)
+- `/support` - Support/Contact page
+
+**Domain & Hosting**:
+
+- [ ] Register domain (pushpullapp.com or similar)
+- [ ] Set up DNS with hosting provider
+- [ ] Deploy to Vercel/Netlify (free tier)
+- [ ] Configure SSL certificate
+- [ ] Set up redirect from www to root domain
+
+**App Store Optimization**:
+
+- [ ] Create App Store listing (iOS)
+- [ ] Create Google Play Store listing (Android)
+- [ ] Design app icon (1024x1024)
+- [ ] Create 5-6 app screenshots per platform
+- [ ] Write compelling app description
+- [ ] Choose keywords for ASO
+- [ ] Create feature graphic for Play Store
+
+**Files to Create** (new repo or `/landing` directory):
+
+- `/landing/src/app/page.tsx` - Home page
+- `/landing/src/app/privacy/page.tsx` - Privacy policy
+- `/landing/src/app/terms/page.tsx` - Terms of service
+- `/landing/src/app/support/page.tsx` - Support page
+- `/landing/src/components/FeatureShowcase.tsx`
+- `/landing/src/components/PricingTable.tsx`
+- `/landing/src/components/DownloadButtons.tsx`
+- `/landing/public/screenshots/` - App screenshots
+
+**Integration Points**:
+
+- Deep links from landing page to app (if installed)
+- UTM tracking for download attribution
+- Email capture for pre-launch list (optional)
 
 ---
 
@@ -815,5 +1134,5 @@ CREATE TABLE workout_comments (
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3** (Current): Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
-- **v1.4** (Target: Week 9): Stripe integration + Paywall
+- **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
 - **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements

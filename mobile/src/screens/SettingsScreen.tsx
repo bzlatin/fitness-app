@@ -12,6 +12,7 @@ import {
   Switch,
   ActivityIndicator,
   Linking,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -26,10 +27,12 @@ import {
   removeFollower,
   unfollowUser,
 } from "../api/social";
+import { getSubscriptionStatus } from "../api/subscriptions";
 import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { restorePurchases } from "../services/payments";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -68,6 +71,37 @@ const SettingsScreen = () => {
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const isHandleLocked = Boolean(user?.handle);
 
+  const {
+    data: subscriptionStatus,
+    isLoading: isSubscriptionLoading,
+    isError: isSubscriptionError,
+    refetch: refetchSubscriptionStatus,
+  } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: getSubscriptionStatus,
+    enabled: Boolean(user),
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnMount: false, // Don't refetch on every mount
+  });
+  const isPro = (user?.plan ?? "free") === "pro";
+  const isIOS = Platform.OS === "ios";
+  const isAppleSubscription = subscriptionStatus?.subscriptionPlatform === "apple";
+  const formatDate = (value?: number | null | string) => {
+    if (!value) return undefined;
+    const date =
+      typeof value === "number" ? new Date(value * 1000) : new Date(value);
+    return date.toLocaleDateString();
+  };
+  const renewalDate =
+    subscriptionStatus?.currentPeriodEnd && isPro
+      ? formatDate(subscriptionStatus.currentPeriodEnd)
+      : user?.planExpiresAt
+      ? formatDate(user.planExpiresAt)
+      : undefined;
+  const trialEnds = subscriptionStatus?.trialEndsAt
+    ? formatDate(subscriptionStatus.trialEndsAt)
+    : undefined;
+
   useEffect(() => {
     if (user) {
       setDraftName(user.name ?? "");
@@ -95,8 +129,21 @@ const SettingsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh])
+      void refetchSubscriptionStatus();
+    }, [refresh, refetchSubscriptionStatus])
   );
+
+  const restorePurchasesMutation = useMutation({
+    mutationFn: () => restorePurchases(),
+    onError: (err: Error) => {
+      Alert.alert("Restore failed", err.message);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      await refresh();
+      Alert.alert("Restored", "Your Apple subscription has been restored.");
+    },
+  });
 
   const connectionsQuery = useQuery({
     queryKey: ["social", "connections", "settings"],
@@ -768,6 +815,133 @@ const SettingsScreen = () => {
               </View>
             </View>
           ) : null}
+        </View>
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: 14,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 14,
+          }}
+        >
+          <View style={{ gap: 6 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
+              Billing
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              Manage your subscription and billing details.
+            </Text>
+          </View>
+          <View
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 4,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {isPro ? "Pro plan" : "Free plan"}
+            </Text>
+            {isSubscriptionLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : isSubscriptionError ? (
+              <Text style={{ color: colors.error, fontSize: 12 }}>
+                Unable to load billing status.
+              </Text>
+            ) : (
+              <>
+                {trialEnds ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Trial ends {trialEnds}
+                  </Text>
+                ) : null}
+                {renewalDate ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {subscriptionStatus?.cancelAtPeriodEnd
+                      ? `Ends on ${renewalDate}`
+                      : `Renews on ${renewalDate}`}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            <Pressable
+              onPress={() => {
+                if (isPro && isAppleSubscription) {
+                  void Linking.openURL("https://apps.apple.com/account/subscriptions");
+                  return;
+                }
+                navigation.navigate("Upgrade", { plan: "monthly" });
+              }}
+              style={({ pressed }) => ({
+                marginTop: 10,
+                paddingVertical: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.primary,
+                backgroundColor: pressed ? colors.primary : "transparent",
+                alignItems: "center",
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {isPro
+                  ? isAppleSubscription
+                    ? "Manage in App Store"
+                    : "Manage subscription"
+                  : "Upgrade to Pro"}
+              </Text>
+            </Pressable>
+            {isIOS ? (
+              <Pressable
+                onPress={() => restorePurchasesMutation.mutate()}
+                disabled={restorePurchasesMutation.isPending}
+                style={({ pressed }) => ({
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                  alignItems: "center",
+                  opacity: restorePurchasesMutation.isPending ? 0.6 : 1,
+                })}
+              >
+                {restorePurchasesMutation.isPending ? (
+                  <ActivityIndicator color={colors.textPrimary} />
+                ) : (
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    Restore purchases (iOS)
+                  </Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <View

@@ -150,7 +150,7 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
               marginBottom: 20,
             }}
           >
-            $4.99/month or $47.99/year • 7-day free trial
+            $4.99/month or $49.99/year • 7-day free trial
           </Text>
 
           {/* Buttons */}
