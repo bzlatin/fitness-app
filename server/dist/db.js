@@ -19,6 +19,8 @@ const ssl = connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
+// Force pg to apply the same relaxed SSL policy (avoids self-signed chain errors from poolers)
+pg_1.defaults.ssl = ssl ?? false;
 // Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
 if (!ssl) {
     process.env.PGSSLMODE = "disable";

@@ -1,4 +1,4 @@
-import { Pool, QueryResultRow } from "pg";
+import { Pool, QueryResultRow, defaults as pgDefaults } from "pg";
 import dns from "dns";
 import { MOCK_USER_IDS } from "./data/mockUsers";
 
@@ -18,6 +18,9 @@ const ssl =
   connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
+
+// Force pg to apply the same relaxed SSL policy (avoids self-signed chain errors from poolers)
+pgDefaults.ssl = ssl ?? false;
 
 // Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
 if (!ssl) {
