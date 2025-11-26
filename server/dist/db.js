@@ -19,6 +19,13 @@ const ssl = connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
+// Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
+if (!ssl) {
+    process.env.PGSSLMODE = "disable";
+}
+else {
+    process.env.PGSSLMODE = "no-verify";
+}
 exports.pool = new pg_1.Pool({
     connectionString,
     ssl,

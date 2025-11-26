@@ -19,6 +19,13 @@ const ssl =
     ? undefined
     : { rejectUnauthorized: false };
 
+// Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
+if (!ssl) {
+  process.env.PGSSLMODE = "disable";
+} else {
+  process.env.PGSSLMODE = "no-verify";
+}
+
 export const pool = new Pool({
   connectionString,
   ssl,
