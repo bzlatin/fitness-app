@@ -19,11 +19,6 @@ const ssl =
     ? undefined
     : { rejectUnauthorized: false };
 
-// Skip TLS verification for managed hosts with self-signed chains (e.g., Supabase session pooler)
-if (ssl) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
-
 export const pool = new Pool({
   connectionString,
   ssl,

@@ -19,10 +19,6 @@ const ssl = connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1")
     ? undefined
     : { rejectUnauthorized: false };
-// Skip TLS verification for managed hosts with self-signed chains (e.g., Supabase session pooler)
-if (ssl) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
 exports.pool = new pg_1.Pool({
     connectionString,
     ssl,
