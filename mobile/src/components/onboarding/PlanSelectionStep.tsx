@@ -1,6 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { colors } from "../../theme/colors";
 import { fontFamilies } from "../../theme/typography";
 
@@ -8,7 +7,8 @@ interface PlanSelectionStepProps {
   selectedPlan: "free" | "pro";
   onPlanChange: (plan: "free" | "pro") => void;
   onContinueFree: () => void;
-  onStartTrial: () => void;
+  onStartTrial: (planType: "monthly" | "yearly") => void;
+  isProcessingPurchase?: boolean;
 }
 
 interface FeatureItemProps {
@@ -42,13 +42,18 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
   onPlanChange,
   onContinueFree,
   onStartTrial,
+  isProcessingPurchase = false,
 }) => {
+  const [selectedProPlan, setSelectedProPlan] = React.useState<"monthly" | "yearly">("yearly");
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Choose Your Plan</Text>
-      <Text style={styles.subtitle}>
-        Start with Free or unlock everything with Pro
-      </Text>
+      <View style={{ gap: 4, marginBottom: 24 }}>
+        <Text style={styles.title}>Unlock Your Full Potential</Text>
+        <Text style={styles.subtitle}>
+          Choose between Free or unlock everything with Pro to get AI-powered workouts, unlimited templates, and advanced analytics
+        </Text>
+      </View>
 
       <View style={styles.plansContainer}>
         {/* Free Plan Card */}
@@ -67,11 +72,11 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
           <View style={styles.divider} />
 
           <View style={styles.featureList}>
-            <FeatureItem text="3 workout templates" />
-            <FeatureItem text="Unlimited logging" />
+            <FeatureItem text="Workout logging" />
+            <FeatureItem text="Up to 3 templates" />
             <FeatureItem text="Squad features" />
             <FeatureItem text="Workout history" />
-            <FeatureItem text="Basic analytics" />
+            <FeatureItem text="Basic body heatmap" />
           </View>
 
           {selectedPlan === "free" && (
@@ -90,26 +95,20 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
             selectedPlan === "pro" && styles.planCardSelectedPro,
           ]}
         >
-          {/* Best Value Badge */}
-          <View style={styles.bestValueBadge}>
-            <Text style={styles.bestValueText}>BEST VALUE</Text>
-          </View>
-
           <View style={styles.planHeader}>
             <Text style={[styles.planName, styles.proText]}>Pro</Text>
-            <Text style={[styles.planPrice, styles.proText]}>$4.99/mo</Text>
           </View>
-
-          <Text style={styles.planSubprice}>or $49.99/year</Text>
 
           <View style={[styles.divider, styles.proDivider]} />
 
           <View style={styles.featureList}>
             <FeatureItem text="Unlimited templates" highlight />
             <FeatureItem text="AI workout generation" highlight />
-            <FeatureItem text="Recovery intelligence" highlight />
+            <FeatureItem text="Smart suggestions" highlight />
+            <FeatureItem text="Recovery tracking" highlight />
             <FeatureItem text="Progressive overload" highlight />
             <FeatureItem text="Advanced analytics" highlight />
+            <FeatureItem text="Detailed body heatmap" highlight />
           </View>
 
           {selectedPlan === "pro" && (
@@ -120,25 +119,218 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
         </Pressable>
       </View>
 
+      {/* Pro Plan Pricing Options */}
+      {selectedPlan === "pro" && (
+        <View style={{ gap: 12, marginBottom: 20 }}>
+          {/* Yearly Plan - Best Value */}
+          <Pressable
+            onPress={() => setSelectedProPlan("yearly")}
+            style={{
+              backgroundColor:
+                selectedProPlan === "yearly"
+                  ? colors.primary + "15"
+                  : colors.background,
+              borderRadius: 12,
+              padding: 16,
+              borderWidth: 2,
+              borderColor:
+                selectedProPlan === "yearly" ? colors.primary : colors.border,
+              position: "relative",
+            }}
+          >
+            {selectedProPlan === "yearly" && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  backgroundColor: colors.primary,
+                  borderRadius: 12,
+                  width: 24,
+                  height: 24,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#0B1220",
+                    fontSize: 14,
+                    fontFamily: fontFamilies.bold,
+                  }}
+                >
+                  ✓
+                </Text>
+              </View>
+            )}
+            <View
+              style={{
+                position: "absolute",
+                top: -8,
+                left: 16,
+                backgroundColor: colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#0B1220",
+                  fontSize: 11,
+                  fontFamily: fontFamilies.bold,
+                }}
+              >
+                BEST VALUE
+              </Text>
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: 8,
+              }}
+            >
+              <View>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 20,
+                    fontFamily: fontFamilies.bold,
+                  }}
+                >
+                  $49.99/year
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    marginTop: 2,
+                  }}
+                >
+                  Save 17% • Just $4.16/month
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+
+          {/* Monthly Plan */}
+          <Pressable
+            onPress={() => setSelectedProPlan("monthly")}
+            style={{
+              backgroundColor:
+                selectedProPlan === "monthly"
+                  ? colors.primary + "15"
+                  : colors.background,
+              borderRadius: 12,
+              padding: 16,
+              borderWidth: 2,
+              borderColor:
+                selectedProPlan === "monthly" ? colors.primary : colors.border,
+            }}
+          >
+            {selectedProPlan === "monthly" && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  backgroundColor: colors.primary,
+                  borderRadius: 12,
+                  width: 24,
+                  height: 24,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#0B1220",
+                    fontSize: 14,
+                    fontFamily: fontFamilies.bold,
+                  }}
+                >
+                  ✓
+                </Text>
+              </View>
+            )}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 20,
+                    fontFamily: fontFamilies.bold,
+                  }}
+                >
+                  $4.99/month
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    marginTop: 2,
+                  }}
+                >
+                  Billed monthly
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Trial Info */}
+      {selectedPlan === "pro" && (
+        <View
+          style={{
+            backgroundColor: colors.primary + "10",
+            borderRadius: 12,
+            padding: 14,
+            marginBottom: 20,
+            borderWidth: 1,
+            borderColor: colors.primary + "30",
+          }}
+        >
+          <Text
+            style={{
+              color: colors.primary,
+              fontSize: 13,
+              fontFamily: fontFamilies.semibold,
+              textAlign: "center",
+              lineHeight: 18,
+            }}
+          >
+            ✨ 7-day free trial included with both plans • Cancel anytime
+          </Text>
+        </View>
+      )}
+
       {/* Action Buttons */}
       <View style={styles.actions}>
         <Pressable
-          onPress={selectedPlan === "pro" ? onStartTrial : onContinueFree}
+          onPress={() => selectedPlan === "pro" ? onStartTrial(selectedProPlan) : onContinueFree()}
+          disabled={isProcessingPurchase}
           style={({ pressed }) => [
             styles.primaryButton,
-            { opacity: pressed ? 0.9 : 1 },
+            { opacity: pressed || isProcessingPurchase ? 0.7 : 1 },
           ]}
         >
-          <Text style={styles.primaryButtonText}>
-            {selectedPlan === "pro" ? "Start 7-Day Trial" : "Continue with Free"}
-          </Text>
+          {isProcessingPurchase ? (
+            <ActivityIndicator color="#0B1220" />
+          ) : (
+            <Text style={styles.primaryButtonText}>
+              {selectedPlan === "pro" ? "Start 7-Day Trial" : "Continue with Free"}
+            </Text>
+          )}
         </Pressable>
-
-        {selectedPlan === "pro" && (
-          <Text style={styles.disclaimer}>
-            Cancel anytime during trial. $4.99/mo after trial ends.
-          </Text>
-        )}
       </View>
     </View>
   );
@@ -147,29 +339,28 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: fontFamilies.bold,
     color: colors.textPrimary,
-    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 32,
+    lineHeight: 20,
   },
   plansContainer: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 32,
+    gap: 12,
+    marginBottom: 24,
   },
   planCard: {
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     borderWidth: 2,
     borderColor: colors.border,
   },
@@ -224,7 +415,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   checkmark: {
-    color: colors.success || "#10b981",
+    color: "#10b981",
     fontSize: 16,
     fontFamily: fontFamilies.bold,
   },

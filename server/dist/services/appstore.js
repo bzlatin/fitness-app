@@ -16,7 +16,7 @@ const productToPlan = {
 const resolveEnvironment = () => APP_STORE_ENV.toLowerCase() === "production"
     ? app_store_server_library_1.Environment.PRODUCTION
     : app_store_server_library_1.Environment.SANDBOX;
-const getClient = () => {
+const getClient = (environment) => {
     if (!APP_STORE_ISSUER_ID ||
         !APP_STORE_KEY_ID ||
         !APP_STORE_PRIVATE_KEY ||
@@ -24,7 +24,7 @@ const getClient = () => {
         throw new Error("Missing Apple App Store credentials. Set APP_STORE_ISSUER_ID, APP_STORE_KEY_ID, APP_STORE_PRIVATE_KEY, and APP_STORE_BUNDLE_ID in the environment.");
     }
     const sanitizedKey = APP_STORE_PRIVATE_KEY.replace(/\\n/g, "\n");
-    return new app_store_server_library_1.AppStoreServerAPIClient(sanitizedKey, APP_STORE_KEY_ID, APP_STORE_ISSUER_ID, APP_STORE_BUNDLE_ID, resolveEnvironment());
+    return new app_store_server_library_1.AppStoreServerAPIClient(sanitizedKey, APP_STORE_KEY_ID, APP_STORE_ISSUER_ID, APP_STORE_BUNDLE_ID, environment ?? resolveEnvironment());
 };
 const toStatus = (transaction, renewalInfo) => {
     if (!transaction.productId) {
@@ -80,8 +80,23 @@ const decodeSignedPayload = (signedPayload) => {
     }
 };
 const fetchTransaction = async (transactionId) => {
-    const client = getClient();
-    const transactionInfo = await client.getTransactionInfo(transactionId);
+    let client = getClient();
+    let transactionInfo;
+    try {
+        // Try with the default environment (production or sandbox based on APP_STORE_ENV)
+        transactionInfo = await client.getTransactionInfo(transactionId);
+    }
+    catch (error) {
+        // If we get an error and we're in production mode, try sandbox
+        if (resolveEnvironment() === app_store_server_library_1.Environment.PRODUCTION) {
+            console.log("Production validation failed, retrying with sandbox environment");
+            client = getClient(app_store_server_library_1.Environment.SANDBOX);
+            transactionInfo = await client.getTransactionInfo(transactionId);
+        }
+        else {
+            throw error;
+        }
+    }
     const transaction = decodeSignedPayload(transactionInfo.signedTransactionInfo);
     if (!transaction) {
         throw new Error("Unable to decode Apple transaction payload");
@@ -93,8 +108,23 @@ const fetchTransaction = async (transactionId) => {
 };
 exports.fetchTransaction = fetchTransaction;
 const fetchSubscriptionStatus = async (originalTransactionId) => {
-    const client = getClient();
-    const statusResponse = await client.getAllSubscriptionStatuses(originalTransactionId);
+    let client = getClient();
+    let statusResponse;
+    try {
+        // Try with the default environment (production or sandbox based on APP_STORE_ENV)
+        statusResponse = await client.getAllSubscriptionStatuses(originalTransactionId);
+    }
+    catch (error) {
+        // If we get an error and we're in production mode, try sandbox
+        if (resolveEnvironment() === app_store_server_library_1.Environment.PRODUCTION) {
+            console.log("Production status check failed, retrying with sandbox environment");
+            client = getClient(app_store_server_library_1.Environment.SANDBOX);
+            statusResponse = await client.getAllSubscriptionStatuses(originalTransactionId);
+        }
+        else {
+            throw error;
+        }
+    }
     const latest = statusResponse.data?.[0]?.lastTransactions?.[0];
     if (!latest) {
         return null;

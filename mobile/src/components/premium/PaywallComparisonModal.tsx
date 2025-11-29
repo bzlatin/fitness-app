@@ -1,5 +1,14 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, Platform, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Modal,
+  ScrollView,
+  Platform,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { useStripe } from "@stripe/stripe-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { colors } from "../../theme/colors";
@@ -28,7 +37,7 @@ const features: FeatureRow[] = [
   { name: "Smart workout suggestions", free: false, pro: true },
   { name: "Muscle focus targeting", free: false, pro: true },
   { name: "Recovery & fatigue tracking", free: false, pro: true },
-  { name: "Progressive overload suggestions", free: false, pro: true },
+  { name: "Progressive overload", free: false, pro: true },
   { name: "Advanced analytics & insights", free: false, pro: true },
   { name: "Body heatmap visualization", free: "Basic", pro: "Detailed" },
 ];
@@ -39,7 +48,9 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
   onUpgrade,
   triggeredBy,
 }) => {
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">(
+    "yearly"
+  );
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
   const stripe = useStripe();
@@ -55,7 +66,10 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
       }),
     onError: (err: unknown) => {
       const error = err as { message?: string; code?: string };
-      if (error.code === "USER_CANCELLED" || error.message === "USER_CANCELLED") {
+      if (
+        error.code === "USER_CANCELLED" ||
+        error.message === "USER_CANCELLED"
+      ) {
         // Silent no-op for user-initiated cancellations
         return;
       }
@@ -87,7 +101,8 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
     }
 
     // Otherwise trigger IAP directly
-    const planChoice: PlanChoice = selectedPlan === "yearly" ? "annual" : "monthly";
+    const planChoice: PlanChoice =
+      selectedPlan === "yearly" ? "annual" : "monthly";
     startCheckout.mutate(planChoice);
   };
 
@@ -95,7 +110,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType='fade'
       onRequestClose={onClose}
     >
       <View
@@ -130,7 +145,6 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
             flex: 1,
           }}
         >
-
           {/* Close Button */}
           <Pressable
             onPress={onClose}
@@ -148,9 +162,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
               alignItems: "center",
             }}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 20 }}>
-              ✕
-            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 20 }}>✕</Text>
           </Pressable>
 
           {/* Scrollable Content */}
@@ -200,7 +212,8 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                 lineHeight: 20,
               }}
             >
-              Get AI-powered workouts, unlimited templates, and advanced recovery insights to achieve your fitness goals faster
+              Get AI-powered workouts, unlimited templates, and advanced
+              recovery insights to achieve your fitness goals faster
             </Text>
 
             {/* Comparison Table */}
@@ -222,7 +235,13 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                   backgroundColor: colors.background,
                 }}
               >
-                <View style={{ flex: 2, paddingVertical: 10, paddingHorizontal: 10 }}>
+                <View
+                  style={{
+                    flex: 2,
+                    paddingVertical: 10,
+                    paddingHorizontal: 10,
+                  }}
+                >
                   <Text
                     style={{
                       color: colors.textSecondary,
@@ -283,8 +302,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                   key={index}
                   style={{
                     flexDirection: "row",
-                    borderBottomWidth:
-                      index < features.length - 1 ? 1 : 0,
+                    borderBottomWidth: index < features.length - 1 ? 1 : 0,
                     borderBottomColor: colors.border,
                     minHeight: 42,
                   }}
@@ -394,11 +412,15 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
               <Pressable
                 onPress={() => setSelectedPlan("yearly")}
                 style={{
-                  backgroundColor: selectedPlan === "yearly" ? colors.primary + "15" : colors.background,
+                  backgroundColor:
+                    selectedPlan === "yearly"
+                      ? colors.primary + "15"
+                      : colors.background,
                   borderRadius: 12,
                   padding: 16,
                   borderWidth: 2,
-                  borderColor: selectedPlan === "yearly" ? colors.primary : colors.border,
+                  borderColor:
+                    selectedPlan === "yearly" ? colors.primary : colors.border,
                   position: "relative",
                 }}
               >
@@ -416,7 +438,15 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "#0B1220", fontSize: 14, fontFamily: fontFamilies.bold }}>✓</Text>
+                    <Text
+                      style={{
+                        color: "#0B1220",
+                        fontSize: 14,
+                        fontFamily: fontFamilies.bold,
+                      }}
+                    >
+                      ✓
+                    </Text>
                   </View>
                 )}
                 <View
@@ -430,11 +460,24 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                     borderRadius: 12,
                   }}
                 >
-                  <Text style={{ color: "#0B1220", fontSize: 11, fontFamily: fontFamilies.bold }}>
+                  <Text
+                    style={{
+                      color: "#0B1220",
+                      fontSize: 11,
+                      fontFamily: fontFamilies.bold,
+                    }}
+                  >
                     BEST VALUE
                   </Text>
                 </View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 8,
+                  }}
+                >
                   <View>
                     <Text
                       style={{
@@ -462,11 +505,15 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
               <Pressable
                 onPress={() => setSelectedPlan("monthly")}
                 style={{
-                  backgroundColor: selectedPlan === "monthly" ? colors.primary + "15" : colors.background,
+                  backgroundColor:
+                    selectedPlan === "monthly"
+                      ? colors.primary + "15"
+                      : colors.background,
                   borderRadius: 12,
                   padding: 16,
                   borderWidth: 2,
-                  borderColor: selectedPlan === "monthly" ? colors.primary : colors.border,
+                  borderColor:
+                    selectedPlan === "monthly" ? colors.primary : colors.border,
                 }}
               >
                 {selectedPlan === "monthly" && (
@@ -483,10 +530,24 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "#0B1220", fontSize: 14, fontFamily: fontFamilies.bold }}>✓</Text>
+                    <Text
+                      style={{
+                        color: "#0B1220",
+                        fontSize: 14,
+                        fontFamily: fontFamilies.bold,
+                      }}
+                    >
+                      ✓
+                    </Text>
                   </View>
                 )}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
                   <View>
                     <Text
                       style={{
@@ -561,7 +622,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
               })}
             >
               {startCheckout.isPending ? (
-                <ActivityIndicator color="#0B1220" />
+                <ActivityIndicator color='#0B1220' />
               ) : (
                 <Text
                   style={{
