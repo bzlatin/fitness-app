@@ -33,6 +33,7 @@ import { SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { restorePurchases } from "../services/payments";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -69,6 +70,7 @@ const SettingsScreen = () => {
     useState<SocialUserSummary | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const isHandleLocked = Boolean(user?.handle);
 
   const {
@@ -85,7 +87,8 @@ const SettingsScreen = () => {
   });
   const isPro = (user?.plan ?? "free") === "pro";
   const isIOS = Platform.OS === "ios";
-  const isAppleSubscription = subscriptionStatus?.subscriptionPlatform === "apple";
+  const isAppleSubscription =
+    subscriptionStatus?.subscriptionPlatform === "apple";
   const formatDate = (value?: number | null | string) => {
     if (!value) return undefined;
     const date =
@@ -139,7 +142,9 @@ const SettingsScreen = () => {
       Alert.alert("Restore failed", err.message);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", "status"],
+      });
       await refresh();
       Alert.alert("Restored", "Your Apple subscription has been restored.");
     },
@@ -884,7 +889,9 @@ const SettingsScreen = () => {
             <Pressable
               onPress={() => {
                 if (isPro && isAppleSubscription) {
-                  void Linking.openURL("https://apps.apple.com/account/subscriptions");
+                  void Linking.openURL(
+                    "https://apps.apple.com/account/subscriptions"
+                  );
                   return;
                 }
                 navigation.navigate("Upgrade", { plan: "monthly" });
@@ -922,7 +929,9 @@ const SettingsScreen = () => {
                   borderRadius: 10,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                  backgroundColor: pressed
+                    ? colors.surface
+                    : colors.surfaceMuted,
                   alignItems: "center",
                   opacity: restorePurchasesMutation.isPending ? 0.6 : 1,
                 })}
@@ -1146,51 +1155,105 @@ const SettingsScreen = () => {
           </View>
 
           {/* Progressive Overload Toggle */}
-          <View
+          <Pressable
+            onPress={() => {
+              if (!isPro) {
+                setShowPaywallModal(true);
+              }
+            }}
+            disabled={isPro}
             style={{
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              backgroundColor: colors.surfaceMuted,
+              backgroundColor: !isPro
+                ? `${colors.primary}10`
+                : colors.surfaceMuted,
               padding: 12,
               borderRadius: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
+              borderWidth: 1.5,
+              borderColor: !isPro ? colors.primary : colors.border,
             }}
           >
             <View style={{ flex: 1, marginRight: 12 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Progressive Overload
+                </Text>
+                {!isPro && (
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#0B1220",
+                        fontSize: 10,
+                        fontFamily: fontFamilies.bold,
+                      }}
+                    >
+                      PRO
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text
                 style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
                 }}
               >
-                Progressive Overload Suggestions
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                Get smart weight increase recommendations based on your performance
+                {!isPro
+                  ? "Tap to unlock smart weight progression suggestions"
+                  : "Get smart weight increase recommendations based on your performance"}
               </Text>
             </View>
-            <Switch
-              value={user.progressiveOverloadEnabled ?? true}
-              disabled={isTogglingProgression}
-              onValueChange={async (value) => {
-                setIsTogglingProgression(true);
-                try {
-                  await updateProfile({ progressiveOverloadEnabled: value });
-                } catch (err) {
-                  Alert.alert(
-                    "Could not update setting",
-                    "Please try again."
-                  );
-                } finally {
-                  setIsTogglingProgression(false);
+            {isPro ? (
+              <Switch
+                value={user.progressiveOverloadEnabled ?? true}
+                disabled={isTogglingProgression}
+                onValueChange={async (value) => {
+                  setIsTogglingProgression(true);
+                  try {
+                    await updateProfile({ progressiveOverloadEnabled: value });
+                  } catch (err) {
+                    Alert.alert("Could not update setting", "Please try again.");
+                  } finally {
+                    setIsTogglingProgression(false);
+                  }
+                }}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                thumbColor={
+                  user.progressiveOverloadEnabled ?? true ? "#fff" : "#f4f3f4"
                 }
-              }}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={(user.progressiveOverloadEnabled ?? true) ? "#fff" : "#f4f3f4"}
-            />
-          </View>
+              />
+            ) : (
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.primary + "20",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>🔒</Text>
+              </View>
+            )}
+          </Pressable>
 
           <Pressable
             onPress={() => {
@@ -1517,6 +1580,12 @@ const SettingsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+        triggeredBy="progression"
+      />
     </ScreenContainer>
   );
 };

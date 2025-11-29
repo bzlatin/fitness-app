@@ -5,6 +5,7 @@ const id_1 = require("../utils/id");
 const db_1 = require("../db");
 const exercises_1 = require("../data/exercises");
 const exerciseData_1 = require("../utils/exerciseData");
+const planLimits_1 = require("../middleware/planLimits");
 const router = (0, express_1.Router)();
 const distExercises = (0, exerciseData_1.loadExercisesJson)();
 const dedupeId = (id) => id.replace(/\s+/g, "_");
@@ -146,7 +147,7 @@ router.get("/:id", async (req, res) => {
         return res.status(500).json({ error: "Failed to fetch template" });
     }
 });
-router.post("/", (req, res) => {
+router.post("/", planLimits_1.checkTemplateLimit, (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });

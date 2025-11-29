@@ -1,6 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import {
@@ -10,28 +11,30 @@ import {
 import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { canCreateAnotherTemplate } from "../utils/featureGating";
-import UpgradePrompt from "../components/premium/UpgradePrompt";
+import { canCreateAnotherTemplate, isPro as checkIsPro } from "../utils/featureGating";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { fontFamilies } from "../theme/typography";
 
 const MyWorkoutsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data, isLoading } = useWorkoutTemplates();
   const duplicateMutation = useDuplicateTemplate();
   const { user } = useCurrentUser();
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+
+  // Check if user has Pro or Lifetime plan
+  const isPro = checkIsPro(user);
 
   const templates = data ?? [];
   const templateLimitReached = user
     ? !canCreateAnotherTemplate(user, templates.length)
     : false;
-  const isPro = user?.plan === "pro";
+  const templateLimit = 3;
+  const templatesUsed = templates.length;
 
   const handleCreateTemplate = () => {
     if (templateLimitReached) {
-      Alert.alert(
-        "Free limit reached",
-        "You've reached the free template limit. Upgrades coming soon."
-      );
+      setShowPaywallModal(true);
       return;
     }
     navigation.navigate("WorkoutTemplateBuilder", {});
@@ -39,7 +42,7 @@ const MyWorkoutsScreen = () => {
 
   const handleGenerateWithAI = () => {
     if (!isPro) {
-      setShowUpgradePrompt(true);
+      setShowPaywallModal(true);
       return;
     }
     navigation.navigate("WorkoutGenerator");
@@ -47,12 +50,6 @@ const MyWorkoutsScreen = () => {
 
   return (
     <ScreenContainer scroll>
-      <UpgradePrompt
-        visible={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        feature="AI Workout Generation"
-      />
-
       <View style={{ marginVertical: 12 }}>
         <Text
           style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "700" }}
@@ -63,6 +60,66 @@ const MyWorkoutsScreen = () => {
           Build templates and start quickly.
         </Text>
       </View>
+
+      {/* Template Counter */}
+      {!isPro && (
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderRadius: 12,
+            padding: 14,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 14,
+              }}
+            >
+              Templates
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                marginTop: 2,
+              }}
+            >
+              {templatesUsed} of {templateLimit} used
+            </Text>
+          </View>
+          {templateLimitReached && (
+            <Pressable
+              onPress={() => setShowPaywallModal(true)}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: "#0B1220",
+                  fontFamily: fontFamilies.bold,
+                  fontSize: 12,
+                }}
+              >
+                Upgrade
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {/* AI Generation Button (Pro Feature) */}
       <Pressable
@@ -117,11 +174,6 @@ const MyWorkoutsScreen = () => {
           Build Manually
         </Text>
       </Pressable>
-      {templateLimitReached ? (
-        <Text style={{ color: colors.textSecondary, marginBottom: 12 }}>
-          You've reached the free template limit. Upgrades coming soon.
-        </Text>
-      ) : null}
 
       {isLoading ? (
         <View style={{ marginTop: 20 }}>
@@ -188,6 +240,11 @@ const MyWorkoutsScreen = () => {
           />
         ))
       )}
+
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+      />
     </ScreenContainer>
   );
 };

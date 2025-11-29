@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const fatigue_1 = require("../services/fatigue");
 const progression_1 = require("../services/progression");
+const planLimits_1 = require("../middleware/planLimits");
 const router = (0, express_1.Router)();
 router.get("/fatigue", async (_req, res) => {
     const userId = res.locals.userId;
@@ -18,7 +19,7 @@ router.get("/fatigue", async (_req, res) => {
         return res.status(500).json({ error: "Failed to fetch fatigue scores" });
     }
 });
-router.get("/recommendations", async (_req, res) => {
+router.get("/recommendations", planLimits_1.requireProPlan, async (_req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -33,7 +34,7 @@ router.get("/recommendations", async (_req, res) => {
         return res.status(500).json({ error: "Failed to fetch recommendations" });
     }
 });
-router.get("/progression/:templateId", async (req, res) => {
+router.get("/progression/:templateId", planLimits_1.requireProPlan, async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -51,7 +52,7 @@ router.get("/progression/:templateId", async (req, res) => {
         return res.status(500).json({ error: "Failed to fetch progression suggestions" });
     }
 });
-router.post("/progression/:templateId/apply", async (req, res) => {
+router.post("/progression/:templateId/apply", planLimits_1.requireProPlan, async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });

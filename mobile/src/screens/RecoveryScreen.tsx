@@ -30,6 +30,8 @@ import {
   fatigueStatusColors,
   readinessFromFatigueScore,
 } from "../utils/fatigueReadiness";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { isPro as checkIsPro } from "../utils/featureGating";
 
 const statusOrder: Record<MuscleFatigue["status"], number> = {
   "high-fatigue": 0,
@@ -37,7 +39,7 @@ const statusOrder: Record<MuscleFatigue["status"], number> = {
   optimal: 2,
   "under-trained": 3,
   "no-data": 4,
-};
+}
 
 const RecoveryScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -47,22 +49,29 @@ const RecoveryScreen = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const muscleStatusSectionRef = useRef<View>(null);
   const [bodySide, setBodySide] = useState<"front" | "back">("front");
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+
+  // Check if user has Pro or Lifetime plan
+  const isPro = checkIsPro(user);
+
   const bodyGender =
     (user?.onboardingData?.bodyGender as "male" | "female" | undefined) ??
     "male";
+
+  // Fetch fatigue data for all users (free users can see heatmap)
   const {
     data: fatigue,
     isLoading,
     isRefetching,
     isError,
     refetch,
-  } = useFatigue();
+  } = useFatigue(true);
   const {
     data: recommendations,
     isLoading: recLoading,
     isRefetching: recRefetching,
     refetch: refetchRecommendations,
-  } = useTrainingRecommendations(!!fatigue);
+  } = useTrainingRecommendations(isPro && !!fatigue);
   const aiWorkout = useMutation({
     mutationFn: async () => {
       const targetMuscles = recommendations?.targetMuscles ?? [];
@@ -343,8 +352,13 @@ const RecoveryScreen = () => {
   }, [refetch, refetchRecommendations]);
 
   const handleMuscleSelect = useCallback((muscle: string) => {
+    // Free users can see the heatmap but not the detailed percentages modal
+    if (!isPro) {
+      setShowPaywallModal(true);
+      return;
+    }
     setSelectedMuscle(muscle);
-  }, []);
+  }, [isPro]);
 
   const emptyState =
     fatigue &&
@@ -422,12 +436,22 @@ const RecoveryScreen = () => {
       );
     }
 
-    if (!fatigue || emptyState) {
+    const hasNoData = !fatigue || emptyState;
+
+    if (hasNoData) {
+      // Show empty state message but still show the body heatmap below
       return (
-        <View style={{ gap: 14, paddingTop: 10 }}>
-          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-            Recovery & Fatigue
-          </Text>
+        <View style={{ gap: 16 }}>
+          <View style={{ gap: 6 }}>
+            <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+              Recovery & Fatigue
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {isPro
+                ? "Track your muscle recovery with our interactive body heatmap and detailed analytics."
+                : "Track your muscle recovery with our interactive body heatmap."}
+            </Text>
+          </View>
           <View
             style={{
               backgroundColor: colors.surface,
@@ -444,13 +468,85 @@ const RecoveryScreen = () => {
                 fontFamily: fontFamilies.semibold,
               }}
             >
-              Not enough data yet
+              Building your recovery baseline
             </Text>
             <Text style={{ color: colors.textSecondary }}>
-              Log a few workouts this week to see fatigue, recovery trends, and
-              tailored recommendations.
+              Log a few workouts this week to see muscle fatigue levels, recovery trends, and
+              {isPro ? " personalized training recommendations" : " which muscles need rest"}.
             </Text>
           </View>
+
+          {/* Always show body heatmap even with no data */}
+          <RecoveryBodyMap
+            data={fatigue?.perMuscle ?? []}
+            onSelectMuscle={handleMuscleSelect}
+            side={bodySide}
+            gender={bodyGender}
+            onSideChange={setBodySide}
+          />
+
+          {/* Free users: Show upgrade prompt */}
+          {!isPro && (
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 14,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                gap: 12,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 20 }}>👑</Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                    flex: 1,
+                  }}
+                >
+                  Unlock Detailed Recovery Analytics
+                </Text>
+              </View>
+              <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
+                Get detailed readiness percentages for each muscle, view your exercise history, and receive AI-powered training recommendations.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Detailed percentages</Text>
+                </View>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Exercise history</Text>
+                </View>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ AI recommendations</Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setShowPaywallModal(true)}
+                style={({ pressed }) => ({
+                  backgroundColor: colors.primary,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  marginTop: 8,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Upgrade to Pro
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       );
     }
@@ -462,28 +558,31 @@ const RecoveryScreen = () => {
             Recovery & Fatigue
           </Text>
           <Text style={{ color: colors.textSecondary }}>
-            Per-muscle readiness from your last 7 days. Tap the heatmap to drill
-            into exercises.
+            {isPro
+              ? "Per-muscle readiness from your last 7 days. Tap the heatmap to drill into exercises."
+              : "Track your muscle recovery with our interactive body heatmap."}
           </Text>
         </View>
 
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
-          }}
-        >
+        {/* Pro users: Show detailed recovery & readiness card */}
+        {isPro && (
           <View
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
+              backgroundColor: colors.surface,
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 14,
             }}
           >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
             <Text
               style={{
                 color: colors.textPrimary,
@@ -515,148 +614,149 @@ const RecoveryScreen = () => {
                 </Text>
               </View>
             )}
-          </View>
-
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 13,
-              lineHeight: 18,
-            }}
-          >
-            {guidanceCopy}
-          </Text>
-
-          {fatiguedMuscles.length > 0 && (
-            <View style={{ gap: 8 }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Needs rest
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {fatiguedMuscles.map((muscle) => (
-                  <View
-                    key={muscle.muscleGroup}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      backgroundColor: colors.surfaceMuted,
-                      borderWidth: 1,
-                      borderColor: muscle.readiness.color,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 13,
-                      }}
-                    >
-                      {formatMuscleGroup(muscle.muscleGroup)}
-                    </Text>
-                    <Text
-                      style={{
-                        color: muscle.readiness.color,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 14,
-                        marginTop: 2,
-                      }}
-                    >
-                      {`${muscle.readiness.percent}% ready`}
-                    </Text>
-                  </View>
-                ))}
-              </View>
             </View>
-          )}
 
-          {freshestMusclesDetailed.length > 0 && (
-            <View style={{ gap: 8 }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Good to push
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {freshestMusclesDetailed.map((muscle) => (
-                  <View
-                    key={muscle.muscleGroup}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      backgroundColor: colors.surfaceMuted,
-                      borderWidth: 1,
-                      borderColor: muscle.readiness.color,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 13,
-                      }}
-                    >
-                      {formatMuscleGroup(muscle.muscleGroup)}
-                    </Text>
-                    <Text
-                      style={{
-                        color: muscle.readiness.color,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 14,
-                        marginTop: 2,
-                      }}
-                    >
-                      {`${muscle.readiness.percent}% ready`}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {fatiguedMuscles.length === 0 &&
-            freshestMusclesDetailed.length === 0 && (
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  textAlign: "center",
-                  paddingVertical: 8,
-                }}
-              >
-                All muscle groups are balanced. Tap the heatmap for details.
-              </Text>
-            )}
-
-          {lastWorkoutDays !== null && (
-            <View
+            <Text
               style={{
-                paddingTop: 4,
-                borderTopWidth: 1,
-                borderTopColor: colors.border,
+                color: colors.textSecondary,
+                fontSize: 13,
+                lineHeight: 18,
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Last workout:{" "}
-                {lastWorkoutDays === 0 ? "today" : `${lastWorkoutDays}d ago`}
-              </Text>
-            </View>
-          )}
-        </View>
+              {guidanceCopy}
+            </Text>
+
+            {fatiguedMuscles.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Needs rest
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {fatiguedMuscles.map((muscle) => (
+                    <View
+                      key={muscle.muscleGroup}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceMuted,
+                        borderWidth: 1,
+                        borderColor: muscle.readiness.color,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 13,
+                        }}
+                      >
+                        {formatMuscleGroup(muscle.muscleGroup)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: muscle.readiness.color,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 14,
+                          marginTop: 2,
+                        }}
+                      >
+                        {`${muscle.readiness.percent}% ready`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {freshestMusclesDetailed.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Good to push
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {freshestMusclesDetailed.map((muscle) => (
+                    <View
+                      key={muscle.muscleGroup}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceMuted,
+                        borderWidth: 1,
+                        borderColor: muscle.readiness.color,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 13,
+                        }}
+                      >
+                        {formatMuscleGroup(muscle.muscleGroup)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: muscle.readiness.color,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 14,
+                          marginTop: 2,
+                        }}
+                      >
+                        {`${muscle.readiness.percent}% ready`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {fatiguedMuscles.length === 0 &&
+              freshestMusclesDetailed.length === 0 && (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    textAlign: "center",
+                    paddingVertical: 8,
+                  }}
+                >
+                  All muscle groups are balanced. Tap the heatmap for details.
+                </Text>
+              )}
+
+            {lastWorkoutDays !== null && (
+              <View
+                style={{
+                  paddingTop: 4,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Last workout:{" "}
+                  {lastWorkoutDays === 0 ? "today" : `${lastWorkoutDays}d ago`}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <RecoveryBodyMap
           data={fatigue.perMuscle}
@@ -666,23 +766,88 @@ const RecoveryScreen = () => {
           onSideChange={setBodySide}
         />
 
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: 14,
-            gap: 10,
-          }}
-        >
+        {/* Free users: Show upgrade prompt for detailed analytics */}
+        {!isPro && (
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 12,
             }}
           >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 20 }}>👑</Text>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                  flex: 1,
+                }}
+              >
+                Unlock Detailed Recovery Analytics
+              </Text>
+            </View>
+            <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
+              Tap any muscle to see detailed readiness percentages, recent exercises, and get AI-powered training recommendations.
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Detailed percentages</Text>
+              </View>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Exercise history</Text>
+              </View>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ AI recommendations</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => setShowPaywallModal(true)}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                marginTop: 8,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 15,
+                }}
+              >
+                Upgrade to Pro
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Pro users: Show fresh muscles section */}
+        {isPro && (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 14,
+              gap: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
             <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
               Fresh muscles
             </Text>
@@ -707,71 +872,77 @@ const RecoveryScreen = () => {
                 {showFresh ? "Hide" : "Show"}
               </Text>
             </Pressable>
-          </View>
-          <Text style={{ color: colors.textSecondary }}>
-            Ready targets below fatigue threshold. Tap to reveal.
-          </Text>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-              fontSize: 18,
-            }}
-          >
-            {`${fatigue.freshMuscles.length} muscle groups`}
-          </Text>
-          {showFresh && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {fatigue.freshMuscles.map((muscle) => (
-                <View
-                  key={muscle}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    backgroundColor: `${colors.primary}15`,
-                    borderWidth: 1,
-                    borderColor: `${colors.primary}35`,
-                  }}
-                >
-                  <Text
+            </View>
+            <Text style={{ color: colors.textSecondary }}>
+              Ready targets below fatigue threshold. Tap to reveal.
+            </Text>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 18,
+              }}
+            >
+              {`${fatigue.freshMuscles.length} muscle groups`}
+            </Text>
+            {showFresh && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {fatigue.freshMuscles.map((muscle) => (
+                  <View
+                    key={muscle}
                     style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.medium,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: `${colors.primary}15`,
+                      borderWidth: 1,
+                      borderColor: `${colors.primary}35`,
                     }}
                   >
-                    {formatMuscleGroup(muscle)}
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.medium,
+                      }}
+                    >
+                      {formatMuscleGroup(muscle)}
+                    </Text>
+                  </View>
+                ))}
+                {fatigue.freshMuscles.length === 0 && (
+                  <Text style={{ color: colors.textSecondary }}>
+                    No clear fresh targets—balance intensity today.
                   </Text>
-                </View>
-              ))}
-              {fatigue.freshMuscles.length === 0 && (
-                <Text style={{ color: colors.textSecondary }}>
-                  No clear fresh targets—balance intensity today.
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-
-        <View ref={muscleStatusSectionRef} style={{ gap: 10 }}>
-          <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-            Muscle Group Status
-          </Text>
-          <View style={{ gap: 10 }}>
-            {sortedMuscles.map((item) => (
-              <FatigueIndicator key={item.muscleGroup} item={item} />
-            ))}
+                )}
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
-        <View style={{ gap: 12 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
+        {/* Pro users: Show detailed muscle status list */}
+        {isPro && (
+          <View ref={muscleStatusSectionRef} style={{ gap: 10 }}>
+            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+              Muscle Group Status
+            </Text>
+            <View style={{ gap: 10 }}>
+              {sortedMuscles.map((item) => (
+                <FatigueIndicator key={item.muscleGroup} item={item} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Pro users: AI recommendations section */}
+        {isPro && (
+          <View style={{ gap: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
             <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
               What should I train today?
             </Text>
@@ -795,151 +966,159 @@ const RecoveryScreen = () => {
                 Refresh
               </Text>
             </Pressable>
-          </View>
+            </View>
 
-          <Pressable
-            onPress={() => aiWorkout.mutate()}
-            disabled={aiWorkout.isPending}
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor:
-                pressed || aiWorkout.isPending
-                  ? colors.surfaceMuted
-                  : colors.surface,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            })}
-          >
-            {aiWorkout.isPending && (
-              <ActivityIndicator color={colors.primary} size='small' />
-            )}
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 14,
+            <Pressable
+              onPress={() => {
+                if (!isPro) {
+                  setShowPaywallModal(true);
+                  return;
+                }
+                aiWorkout.mutate();
               }}
+              disabled={aiWorkout.isPending}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor:
+                  pressed || aiWorkout.isPending
+                    ? colors.surfaceMuted
+                    : colors.surface,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              })}
             >
-              Generate fatigue-aware session
-            </Text>
-          </Pressable>
-
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(recommendations?.targetMuscles ?? []).map((muscle) => (
-              <View
-                key={muscle}
+              {aiWorkout.isPending && (
+                <ActivityIndicator color={colors.primary} size='small' />
+              )}
+              <Text
                 style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  backgroundColor: `${colors.primary}18`,
-                  borderWidth: 1,
-                  borderColor: `${colors.primary}30`,
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 14,
                 }}
               >
-                <Text
+                Generate fatigue-aware session
+                {!isPro && " 👑"}
+              </Text>
+            </Pressable>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {(recommendations?.targetMuscles ?? []).map((muscle) => (
+                <View
+                  key={muscle}
                   style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.medium,
-                    fontSize: 13,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    backgroundColor: `${colors.primary}18`,
+                    borderWidth: 1,
+                    borderColor: `${colors.primary}30`,
                   }}
                 >
-                  {formatMuscleGroup(muscle)}
-                </Text>
-              </View>
-            ))}
-            {(recommendations?.targetMuscles?.length ?? 0) === 0 && (
-              <Text style={{ color: colors.textSecondary }}>
-                We'll balance volume across optimal muscle groups.
-              </Text>
-            )}
-          </View>
-
-          <View style={{ gap: 10 }}>
-            {(recommendations?.recommendedWorkouts ?? []).map((workout) => {
-              const canNavigate =
-                workout.id && !workout.id.startsWith("fallback");
-              return (
-                <Pressable
-                  key={workout.id}
-                  disabled={!canNavigate}
-                  onPress={() =>
-                    canNavigate &&
-                    navigation.navigate("WorkoutTemplateDetail", {
-                      templateId: workout.id,
-                    })
-                  }
-                  style={({ pressed }) => ({
-                    backgroundColor: colors.surface,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: 14,
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <View
+                  <Text
                     style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 6,
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                      fontSize: 13,
                     }}
                   >
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 16,
-                      }}
-                    >
-                      {workout.name}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontFamily: fontFamilies.medium,
-                        fontSize: 12,
-                      }}
-                    >
-                      {workout.muscleGroups.map(formatMuscleGroup).join(" • ")}
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.textSecondary }}>
-                    {workout.reason}
+                    {formatMuscleGroup(muscle)}
                   </Text>
-                  {!canNavigate && (
-                    <Text
+                </View>
+              ))}
+              {(recommendations?.targetMuscles?.length ?? 0) === 0 && (
+                <Text style={{ color: colors.textSecondary }}>
+                  We'll balance volume across optimal muscle groups.
+                </Text>
+              )}
+            </View>
+
+            <View style={{ gap: 10 }}>
+              {(recommendations?.recommendedWorkouts ?? []).map((workout) => {
+                const canNavigate =
+                  workout.id && !workout.id.startsWith("fallback");
+                return (
+                  <Pressable
+                    key={workout.id}
+                    disabled={!canNavigate}
+                    onPress={() =>
+                      canNavigate &&
+                      navigation.navigate("WorkoutTemplateDetail", {
+                        templateId: workout.id,
+                      })
+                    }
+                    style={({ pressed }) => ({
+                      backgroundColor: colors.surface,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      padding: 14,
+                      opacity: pressed ? 0.92 : 1,
+                    })}
+                  >
+                    <View
                       style={{
-                        color: colors.textSecondary,
-                        fontFamily: fontFamilies.medium,
-                        marginTop: 6,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 6,
                       }}
                     >
-                      Try a light full-body / mobility session.
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 16,
+                        }}
+                      >
+                        {workout.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fontFamilies.medium,
+                          fontSize: 12,
+                        }}
+                      >
+                        {workout.muscleGroups.map(formatMuscleGroup).join(" • ")}
+                      </Text>
+                    </View>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {workout.reason}
                     </Text>
-                  )}
-                </Pressable>
-              );
-            })}
+                    {!canNavigate && (
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fontFamilies.medium,
+                          marginTop: 6,
+                        }}
+                      >
+                        Try a light full-body / mobility session.
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
 
-            {recLoading && (
-              <View
-                style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-              >
-                <ActivityIndicator color={colors.secondary} size='small' />
-                <Text style={{ color: colors.textSecondary }}>
-                  Curating today's picks...
-                </Text>
-              </View>
-            )}
+              {recLoading && (
+                <View
+                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+                >
+                  <ActivityIndicator color={colors.secondary} size='small' />
+                  <Text style={{ color: colors.textSecondary }}>
+                    Curating today's picks...
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </View>
     );
   };
@@ -1210,6 +1389,12 @@ const RecoveryScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+        triggeredBy="recovery"
+      />
     </>
   );
 };

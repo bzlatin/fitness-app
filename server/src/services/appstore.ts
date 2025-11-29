@@ -26,7 +26,7 @@ const resolveEnvironment = () =>
     ? Environment.PRODUCTION
     : Environment.SANDBOX;
 
-const getClient = () => {
+const getClient = (environment?: Environment) => {
   if (
     !APP_STORE_ISSUER_ID ||
     !APP_STORE_KEY_ID ||
@@ -45,7 +45,7 @@ const getClient = () => {
     APP_STORE_KEY_ID,
     APP_STORE_ISSUER_ID,
     APP_STORE_BUNDLE_ID,
-    resolveEnvironment()
+    environment ?? resolveEnvironment()
   );
 };
 
@@ -120,8 +120,23 @@ const decodeSignedPayload = <T>(signedPayload?: string | null): T | null => {
 };
 
 export const fetchTransaction = async (transactionId: string) => {
-  const client = getClient();
-  const transactionInfo = await client.getTransactionInfo(transactionId);
+  let client = getClient();
+  let transactionInfo;
+
+  try {
+    // Try with the default environment (production or sandbox based on APP_STORE_ENV)
+    transactionInfo = await client.getTransactionInfo(transactionId);
+  } catch (error: any) {
+    // If we get an error and we're in production mode, try sandbox
+    if (resolveEnvironment() === Environment.PRODUCTION) {
+      console.log("Production validation failed, retrying with sandbox environment");
+      client = getClient(Environment.SANDBOX);
+      transactionInfo = await client.getTransactionInfo(transactionId);
+    } else {
+      throw error;
+    }
+  }
+
   const transaction = decodeSignedPayload<JWSTransactionDecodedPayload>(
     transactionInfo.signedTransactionInfo
   );
@@ -137,10 +152,27 @@ export const fetchTransaction = async (transactionId: string) => {
 export const fetchSubscriptionStatus = async (
   originalTransactionId: string
 ) => {
-  const client = getClient();
-  const statusResponse = await client.getAllSubscriptionStatuses(
-    originalTransactionId
-  );
+  let client = getClient();
+  let statusResponse;
+
+  try {
+    // Try with the default environment (production or sandbox based on APP_STORE_ENV)
+    statusResponse = await client.getAllSubscriptionStatuses(
+      originalTransactionId
+    );
+  } catch (error: any) {
+    // If we get an error and we're in production mode, try sandbox
+    if (resolveEnvironment() === Environment.PRODUCTION) {
+      console.log("Production status check failed, retrying with sandbox environment");
+      client = getClient(Environment.SANDBOX);
+      statusResponse = await client.getAllSubscriptionStatuses(
+        originalTransactionId
+      );
+    } else {
+      throw error;
+    }
+  }
+
   const latest = statusResponse.data?.[0]?.lastTransactions?.[0];
 
   if (!latest) {

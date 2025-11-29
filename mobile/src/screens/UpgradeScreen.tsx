@@ -72,7 +72,7 @@ const UpgradeScreen = () => {
   });
 
   const currentInterval = statusQuery.data?.currentInterval ?? null;
-  const isPro = statusQuery.data?.plan === "pro";
+  const isPro = statusQuery.data?.plan === "pro" || statusQuery.data?.plan === "lifetime";
   const isAppleSubscription =
     statusQuery.data?.subscriptionPlatform === "apple";
 

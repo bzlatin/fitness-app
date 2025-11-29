@@ -5,10 +5,11 @@ import { FatigueResult, TrainingRecommendation } from "../types/analytics";
 export const fatigueQueryKey = ["analytics", "fatigue"];
 export const recommendationsQueryKey = ["analytics", "recommendations"];
 
-export const useFatigue = () =>
+export const useFatigue = (enabled: boolean = true) =>
   useQuery<FatigueResult>({
     queryKey: fatigueQueryKey,
     queryFn: fetchFatigue,
+    enabled,
   });
 
 export const useTrainingRecommendations = (enabled: boolean) =>

@@ -132,16 +132,18 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
     purchase.originalTransactionIdentifier ??
     (purchase as { originalTransactionId?: string }).originalTransactionId;
 
+  let latestTransaction = null;
+
   // Fallback: ask iOS for the latest transaction on this SKU
   if (!transactionId) {
-    const latest = await RNIap.latestTransactionIOS(productId);
+    latestTransaction = await RNIap.latestTransactionIOS(productId);
     transactionId =
-      latest?.transactionId ??
-      latest?.originalTransactionIdentifier ??
-      (latest as { originalTransactionId?: string })?.originalTransactionId;
+      latestTransaction?.transactionId ??
+      latestTransaction?.originalTransactionIdentifier ??
+      (latestTransaction as { originalTransactionId?: string })?.originalTransactionId;
     log("latestTransactionIOS", {
       productId,
-      latest,
+      latest: latestTransaction,
       resolvedTransactionId: transactionId,
     });
   }
@@ -156,7 +158,9 @@ export const purchaseSubscription = async (plan: PlanChoice) => {
   const validation = await validateIosReceipt({ transactionId });
 
   try {
-    await RNIap.finishTransaction({ purchase, isConsumable: false });
+    // Use the latest transaction if we fetched it, otherwise use the original purchase
+    const transactionToFinish = latestTransaction ?? purchase;
+    await RNIap.finishTransaction({ purchase: transactionToFinish, isConsumable: false });
   } catch (err) {
     // If finishing fails, surface the validation response so the backend still captures entitlement.
     console.warn("Failed to finish Apple transaction", err);

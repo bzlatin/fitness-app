@@ -11,8 +11,12 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { NavigationContext } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStripe } from "@stripe/stripe-react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
+import { startSubscription } from "../services/payments";
+import type { PlanChoice } from "../api/subscriptions";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import {
@@ -31,12 +35,15 @@ import ScheduleStep from "../components/onboarding/ScheduleStep";
 import LimitationsStep from "../components/onboarding/LimitationsStep";
 import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
+import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const stripe = useStripe();
   // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
   const navigation = useContext(NavigationContext);
   // Determine if this is a retake by checking if user has existing onboarding data
@@ -45,6 +52,7 @@ const OnboardingScreen = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isIOS = Platform.OS === "ios";
 
   // Step 1: Welcome
   const [name, setName] = useState(user?.name ?? "");
@@ -77,6 +85,50 @@ const OnboardingScreen = () => {
   // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
 
+  // Step 9: Plan Selection
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("free");
+
+  const handlePlanChange = (plan: "free" | "pro") => {
+    setSelectedPlan(plan);
+    // Reset purchase state when switching plans
+    if (plan === "free" && isSubmitting) {
+      setIsSubmitting(false);
+      setError(null);
+    }
+  };
+
+  const startCheckout = useMutation({
+    mutationFn: (plan: PlanChoice) =>
+      startSubscription({
+        plan,
+        stripe,
+        userEmail: user?.email ?? null,
+        userName: user?.name ?? null,
+      }),
+    onError: (err: unknown) => {
+      const error = err as { message?: string; code?: string };
+      setIsSubmitting(false);
+      if (
+        error.code === "USER_CANCELLED" ||
+        error.message === "USER_CANCELLED"
+      ) {
+        // Silent no-op for user-initiated cancellations
+        return;
+      }
+      Alert.alert(
+        isIOS ? "Purchase failed" : "Checkout failed",
+        error.message || "Something went wrong. Please try again."
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", "status"],
+      });
+      // Complete onboarding after successful purchase
+      await handleSubmit();
+    },
+  });
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
@@ -95,6 +147,8 @@ const OnboardingScreen = () => {
         return true; // Optional body profile
       case 8:
         return preferredSplit !== undefined;
+      case 9:
+        return true; // Plan selection step - always can proceed
       default:
         return false;
     }
@@ -228,9 +282,27 @@ const OnboardingScreen = () => {
         return (
           <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
         );
+      case 9:
+        return (
+          <PlanSelectionStep
+            selectedPlan={selectedPlan}
+            onPlanChange={handlePlanChange}
+            onContinueFree={handleSubmit}
+            onStartTrial={handleStartTrial}
+            isProcessingPurchase={isSubmitting || startCheckout.isPending}
+          />
+        );
       default:
         return null;
     }
+  };
+
+  const handleStartTrial = async (planType: "monthly" | "yearly") => {
+    setIsSubmitting(true);
+    setError(null);
+
+    const planChoice: PlanChoice = planType === "yearly" ? "annual" : "monthly";
+    startCheckout.mutate(planChoice);
   };
 
   const handleCancel = () => {
@@ -319,34 +391,59 @@ const OnboardingScreen = () => {
           )}
 
           {/* Navigation buttons */}
-          <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
-            <Pressable
-              onPress={currentStep === TOTAL_STEPS ? handleSubmit : handleNext}
-              disabled={!canProceed() || isSubmitting}
-              style={({ pressed }) => ({
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: canProceed() && !isSubmitting ? colors.primary : colors.border,
-                alignItems: "center",
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 16,
-                }}
+          {currentStep !== TOTAL_STEPS && (
+            <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
+              <Pressable
+                onPress={handleNext}
+                disabled={!canProceed() || isSubmitting}
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: canProceed() && !isSubmitting ? colors.primary : colors.border,
+                  alignItems: "center",
+                  opacity: pressed ? 0.9 : 1,
+                })}
               >
-                {isSubmitting
-                  ? "Saving..."
-                  : currentStep === TOTAL_STEPS
-                    ? "Complete Setup"
-                    : "Continue"}
-              </Text>
-            </Pressable>
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                  }}
+                >
+                  {isSubmitting ? "Saving..." : "Continue"}
+                </Text>
+              </Pressable>
 
-            {currentStep > 1 && (
+              {currentStep > 1 && (
+                <Pressable
+                  onPress={handleBack}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                    alignItems: "center",
+                    opacity: pressed || isSubmitting ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                      fontSize: 16,
+                    }}
+                  >
+                    Back
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* On the last step, show Back button below the plan selection */}
+          {currentStep === TOTAL_STEPS && currentStep > 1 && (
+            <View style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
               <Pressable
                 onPress={handleBack}
                 disabled={isSubmitting}
@@ -368,8 +465,8 @@ const OnboardingScreen = () => {
                   Back
                 </Text>
               </Pressable>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>

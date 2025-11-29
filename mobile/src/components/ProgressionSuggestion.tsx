@@ -41,6 +41,8 @@ type ProgressionSuggestionModalProps = {
   progressiveOverloadEnabled?: boolean;
   onToggleProgressiveOverload?: (enabled: boolean) => void;
   isUpdatingPreference?: boolean;
+  isPro?: boolean;
+  onUpgrade?: () => void;
 };
 
 const ProgressionSuggestionModal = ({
@@ -53,6 +55,8 @@ const ProgressionSuggestionModal = ({
   progressiveOverloadEnabled = true,
   onToggleProgressiveOverload,
   isUpdatingPreference = false,
+  isPro = true,
+  onUpgrade,
 }: ProgressionSuggestionModalProps) => {
   const [selectedExercises, setSelectedExercises] = useState<Set<string>>(
     new Set()
@@ -143,8 +147,147 @@ const ProgressionSuggestionModal = ({
             maxHeight: "85%",
             borderWidth: 1,
             borderColor: colors.border,
+            position: "relative",
           }}
         >
+          {/* Free user overlay */}
+          {!isPro && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(11, 18, 32, 0.97)",
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                zIndex: 10,
+                padding: 24,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: colors.primary + "20",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 20,
+                }}
+              >
+                <Ionicons name="lock-closed" size={32} color={colors.primary} />
+              </View>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 24,
+                  fontFamily: fontFamilies.bold,
+                  marginBottom: 12,
+                  textAlign: "center",
+                }}
+              >
+                Progressive Overload
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 15,
+                  lineHeight: 22,
+                  textAlign: "center",
+                  marginBottom: 24,
+                  paddingHorizontal: 20,
+                }}
+              >
+                Get AI-powered weight progression suggestions based on your training history. Upgrade to Pro to unlock this feature.
+              </Text>
+              <View
+                style={{
+                  backgroundColor: colors.surfaceMuted,
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 24,
+                  width: "100%",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    marginBottom: 12,
+                  }}
+                >
+                  What you'll get:
+                </Text>
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.textSecondary, flex: 1 }}>
+                      Smart weight progression tracking
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.textSecondary, flex: 1 }}>
+                      Personalized load recommendations
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.textSecondary, flex: 1 }}>
+                      Auto-apply increases to workouts
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  onUpgrade?.();
+                }}
+                style={({ pressed }) => ({
+                  backgroundColor: colors.primary,
+                  paddingVertical: 16,
+                  paddingHorizontal: 32,
+                  borderRadius: 14,
+                  width: "100%",
+                  alignItems: "center",
+                  marginBottom: 12,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 16,
+                  }}
+                >
+                  Upgrade to Pro
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Maybe Later
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Header with gradient */}
           <LinearGradient
             colors={["rgba(34, 197, 94, 0.15)", "transparent"]}
