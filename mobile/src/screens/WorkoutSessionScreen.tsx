@@ -38,6 +38,7 @@ import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import TimerAdjustmentModal from "../components/workouts/TimerAdjustmentModal";
+import ExercisePicker from "../components/workouts/ExercisePicker";
 import ProgressionSuggestionModal, {
   ProgressionData,
 } from "../components/ProgressionSuggestion";
@@ -281,18 +282,27 @@ const WorkoutSessionScreen = () => {
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
   const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
-  const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<string | null>(null);
-  const [sessionRestTimes, setSessionRestTimes] = useState<Record<string, number>>({});
+  const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<
+    string | null
+  >(null);
+  const [sessionRestTimes, setSessionRestTimes] = useState<
+    Record<string, number>
+  >({});
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [showTopGradient, setShowTopGradient] = useState(false);
   const [showBottomGradient, setShowBottomGradient] = useState(true);
-  const [progressionData, setProgressionData] = useState<ProgressionData | null>(null);
+  const [progressionData, setProgressionData] =
+    useState<ProgressionData | null>(null);
   const [showProgressionModal, setShowProgressionModal] = useState(false);
   const [progressionChecked, setProgressionChecked] = useState(false);
-  const [progressionModalBlockingTimer, setProgressionModalBlockingTimer] = useState(false);
-  const [isUpdatingProgressionSetting, setIsUpdatingProgressionSetting] = useState(false);
-  const [progressionModalAcknowledged, setProgressionModalAcknowledged] = useState(false);
+  const [progressionModalBlockingTimer, setProgressionModalBlockingTimer] =
+    useState(false);
+  const [isUpdatingProgressionSetting, setIsUpdatingProgressionSetting] =
+    useState(false);
+  const [progressionModalAcknowledged, setProgressionModalAcknowledged] =
+    useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
 
@@ -381,7 +391,9 @@ const WorkoutSessionScreen = () => {
       setShowProgressionModal(false);
       Alert.alert(
         "Progression Applied",
-        `Updated ${result.updated} exercise${result.updated === 1 ? "" : "s"} in your template. The new weights will be used in future workouts.`,
+        `Updated ${result.updated} exercise${
+          result.updated === 1 ? "" : "s"
+        } in your template. The new weights will be used in future workouts.`,
         [{ text: "Got it" }]
       );
       // Optionally refresh the template
@@ -473,7 +485,14 @@ const WorkoutSessionScreen = () => {
     };
 
     checkProgression();
-  }, [sessionId, route.params.templateId, progressionChecked, user, template, isPro]);
+  }, [
+    sessionId,
+    route.params.templateId,
+    progressionChecked,
+    user,
+    template,
+    isPro,
+  ]);
 
   useEffect(() => {
     if (showProgressionModal && !progressionModalAcknowledged) {
@@ -614,7 +633,13 @@ const WorkoutSessionScreen = () => {
     ) {
       setActiveSetId(firstIncompleteGroup.sets[0].id);
     }
-  }, [activeExerciseKey, activeSetId, groupedSets, loggedSetIds, autoFocusEnabled]);
+  }, [
+    activeExerciseKey,
+    activeSetId,
+    groupedSets,
+    loggedSetIds,
+    autoFocusEnabled,
+  ]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -694,13 +719,19 @@ const WorkoutSessionScreen = () => {
         // All sets in this exercise are logged, move to next exercise
         const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
         if (allLogged) {
-          const currentIndex = groupedSets.findIndex((g) => g.key === group.key);
+          const currentIndex = groupedSets.findIndex(
+            (g) => g.key === group.key
+          );
           const nextGroup = groupedSets[currentIndex + 1];
           if (nextGroup) {
             setAutoFocusEnabled(true);
             setActiveExerciseKey(nextGroup.key);
-            const firstUnloggedInNextGroup = nextGroup.sets.find((s) => !updatedLoggedSetIds.has(s.id));
-            setActiveSetId(firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null);
+            const firstUnloggedInNextGroup = nextGroup.sets.find(
+              (s) => !updatedLoggedSetIds.has(s.id)
+            );
+            setActiveSetId(
+              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null
+            );
           } else {
             setActiveExerciseKey(null);
             setActiveSetId(null);
@@ -761,6 +792,68 @@ const WorkoutSessionScreen = () => {
     }));
   };
 
+  const handleAddExerciseToSession = (exerciseForm: any) => {
+    if (!sessionId) return;
+
+    // Get the highest setIndex to append at the end
+    const maxSetIndex =
+      sets.length > 0 ? Math.max(...sets.map((s) => s.setIndex)) : -1;
+
+    const baseIndex = maxSetIndex + 100;
+    const numSets = exerciseForm.sets || 3;
+    const newSets: WorkoutSet[] = [];
+
+    for (let i = 0; i < numSets; i++) {
+      const newSet: WorkoutSet = {
+        id: `temp-${Date.now()}-${i}`,
+        sessionId,
+        exerciseId: exerciseForm.exercise.id,
+        exerciseName: exerciseForm.exercise.name,
+        exerciseImageUrl: exerciseForm.exercise.gifUrl,
+        setIndex: baseIndex + i,
+        targetReps: exerciseForm.reps || 10,
+        targetWeight: undefined,
+        actualReps: exerciseForm.reps || 10,
+        actualWeight: undefined,
+        targetRestSeconds: exerciseForm.restSeconds || 90,
+        templateExerciseId: exerciseForm.exercise.id, // Use exercise ID as key
+      };
+      newSets.push(newSet);
+    }
+
+    setSets((prev) => [...prev, ...newSets]);
+    setShowExercisePicker(false);
+  };
+
+  const handleDeleteExercise = (exerciseKey: string) => {
+    Alert.alert(
+      "Delete Exercise",
+      "Are you sure you want to remove this exercise from the workout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            // Remove all sets for this exercise
+            setSets((prev) =>
+              prev.filter((set) => {
+                const setKey = set.templateExerciseId ?? set.exerciseId;
+                return setKey !== exerciseKey;
+              })
+            );
+
+            // Clear active exercise if it was deleted
+            if (activeExerciseKey === exerciseKey) {
+              setActiveExerciseKey(null);
+              setActiveSetId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleReorderExercises = (newGroupedSets: ExerciseGroup[]) => {
     // Update all set indices based on new order
     const reorderedSets: WorkoutSet[] = [];
@@ -815,31 +908,27 @@ const WorkoutSessionScreen = () => {
       return;
     }
 
-    Alert.alert(
-      "Remove Set",
-      "Are you sure you want to remove this set?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            setSets((prev) => prev.filter((s) => s.id !== setId));
-            setLoggedSetIds((prev) => {
-              const next = new Set(prev);
-              next.delete(setId);
-              return next;
-            });
-            if (activeSetId === setId) {
-              setActiveSetId(null);
-            }
-            if (lastLoggedSetId === setId) {
-              setLastLoggedSetId(null);
-            }
-          },
+    Alert.alert("Remove Set", "Are you sure you want to remove this set?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          setSets((prev) => prev.filter((s) => s.id !== setId));
+          setLoggedSetIds((prev) => {
+            const next = new Set(prev);
+            next.delete(setId);
+            return next;
+          });
+          if (activeSetId === setId) {
+            setActiveSetId(null);
+          }
+          if (lastLoggedSetId === setId) {
+            setLastLoggedSetId(null);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const sessionTitle = templateName ?? "Workout Session";
@@ -884,7 +973,9 @@ const WorkoutSessionScreen = () => {
   };
 
   const swapExerciseGroup = groupedSets.find((g) => g.key === swapExerciseKey);
-  const timerAdjustGroup = groupedSets.find((g) => g.key === timerAdjustExerciseKey);
+  const timerAdjustGroup = groupedSets.find(
+    (g) => g.key === timerAdjustExerciseKey
+  );
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -928,7 +1019,9 @@ const WorkoutSessionScreen = () => {
           <Ionicons name='close' size={18} color={colors.textPrimary} />
         </Pressable>
         <Pressable
-          accessibilityLabel={timerActive ? "Pause workout timer" : "Resume workout timer"}
+          accessibilityLabel={
+            timerActive ? "Pause workout timer" : "Resume workout timer"
+          }
           onPress={timerActive ? pauseTimer : resumeTimer}
           style={({ pressed }) => ({
             flexDirection: "row",
@@ -1071,9 +1164,7 @@ const WorkoutSessionScreen = () => {
             <Text
               style={{
                 color:
-                  restRemaining !== null
-                    ? colors.primary
-                    : colors.textPrimary,
+                  restRemaining !== null ? colors.primary : colors.textPrimary,
                 fontSize: 22,
                 fontWeight: "800",
                 letterSpacing: 0.5,
@@ -1149,6 +1240,30 @@ const WorkoutSessionScreen = () => {
         </View>
       ) : null}
 
+      {/* Add Exercise Button */}
+      <Pressable
+        onPress={() => setShowExercisePicker(true)}
+        style={({ pressed }) => ({
+          backgroundColor: colors.surfaceMuted,
+          paddingVertical: 14,
+          borderRadius: 12,
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: colors.border,
+          opacity: pressed ? 0.8 : 1,
+          flexDirection: "row",
+          justifyContent: "center",
+          gap: 8,
+        })}
+      >
+        <Ionicons name='add-circle-outline' size={20} color={colors.primary} />
+        <Text
+          style={{ color: colors.textPrimary, fontWeight: "600", fontSize: 15 }}
+        >
+          Add Exercise
+        </Text>
+      </Pressable>
+
       <Pressable
         disabled={!sessionId || finishMutation.isPending}
         onPress={() => finishMutation.mutate()}
@@ -1157,10 +1272,9 @@ const WorkoutSessionScreen = () => {
           paddingVertical: 16,
           borderRadius: 14,
           alignItems: "center",
-          marginTop: 12,
+          marginTop: 4,
           marginBottom: 24,
-          opacity:
-            !sessionId || finishMutation.isPending || pressed ? 0.8 : 1,
+          opacity: !sessionId || finishMutation.isPending || pressed ? 0.8 : 1,
           flexDirection: "row",
           justifyContent: "center",
           gap: 10,
@@ -1213,6 +1327,13 @@ const WorkoutSessionScreen = () => {
           }}
         />
       )}
+      <ExercisePicker
+        visible={showExercisePicker}
+        onClose={() => setShowExercisePicker(false)}
+        selected={[]}
+        onAdd={handleAddExerciseToSession}
+        onRemove={() => {}}
+      />
       <ProgressionSuggestionModal
         visible={showProgressionModal}
         data={progressionData}
@@ -1232,12 +1353,12 @@ const WorkoutSessionScreen = () => {
       <PaywallComparisonModal
         visible={showPaywallModal}
         onClose={() => setShowPaywallModal(false)}
-        triggeredBy="progression"
+        triggeredBy='progression'
       />
       <Modal
         visible={!!imagePreviewUrl}
         transparent
-        animationType="fade"
+        animationType='fade'
         onRequestClose={() => setImagePreviewUrl(null)}
       >
         <Pressable
@@ -1257,7 +1378,7 @@ const WorkoutSessionScreen = () => {
                 height: Dimensions.get("window").width - 40,
                 borderRadius: 12,
               }}
-              resizeMode="contain"
+              resizeMode='contain'
             />
           )}
           <Pressable
@@ -1271,7 +1392,7 @@ const WorkoutSessionScreen = () => {
               padding: 8,
             }}
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name='close' size={24} color={colors.textPrimary} />
           </Pressable>
         </Pressable>
       </Modal>
@@ -1286,7 +1407,11 @@ const WorkoutSessionScreen = () => {
           ListFooterComponent={renderFooter}
           contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 16 }}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item: group, drag, isActive }: RenderItemParams<ExerciseGroup>) => (
+          renderItem={({
+            item: group,
+            drag,
+            isActive,
+          }: RenderItemParams<ExerciseGroup>) => (
             <ScaleDecorator>
               <ExerciseCard
                 group={group}
@@ -1316,7 +1441,10 @@ const WorkoutSessionScreen = () => {
                 isDragging={isActive}
                 onAddSet={() => handleAddSet(group.key)}
                 onRemoveSet={handleRemoveSet}
-                onImagePress={() => group.imageUrl && setImagePreviewUrl(group.imageUrl)}
+                onDeleteExercise={() => handleDeleteExercise(group.key)}
+                onImagePress={() =>
+                  group.imageUrl && setImagePreviewUrl(group.imageUrl)
+                }
               />
             </ScaleDecorator>
           )}
@@ -1324,28 +1452,28 @@ const WorkoutSessionScreen = () => {
         {/* Top gradient fade */}
         {showTopGradient && (
           <LinearGradient
-            colors={[colors.background, 'transparent']}
+            colors={[colors.background, "transparent"]}
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
               right: 0,
               height: 60,
-              pointerEvents: 'none',
+              pointerEvents: "none",
             }}
           />
         )}
         {/* Bottom gradient fade */}
         {showBottomGradient && (
           <LinearGradient
-            colors={['transparent', colors.background]}
+            colors={["transparent", colors.background]}
             style={{
-              position: 'absolute',
+              position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
               height: 80,
-              pointerEvents: 'none',
+              pointerEvents: "none",
             }}
           />
         )}
@@ -1435,7 +1563,11 @@ const SetInputRow = ({
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Ionicons name="trash-outline" color={colors.textSecondary} size={16} />
+              <Ionicons
+                name='trash-outline'
+                color={colors.textSecondary}
+                size={16}
+              />
             </Pressable>
           )}
           <Pressable
@@ -1573,6 +1705,7 @@ type ExerciseCardProps = {
   isDragging: boolean;
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
+  onDeleteExercise: () => void;
   onImagePress: () => void;
 };
 
@@ -1595,6 +1728,7 @@ const ExerciseCard = ({
   isDragging,
   onAddSet,
   onRemoveSet,
+  onDeleteExercise,
   onImagePress,
 }: ExerciseCardProps) => {
   const summaryLine = `${group.sets.length} sets · ${
@@ -1602,13 +1736,6 @@ const ExerciseCard = ({
       ? `${group.sets[0].targetReps} reps`
       : "adjust as you go"
   }`;
-  const nextIncompleteIndex = group.sets.findIndex(
-    (set) => set.actualReps === undefined || set.actualWeight === undefined
-  );
-  const statusLabel =
-    nextIncompleteIndex === -1
-      ? "All sets logged"
-      : `Set ${nextIncompleteIndex + 1} ready`;
 
   return (
     <View
@@ -1637,7 +1764,7 @@ const ExerciseCard = ({
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <Ionicons name="menu" size={20} color={colors.textSecondary} />
+          <Ionicons name='menu' size={20} color={colors.textSecondary} />
         </Pressable>
         <Pressable
           onPress={onToggle}
@@ -1664,16 +1791,24 @@ const ExerciseCard = ({
               {summaryLine}
             </Text>
           </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              {statusLabel}
-            </Text>
-            <Ionicons
-              name={expanded ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={colors.textPrimary}
-            />
-          </View>
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.textPrimary}
+          />
+        </Pressable>
+        <Pressable
+          onPress={onDeleteExercise}
+          style={({ pressed }) => ({
+            padding: 4,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Ionicons
+            name='trash-outline'
+            size={20}
+            color={colors.error || "#EF4444"}
+          />
         </Pressable>
       </View>
 
@@ -1741,7 +1876,11 @@ const ExerciseCard = ({
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Ionicons name="swap-horizontal" size={16} color={colors.textPrimary} />
+              <Ionicons
+                name='swap-horizontal'
+                size={16}
+                color={colors.textPrimary}
+              />
               <Text
                 style={{
                   color: colors.textPrimary,
@@ -1769,7 +1908,11 @@ const ExerciseCard = ({
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Ionicons name="timer-outline" size={16} color={colors.textPrimary} />
+              <Ionicons
+                name='timer-outline'
+                size={16}
+                color={colors.textPrimary}
+              />
               <Text
                 style={{
                   color: colors.textPrimary,
@@ -1855,7 +1998,11 @@ const ExerciseCard = ({
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+            <Ionicons
+              name='add-circle-outline'
+              size={16}
+              color={colors.primary}
+            />
             <Text
               style={{
                 color: colors.primary,
