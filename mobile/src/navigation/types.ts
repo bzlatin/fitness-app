@@ -15,6 +15,7 @@ export type RootStackParamList = {
     totalSets?: number;
     totalVolume?: number;
     prCount?: number;
+    durationSeconds?: number;
   };
   WorkoutPreview: {
     workout: {

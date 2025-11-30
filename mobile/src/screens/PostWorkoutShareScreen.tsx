@@ -120,10 +120,21 @@ const PostWorkoutShareScreen = () => {
     });
   };
 
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return undefined;
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
+
   const summaryLineParts = [
     route.params.templateName ?? "Custom workout",
+    route.params.durationSeconds ? formatDuration(route.params.durationSeconds) : undefined,
     route.params.totalSets ? `${route.params.totalSets} sets` : undefined,
-    route.params.totalVolume ? `${route.params.totalVolume} volume` : undefined,
+    route.params.totalVolume ? `${route.params.totalVolume} lbs` : undefined,
     route.params.prCount ? `${route.params.prCount} PRs` : undefined,
   ].filter(Boolean);
 

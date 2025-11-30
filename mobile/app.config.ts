@@ -25,10 +25,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     name: config.name ?? "push-pull",
     slug: config.slug ?? "push-pull",
     scheme: callbackScheme,
+    icon: "./assets/icon.png",
+    splash: {
+      image: "./assets/icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#050816",
+    },
+    backgroundColor: "#050816",
     ios: iosConfig,
     android: {
       ...config.android,
       package: androidPackage,
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#050816",
+      },
     },
     extra: {
       ...config.extra,

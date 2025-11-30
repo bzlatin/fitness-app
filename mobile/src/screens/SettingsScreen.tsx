@@ -1257,6 +1257,57 @@ const SettingsScreen = () => {
 
           <Pressable
             onPress={() => {
+              const newValue = !(user?.restTimerSoundEnabled ?? true);
+              updateProfile({ restTimerSoundEnabled: newValue });
+            }}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 14,
+                }}
+              >
+                Rest Timer Sound
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                Play a notification sound when rest timer completes
+              </Text>
+            </View>
+            <Switch
+              value={user?.restTimerSoundEnabled ?? true}
+              onValueChange={(value) => {
+                updateProfile({ restTimerSoundEnabled: value });
+              }}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={
+                user?.restTimerSoundEnabled ?? true ? "#fff" : "#f4f3f4"
+              }
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
               navigation.navigate("Onboarding", { isRetake: true });
             }}
             style={({ pressed }) => ({
