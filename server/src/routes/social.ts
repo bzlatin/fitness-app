@@ -20,6 +20,7 @@ type UserRow = {
   weekly_goal: number | null;
   onboarding_data: unknown;
   progressive_overload_enabled: boolean | null;
+  rest_timer_sound_enabled: boolean | null;
 };
 
 type SocialProfile = {
@@ -44,6 +45,7 @@ type SocialProfile = {
   weeklyGoal?: number;
   onboardingData?: unknown;
   progressiveOverloadEnabled?: boolean;
+  restTimerSoundEnabled?: boolean;
   friendsPreview?: {
     id: string;
     name: string;
@@ -206,6 +208,7 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   weeklyGoal: row.weekly_goal ?? 4,
   onboardingData: row.onboarding_data ?? undefined,
   progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
+  restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -469,6 +472,7 @@ router.put("/me", async (req, res) => {
     weeklyGoal,
     onboardingData,
     progressiveOverloadEnabled,
+    restTimerSoundEnabled,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -551,6 +555,11 @@ router.put("/me", async (req, res) => {
   if (progressiveOverloadEnabled !== undefined) {
     updates.push(`progressive_overload_enabled = $${idx}`);
     values.push(progressiveOverloadEnabled);
+    idx += 1;
+  }
+  if (restTimerSoundEnabled !== undefined) {
+    updates.push(`rest_timer_sound_enabled = $${idx}`);
+    values.push(restTimerSoundEnabled);
     idx += 1;
   }
 

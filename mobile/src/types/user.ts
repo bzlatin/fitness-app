@@ -18,6 +18,7 @@ export interface User {
   weeklyGoal?: number;
   onboardingData?: OnboardingData | null;
   progressiveOverloadEnabled?: boolean;
+  restTimerSoundEnabled?: boolean;
 }
 
 export interface UserProfile extends User {

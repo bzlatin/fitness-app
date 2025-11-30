@@ -37,6 +37,7 @@ import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
+import TimerAdjustmentModal from "../components/workouts/TimerAdjustmentModal";
 import ProgressionSuggestionModal, {
   ProgressionData,
 } from "../components/ProgressionSuggestion";
@@ -47,6 +48,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { isPro as checkIsPro } from "../utils/featureGating";
+import { playTimerSound } from "../utils/timerSound";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -222,7 +224,8 @@ type ExerciseGroup = {
 
 const groupSetsByExercise = (
   sessionSets: WorkoutSet[],
-  restLookup?: Record<string, number | undefined>
+  restLookup?: Record<string, number | undefined>,
+  sessionRestTimes?: Record<string, number>
 ): ExerciseGroup[] => {
   const grouped = new Map<string, ExerciseGroup>();
   sessionSets.forEach((set) => {
@@ -234,12 +237,14 @@ const groupSetsByExercise = (
       imageUrl: resolveExerciseImageUri(set.exerciseImageUrl),
       sets: [],
       restSeconds:
+        sessionRestTimes?.[key] ?? // Prioritize session-specific rest times
         restLookup?.[key] ??
         restLookup?.[set.exerciseId] ??
         set.targetRestSeconds,
     };
     if (!resolved.restSeconds) {
       resolved.restSeconds =
+        sessionRestTimes?.[key] ??
         restLookup?.[key] ??
         restLookup?.[set.exerciseId] ??
         set.targetRestSeconds;
@@ -276,6 +281,8 @@ const WorkoutSessionScreen = () => {
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
   const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
+  const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<string | null>(null);
+  const [sessionRestTimes, setSessionRestTimes] = useState<Record<string, number>>({});
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [showTopGradient, setShowTopGradient] = useState(false);
   const [showBottomGradient, setShowBottomGradient] = useState(true);
@@ -522,6 +529,7 @@ const WorkoutSessionScreen = () => {
         totalSets: summary.totalSets,
         totalVolume: summary.totalVolume,
         prCount: summary.prCount,
+        durationSeconds: elapsedSeconds,
       });
     },
     onError: () => Alert.alert("Could not finish workout"),
@@ -588,8 +596,8 @@ const WorkoutSessionScreen = () => {
   };
 
   const groupedSets = useMemo(
-    () => groupSetsByExercise(sets, restLookup),
-    [sets, restLookup]
+    () => groupSetsByExercise(sets, restLookup, sessionRestTimes),
+    [sets, restLookup, sessionRestTimes]
   );
 
   useEffect(() => {
@@ -610,6 +618,7 @@ const WorkoutSessionScreen = () => {
 
   useEffect(() => {
     if (!restEndsAt) return;
+    let hasPlayedSound = false;
     const tick = () => {
       const remaining = Math.max(
         0,
@@ -619,12 +628,18 @@ const WorkoutSessionScreen = () => {
       if (remaining <= 0) {
         setRestEndsAt(null);
         setTimeout(() => setRestRemaining(null), 400);
+
+        // Play sound when timer completes (if enabled)
+        if (!hasPlayedSound && user?.restTimerSoundEnabled !== false) {
+          hasPlayedSound = true;
+          playTimerSound();
+        }
       }
     };
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [restEndsAt]);
+  }, [restEndsAt, user?.restTimerSoundEnabled]);
 
   const startRestTimer = (seconds?: number) => {
     const duration = Math.max(10, seconds ?? 90);
@@ -673,20 +688,23 @@ const WorkoutSessionScreen = () => {
         .sort((a, b) => a.setIndex - b.setIndex);
       const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
       if (nextSet) {
+        // Immediately update activeSetId to the next unlogged set
         setActiveSetId(nextSet.id);
-      }
-
-      const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
-      if (allLogged) {
-        const currentIndex = groupedSets.findIndex((g) => g.key === group.key);
-        const nextGroup = groupedSets[currentIndex + 1];
-        if (nextGroup) {
-          setAutoFocusEnabled(true);
-          setActiveExerciseKey(nextGroup.key);
-          setActiveSetId(nextGroup.sets[0]?.id ?? null);
-        } else {
-          setActiveExerciseKey(null);
-          setActiveSetId(null);
+      } else {
+        // All sets in this exercise are logged, move to next exercise
+        const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
+        if (allLogged) {
+          const currentIndex = groupedSets.findIndex((g) => g.key === group.key);
+          const nextGroup = groupedSets[currentIndex + 1];
+          if (nextGroup) {
+            setAutoFocusEnabled(true);
+            setActiveExerciseKey(nextGroup.key);
+            const firstUnloggedInNextGroup = nextGroup.sets.find((s) => !updatedLoggedSetIds.has(s.id));
+            setActiveSetId(firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null);
+          } else {
+            setActiveExerciseKey(null);
+            setActiveSetId(null);
+          }
         }
       }
     }
@@ -734,6 +752,13 @@ const WorkoutSessionScreen = () => {
       })
     );
     setSwapExerciseKey(null);
+  };
+
+  const handleAdjustTimer = (exerciseKey: string, newRestSeconds: number) => {
+    setSessionRestTimes((prev) => ({
+      ...prev,
+      [exerciseKey]: newRestSeconds,
+    }));
   };
 
   const handleReorderExercises = (newGroupedSets: ExerciseGroup[]) => {
@@ -859,6 +884,7 @@ const WorkoutSessionScreen = () => {
   };
 
   const swapExerciseGroup = groupedSets.find((g) => g.key === swapExerciseKey);
+  const timerAdjustGroup = groupedSets.find((g) => g.key === timerAdjustExerciseKey);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -1175,6 +1201,18 @@ const WorkoutSessionScreen = () => {
           }
         />
       )}
+      {timerAdjustGroup && (
+        <TimerAdjustmentModal
+          visible={!!timerAdjustExerciseKey}
+          onClose={() => setTimerAdjustExerciseKey(null)}
+          currentSeconds={timerAdjustGroup.restSeconds ?? 90}
+          exerciseName={timerAdjustGroup.name}
+          onSave={(seconds) => {
+            handleAdjustTimer(timerAdjustExerciseKey!, seconds);
+            setTimerAdjustExerciseKey(null);
+          }}
+        />
+      )}
       <ProgressionSuggestionModal
         visible={showProgressionModal}
         data={progressionData}
@@ -1273,6 +1311,7 @@ const WorkoutSessionScreen = () => {
                 lastLoggedSetId={lastLoggedSetId}
                 onUndo={undoSet}
                 onSwap={() => setSwapExerciseKey(group.key)}
+                onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
                 onDrag={drag}
                 isDragging={isActive}
                 onAddSet={() => handleAddSet(group.key)}
@@ -1529,6 +1568,7 @@ type ExerciseCardProps = {
   lastLoggedSetId: string | null;
   onUndo: (setId: string) => void;
   onSwap: () => void;
+  onAdjustTimer: () => void;
   onDrag: () => void;
   isDragging: boolean;
   onAddSet: () => void;
@@ -1550,6 +1590,7 @@ const ExerciseCard = ({
   lastLoggedSetId,
   onUndo,
   onSwap,
+  onAdjustTimer,
   onDrag,
   isDragging,
   onAddSet,
@@ -1682,33 +1723,64 @@ const ExerciseCard = ({
           </View>
 
           {/* Action buttons */}
-          <Pressable
-            onPress={onSwap}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Ionicons name="swap-horizontal" size={16} color={colors.textPrimary} />
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 13,
-                fontWeight: "600",
-              }}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={onSwap}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
             >
-              Swap Exercise
-            </Text>
-          </Pressable>
+              <Ionicons name="swap-horizontal" size={16} color={colors.textPrimary} />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                Swap
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onAdjustTimer}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name="timer-outline" size={16} color={colors.textPrimary} />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                Rest: {group.restSeconds ?? 90}s
+              </Text>
+            </Pressable>
+          </View>
 
           {group.sets.map((set, displayIndex) => (
             <View key={set.id} style={{ gap: 8 }}>

@@ -91,7 +91,8 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden',
       ADD COLUMN IF NOT EXISTS weekly_goal INTEGER NOT NULL DEFAULT 4,
       ADD COLUMN IF NOT EXISTS onboarding_data JSONB,
-      ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true
+      ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true
   `);
 
   await query(`
