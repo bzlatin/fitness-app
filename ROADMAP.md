@@ -895,7 +895,6 @@ Start 7-day free trial →
 - [ ] Most/least trained muscle groups
 - [ ] Volume PR tracking per muscle group
 - [ ] Muscle group frequency heatmap (calendar view)
-- [ ] Export workout data to CSV
 
 **Files to Create/Modify**:
 
