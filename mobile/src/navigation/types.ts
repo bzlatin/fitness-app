@@ -29,6 +29,7 @@ export type RootStackParamList = {
   Onboarding: { isRetake?: boolean };
   SquadJoin: { code: string };
   Recovery: undefined;
+  Analytics: undefined;
   Upgrade: { plan?: "monthly" | "annual" } | undefined;
 };
 

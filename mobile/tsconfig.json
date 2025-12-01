@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "types": ["react", "react-native", "react-native-reanimated"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "App.tsx"],
-  "exclude": ["node_modules"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "App.tsx"],
+  "exclude": ["node_modules", "**/node_modules/**", "**/*.spec.ts"],
   "extends": "expo/tsconfig.base"
 }

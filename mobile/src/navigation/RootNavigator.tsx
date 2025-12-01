@@ -20,6 +20,7 @@ import OnboardingScreen from "../screens/OnboardingScreen";
 import SquadJoinScreen from "../screens/SquadJoinScreen";
 import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
 import RecoveryScreen from "../screens/RecoveryScreen";
+import AnalyticsScreen from "../screens/AnalyticsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
@@ -156,6 +157,11 @@ const RootNavigator = () => (
       name='Recovery'
       component={RecoveryScreen}
       options={{ title: "Recovery & Fatigue" }}
+    />
+    <Stack.Screen
+      name='Analytics'
+      component={AnalyticsScreen}
+      options={{ title: "Advanced Analytics" }}
     />
     <Stack.Screen
       name='SquadJoin'
