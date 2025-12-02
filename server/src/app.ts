@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 import { UnauthorizedError } from "express-oauth2-jwt-bearer";
 import exercisesRouter from "./routes/exercises";
 import templatesRouter from "./routes/templates";
@@ -20,6 +21,9 @@ app.use("/webhooks/appstore", appStoreWebhookRouter);
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
