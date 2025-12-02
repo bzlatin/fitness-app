@@ -357,8 +357,15 @@ const RecoveryScreen = () => {
       setShowPaywallModal(true);
       return;
     }
+
+    // Don't show modal for muscles with no data
+    const muscleMeta = readinessByMuscle.find((item) => item.muscleGroup === muscle);
+    if (!muscleMeta || muscleMeta.status === "no-data") {
+      return;
+    }
+
     setSelectedMuscle(muscle);
-  }, [isPro]);
+  }, [isPro, readinessByMuscle]);
 
   const emptyState =
     fatigue &&
@@ -936,37 +943,9 @@ const RecoveryScreen = () => {
         {/* Pro users: AI recommendations section */}
         {isPro && (
           <View style={{ gap: 12 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
             <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
               What should I train today?
             </Text>
-            <Pressable
-              onPress={() => onRefresh()}
-              style={({ pressed }) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.medium,
-                }}
-              >
-                Refresh
-              </Text>
-            </Pressable>
-            </View>
 
             <Pressable
               onPress={() => {

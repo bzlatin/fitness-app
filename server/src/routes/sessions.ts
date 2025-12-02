@@ -335,12 +335,17 @@ router.get("/history/range", async (req, res) => {
   }
 
   try {
+    // CRITICAL: Only return completed sessions (finished_at IS NOT NULL)
+    // This ensures in-progress/abandoned sessions don't appear in workout history
     const sessionRows = await query<SessionRow>(
       `
         SELECT s.*, COALESCE(s.template_name, t.name) as template_name
         FROM workout_sessions s
         LEFT JOIN workout_templates t ON t.id = s.template_id
-        WHERE s.user_id = $1 AND s.started_at >= $2 AND s.started_at < $3
+        WHERE s.user_id = $1
+          AND s.started_at >= $2
+          AND s.started_at < $3
+          AND s.finished_at IS NOT NULL
         ORDER BY s.started_at DESC
       `,
       [userId, rangeStart.toISOString(), rangeEnd.toISOString()]
@@ -423,11 +428,12 @@ router.get("/history/range", async (req, res) => {
 
     const days = Array.from(dayMap.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
 
+    // Only count completed workouts for streak calculation
     const streakRows = await query<{ started_at: string }>(
       `
         SELECT started_at
         FROM workout_sessions
-        WHERE user_id = $1
+        WHERE user_id = $1 AND finished_at IS NOT NULL
         ORDER BY started_at DESC
       `,
       [userId]

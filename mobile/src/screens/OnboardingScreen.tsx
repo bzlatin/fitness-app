@@ -36,8 +36,7 @@ import LimitationsStep from "../components/onboarding/LimitationsStep";
 import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
-
-const TOTAL_STEPS = 9;
+import { isPro as checkIsPro } from "../utils/featureGating";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -49,6 +48,14 @@ const OnboardingScreen = () => {
   // Determine if this is a retake by checking if user has existing onboarding data
   // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
   const isRetake = Boolean(user?.onboardingData);
+  const isProUser = checkIsPro(user);
+
+  // Calculate total steps dynamically based on what we skip
+  // Skip WelcomeStep (profile editing) if retaking
+  // Skip PlanSelectionStep if user is already Pro
+  const skipWelcome = isRetake;
+  const skipPlanSelection = isRetake && isProUser;
+  const TOTAL_STEPS = 9 - (skipWelcome ? 1 : 0) - (skipPlanSelection ? 1 : 0);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,8 +136,24 @@ const OnboardingScreen = () => {
     },
   });
 
+  // Map display step to actual step logic
+  const getActualStep = (displayStep: number): number => {
+    let actualStep = displayStep;
+    // If skipping welcome, shift steps down by 1
+    if (skipWelcome) {
+      actualStep += 1;
+    }
+    // If we're at the plan selection step and skipping it, handle separately
+    if (skipPlanSelection && actualStep >= 9) {
+      // This shouldn't happen as we adjusted TOTAL_STEPS, but handle it gracefully
+      return 9; // Map to plan selection (which we'll skip in renderStep)
+    }
+    return actualStep;
+  };
+
   const canProceed = () => {
-    switch (currentStep) {
+    const actualStep = getActualStep(currentStep);
+    switch (actualStep) {
       case 1:
         return name.trim().length > 0;
       case 2:
@@ -154,7 +177,14 @@ const OnboardingScreen = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // If we're on the last step and skipping plan selection (Pro user retaking),
+    // submit the form instead of going to next step
+    if (currentStep === TOTAL_STEPS && skipPlanSelection) {
+      await handleSubmit();
+      return;
+    }
+
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep(currentStep + 1);
       setError(null);
@@ -218,8 +248,14 @@ const OnboardingScreen = () => {
   };
 
   const renderStep = () => {
-    switch (currentStep) {
+    const actualStep = getActualStep(currentStep);
+
+    switch (actualStep) {
       case 1:
+        // Skip WelcomeStep if retaking (profile editing should be in ProfileScreen)
+        if (skipWelcome) {
+          return null;
+        }
         return (
           <WelcomeStep
             name={name}
@@ -283,6 +319,10 @@ const OnboardingScreen = () => {
           <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
         );
       case 9:
+        // Skip PlanSelectionStep if user is already Pro and retaking
+        if (skipPlanSelection) {
+          return null;
+        }
         return (
           <PlanSelectionStep
             selectedPlan={selectedPlan}
@@ -441,30 +481,58 @@ const OnboardingScreen = () => {
             </View>
           )}
 
-          {/* On the last step, show Back button below the plan selection */}
-          {currentStep === TOTAL_STEPS && currentStep > 1 && (
-            <View style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
-              <Pressable
-                onPress={handleBack}
-                disabled={isSubmitting}
-                style={({ pressed }) => ({
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  backgroundColor: colors.surfaceMuted,
-                  alignItems: "center",
-                  opacity: pressed || isSubmitting ? 0.7 : 1,
-                })}
-              >
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.medium,
-                    fontSize: 16,
-                  }}
+          {/* On the last step */}
+          {currentStep === TOTAL_STEPS && (
+            <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
+              {/* If skipping plan selection (Pro user retaking), show Save button */}
+              {skipPlanSelection && (
+                <Pressable
+                  onPress={handleSubmit}
+                  disabled={!canProceed() || isSubmitting}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    backgroundColor: canProceed() && !isSubmitting ? colors.primary : colors.border,
+                    alignItems: "center",
+                    opacity: pressed ? 0.9 : 1,
+                  })}
                 >
-                  Back
-                </Text>
-              </Pressable>
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 16,
+                    }}
+                  >
+                    {isSubmitting ? "Saving..." : "Save Preferences"}
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Show Back button */}
+              {currentStep > 1 && (
+                <Pressable
+                  onPress={handleBack}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                    alignItems: "center",
+                    opacity: pressed || isSubmitting ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                      fontSize: 16,
+                    }}
+                  >
+                    Back
+                  </Text>
+                </Pressable>
+              )}
             </View>
           )}
         </View>

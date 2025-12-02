@@ -71,6 +71,9 @@ const RecoveryBodyMap = ({
   const bodyData = useMemo(() => {
     const entries: Array<{ slug: any; intensity: number }> = [];
     data.forEach((item) => {
+      // Skip muscles with no data to avoid showing them on the heatmap
+      if (item.status === "no-data") return;
+
       const mapped = muscleMap[item.muscleGroup];
       if (!mapped) return;
       const readiness = readinessFromFatigueScore(item.fatigueScore);
