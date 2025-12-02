@@ -884,23 +884,88 @@ Start 7-day free trial →
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
 
-#### 4.1 Advanced Muscle Group Analytics
+#### 4.1 Advanced Muscle Group Analytics ✅ COMPLETE
 
-**Priority**: MEDIUM | **Effort**: 5-6 days | **Impact**: MEDIUM
+**Priority**: MEDIUM | **Effort**: 5-6 days | **Impact**: MEDIUM | **Status**: ✅ IMPLEMENTED (2025-11-30)
 
 **Features**:
 
-- [ ] Weekly volume per muscle group chart (last 12 weeks)
-- [ ] Push vs Pull volume balance indicator
-- [ ] Most/least trained muscle groups
-- [ ] Volume PR tracking per muscle group
-- [ ] Muscle group frequency heatmap (calendar view)
+- [x] Weekly volume per muscle group chart (last 12 weeks)
+- [x] Push vs Pull volume balance indicator
+- [x] Most/least trained muscle groups
+- [x] Volume PR tracking per muscle group
+- [x] Muscle group frequency heatmap (calendar view)
 
-**Files to Create/Modify**:
+**Implementation Details**:
 
-- `/mobile/src/screens/AnalyticsScreen.tsx` (new, Pro feature)
-- `/server/src/routes/analytics.ts` (expand)
-- `/mobile/src/components/VolumeChart.tsx` (new)
+**Backend Service** (`/server/src/services/muscleAnalytics.ts`):
+- ✅ `getWeeklyVolumeByMuscleGroup()` - Aggregates volume by week and muscle for charting
+- ✅ `getMuscleGroupSummaries()` - Total volume, sets, workouts, and last trained date per muscle
+- ✅ `getPushPullBalance()` - Calculates push/pull/leg volume with balance recommendations
+- ✅ `getVolumePRs()` - Tracks peak volume weeks and current progress per muscle
+- ✅ `getFrequencyHeatmap()` - Training frequency analysis with most common training days
+- ✅ `getAdvancedAnalytics()` - Combined endpoint for all analytics
+
+**API Endpoints** (all Pro-gated):
+- `GET /api/analytics/muscle-analytics?weeks={4|8|12}` - All analytics data
+- `GET /api/analytics/weekly-volume?weeks={N}` - Chart data
+- `GET /api/analytics/muscle-summaries?weeks={N}` - Summary cards
+- `GET /api/analytics/push-pull-balance?weeks={N}` - Balance analysis
+- `GET /api/analytics/volume-prs?weeks={N}` - PR tracking
+- `GET /api/analytics/frequency-heatmap?weeks={N}` - Frequency data
+
+**UI Components**:
+- ✅ `/mobile/src/components/VolumeChart.tsx` - Interactive SVG line chart with:
+  - Multi-muscle group visualization with color coding
+  - Clickable legend for filtering muscle groups
+  - Horizontal scrolling for 12-week view
+  - Auto-scaling Y-axis based on volume
+  - Data point tooltips via circles on graph
+
+- ✅ `/mobile/src/screens/AnalyticsScreen.tsx` - Comprehensive Pro analytics dashboard:
+  - Pro plan paywall with feature list for free users
+  - Time range selector (4/8/12 weeks)
+  - Weekly volume chart with muscle filtering
+  - Push/Pull balance card with ratio and recommendations
+  - Muscle group summary cards (top 8 by volume)
+  - Volume PR tracking with % of peak for top 6 muscles
+  - Training frequency summary with weekly averages
+  - Pull-to-refresh support
+  - Loading and error states
+
+**Navigation**:
+- ✅ Added `Analytics` route to `/mobile/src/navigation/types.ts`
+- ✅ Registered screen in `/mobile/src/navigation/RootNavigator.tsx`
+- ✅ Added "Advanced Analytics" card to HomeScreen (Pro users only)
+
+**TypeScript Types** (`/mobile/src/types/analytics.ts`):
+- ✅ `WeeklyVolumeData` - Chart data structure
+- ✅ `MuscleGroupSummary` - Summary metrics
+- ✅ `PushPullBalance` - Balance analysis
+- ✅ `VolumePR` - PR tracking data
+- ✅ `FrequencyHeatmapData` - Frequency metrics
+- ✅ `AdvancedAnalytics` - Combined type
+
+**Files Created**:
+- `/server/src/services/muscleAnalytics.ts` - Complete analytics service
+- `/mobile/src/components/VolumeChart.tsx` - Custom SVG chart component
+- `/mobile/src/screens/AnalyticsScreen.tsx` - Full analytics dashboard
+
+**Files Modified**:
+- `/server/src/routes/analytics.ts` - Added 6 new Pro endpoints
+- `/mobile/src/api/analytics.ts` - API client functions
+- `/mobile/src/types/analytics.ts` - TypeScript definitions
+- `/mobile/src/navigation/types.ts` - Added Analytics route
+- `/mobile/src/navigation/RootNavigator.tsx` - Registered screen
+- `/mobile/src/screens/HomeScreen.tsx` - Added navigation card
+
+**Key Design Decisions**:
+- **Pro Feature**: All advanced analytics are Pro-only to drive subscriptions
+- **Performance**: Week-based aggregation with configurable time ranges (4/8/12 weeks)
+- **Push/Pull Categories**: chest/shoulders/triceps = Push, back/biceps = Pull, legs/glutes = Legs
+- **Chart Library**: Custom SVG implementation using react-native-svg (already installed)
+- **Volume Calculation**: `sets × reps × weight` with bodyweight fallback (100 lbs)
+- **PR Tracking**: Rolling 52-week window for peak volume detection
 
 ---
 

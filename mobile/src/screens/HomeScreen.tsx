@@ -439,6 +439,62 @@ const HomeScreen = () => {
             </View>
           )}
         </View>
+
+        {/* Advanced Analytics (Pro Feature) */}
+        {isPro && (
+          <View
+            style={{
+              marginTop: 12,
+              padding: 16,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceMuted,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <View style={{ gap: 4 }}>
+                <Text
+                  style={{ ...typography.heading2, color: colors.textPrimary, fontSize: 18 }}
+                >
+                  Advanced Analytics
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Volume trends & muscle balance
+                </Text>
+              </View>
+              <Ionicons name="bar-chart" size={24} color={colors.primary} />
+            </View>
+            <Pressable
+              onPress={() => navigation.navigate("Analytics")}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                paddingVertical: 12,
+                borderRadius: 10,
+                backgroundColor: colors.primary,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 14,
+                  textAlign: "center",
+                }}
+              >
+                View Analytics
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <SwapModal

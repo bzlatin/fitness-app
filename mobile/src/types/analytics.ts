@@ -35,3 +35,56 @@ export type TrainingRecommendation = {
     reason: string;
   }>;
 };
+
+// Advanced Analytics Types
+export type WeeklyVolumeData = {
+  weekStartDate: string;
+  weekNumber: number;
+  year: number;
+  muscleGroup: string;
+  totalVolume: number;
+  totalSets: number;
+  workoutCount: number;
+};
+
+export type MuscleGroupSummary = {
+  muscleGroup: string;
+  totalVolume: number;
+  totalSets: number;
+  workoutCount: number;
+  averageVolumePerWorkout: number;
+  lastTrainedDate: string | null;
+};
+
+export type PushPullBalance = {
+  pushVolume: number;
+  pullVolume: number;
+  legVolume: number;
+  otherVolume: number;
+  pushPullRatio: number;
+  balanceStatus: "balanced" | "push-heavy" | "pull-heavy";
+  recommendations: string[];
+};
+
+export type VolumePR = {
+  muscleGroup: string;
+  peakVolume: number;
+  peakWeekDate: string;
+  currentVolume: number;
+  percentOfPR: number;
+};
+
+export type FrequencyHeatmapData = {
+  muscleGroup: string;
+  dateTrainingCount: Record<string, number>;
+  weeklyFrequency: number;
+  mostTrainedDay: string | null;
+};
+
+export type AdvancedAnalytics = {
+  weeklyVolumeData: WeeklyVolumeData[];
+  muscleGroupSummaries: MuscleGroupSummary[];
+  pushPullBalance: PushPullBalance;
+  volumePRs: VolumePR[];
+  frequencyHeatmap: FrequencyHeatmapData[];
+};
