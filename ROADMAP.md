@@ -586,9 +586,9 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 - [x] Create Apple Developer account ($99/year)
 - [x] Register app in App Store Connect
 - [x] Create two subscription products in App Store Connect
-- [x] Set up StoreKit Configuration file for local testing
+- [ ] Set up StoreKit Configuration file for local testing (app.config.ts expects `./ios/StoreKit/Configuration.storekit`, file not present)
 - [x] Add iOS bundle identifier to `app.config.ts`
-- [ ] Configure Apple Team ID in Expo build settings
+- [ ] Configure Apple Team ID in Expo build settings (env values not set)
 
 **Backend:**
 
@@ -601,7 +601,7 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
   - `POST /api/subscriptions/ios/validate-receipt` - Validate and activate subscription
   - `GET /api/subscriptions/ios/status` - Check App Store subscription status
 - [x] Add Apple App Store Server Notification webhook handler (`/webhooks/appstore`)
-- [ ] Handle App Store notification types:
+- [x] Handle App Store notification types:
   - `INITIAL_BUY` → Activate Pro plan
   - `DID_RENEW` → Extend plan expiration
   - `DID_FAIL_TO_RENEW` → Grace period warning
@@ -691,8 +691,8 @@ export const startSubscription = async (plan: "monthly" | "annual") => {
 - [x] Add "Restore Purchases" button (Apple requires this)
 - [ ] Handle subscription groups in App Store Connect
 - [ ] Configure introductory offers (7-day free trial)
-- [ ] Add subscription terms URL (required for App Store)
-- [ ] Add privacy policy URL (required for App Store)
+- [ ] Add subscription terms URL (required for App Store; content lives at `web/src/app/terms/page.tsx`)
+- [ ] Add privacy policy URL (required for App Store; content lives at `web/src/app/privacy/page.tsx`)
 - [x] Implement "Manage Subscription" deep link to iOS Settings
 - [ ] Test with Sandbox users in App Store Connect
 - [ ] Submit subscription details for App Review
@@ -833,8 +833,8 @@ Since this is pre-launch with no existing iOS users:
 
 **Error Handling:**
 
-- [ ] Handle 403 errors from analytics endpoints gracefully (show upgrade prompt instead of crash)
-- [ ] Handle 403 errors from template save endpoint (show upgrade prompt)
+- [x] Handle 403 errors from analytics endpoints gracefully (show upgrade prompt instead of crash)
+- [x] Handle 403 errors from template save endpoint (show upgrade prompt)
 - [ ] Add error boundary for subscription status fetch failures
 
 **Testing Checklist:**
@@ -881,6 +881,15 @@ Start 7-day free trial →
 ```
 
 ---
+
+**Phase 3 Remaining Work (not yet in code):**
+
+- Add Apple Team ID env + StoreKit configuration file (`mobile/ios/StoreKit/Configuration.storekit`) to satisfy `app.config.ts`.
+- Surface App Store subscription states (trial/grace/expired) in mobile UI (Upgrade/Settings/Home) and block expired/grace users with the paywall.
+- Wire App Store metadata and in-app links to legal pages: `web/src/app/terms/page.tsx` and `web/src/app/privacy/page.tsx`.
+- Configure App Store subscription group + 7-day intro offer to match StoreKit SKUs.
+- Add an error boundary/fallback for subscription status fetch failures.
+- Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating.
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
 
@@ -1060,10 +1069,10 @@ CREATE TABLE workout_comments (
 
 **Pages to Create**:
 
-- `/` - Home (main landing page)
-- `/privacy` - Privacy Policy (required for App Store)
-- `/terms` - Terms of Service (required for App Store)
-- `/support` - Support/Contact page
+- [x] `/` - Home (main landing page) — built in `web/src/app/page.tsx`
+- [x] `/privacy` - Privacy Policy (required for App Store) — built in `web/src/app/privacy/page.tsx`
+- [x] `/terms` - Terms of Service (required for App Store) — built in `web/src/app/terms/page.tsx`
+- [ ] `/support` - Support/Contact page
 
 **Domain & Hosting**:
 
@@ -1083,16 +1092,16 @@ CREATE TABLE workout_comments (
 - [ ] Choose keywords for ASO
 - [ ] Create feature graphic for Play Store
 
-**Files to Create** (new repo or `/landing` directory):
+**Files to Create** (now live under `web/`):
 
-- `/landing/src/app/page.tsx` - Home page
-- `/landing/src/app/privacy/page.tsx` - Privacy policy
-- `/landing/src/app/terms/page.tsx` - Terms of service
-- `/landing/src/app/support/page.tsx` - Support page
-- `/landing/src/components/FeatureShowcase.tsx`
-- `/landing/src/components/PricingTable.tsx`
-- `/landing/src/components/DownloadButtons.tsx`
-- `/landing/public/screenshots/` - App screenshots
+- [x] `web/src/app/page.tsx` - Home page
+- [x] `web/src/app/privacy/page.tsx` - Privacy policy
+- [x] `web/src/app/terms/page.tsx` - Terms of service
+- [ ] `web/src/app/support/page.tsx` - Support page
+- [ ] `web/src/components/FeatureShowcase.tsx`
+- [ ] `web/src/components/PricingTable.tsx`
+- [ ] `web/src/components/DownloadButtons.tsx`
+- [ ] `web/public/screenshots/` - App screenshots
 
 **Integration Points**:
 

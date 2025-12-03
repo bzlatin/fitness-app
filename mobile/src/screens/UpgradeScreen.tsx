@@ -21,6 +21,7 @@ import {
 } from "../api/subscriptions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { startSubscription } from "../services/payments";
+import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 
 const plans: Record<
   PlanChoice,
@@ -69,12 +70,19 @@ const UpgradeScreen = () => {
     queryFn: getSubscriptionStatus,
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: false, // Don't refetch on every mount, use cached data
+    retry: 1,
   });
 
+  const statusError = statusQuery.isError;
+  const platformStatus = statusQuery.data?.status?.toLowerCase();
   const currentInterval = statusQuery.data?.currentInterval ?? null;
   const isPro = statusQuery.data?.plan === "pro" || statusQuery.data?.plan === "lifetime";
   const isAppleSubscription =
     statusQuery.data?.subscriptionPlatform === "apple";
+  const isGrace = platformStatus === "in_grace_period";
+  const isExpired = platformStatus === "expired" || platformStatus === "revoked";
+  const isTrial = platformStatus === "trialing" || Boolean(statusQuery.data?.trialEndsAt);
+  const appleEnvironment = statusQuery.data?.appleEnvironment;
 
   useEffect(() => {
     if (isPro && currentInterval) {
@@ -185,6 +193,19 @@ const UpgradeScreen = () => {
       ? [currentInterval === "annual" ? "monthly" : "annual"]
       : ["monthly", "annual"];
 
+  const openLegal = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert("Unable to open link", "Please try again later.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (err) {
+      Alert.alert("Unable to open link", (err as Error)?.message ?? "Please try again later.");
+    }
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -211,6 +232,162 @@ const UpgradeScreen = () => {
           {screenDescription}
         </Text>
       </View>
+
+      {statusError ? (
+        <View
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 14,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 15,
+            }}
+          >
+            Subscription status unavailable
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+            }}
+          >
+            We couldn&apos;t refresh your subscription. Check your connection or try again.
+          </Text>
+          <TouchableOpacity
+            onPress={() => statusQuery.refetch()}
+            style={{
+              alignSelf: "flex-start",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 10,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {isTrial && trialEnds ? (
+        <View
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.primary,
+            backgroundColor: "rgba(34,197,94,0.08)",
+            padding: 14,
+            gap: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 15,
+            }}
+          >
+            Trial active
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+            }}
+          >
+            Your 7-day trial ends {trialEnds}. Keep Pro to retain AI workouts and analytics.
+          </Text>
+        </View>
+      ) : null}
+
+      {isGrace ? (
+        <View
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#fbbf24",
+            backgroundColor: "#2d1b00",
+            padding: 14,
+            gap: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: "#fbbf24",
+              fontFamily: fontFamilies.semibold,
+              fontSize: 15,
+            }}
+          >
+            Billing issue • Grace period
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+            }}
+          >
+            Apple reports your subscription is in a grace period. Update your payment method to avoid losing Pro access.
+          </Text>
+          {appleEnvironment ? (
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: fontFamilies.medium,
+                fontSize: 12,
+              }}
+            >
+              App Store environment: {appleEnvironment}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {isExpired ? (
+        <View
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#ef4444",
+            backgroundColor: "#2b0003",
+            padding: 14,
+            gap: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: "#f87171",
+              fontFamily: fontFamilies.semibold,
+              fontSize: 15,
+            }}
+          >
+            Subscription expired
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+            }}
+          >
+            Renew your plan to regain access to AI workouts, progression, and advanced analytics.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Current Plan Badge (for Pro users) */}
       {isPro && currentInterval ? (
@@ -649,6 +826,48 @@ const UpgradeScreen = () => {
           )}
         </View>
       ) : null}
+
+      <View
+        style={{
+          marginTop: 8,
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: 12,
+            textAlign: "center",
+          }}
+        >
+          By continuing you agree to our Terms and Privacy Policy.
+        </Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <TouchableOpacity onPress={() => openLegal(TERMS_URL)}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 12,
+              }}
+            >
+              Terms of Service
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => openLegal(PRIVACY_URL)}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 12,
+              }}
+            >
+              Privacy Policy
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
 };
