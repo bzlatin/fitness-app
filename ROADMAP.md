@@ -201,7 +201,7 @@ CREATE TABLE squad_invite_links (
 
 - Use Expo deep linking for `app://` URLs
 - Share via React Native Share API
-- Link format: `https://pushpullapp.com/squad/join/{code}` (redirects to deep link)
+- Link format: `https://push-pull.app/squad/join/{code}` (redirects to deep link)
 - Validate link hasn't expired or exceeded max uses
 - Show squad name, member count, and sample members before joining
 
@@ -908,6 +908,7 @@ Start 7-day free trial →
 **Implementation Details**:
 
 **Backend Service** (`/server/src/services/muscleAnalytics.ts`):
+
 - ✅ `getWeeklyVolumeByMuscleGroup()` - Aggregates volume by week and muscle for charting
 - ✅ `getMuscleGroupSummaries()` - Total volume, sets, workouts, and last trained date per muscle
 - ✅ `getPushPullBalance()` - Calculates push/pull/leg volume with balance recommendations
@@ -916,6 +917,7 @@ Start 7-day free trial →
 - ✅ `getAdvancedAnalytics()` - Combined endpoint for all analytics
 
 **API Endpoints** (all Pro-gated):
+
 - `GET /api/analytics/muscle-analytics?weeks={4|8|12}` - All analytics data
 - `GET /api/analytics/weekly-volume?weeks={N}` - Chart data
 - `GET /api/analytics/muscle-summaries?weeks={N}` - Summary cards
@@ -924,7 +926,9 @@ Start 7-day free trial →
 - `GET /api/analytics/frequency-heatmap?weeks={N}` - Frequency data
 
 **UI Components**:
+
 - ✅ `/mobile/src/components/VolumeChart.tsx` - Interactive SVG line chart with:
+
   - Multi-muscle group visualization with color coding
   - Clickable legend for filtering muscle groups
   - Horizontal scrolling for 12-week view
@@ -943,11 +947,13 @@ Start 7-day free trial →
   - Loading and error states
 
 **Navigation**:
+
 - ✅ Added `Analytics` route to `/mobile/src/navigation/types.ts`
 - ✅ Registered screen in `/mobile/src/navigation/RootNavigator.tsx`
 - ✅ Added "Advanced Analytics" card to HomeScreen (Pro users only)
 
 **TypeScript Types** (`/mobile/src/types/analytics.ts`):
+
 - ✅ `WeeklyVolumeData` - Chart data structure
 - ✅ `MuscleGroupSummary` - Summary metrics
 - ✅ `PushPullBalance` - Balance analysis
@@ -956,11 +962,13 @@ Start 7-day free trial →
 - ✅ `AdvancedAnalytics` - Combined type
 
 **Files Created**:
+
 - `/server/src/services/muscleAnalytics.ts` - Complete analytics service
 - `/mobile/src/components/VolumeChart.tsx` - Custom SVG chart component
 - `/mobile/src/screens/AnalyticsScreen.tsx` - Full analytics dashboard
 
 **Files Modified**:
+
 - `/server/src/routes/analytics.ts` - Added 6 new Pro endpoints
 - `/mobile/src/api/analytics.ts` - API client functions
 - `/mobile/src/types/analytics.ts` - TypeScript definitions
@@ -969,6 +977,7 @@ Start 7-day free trial →
 - `/mobile/src/screens/HomeScreen.tsx` - Added navigation card
 
 **Key Design Decisions**:
+
 - **Pro Feature**: All advanced analytics are Pro-only to drive subscriptions
 - **Performance**: Week-based aggregation with configurable time ranges (4/8/12 weeks)
 - **Push/Pull Categories**: chest/shoulders/triceps = Push, back/biceps = Pull, legs/glutes = Legs
@@ -1076,7 +1085,7 @@ CREATE TABLE workout_comments (
 
 **Domain & Hosting**:
 
-- [ ] Register domain (pushpullapp.com or similar)
+- [ ] Register domain (push-pull.app )
 - [ ] Set up DNS with hosting provider
 - [ ] Deploy to Vercel/Netlify (free tier)
 - [ ] Configure SSL certificate
@@ -1203,7 +1212,7 @@ CREATE TABLE workout_comments (
 ## Open Questions & Decisions Needed
 
 1. **App Name**: Still "Push/Pull" or rebrand? (Check trademark availability)
-2. **Domain**: Register pushpullapp.com or similar
+2. **Domain**: Register push-pull.app
 3. **Privacy Policy**: Need lawyer review before collecting payment info
 4. **Terms of Service**: Liability for workout injuries (disclaimer)
 5. **Customer Support**: Email only? In-app chat? Response time SLA?
