@@ -57,11 +57,26 @@ const HomeScreen = () => {
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   // Check subscription status for trial banner
-  const { data: subscriptionStatus } = useQuery({
+  const {
+    data: subscriptionStatus,
+    isError: subscriptionStatusError,
+    refetch: refetchSubscriptionStatus,
+  } = useQuery({
     queryKey: ["subscription", "status"],
     queryFn: getSubscriptionStatus,
     staleTime: 30000,
+    retry: 1,
   });
+  const subscriptionState = subscriptionStatus?.status?.toLowerCase();
+  const isTrial =
+    Boolean(subscriptionStatus?.trialEndsAt) ||
+    subscriptionState === "trialing";
+  const isGrace = subscriptionState === "in_grace_period";
+  const isExpired =
+    subscriptionState === "expired" || subscriptionState === "revoked";
+  const trialEndsIso = subscriptionStatus?.trialEndsAt
+    ? new Date(subscriptionStatus.trialEndsAt).toISOString()
+    : null;
 
   const upNext = useMemo<WorkoutTemplate | null>(() => {
     if (!templates || templates.length === 0) return null;
@@ -83,13 +98,113 @@ const HomeScreen = () => {
 
   return (
     <ScreenContainer scroll>
-      {/* Trial Banner */}
-      {subscriptionStatus && subscriptionStatus.trialEndsAt && (
+      {/* Subscription status banners */}
+      {subscriptionStatusError ? (
+        <Pressable
+          onPress={() => refetchSubscriptionStatus()}
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            Subscription status unavailable
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+              marginTop: 4,
+            }}
+          >
+            We couldn&apos;t refresh your subscription. Tap to retry.
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isTrial && trialEndsIso ? (
         <TrialBanner
-          trialEndsAt={new Date(subscriptionStatus.trialEndsAt).toISOString()}
+          trialEndsAt={trialEndsIso}
           onUpgrade={() => navigation.navigate("Upgrade")}
         />
-      )}
+      ) : null}
+
+      {isGrace ? (
+        <Pressable
+          onPress={() => navigation.navigate("Upgrade")}
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: "#2d1b00",
+            borderColor: "#f59e0b",
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          <Text
+            style={{
+              color: "#fbbf24",
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            Billing issue • Grace period
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+              marginTop: 4,
+            }}
+          >
+            Your Apple subscription is in a grace period. Update billing to keep
+            Pro access.
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isExpired ? (
+        <Pressable
+          onPress={() => navigation.navigate("Upgrade")}
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: "#2b0003",
+            borderColor: "#ef4444",
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          <Text
+            style={{
+              color: "#f87171",
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            Subscription expired
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamilies.regular,
+              marginTop: 4,
+            }}
+          >
+            Renew your plan to unlock AI workouts, analytics, and progression.
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={{ gap: 12 }}>
         <View

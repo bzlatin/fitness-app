@@ -132,6 +132,16 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS idx_appstore_notifications_original_tx ON appstore_notifications(original_transaction_id)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS waitlist_emails (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      source TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   await query(`UPDATE users SET plan = 'free' WHERE plan IS NULL`);
 
   await query(`
@@ -442,113 +452,8 @@ export const initDb = async () => {
           template_id = EXCLUDED.template_id
   `);
 
-  await query(`
-    INSERT INTO workout_sessions (
-      id, user_id, template_id, template_name, started_at, finished_at, created_at, updated_at
-    )
-    VALUES
-      ('sess-exh-01', '${exhibitedUserId}', 'tmpl-exh-chest-back', 'Chest / Back Power', NOW() - INTERVAL '35 days' + INTERVAL '9 hours', NOW() - INTERVAL '35 days' + INTERVAL '10.2 hours', NOW() - INTERVAL '35 days', NOW() - INTERVAL '35 days'),
-      ('sess-exh-02', '${exhibitedUserId}', 'tmpl-exh-legs', 'Legs + Glutes Strength', NOW() - INTERVAL '32 days' + INTERVAL '8 hours', NOW() - INTERVAL '32 days' + INTERVAL '9.5 hours', NOW() - INTERVAL '32 days', NOW() - INTERVAL '32 days'),
-      ('sess-exh-03', '${exhibitedUserId}', 'tmpl-exh-arms-shoulders', 'Arms + Shoulders Volume', NOW() - INTERVAL '30 days' + INTERVAL '7 hours', NOW() - INTERVAL '30 days' + INTERVAL '8.1 hours', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days'),
-      ('sess-exh-04', '${exhibitedUserId}', 'tmpl-exh-chest-back', 'Chest / Back Power', NOW() - INTERVAL '27 days' + INTERVAL '7 hours', NOW() - INTERVAL '27 days' + INTERVAL '8.1 hours', NOW() - INTERVAL '27 days', NOW() - INTERVAL '27 days'),
-      ('sess-exh-05', '${exhibitedUserId}', 'tmpl-exh-legs', 'Legs + Glutes Strength', NOW() - INTERVAL '24 days' + INTERVAL '6 hours', NOW() - INTERVAL '24 days' + INTERVAL '7.3 hours', NOW() - INTERVAL '24 days', NOW() - INTERVAL '24 days'),
-      ('sess-exh-06', '${exhibitedUserId}', 'tmpl-exh-arms-shoulders', 'Arms + Shoulders Volume', NOW() - INTERVAL '21 days' + INTERVAL '9 hours', NOW() - INTERVAL '21 days' + INTERVAL '10 hours', NOW() - INTERVAL '21 days', NOW() - INTERVAL '21 days'),
-      ('sess-exh-07', '${exhibitedUserId}', 'tmpl-exh-chest-back', 'Chest / Back Power', NOW() - INTERVAL '17 days' + INTERVAL '8 hours', NOW() - INTERVAL '17 days' + INTERVAL '9.2 hours', NOW() - INTERVAL '17 days', NOW() - INTERVAL '17 days'),
-      ('sess-exh-08', '${exhibitedUserId}', 'tmpl-exh-legs', 'Legs + Glutes Strength', NOW() - INTERVAL '13 days' + INTERVAL '7 hours', NOW() - INTERVAL '13 days' + INTERVAL '8.4 hours', NOW() - INTERVAL '13 days', NOW() - INTERVAL '13 days'),
-      ('sess-exh-09', '${exhibitedUserId}', 'tmpl-exh-arms-shoulders', 'Arms + Shoulders Volume', NOW() - INTERVAL '10 days' + INTERVAL '6 hours', NOW() - INTERVAL '10 days' + INTERVAL '7 hours', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days'),
-      ('sess-exh-10', '${exhibitedUserId}', 'tmpl-exh-chest-back', 'Chest / Back Power', NOW() - INTERVAL '6 days' + INTERVAL '9 hours', NOW() - INTERVAL '6 days' + INTERVAL '10 hours', NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days'),
-      ('sess-exh-11', '${exhibitedUserId}', 'tmpl-exh-legs', 'Legs + Glutes Strength', NOW() - INTERVAL '4 days' + INTERVAL '8 hours', NOW() - INTERVAL '4 days' + INTERVAL '9.3 hours', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days'),
-      ('sess-exh-12', '${exhibitedUserId}', 'tmpl-exh-arms-shoulders', 'Arms + Shoulders Volume', NOW() - INTERVAL '2 days' + INTERVAL '7 hours', NOW() - INTERVAL '2 days' + INTERVAL '8 hours', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
-      ('sess-exh-13', '${exhibitedUserId}', 'tmpl-exh-chest-back', 'Chest / Back Power', NOW() - INTERVAL '1 day' + INTERVAL '6 hours', NOW() - INTERVAL '1 day' + INTERVAL '7.2 hours', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day')
-    ON CONFLICT (id) DO UPDATE
-      SET template_id = EXCLUDED.template_id,
-          template_name = EXCLUDED.template_name,
-          started_at = EXCLUDED.started_at,
-          finished_at = EXCLUDED.finished_at,
-          user_id = EXCLUDED.user_id,
-          updated_at = NOW()
-  `);
-
-  await query(`
-    INSERT INTO workout_sets (
-      id, session_id, template_exercise_id, exercise_id, set_index, target_reps, target_weight, actual_reps, actual_weight, rpe
-    )
-    VALUES
-      -- sess-exh-01 chest/back
-      ('set-exh-01-1', 'sess-exh-01', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 0, 8, 185, 8, 185, 7.5),
-      ('set-exh-01-2', 'sess-exh-01', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 1, 8, 185, 7, 195, 8),
-      ('set-exh-01-3', 'sess-exh-01', 'tmpl-exh-chest-back-ex2', 'ex-row', 0, 10, 155, 10, 155, 7),
-      ('set-exh-01-4', 'sess-exh-01', 'tmpl-exh-chest-back-ex2', 'ex-row', 1, 10, 155, 9, 165, 7.5),
-      ('set-exh-01-5', 'sess-exh-01', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 0, 12, 140, 12, 140, 7),
-      ('set-exh-01-6', 'sess-exh-01', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 1, 12, 140, 11, 150, 7.5),
-      -- sess-exh-02 legs
-      ('set-exh-02-1', 'sess-exh-02', 'tmpl-exh-legs-ex1', 'ex-back-squat', 0, 8, 245, 8, 245, 7.5),
-      ('set-exh-02-2', 'sess-exh-02', 'tmpl-exh-legs-ex1', 'ex-back-squat', 1, 8, 245, 7, 255, 8),
-      ('set-exh-02-3', 'sess-exh-02', 'tmpl-exh-legs-ex2', 'ex-deadlift', 0, 6, 275, 6, 275, 7.5),
-      ('set-exh-02-4', 'sess-exh-02', 'tmpl-exh-legs-ex2', 'ex-deadlift', 1, 6, 275, 5, 285, 8),
-      ('set-exh-02-5', 'sess-exh-02', 'tmpl-exh-legs-ex3', 'ex-leg-press', 0, 12, 360, 12, 360, 7),
-      ('set-exh-02-6', 'sess-exh-02', 'tmpl-exh-legs-ex3', 'ex-leg-press', 1, 12, 360, 11, 380, 7.5),
-      -- sess-exh-03 arms/shoulders
-      ('set-exh-03-1', 'sess-exh-03', 'tmpl-exh-arms-shoulders-ex1', 'ex-ohp', 0, 8, 115, 8, 115, 7.5),
-      ('set-exh-03-2', 'sess-exh-03', 'tmpl-exh-arms-shoulders-ex1', 'ex-ohp', 1, 8, 115, 7, 125, 8),
-      ('set-exh-03-3', 'sess-exh-03', 'tmpl-exh-arms-shoulders-ex2', 'ex-dumbbell-curl', 0, 12, 35, 12, 35, 7),
-      ('set-exh-03-4', 'sess-exh-03', 'tmpl-exh-arms-shoulders-ex3', 'ex-tricep-pushdown', 0, 12, 70, 12, 70, 7),
-      ('set-exh-03-5', 'sess-exh-03', 'tmpl-exh-arms-shoulders-ex4', 'ex-lateral-raise', 0, 15, 25, 15, 25, 7),
-      -- sess-exh-04 chest/back
-      ('set-exh-04-1', 'sess-exh-04', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 0, 8, 185, 8, 190, 7.5),
-      ('set-exh-04-2', 'sess-exh-04', 'tmpl-exh-chest-back-ex2', 'ex-row', 0, 10, 155, 10, 160, 7),
-      ('set-exh-04-3', 'sess-exh-04', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 0, 12, 140, 12, 145, 7),
-      -- sess-exh-05 legs
-      ('set-exh-05-1', 'sess-exh-05', 'tmpl-exh-legs-ex1', 'ex-back-squat', 0, 8, 245, 8, 250, 7.5),
-      ('set-exh-05-2', 'sess-exh-05', 'tmpl-exh-legs-ex2', 'ex-deadlift', 0, 6, 275, 6, 280, 7.5),
-      ('set-exh-05-3', 'sess-exh-05', 'tmpl-exh-legs-ex3', 'ex-leg-press', 0, 12, 360, 12, 380, 7),
-      ('set-exh-05-4', 'sess-exh-05', 'tmpl-exh-legs-ex4', 'ex-leg-curl', 0, 15, 110, 15, 110, 7),
-      -- sess-exh-06 arms/shoulders
-      ('set-exh-06-1', 'sess-exh-06', 'tmpl-exh-arms-shoulders-ex1', 'ex-ohp', 0, 8, 115, 8, 120, 7.5),
-      ('set-exh-06-2', 'sess-exh-06', 'tmpl-exh-arms-shoulders-ex2', 'ex-dumbbell-curl', 0, 12, 35, 12, 37.5, 7.5),
-      ('set-exh-06-3', 'sess-exh-06', 'tmpl-exh-arms-shoulders-ex3', 'ex-tricep-pushdown', 0, 12, 70, 12, 75, 7.5),
-      ('set-exh-06-4', 'sess-exh-06', 'tmpl-exh-arms-shoulders-ex4', 'ex-lateral-raise', 0, 15, 25, 15, 27.5, 7.5),
-      -- sess-exh-07 chest/back
-      ('set-exh-07-1', 'sess-exh-07', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 0, 8, 185, 8, 200, 8),
-      ('set-exh-07-2', 'sess-exh-07', 'tmpl-exh-chest-back-ex2', 'ex-row', 0, 10, 155, 10, 165, 7.5),
-      ('set-exh-07-3', 'sess-exh-07', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 0, 12, 140, 12, 150, 7.5),
-      -- sess-exh-08 legs
-      ('set-exh-08-1', 'sess-exh-08', 'tmpl-exh-legs-ex1', 'ex-back-squat', 0, 8, 245, 8, 255, 7.5),
-      ('set-exh-08-2', 'sess-exh-08', 'tmpl-exh-legs-ex3', 'ex-leg-press', 0, 12, 360, 12, 390, 7.5),
-      ('set-exh-08-3', 'sess-exh-08', 'tmpl-exh-legs-ex4', 'ex-leg-curl', 0, 15, 110, 15, 115, 7.5),
-      -- sess-exh-09 arms/shoulders
-      ('set-exh-09-1', 'sess-exh-09', 'tmpl-exh-arms-shoulders-ex1', 'ex-ohp', 0, 8, 115, 8, 125, 7.5),
-      ('set-exh-09-2', 'sess-exh-09', 'tmpl-exh-arms-shoulders-ex2', 'ex-dumbbell-curl', 0, 12, 35, 12, 37.5, 7.5),
-      ('set-exh-09-3', 'sess-exh-09', 'tmpl-exh-arms-shoulders-ex3', 'ex-tricep-pushdown', 0, 12, 70, 12, 75, 7.5),
-      ('set-exh-09-4', 'sess-exh-09', 'tmpl-exh-arms-shoulders-ex4', 'ex-lateral-raise', 0, 15, 25, 15, 27.5, 7.5),
-      -- sess-exh-10 chest/back
-      ('set-exh-10-1', 'sess-exh-10', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 0, 8, 185, 8, 195, 7.5),
-      ('set-exh-10-2', 'sess-exh-10', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 1, 8, 185, 7, 205, 8),
-      ('set-exh-10-3', 'sess-exh-10', 'tmpl-exh-chest-back-ex2', 'ex-row', 0, 10, 155, 10, 165, 7.5),
-      ('set-exh-10-4', 'sess-exh-10', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 0, 12, 140, 12, 150, 7.5),
-      -- sess-exh-11 legs
-      ('set-exh-11-1', 'sess-exh-11', 'tmpl-exh-legs-ex1', 'ex-back-squat', 0, 8, 245, 8, 260, 7.5),
-      ('set-exh-11-2', 'sess-exh-11', 'tmpl-exh-legs-ex2', 'ex-deadlift', 0, 6, 275, 6, 290, 8),
-      ('set-exh-11-3', 'sess-exh-11', 'tmpl-exh-legs-ex3', 'ex-leg-press', 0, 12, 360, 12, 400, 7.5),
-      ('set-exh-11-4', 'sess-exh-11', 'tmpl-exh-legs-ex4', 'ex-leg-curl', 0, 15, 110, 15, 120, 7.5),
-      -- sess-exh-12 arms/shoulders
-      ('set-exh-12-1', 'sess-exh-12', 'tmpl-exh-arms-shoulders-ex1', 'ex-ohp', 0, 8, 115, 8, 122.5, 7.5),
-      ('set-exh-12-2', 'sess-exh-12', 'tmpl-exh-arms-shoulders-ex2', 'ex-dumbbell-curl', 0, 12, 35, 13, 37.5, 7.5),
-      ('set-exh-12-3', 'sess-exh-12', 'tmpl-exh-arms-shoulders-ex3', 'ex-tricep-pushdown', 0, 12, 70, 13, 75, 7.5),
-      ('set-exh-12-4', 'sess-exh-12', 'tmpl-exh-arms-shoulders-ex4', 'ex-lateral-raise', 0, 15, 25, 16, 27.5, 7.5),
-      -- sess-exh-13 chest/back (recent)
-      ('set-exh-13-1', 'sess-exh-13', 'tmpl-exh-chest-back-ex1', 'ex-bench-press', 0, 8, 185, 8, 200, 7.5),
-      ('set-exh-13-2', 'sess-exh-13', 'tmpl-exh-chest-back-ex2', 'ex-row', 0, 10, 155, 10, 170, 7.5),
-      ('set-exh-13-3', 'sess-exh-13', 'tmpl-exh-chest-back-ex3', 'ex-lat-pulldown', 0, 12, 140, 12, 155, 7.5),
-      ('set-exh-13-4', 'sess-exh-13', 'tmpl-exh-chest-back-ex4', 'ex-plank', 0, 0, NULL, 0, NULL, NULL)
-    ON CONFLICT (id) DO UPDATE
-      SET actual_reps = EXCLUDED.actual_reps,
-          actual_weight = EXCLUDED.actual_weight,
-          target_reps = EXCLUDED.target_reps,
-          target_weight = EXCLUDED.target_weight,
-          template_exercise_id = EXCLUDED.template_exercise_id,
-          exercise_id = EXCLUDED.exercise_id
-  `);
+  // Demo workout sessions and sets removed - no longer auto-generating for @exhibited user
+  // User can create their own workout history through the app
 
   const seededValues = MOCK_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
   await query(`

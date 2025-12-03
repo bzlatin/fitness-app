@@ -87,6 +87,7 @@ const mapUserRow = (row) => ({
     weeklyGoal: row.weekly_goal ?? 4,
     onboardingData: row.onboarding_data ?? undefined,
     progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
+    restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
 });
 const fetchUserSummary = async (userId) => {
     const result = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
@@ -279,7 +280,7 @@ router.put("/me", async (req, res) => {
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, } = req.body;
+    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, restTimerSoundEnabled, } = req.body;
     const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
     const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
     if (name !== undefined && !name.trim()) {
@@ -350,6 +351,11 @@ router.put("/me", async (req, res) => {
     if (progressiveOverloadEnabled !== undefined) {
         updates.push(`progressive_overload_enabled = $${idx}`);
         values.push(progressiveOverloadEnabled);
+        idx += 1;
+    }
+    if (restTimerSoundEnabled !== undefined) {
+        updates.push(`rest_timer_sound_enabled = $${idx}`);
+        values.push(restTimerSoundEnabled);
         idx += 1;
     }
     if (updates.length === 0) {

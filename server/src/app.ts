@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 import { UnauthorizedError } from "express-oauth2-jwt-bearer";
 import exercisesRouter from "./routes/exercises";
 import templatesRouter from "./routes/templates";
@@ -8,6 +9,7 @@ import socialRouter from "./routes/social";
 import aiRouter from "./routes/ai";
 import analyticsRouter from "./routes/analytics";
 import subscriptionsRouter from "./routes/subscriptions";
+import waitlistRouter from "./routes/waitlist";
 import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
@@ -21,10 +23,14 @@ app.use("/webhooks/appstore", appStoreWebhookRouter);
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, "..", "public")));
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/api/waitlist", waitlistRouter);
 app.use("/api/exercises", exercisesRouter);
 const authChain = [maybeRequireAuth, attachUser, ensureUser];
 app.use("/api/templates", ...authChain, templatesRouter);

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
+const path_1 = __importDefault(require("path"));
 const express_oauth2_jwt_bearer_1 = require("express-oauth2-jwt-bearer");
 const exercises_1 = __importDefault(require("./routes/exercises"));
 const templates_1 = __importDefault(require("./routes/templates"));
@@ -13,6 +14,7 @@ const social_1 = __importDefault(require("./routes/social"));
 const ai_1 = __importDefault(require("./routes/ai"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
 const subscriptions_1 = __importDefault(require("./routes/subscriptions"));
+const waitlist_1 = __importDefault(require("./routes/waitlist"));
 const stripe_1 = __importDefault(require("./webhooks/stripe"));
 const appstore_1 = __importDefault(require("./webhooks/appstore"));
 const auth_1 = require("./middleware/auth");
@@ -22,9 +24,12 @@ app.use("/webhooks/stripe", stripe_1.default);
 app.use("/webhooks/appstore", appstore_1.default);
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Serve static files from public directory
+app.use(express_1.default.static(path_1.default.join(__dirname, "..", "public")));
 app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
 });
+app.use("/api/waitlist", waitlist_1.default);
 app.use("/api/exercises", exercises_1.default);
 const authChain = [auth_1.maybeRequireAuth, auth_1.attachUser, auth_1.ensureUser];
 app.use("/api/templates", ...authChain, templates_1.default);

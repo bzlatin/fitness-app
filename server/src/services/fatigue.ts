@@ -242,12 +242,21 @@ const sortMuscles = (items: MuscleFatigue[]) =>
 
 export const getFatigueScores = async (userId: string): Promise<FatigueResult> => {
   const now = new Date();
-  const last7Start = subtractDays(now, 7);
-  const baselineStart = subtractDays(now, 35);
-  const baselineEnd = subtractDays(now, 7);
+  // Set time to start of day to avoid timezone/time-of-day issues
+  const nowStart = new Date(now);
+  nowStart.setHours(23, 59, 59, 999);
+
+  const last7Start = subtractDays(nowStart, 7);
+  last7Start.setHours(0, 0, 0, 0);
+
+  const baselineStart = subtractDays(nowStart, 35);
+  baselineStart.setHours(0, 0, 0, 0);
+
+  const baselineEnd = subtractDays(nowStart, 7);
+  baselineEnd.setHours(0, 0, 0, 0);
 
   const [last7Volumes, baselineVolumes] = await Promise.all([
-    fetchVolumeByMuscle(userId, last7Start, now),
+    fetchVolumeByMuscle(userId, last7Start, nowStart),
     fetchVolumeByMuscle(userId, baselineStart, baselineEnd),
   ]);
 
@@ -267,10 +276,18 @@ export const getFatigueScores = async (userId: string): Promise<FatigueResult> =
     const baselineMissing = baselineWeekly === 0;
     const hasAnyData = last7 > 0 || !baselineMissing;
 
+    // Calculate fatigue score
+    // Key insight: fatigueScore represents training load as a % of baseline
+    // - 0-70%: under-trained (low recent volume = fresh/recovered)
+    // - 70-110%: optimal (near baseline = good training)
+    // - 110-130%: moderate fatigue (above baseline = needs monitoring)
+    // - 130%+: high fatigue (way above baseline = needs rest)
+    //
+    // When last7 = 0 and baseline exists, muscle is FULLY RECOVERED (score = 0)
     const fatigueScore = baselineMissing
       ? last7 > 0
-        ? 100
-        : 0
+        ? 100  // Has recent data but no baseline: assume optimal
+        : 0    // No recent data, no baseline: no-data
       : safeDivide(last7, baselineWeekly) * 100;
 
     const status =

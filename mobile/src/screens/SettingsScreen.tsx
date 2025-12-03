@@ -34,6 +34,7 @@ import { formatHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -85,10 +86,16 @@ const SettingsScreen = () => {
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: false, // Don't refetch on every mount
   });
-  const isPro = (user?.plan ?? "free") === "pro";
+  const subscriptionPlan = subscriptionStatus?.plan ?? user?.plan ?? "free";
+  const isPro =
+    subscriptionPlan === "pro" || subscriptionPlan === "lifetime";
   const isIOS = Platform.OS === "ios";
   const isAppleSubscription =
     subscriptionStatus?.subscriptionPlatform === "apple";
+  const platformStatus = subscriptionStatus?.status?.toLowerCase();
+  const isGrace = platformStatus === "in_grace_period";
+  const isExpired =
+    platformStatus === "expired" || platformStatus === "revoked";
   const formatDate = (value?: number | null | string) => {
     if (!value) return undefined;
     const date =
@@ -867,11 +874,44 @@ const SettingsScreen = () => {
             {isSubscriptionLoading ? (
               <ActivityIndicator color={colors.primary} />
             ) : isSubscriptionError ? (
-              <Text style={{ color: colors.error, fontSize: 12 }}>
-                Unable to load billing status.
-              </Text>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: colors.error, fontSize: 12 }}>
+                  Unable to load billing status.
+                </Text>
+                <Pressable
+                  onPress={() => refetchSubscriptionStatus()}
+                  style={({ pressed }) => ({
+                    alignSelf: "flex-start",
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 12,
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </Pressable>
+              </View>
             ) : (
               <>
+                {platformStatus ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Status: {platformStatus.replace(/_/g, " ")}
+                    {subscriptionStatus?.subscriptionPlatform === "apple" &&
+                    subscriptionStatus?.appleEnvironment
+                      ? ` (${subscriptionStatus.appleEnvironment})`
+                      : ""}
+                  </Text>
+                ) : null}
                 {trialEnds ? (
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                     Trial ends {trialEnds}
@@ -882,6 +922,16 @@ const SettingsScreen = () => {
                     {subscriptionStatus?.cancelAtPeriodEnd
                       ? `Ends on ${renewalDate}`
                       : `Renews on ${renewalDate}`}
+                  </Text>
+                ) : null}
+                {isGrace ? (
+                  <Text style={{ color: "#fbbf24", fontSize: 12 }}>
+                    Grace period: update your Apple billing to keep Pro access.
+                  </Text>
+                ) : null}
+                {isExpired ? (
+                  <Text style={{ color: colors.error, fontSize: 12 }}>
+                    Subscription expired — renew to restore Pro features.
                   </Text>
                 ) : null}
               </>
@@ -950,6 +1000,46 @@ const SettingsScreen = () => {
                 )}
               </Pressable>
             ) : null}
+            <View
+              style={{
+                marginTop: 10,
+                flexDirection: "row",
+                gap: 12,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                }}
+              >
+                Legal:
+              </Text>
+              <Pressable onPress={() => Linking.openURL(TERMS_URL)}>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                  }}
+                >
+                  Terms of Service
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => Linking.openURL(PRIVACY_URL)}>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                  }}
+                >
+                  Privacy Policy
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
 

@@ -18,9 +18,12 @@ export const useWorkoutHistory = (start: Date, end: Date) => {
     queryFn: () => fetchHistoryRange(startIso, endIso),
     select: (data) => {
       const uniqueSessionIds = new Set<string>();
+      // CRITICAL: Only show sessions that have been completed (finishedAt is set)
+      // This prevents in-progress sessions from appearing in history before they're done
       const filteredDays = data.days
         .map((day) => {
           const uniqueSessions = day.sessions.filter((session) => {
+            // Must have finishedAt AND be unique
             if (session.finishedAt && !uniqueSessionIds.has(session.id)) {
               uniqueSessionIds.add(session.id);
               return true;
