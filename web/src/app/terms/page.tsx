@@ -149,10 +149,10 @@ export default function TermsOfService() {
             <p>
               If you have questions about these Terms, please contact us at:{" "}
               <a
-                href='mailto:legal@pushpull.app'
+                href='mailto:help@push-pull.app'
                 className='text-primary hover:underline'
               >
-                legal@pushpull.app
+                help@push-pull.app
               </a>
             </p>
           </Section>

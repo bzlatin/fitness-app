@@ -122,10 +122,10 @@ export default function PrivacyPolicy() {
               If you have questions about this Privacy Policy, please contact us
               at:{" "}
               <a
-                href='mailto:privacy@pushpull.app'
+                href='mailto:help@push-pull.app'
                 className='text-primary hover:underline'
               >
-                privacy@pushpull.app
+                help@push-pull.app
               </a>
             </p>
           </Section>
