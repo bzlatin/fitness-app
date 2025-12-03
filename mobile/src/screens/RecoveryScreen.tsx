@@ -65,12 +65,14 @@ const RecoveryScreen = () => {
     isRefetching,
     isError,
     refetch,
+    error: fatigueError,
   } = useFatigue(true);
   const {
     data: recommendations,
     isLoading: recLoading,
     isRefetching: recRefetching,
     refetch: refetchRecommendations,
+    error: recommendationsError,
   } = useTrainingRecommendations(isPro && !!fatigue);
   const aiWorkout = useMutation({
     mutationFn: async () => {
@@ -351,6 +353,12 @@ const RecoveryScreen = () => {
     await refetchRecommendations();
   }, [refetch, refetchRecommendations]);
 
+  useEffect(() => {
+    if (fatigueError?.requiresUpgrade || recommendationsError?.requiresUpgrade) {
+      setShowPaywallModal(true);
+    }
+  }, [fatigueError, recommendationsError]);
+
   const handleMuscleSelect = useCallback((muscle: string) => {
     // Free users can see the heatmap but not the detailed percentages modal
     if (!isPro) {
@@ -396,6 +404,59 @@ const RecoveryScreen = () => {
           <Text style={{ marginTop: 10, color: colors.textSecondary }}>
             Loading recovery insights...
           </Text>
+        </View>
+      );
+    }
+
+    if (fatigueError?.requiresUpgrade) {
+      return (
+        <View style={{ gap: 12, paddingTop: 20 }}>
+          <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
+            Recovery & Fatigue
+          </Text>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 10,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 18,
+              }}
+            >
+              Recovery insights require Pro
+            </Text>
+            <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
+              Upgrade to Pro to unlock fatigue intelligence, per-muscle readiness, and AI painting
+              of your recovery window.
+            </Text>
+            <Pressable
+              onPress={() => setShowPaywallModal(true)}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                borderRadius: 12,
+                paddingVertical: 12,
+                alignItems: "center",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Upgrade to Pro
+              </Text>
+            </Pressable>
+          </View>
         </View>
       );
     }

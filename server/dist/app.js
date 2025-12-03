@@ -14,6 +14,7 @@ const social_1 = __importDefault(require("./routes/social"));
 const ai_1 = __importDefault(require("./routes/ai"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
 const subscriptions_1 = __importDefault(require("./routes/subscriptions"));
+const waitlist_1 = __importDefault(require("./routes/waitlist"));
 const stripe_1 = __importDefault(require("./webhooks/stripe"));
 const appstore_1 = __importDefault(require("./webhooks/appstore"));
 const auth_1 = require("./middleware/auth");
@@ -28,6 +29,7 @@ app.use(express_1.default.static(path_1.default.join(__dirname, "..", "public"))
 app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
 });
+app.use("/api/waitlist", waitlist_1.default);
 app.use("/api/exercises", exercises_1.default);
 const authChain = [auth_1.maybeRequireAuth, auth_1.attachUser, auth_1.ensureUser];
 app.use("/api/templates", ...authChain, templates_1.default);

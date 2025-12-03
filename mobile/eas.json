@@ -15,11 +15,13 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://push-pull.onrender.com/api",
+        "EXPO_APPLE_TEAM_ID": "H8FTH49S8J",
         "EXPO_PUBLIC_AUTH0_DOMAIN": "dev-u4u5zoxx7i0wbi1d.us.auth0.com",
         "EXPO_PUBLIC_AUTH0_CLIENT_ID": "oQH0ECq4PcmN4JAgYax5Mm9CqHtLKWvi",
         "EXPO_PUBLIC_AUTH0_AUDIENCE": "https://push-pull-app-api",
         "EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME": "push-pull",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SXArdCrS1s1Z7NCEy9Ysyh1u0xTwAxbtLKqAMuxx6FBZkuIgjJtvrZ9wJvJgRtmHkOwG5KzxoPN9X9h7N3u5AQS00mzUZiyEG"
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SXArdCrS1s1Z7NCEy9Ysyh1u0xTwAxbtLKqAMuxx6FBZkuIgjJtvrZ9wJvJgRtmHkOwG5KzxoPN9X9h7N3u5AQS00mzUZiyEG",
+        "EXPO_APPLE_TEAM_ID": "YOUR_APPLE_TEAM_ID_PLACEHOLDER"
       }
     }
   },

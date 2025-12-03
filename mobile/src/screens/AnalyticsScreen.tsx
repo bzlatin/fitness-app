@@ -21,6 +21,8 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isPro as checkIsPro } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { RootNavigation } from "../navigation/RootNavigator";
+import type { AdvancedAnalytics } from "../types/analytics";
+import type { ApiClientError } from "../api/client";
 
 const AnalyticsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -37,13 +39,13 @@ const AnalyticsScreen = () => {
     isRefetching,
     refetch,
     isError,
-  } = useQuery({
+  } = useQuery<AdvancedAnalytics, ApiClientError>({
     queryKey: ["advancedAnalytics", timeRange],
     queryFn: () => fetchAdvancedAnalytics(timeRange),
     enabled: isPro,
     retry: false,
     onError: (err: any) => {
-      if (err?.response?.status === 403) {
+      if (err?.status === 403 || err?.requiresUpgrade) {
         setShowPaywallModal(true);
       }
     },

@@ -3,14 +3,25 @@ import { ConfigContext, ExpoConfig } from "expo/config";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
 
-const callbackScheme = process.env.EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME || "push-pull";
+const callbackScheme =
+  process.env.EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME || "push-pull";
 const iosBundleId = process.env.EXPO_PUBLIC_IOS_BUNDLE_ID || "com.pushpull.app";
-const androidPackage = process.env.EXPO_PUBLIC_ANDROID_PACKAGE || "com.pushpull.app";
+const androidPackage =
+  process.env.EXPO_PUBLIC_ANDROID_PACKAGE || "com.pushpull.app";
+const appleTeamId =
+  process.env.EXPO_APPLE_TEAM_ID ??
+  process.env.EXPO_APPLE_DEVELOPER_TEAM_ID ??
+  process.env.EXPO_PUBLIC_APPLE_TEAM_ID ??
+  null;
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const iosConfig: ExpoConfig["ios"] & { storeKitConfiguration?: string } = {
+  const iosConfig: ExpoConfig["ios"] & {
+    storeKitConfiguration?: string;
+    teamId?: string;
+  } = {
     ...config.ios,
     bundleIdentifier: iosBundleId,
+    teamId: appleTeamId ?? undefined,
     supportsTablet: true,
     buildNumber: config.ios?.buildNumber ?? "1.0.0",
     storeKitConfiguration: "./ios/StoreKit/Configuration.storekit",

@@ -583,9 +583,9 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 
 **Setup & Configuration:**
 
-- [ ] Create Apple Developer account ($99/year)
-- [ ] Register app in App Store Connect
-- [ ] Create two subscription products in App Store Connect
+- [x] Create Apple Developer account ($99/year)
+- [x] Register app in App Store Connect
+- [x] Create two subscription products in App Store Connect
 - [x] Set up StoreKit Configuration file for local testing
 - [x] Add iOS bundle identifier to `app.config.ts`
 - [ ] Configure Apple Team ID in Expo build settings
@@ -746,9 +746,9 @@ Since this is pre-launch with no existing iOS users:
 
 **Documentation to Create**:
 
-- [ ] `IOS_IAP_SETUP.md` - Setup guide for App Store Connect
-- [ ] Update README with iOS testing instructions
-- [ ] Document subscription platform switching (if user moves from Android to iOS)
+- [x] `IOS_IAP_SETUP.md` - Setup guide for App Store Connect
+- [x] Update README with iOS testing instructions
+- [x] Document subscription platform switching (if user moves from Android to iOS)
 
 **Deployment Considerations**:
 
@@ -804,7 +804,7 @@ Since this is pre-launch with no existing iOS users:
 - [x] Fix template limit constant: Change from 5 to 3 in `/mobile/src/utils/featureGating.ts`
 - [x] Add "X/3 templates" counter UI to MyWorkoutsScreen header (always visible for free users)
 - [x] Update template limit error message in MyWorkoutsScreen to show PaywallComparisonModal instead of Alert
-- [ ] Apply template limit check in WorkoutTemplateBuilderScreen before save
+- [x] Apply template limit check in WorkoutTemplateBuilderScreen before save
 
 **Frontend - Recovery/Fatigue Paywall:**
 

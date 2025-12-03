@@ -62,6 +62,23 @@ const buildUrl = (path: string, params?: RequestConfig["params"]) => {
   return url.toString();
 };
 
+export interface ApiClientError extends Error {
+  status?: number;
+  requiresUpgrade?: boolean;
+}
+
+class ApiRequestError extends Error implements ApiClientError {
+  status?: number;
+  requiresUpgrade?: boolean;
+
+  constructor(message: string, status?: number, requiresUpgrade?: boolean) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.requiresUpgrade = requiresUpgrade;
+  }
+}
+
 const request = async <T>(
   path: string,
   init: RequestInit,
@@ -109,29 +126,29 @@ const request = async <T>(
     clearTimeout(timeout);
   }
 
-  if (!response.ok) {
-    const raw = await response.text().catch(() => response.statusText);
-    const parsedError = (() => {
-      try {
-        return raw ? (JSON.parse(raw) as { error?: string; requiresUpgrade?: boolean }) : null;
-      } catch {
-        return null;
+    if (!response.ok) {
+      const raw = await response.text().catch(() => response.statusText);
+      const parsedError = (() => {
+        try {
+          return raw ? (JSON.parse(raw) as { error?: string; requiresUpgrade?: boolean }) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      // Only trigger sign-out for actual auth errors, not plan restrictions
+      const isAuthError =
+        response.status === 401 ||
+        (response.status === 403 && !parsedError?.requiresUpgrade) ||
+        (response.status === 400 && parsedError?.error?.toLowerCase() === "unauthorized");
+
+      if (isAuthError) {
+        authErrorHandler?.();
       }
-    })();
 
-    // Only trigger sign-out for actual auth errors, not plan restrictions
-    const isAuthError =
-      response.status === 401 ||
-      (response.status === 403 && !parsedError?.requiresUpgrade) ||
-      (response.status === 400 && parsedError?.error?.toLowerCase() === "unauthorized");
-
-    if (isAuthError) {
-      authErrorHandler?.();
+      const message = parsedError?.error ?? raw ?? response.statusText;
+      throw new ApiRequestError(`Request failed: ${response.status} ${message}`, response.status, parsedError?.requiresUpgrade);
     }
-
-    const message = parsedError?.error ?? raw ?? response.statusText;
-    throw new Error(`Request failed: ${response.status} ${message}`);
-  }
 
   if (!expectJson || response.status === 204) {
     return { data: undefined as T };

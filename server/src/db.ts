@@ -132,6 +132,16 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS idx_appstore_notifications_original_tx ON appstore_notifications(original_transaction_id)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS waitlist_emails (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      source TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   await query(`UPDATE users SET plan = 'free' WHERE plan IS NULL`);
 
   await query(`

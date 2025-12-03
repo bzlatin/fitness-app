@@ -20,16 +20,14 @@ import {
 import ExercisePicker from "../components/workouts/ExercisePicker";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import ScreenContainer from "../components/layout/ScreenContainer";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import {
   createTemplate,
   fetchTemplate,
   updateTemplate,
   deleteTemplate,
 } from "../api/templates";
-import {
-  templatesKey,
-  useWorkoutTemplates,
-} from "../hooks/useWorkoutTemplates";
+import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -42,6 +40,7 @@ import {
 import { isCardioExercise } from "../utils/exercises";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
+import type { ApiClientError } from "../api/client";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -74,6 +73,7 @@ const createFallbackExercise = (
 const generateFormId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+type CreateTemplatePayload = Parameters<typeof createTemplate>[0];
 const mapPersistedExercise = (
   exercise: WorkoutTemplateExercise
 ): TemplateExerciseForm => ({
@@ -117,6 +117,7 @@ const WorkoutTemplateBuilderScreen = () => {
     () => listData?.find((t) => t.id === route.params?.templateId),
     [listData, route.params?.templateId]
   );
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: [...templatesKey, route.params?.templateId],
@@ -188,14 +189,23 @@ const WorkoutTemplateBuilderScreen = () => {
     existingTemplate,
   ]);
 
-  const createMutation = useMutation({
-    mutationFn: createTemplate,
+  const createMutation = useMutation<WorkoutTemplate, ApiClientError, CreateTemplatePayload>({
+    mutationFn: (payload) => createTemplate(payload),
     onSuccess: (template) => {
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: templatesKey });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
-    onError: () => Alert.alert("Could not save template", "Please try again."),
+    onError: (err) => {
+      if (err.requiresUpgrade) {
+        setShowPaywallModal(true);
+        return;
+      }
+      Alert.alert(
+        "Could not save template",
+        err.message || "Please try again."
+      );
+    },
   });
 
   const updateMutation = useMutation({
@@ -933,6 +943,11 @@ const WorkoutTemplateBuilderScreen = () => {
           />
         )}
       </View>
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+        triggeredBy="templates"
+      />
     </ScreenContainer>
   );
 };

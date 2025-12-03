@@ -9,6 +9,7 @@ import socialRouter from "./routes/social";
 import aiRouter from "./routes/ai";
 import analyticsRouter from "./routes/analytics";
 import subscriptionsRouter from "./routes/subscriptions";
+import waitlistRouter from "./routes/waitlist";
 import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/api/waitlist", waitlistRouter);
 app.use("/api/exercises", exercisesRouter);
 const authChain = [maybeRequireAuth, attachUser, ensureUser];
 app.use("/api/templates", ...authChain, templatesRouter);
