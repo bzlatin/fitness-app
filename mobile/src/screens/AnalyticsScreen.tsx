@@ -160,6 +160,69 @@ const AnalyticsScreen = () => {
     frequencyHeatmap,
   } = analytics;
 
+  const totalTrackedVolume =
+    pushPullBalance.pushVolume +
+    pushPullBalance.pullVolume +
+    pushPullBalance.legVolume +
+    pushPullBalance.otherVolume;
+
+  const hasAnalyticsData =
+    weeklyVolumeData.length > 0 ||
+    muscleGroupSummaries.length > 0 ||
+    volumePRs.length > 0 ||
+    frequencyHeatmap.length > 0 ||
+    totalTrackedVolume > 0;
+
+  const pushPullRatioDisplay = (() => {
+    const hasPush = pushPullBalance.pushVolume > 0;
+    const hasPull = pushPullBalance.pullVolume > 0;
+
+    if (!hasPush && !hasPull) {
+      return "—";
+    }
+    if (hasPush && !hasPull) {
+      return ">9:1";
+    }
+    if (!hasPush && hasPull) {
+      return "<0.1:1";
+    }
+    return `${pushPullBalance.pushPullRatio.toFixed(1)}:1`;
+  })();
+
+  if (!hasAnalyticsData) {
+    return (
+      <ScreenContainer
+        scroll
+        showGradient
+        showTopGradient
+        paddingTop={20}
+        includeTopInset={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Advanced Analytics</Text>
+          <Text style={styles.headerSubtitle}>
+            Track your volume, balance, and progress
+          </Text>
+        </View>
+
+        <View style={styles.emptyState}>
+          <Ionicons
+            name='bar-chart-outline'
+            size={56}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyTitle}>No workout data yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Log your first workout to see analytics
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
   return (
     <ScreenContainer
       scroll
@@ -237,9 +300,7 @@ const AnalyticsScreen = () => {
               </Text>
             </View>
             <View style={styles.balanceRatioContainer}>
-              <Text style={styles.balanceRatio}>
-                {pushPullBalance.pushPullRatio.toFixed(1)}:1
-              </Text>
+              <Text style={styles.balanceRatio}>{pushPullRatioDisplay}</Text>
             </View>
             <View style={[styles.balanceColumn, styles.balanceColumnRight]}>
               <Text style={styles.balanceLabel}>Pull Volume</Text>
@@ -526,6 +587,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fontFamilies.regular,
     color: colors.textSecondary,
+  },
+  emptyState: {
+    paddingHorizontal: 16,
+    paddingVertical: 48,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    marginTop: 16,
+    fontSize: 18,
+    fontFamily: fontFamilies.semibold,
+    color: colors.textPrimary,
+  },
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    color: colors.textSecondary,
+    textAlign: "center",
   },
   timeRangeWrapper: {
     paddingHorizontal: 16,
