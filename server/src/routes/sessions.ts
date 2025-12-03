@@ -3,57 +3,24 @@ import { PoolClient } from "pg";
 import { pool, query } from "../db";
 import { WorkoutSession, WorkoutSet } from "../types/workouts";
 import { generateId } from "../utils/id";
-import { exercises as localExercises } from "../data/exercises";
-import { loadExercisesJson } from "../utils/exerciseData";
+import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
 
 const router = Router();
 
-type LocalExercise = {
-  id: string;
-  name: string;
-  force?: string | null;
-  level?: string | null;
-  mechanic?: string | null;
-  equipment?: string | null;
-  primaryMuscles?: string[];
-  secondaryMuscles?: string[];
-  instructions?: string[];
-  category?: string;
-  images?: string[];
-};
-
-const distExercises = loadExercisesJson<LocalExercise>();
-
-const dedupeId = (id: string) => id.replace(/\s+/g, "_");
 const formatExerciseId = (id: string) =>
   id
     .replace(/[_-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
-const normalizeExercise = (item: LocalExercise) => {
-  const images = item.images ?? [];
-  const imageUrl =
-    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
 
-  return {
-    id: item.id || dedupeId(item.name),
-    name: item.name,
-    gifUrl: imageUrl,
-  };
+const buildMetaMapFromSets = async (
+  setRows: { exercise_id: string }[]
+): Promise<Map<string, ExerciseMeta>> => {
+  const ids = Array.from(
+    new Set(setRows.map((set) => set.exercise_id).filter(Boolean))
+  );
+  return fetchExerciseMetaByIds(ids);
 };
-
-const exerciseIndex = new Map<string, { name: string; gifUrl?: string }>();
-(localExercises as unknown as LocalExercise[]).forEach((item) => {
-  const normalized = normalizeExercise(item);
-  exerciseIndex.set(normalized.id, { name: normalized.name, gifUrl: normalized.gifUrl });
-});
-distExercises.forEach((item) => {
-  const normalized = normalizeExercise(item as unknown as LocalExercise);
-  exerciseIndex.set(normalized.id, { name: normalized.name, gifUrl: normalized.gifUrl });
-});
-
-const describeExercise = (exerciseId: string) =>
-  exerciseIndex.get(exerciseId) ?? { name: formatExerciseId(exerciseId) };
 
 type TemplateExerciseRow = {
   id: string;
@@ -88,8 +55,9 @@ type SetRow = {
   rpe: string | null;
 };
 
-const mapSet = (row: SetRow): WorkoutSet => {
-  const exerciseMeta = describeExercise(row.exercise_id);
+const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet => {
+  const exerciseMeta = metaMap?.get(row.exercise_id);
+  const exerciseName = exerciseMeta?.name ?? formatExerciseId(row.exercise_id);
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -101,15 +69,16 @@ const mapSet = (row: SetRow): WorkoutSet => {
     actualReps: row.actual_reps ?? undefined,
     actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
     rpe: row.rpe === null ? undefined : Number(row.rpe),
-    exerciseName: exerciseMeta.name,
-    exerciseImageUrl: exerciseMeta.gifUrl,
+    exerciseName,
+    exerciseImageUrl: exerciseMeta?.gifUrl,
   };
 };
 
 const mapSession = (
   row: SessionRow,
   setRows: SetRow[],
-  meta?: { templateName?: string }
+  meta?: { templateName?: string },
+  metaMap?: Map<string, ExerciseMeta>
 ): WorkoutSession => ({
   id: row.id,
   userId: row.user_id,
@@ -120,7 +89,7 @@ const mapSession = (
   sets: setRows
     .filter((set) => set.session_id === row.id)
     .sort((a, b) => a.set_index - b.set_index)
-    .map(mapSet),
+    .map((set) => mapSet(set, metaMap)),
 });
 
 const startOfDayUtc = (date: Date) => {
@@ -215,7 +184,8 @@ const fetchSessionById = async (sessionId: string, userId: string) => {
     `SELECT * FROM workout_sets WHERE session_id = $1 ORDER BY set_index ASC`,
     [sessionId]
   );
-  return mapSession(sessionResult.rows[0], setRows.rows);
+  const metaMap = await buildMetaMapFromSets(setRows.rows);
+  return mapSession(sessionResult.rows[0], setRows.rows, undefined, metaMap);
 };
 
 router.post("/from-template/:templateId", async (req, res) => {
@@ -286,6 +256,7 @@ router.post("/from-template/:templateId", async (req, res) => {
           [sessionId]
         )
       ).rows;
+      const metaMap = await buildMetaMapFromSets(setRows);
 
       return mapSession(
         {
@@ -298,7 +269,8 @@ router.post("/from-template/:templateId", async (req, res) => {
           updated_at: now,
         },
         setRows,
-        { templateName: template.name }
+        { templateName: template.name },
+        metaMap
       );
     });
 
@@ -361,9 +333,12 @@ router.get("/history/range", async (req, res) => {
               [sessionIds]
             )
           ).rows;
+    const metaMap = await buildMetaMapFromSets(setRows);
 
     const summaries: SessionSummary[] = sessionRows.rows.map((row) => {
-      const sets = setRows.filter((set) => set.session_id === row.id).map(mapSet);
+      const sets = setRows
+        .filter((set) => set.session_id === row.id)
+        .map((set) => mapSet(set, metaMap));
       const totalVolume = computeSessionVolume(sets);
       const exerciseMap = new Map<
         string,
@@ -638,6 +613,7 @@ router.post("/manual", async (req, res) => {
           sessionId,
         ])
       ).rows;
+      const metaMap = await buildMetaMapFromSets(setRows);
 
       return mapSession(
         {
@@ -651,7 +627,8 @@ router.post("/manual", async (req, res) => {
           updated_at: safeFinish?.toISOString() ?? safeStart.toISOString(),
         },
         setRows,
-        { templateName }
+        { templateName },
+        metaMap
       );
     });
 

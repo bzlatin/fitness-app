@@ -3,9 +3,8 @@ import { PoolClient } from "pg";
 import { generateId } from "../utils/id";
 import { WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
 import { pool, query } from "../db";
-import { exercises as localExercises } from "../data/exercises";
-import { loadExercisesJson } from "../utils/exerciseData";
 import { checkTemplateLimit } from "../middleware/planLimits";
+import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
 
 const router = Router();
 
@@ -35,76 +34,27 @@ type ExerciseRow = {
   notes: string | null;
 };
 
-type LocalExercise = {
-  id: string;
-  name: string;
-  primaryMuscles?: string[];
-  primaryMuscleGroup?: string | string[];
-  equipment?: string | string[];
-  category?: string;
-  images?: string[];
-};
-
-const distExercises = loadExercisesJson<LocalExercise>();
-
-const dedupeId = (id: string) => id.replace(/\s+/g, "_");
 const formatExerciseId = (id: string) =>
   id
     .replace(/[_-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
-const normalizeExercise = (item: LocalExercise) => {
-  const primary =
-    item.primaryMuscles?.[0] ||
-    (Array.isArray(item.primaryMuscleGroup)
-      ? item.primaryMuscleGroup[0]
-      : item.primaryMuscleGroup) ||
-    "other";
-
-  const images = item.images ?? [];
-  const imageUrl =
-    images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
-
-  return {
-    id: item.id || dedupeId(item.name),
-    name: item.name,
-    primaryMuscleGroup: primary.toLowerCase(),
-    gifUrl: imageUrl,
-  };
-};
-
-const exerciseIndex = new Map<
-  string,
-  { name: string; primaryMuscleGroup: string; gifUrl?: string }
->();
-(localExercises as unknown as LocalExercise[]).forEach((item) => {
-  const normalized = normalizeExercise(item);
-  exerciseIndex.set(normalized.id, normalized);
-});
-distExercises.forEach((item) => {
-  const normalized = normalizeExercise(item);
-  exerciseIndex.set(normalized.id, normalized);
-});
-
-const describeExercise = (exerciseId: string) =>
-  exerciseIndex.get(exerciseId) ?? {
-    name: formatExerciseId(exerciseId),
-    primaryMuscleGroup: "other",
-  };
-
 const numberOrUndefined = (value: string | number | null) =>
   value === null || value === undefined ? undefined : Number(value);
 
-const mapExercise = (row: ExerciseRow): WorkoutTemplateExercise => {
-  const meta = describeExercise(row.exercise_id);
+const mapExercise = (
+  row: ExerciseRow,
+  metaMap: Map<string, ExerciseMeta>
+): WorkoutTemplateExercise => {
+  const meta = metaMap.get(row.exercise_id);
   return {
     id: row.id,
     exerciseId: row.exercise_id,
     orderIndex: row.order_index,
-    exerciseName: meta.name,
-    primaryMuscleGroup: meta.primaryMuscleGroup,
-    exerciseImageUrl: meta.gifUrl,
+    exerciseName: meta?.name ?? formatExerciseId(row.exercise_id),
+    primaryMuscleGroup: meta?.primaryMuscleGroup ?? "other",
+    exerciseImageUrl: meta?.gifUrl,
     defaultSets: row.default_sets,
     defaultReps: row.default_reps,
     defaultRestSeconds: row.default_rest_seconds ?? undefined,
@@ -118,7 +68,8 @@ const mapExercise = (row: ExerciseRow): WorkoutTemplateExercise => {
 
 const mapTemplate = (
   row: TemplateRow,
-  exerciseRows: ExerciseRow[]
+  exerciseRows: ExerciseRow[],
+  metaMap: Map<string, ExerciseMeta>
 ): WorkoutTemplate => ({
   id: row.id,
   userId: row.user_id,
@@ -129,7 +80,7 @@ const mapTemplate = (
   exercises: exerciseRows
     .filter((ex) => ex.template_id === row.id)
     .sort((a, b) => a.order_index - b.order_index)
-    .map(mapExercise),
+    .map((ex) => mapExercise(ex, metaMap)),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -144,7 +95,12 @@ const buildTemplates = async (templateRows: TemplateRow[]) => {
      ORDER BY order_index ASC`,
     [templateIds]
   );
-  return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows));
+  const exerciseIds = Array.from(
+    new Set(exerciseRowsResult.rows.map((row) => row.exercise_id))
+  );
+  const metaMap = await fetchExerciseMetaByIds(exerciseIds);
+
+  return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows, metaMap));
 };
 
 const fetchTemplates = async (userId: string): Promise<WorkoutTemplate[]> => {
@@ -300,7 +256,11 @@ router.post("/", checkTemplateLimit, (req, res) => {
       )
     ).rows;
 
-    return mapTemplate(templateRow, exercisesRows);
+    const metaMap = await fetchExerciseMetaByIds(
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+    );
+
+    return mapTemplate(templateRow, exercisesRows, metaMap);
   })
     .then((template) => res.status(201).json(template))
     .catch((err) => {
@@ -421,7 +381,11 @@ router.put("/:id", (req, res) => {
       )
     ).rows;
 
-    return mapTemplate(templateResult.rows[0], exercisesRows);
+    const metaMap = await fetchExerciseMetaByIds(
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+    );
+
+    return mapTemplate(templateResult.rows[0], exercisesRows, metaMap);
   })
     .then((template) => res.json(template))
     .catch((err) => {
@@ -495,7 +459,11 @@ router.post("/:id/duplicate", async (req, res) => {
       )
     ).rows;
 
-    return mapTemplate(templateRow, exercisesRows);
+    const metaMap = await fetchExerciseMetaByIds(
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+    );
+
+    return mapTemplate(templateRow, exercisesRows, metaMap);
   })
     .then((duplicate) => res.status(201).json(duplicate))
     .catch((err) => {

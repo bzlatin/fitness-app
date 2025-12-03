@@ -7,51 +7,75 @@ const workoutPrompts_1 = require("../services/ai/workoutPrompts");
 const planLimits_1 = require("../middleware/planLimits");
 const db_1 = require("../db");
 const nanoid_1 = require("nanoid");
+const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const exerciseData_1 = require("../utils/exerciseData");
-const exercises_1 = require("../data/exercises");
 const router = (0, express_1.Router)();
-const dedupeId = (id) => id.replace(/\s+/g, "_");
 const formatExerciseName = (value) => value
     .replace(/^ex[-_]/i, "")
     .replace(/[_-]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
-const loadExercisesDatabase = () => {
-    const distExercises = (0, exerciseData_1.loadExercisesJson)();
-    if (distExercises.length > 0) {
-        console.log(`[AI Routes] Loaded ${distExercises.length} exercises from database`);
-        return distExercises;
-    }
-    console.warn("[AI Routes] Exercises database missing. Falling back to small local seed dataset.");
-    return exercises_1.exercises;
+const normalizeEquipment = (value) => {
+    const raw = Array.isArray(value) && value.length > 0
+        ? value[0].toLowerCase()
+        : value?.toLowerCase() ?? "";
+    if (raw.includes("body"))
+        return "bodyweight";
+    if (raw.includes("machine"))
+        return "machine";
+    if (raw.includes("cable"))
+        return "cable";
+    if (raw.includes("dumbbell"))
+        return "dumbbell";
+    if (raw.includes("barbell"))
+        return "barbell";
+    if (raw.includes("kettlebell"))
+        return "kettlebell";
+    return raw || "other";
 };
-const exercisesDatabase = loadExercisesDatabase();
 const normalizeExercise = (item) => {
     const primary = item.primaryMuscles?.[0] ||
         (Array.isArray(item.primaryMuscleGroup)
             ? item.primaryMuscleGroup[0]
             : item.primaryMuscleGroup) ||
         "other";
-    const equipment = item.equipment ||
-        (Array.isArray(item.equipments)
-            ? item.equipments[0]
-            : item.equipments) ||
-        "bodyweight";
-    const images = item.images ?? [];
-    const imageUrl = images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
-    const normalizedId = item.id || dedupeId(item.name || "exercise");
-    const displayName = (item.name && formatExerciseName(item.name)) || formatExerciseName(normalizedId);
+    const equipment = normalizeEquipment(item.equipment || item.equipments || "bodyweight");
+    const imagePath = item.images?.[0];
+    const normalizedId = (item.id || item.name.replace(/\s+/g, "_")).trim();
+    const displayName = formatExerciseName(item.name || normalizedId);
     return {
         id: normalizedId,
         name: displayName,
         primaryMuscleGroup: primary.toLowerCase(),
         equipment: equipment.toLowerCase(),
-        gifUrl: imageUrl,
+        gifUrl: imagePath ? `/api/exercises/assets/${imagePath}` : undefined,
     };
 };
-const normalizedExercises = exercisesDatabase.map(normalizeExercise);
-const exerciseLookup = new Map(normalizedExercises.map((item) => [item.id, item]));
+let exerciseCatalogCache = null;
+const loadExerciseCatalog = async () => {
+    if (exerciseCatalogCache)
+        return exerciseCatalogCache;
+    const dbExercises = await (0, exerciseCatalog_1.fetchExerciseCatalog)();
+    if (dbExercises.length) {
+        exerciseCatalogCache = dbExercises;
+        return exerciseCatalogCache;
+    }
+    const fallback = (0, exerciseData_1.loadExercisesJson)();
+    if (fallback.length) {
+        exerciseCatalogCache = fallback.map(normalizeExercise);
+        return exerciseCatalogCache;
+    }
+    exerciseCatalogCache = [];
+    return exerciseCatalogCache;
+};
+const buildExerciseLookup = async () => {
+    const catalog = await loadExerciseCatalog();
+    return {
+        catalog,
+        lookup: new Map(catalog.map((item) => [item.id, item])),
+    };
+};
 // Simple in-memory rate limiter (can be replaced with Redis in production)
 const rateLimitMap = new Map();
 const checkRateLimit = (userId, maxRequests = 10, windowMs = 60000) => {
@@ -177,8 +201,9 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
         console.log(`[AI] Generating workout for user ${userId}`);
         console.log(`[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`);
         console.log(`[AI] Targeting muscles: ${fatigueTargets.prioritize.join(", ") || "auto"} | Avoid: ${fatigueTargets.avoid.join(", ") || "none"}`);
+        const { catalog: exerciseCatalog, lookup: exerciseLookup } = await buildExerciseLookup();
         const aiProvider = (0, ai_1.getAIProvider)();
-        const generatedWorkout = await aiProvider.generateWorkout(params, normalizedExercises);
+        const generatedWorkout = await aiProvider.generateWorkout(params, exerciseCatalog);
         const focusName = deriveFocusName(specificRequest);
         if (focusName && !requestedSplit) {
             generatedWorkout.name = focusName;
@@ -338,8 +363,9 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, async (req, res) => {
         const user = userResult.rows[0];
         const onboardingData = user?.onboarding_data || {};
         const availableEquipment = onboardingData.available_equipment || ["barbell", "dumbbell", "machine"];
+        const { catalog: exerciseCatalog } = await buildExerciseLookup();
         // Filter exercises by same muscle group
-        const similarExercises = normalizedExercises.filter((ex) => ex.primaryMuscleGroup === primaryMuscleGroup.toLowerCase() && ex.id !== exerciseId);
+        const similarExercises = exerciseCatalog.filter((ex) => ex.primaryMuscleGroup === primaryMuscleGroup.toLowerCase() && ex.id !== exerciseId);
         if (similarExercises.length === 0) {
             return res.status(404).json({
                 error: "No alternatives found",

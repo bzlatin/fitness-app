@@ -37,6 +37,7 @@ import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 import { isPro as checkIsPro } from "../utils/featureGating";
+import { normalizeHandle } from "../utils/formatHandle";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -155,7 +156,9 @@ const OnboardingScreen = () => {
     const actualStep = getActualStep(currentStep);
     switch (actualStep) {
       case 1:
-        return name.trim().length > 0;
+        return (
+          name.trim().length > 0 && normalizeHandle(handle).trim().length > 0
+        );
       case 2:
         return selectedGoals.length > 0;
       case 3:
@@ -222,10 +225,17 @@ const OnboardingScreen = () => {
       preferredSplit,
     };
 
+    const normalizedHandle = normalizeHandle(handle);
+    if (!normalizedHandle) {
+      setIsSubmitting(false);
+      setError("Pick a handle so friends can find you.");
+      return;
+    }
+
     try {
       await completeOnboarding({
         name: name.trim(),
-        handle: handle.trim() || undefined,
+        handle: normalizedHandle,
         avatarUrl: avatarUri,
         onboardingData: onboardingData as any,
       });

@@ -30,7 +30,7 @@ import {
 import { getSubscriptionStatus } from "../api/subscriptions";
 import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
-import { formatHandle } from "../utils/formatHandle";
+import { formatHandle, normalizeHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
@@ -42,6 +42,8 @@ const initialsForName = (name?: string | null) => {
   if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 };
+
+const HANDLE_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
 const SettingsScreen = () => {
   const queryClient = useQueryClient();
@@ -72,7 +74,22 @@ const SettingsScreen = () => {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
-  const isHandleLocked = Boolean(user?.handle);
+  const lastHandleChange = user?.handleLastChangedAt
+    ? new Date(user.handleLastChangedAt)
+    : null;
+  const nextHandleChangeDate =
+    lastHandleChange && !Number.isNaN(lastHandleChange.getTime())
+      ? new Date(lastHandleChange.getTime() + HANDLE_CHANGE_COOLDOWN_MS)
+      : null;
+  const canEditHandle =
+    !user?.handle ||
+    !nextHandleChangeDate ||
+    nextHandleChangeDate.getTime() <= Date.now();
+  const handleStatusMessage = canEditHandle
+    ? "Handles are unique—pick one you'll keep. You can update yours every 30 days."
+    : nextHandleChangeDate
+    ? `Handle changes unlock on ${nextHandleChangeDate.toLocaleDateString()}.`
+    : "Handle changes are temporarily locked.";
 
   const {
     data: subscriptionStatus,
@@ -430,17 +447,24 @@ const SettingsScreen = () => {
         avatarUrl: avatarUri,
       };
 
-      if (!isHandleLocked) {
-        payload.handle = draftHandle.trim() || null;
+      if (canEditHandle) {
+        const normalized = normalizeHandle(draftHandle);
+        if (!normalized) {
+          throw new Error("Handle is required");
+        }
+        payload.handle = normalized;
       }
 
       await updateProfile(payload);
       Alert.alert("Saved", "Profile updated.");
       setIsEditing(false);
     } catch (err) {
+      const status = (err as { status?: number }).status;
       const message =
         err instanceof Error && err.message.includes("Handle already taken")
           ? "That handle is taken. Try another."
+          : status === 429
+          ? "You can only change your handle once every 30 days."
           : (err as Error)?.message ?? "Please try again.";
       Alert.alert("Could not save", message);
     } finally {
@@ -674,14 +698,14 @@ const SettingsScreen = () => {
               />
               <TextInput
                 value={draftHandle}
-                onChangeText={isHandleLocked ? undefined : setDraftHandle}
+                onChangeText={canEditHandle ? setDraftHandle : undefined}
                 placeholder='@handle'
                 placeholderTextColor={colors.textSecondary}
-                editable={!isHandleLocked}
-                selectTextOnFocus={!isHandleLocked}
+                editable={canEditHandle}
+                selectTextOnFocus={canEditHandle}
                 style={[
                   inputStyle,
-                  isHandleLocked
+                  !canEditHandle
                     ? { opacity: 0.6, color: colors.textSecondary }
                     : null,
                 ]}
@@ -693,9 +717,7 @@ const SettingsScreen = () => {
                   marginTop: -4,
                 }}
               >
-                {isHandleLocked
-                  ? "Handles are locked after setup. Reach out if you need a change."
-                  : "Handles are unique—pick one you'll keep."}
+                {handleStatusMessage}
               </Text>
               <TextInput
                 value={draftBio}
