@@ -18,7 +18,7 @@ router.post("/", express_1.default.json({ limit: "2mb" }), async (req, res) => {
         const originalTransactionId = transaction?.originalTransactionId ??
             renewalInfo?.originalTransactionId ??
             payload?.data?.originalTransactionId ??
-            null;
+            undefined;
         let userId = null;
         if (originalTransactionId) {
             userId = await (0, appstore_1.findUserByOriginalTransaction)(originalTransactionId);
