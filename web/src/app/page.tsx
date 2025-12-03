@@ -4,7 +4,17 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+const waitlistUrl = (() => {
+  const rawApiBase = (process.env.NEXT_PUBLIC_API_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  const apiHost =
+    rawApiBase && rawApiBase.endsWith('/api')
+      ? rawApiBase.slice(0, -4)
+      : rawApiBase || 'http://localhost:4000';
+
+  return `${apiHost}/api/waitlist`;
+})();
 
 export default function Home() {
   const [email, setEmail] = useState('');
@@ -20,7 +30,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/api/waitlist`, {
+      const response = await fetch(waitlistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, source: 'landing' }),
