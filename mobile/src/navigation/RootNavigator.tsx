@@ -2,8 +2,10 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { NavigationProp, RouteProp } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { enableScreens } from "react-native-screens";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
 import HistoryScreen from "../screens/HistoryScreen";
@@ -23,6 +25,10 @@ import RecoveryScreen from "../screens/RecoveryScreen";
 import AnalyticsScreen from "../screens/AnalyticsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
+
+// Work around a native crash on iOS (RN Screens border props under Fabric)
+// by falling back to the JS screens implementation on that platform.
+enableScreens(Platform.OS !== "ios");
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
