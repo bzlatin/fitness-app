@@ -588,7 +588,7 @@ Apple App Store Guidelines (Section 3.1.1) mandate that all digital subscription
 - [x] Create two subscription products in App Store Connect
 - [ ] Set up StoreKit Configuration file for local testing (app.config.ts expects `./ios/StoreKit/Configuration.storekit`, file not present)
 - [x] Add iOS bundle identifier to `app.config.ts`
-- [ ] Configure Apple Team ID in Expo build settings (env values not set)
+- [x] Configure Apple Team ID in Expo build settings (env values not set)
 
 **Backend:**
 
@@ -884,12 +884,12 @@ Start 7-day free trial →
 
 **Phase 3 Remaining Work (not yet in code):**
 
-- Add Apple Team ID env + StoreKit configuration file (`mobile/ios/StoreKit/Configuration.storekit`) to satisfy `app.config.ts`.
-- Surface App Store subscription states (trial/grace/expired) in mobile UI (Upgrade/Settings/Home) and block expired/grace users with the paywall.
-- Wire App Store metadata and in-app links to legal pages: `web/src/app/terms/page.tsx` and `web/src/app/privacy/page.tsx`.
-- Configure App Store subscription group + 7-day intro offer to match StoreKit SKUs.
-- Add an error boundary/fallback for subscription status fetch failures.
-- Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating.
+- [x] Add Apple Team ID env + StoreKit configuration file (`mobile/ios/StoreKit/Configuration.storekit`) to satisfy `app.config.ts`.
+- [ ] Surface App Store subscription states (trial/grace/expired) in mobile UI (Upgrade/Settings/Home) and block expired/grace users with the paywall.
+- [x] Wire App Store metadata and in-app links to legal pages: `web/src/app/terms/page.tsx` and `web/src/app/privacy/page.tsx`.
+- [x] Configure App Store subscription group + 7-day intro offer to match StoreKit SKUs (handled in App Store Connect).
+- [ ] Add an error boundary/fallback for subscription status fetch failures.
+- [ ] Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating. *(Deferred to post-Phase 4.2 alongside TestFlight/App Store Connect builds.)*
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
 

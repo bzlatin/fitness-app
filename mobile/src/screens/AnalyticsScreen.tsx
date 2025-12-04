@@ -18,16 +18,18 @@ import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { formatMuscleGroup } from "../utils/muscleGroupCalculations";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { isPro as checkIsPro } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { RootNavigation } from "../navigation/RootNavigator";
 import type { AdvancedAnalytics } from "../types/analytics";
 import type { ApiClientError } from "../api/client";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const AnalyticsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { user } = useCurrentUser();
-  const isPro = checkIsPro(user);
+  const subscriptionAccess = useSubscriptionAccess();
+  const isPro = subscriptionAccess.hasProAccess;
+  const isGraceOrExpired = subscriptionAccess.isGrace || subscriptionAccess.isExpired;
 
   const [timeRange, setTimeRange] = useState<4 | 8 | 12>(4);
   const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]);
@@ -77,7 +79,9 @@ const AnalyticsScreen = () => {
             </View>
             <Text style={styles.paywallTitle}>Advanced Analytics</Text>
             <Text style={styles.paywallDescription}>
-              Track weekly volume, muscle group balance, and volume PRs with Pro
+              {isGraceOrExpired
+                ? "Your subscription is inactive. Update billing to unlock advanced analytics."
+                : "Track weekly volume, muscle group balance, and volume PRs with Pro"}
             </Text>
             <Pressable
               onPress={() => navigation.navigate("Upgrade")}

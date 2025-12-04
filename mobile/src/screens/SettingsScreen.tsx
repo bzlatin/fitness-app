@@ -27,7 +27,6 @@ import {
   removeFollower,
   unfollowUser,
 } from "../api/social";
-import { getSubscriptionStatus } from "../api/subscriptions";
 import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle, normalizeHandle } from "../utils/formatHandle";
@@ -35,6 +34,7 @@ import { RootNavigation } from "../navigation/RootNavigator";
 import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -91,43 +91,44 @@ const SettingsScreen = () => {
     ? `Handle changes unlock on ${nextHandleChangeDate.toLocaleDateString()}.`
     : "Handle changes are temporarily locked.";
 
-  const {
-    data: subscriptionStatus,
-    isLoading: isSubscriptionLoading,
-    isError: isSubscriptionError,
-    refetch: refetchSubscriptionStatus,
-  } = useQuery({
-    queryKey: ["subscription", "status"],
-    queryFn: getSubscriptionStatus,
-    enabled: Boolean(user),
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchOnMount: false, // Don't refetch on every mount
-  });
+  const subscriptionAccess = useSubscriptionAccess();
+  const subscriptionStatus = subscriptionAccess.raw;
+  const isSubscriptionLoading = subscriptionAccess.isLoading;
+  const isSubscriptionError = subscriptionAccess.isError;
+  const refetchSubscriptionStatus = subscriptionAccess.refetch;
   const subscriptionPlan = subscriptionStatus?.plan ?? user?.plan ?? "free";
-  const isPro =
-    subscriptionPlan === "pro" || subscriptionPlan === "lifetime";
+  const hasProAccess = subscriptionAccess.hasProAccess;
+  const isPro = hasProAccess;
   const isIOS = Platform.OS === "ios";
   const isAppleSubscription =
     subscriptionStatus?.subscriptionPlatform === "apple";
-  const platformStatus = subscriptionStatus?.status?.toLowerCase();
-  const isGrace = platformStatus === "in_grace_period";
-  const isExpired =
-    platformStatus === "expired" || platformStatus === "revoked";
-  const formatDate = (value?: number | null | string) => {
+  const platformStatus = subscriptionAccess.status;
+  const isGrace = subscriptionAccess.isGrace;
+  const isExpired = subscriptionAccess.isExpired;
+  const formatDate = (value?: number | null | string | Date) => {
     if (!value) return undefined;
     const date =
-      typeof value === "number" ? new Date(value * 1000) : new Date(value);
+      value instanceof Date
+        ? value
+        : typeof value === "number"
+        ? new Date(value < 2_000_000_000 ? value * 1000 : value)
+        : new Date(value);
     return date.toLocaleDateString();
   };
   const renewalDate =
-    subscriptionStatus?.currentPeriodEnd && isPro
-      ? formatDate(subscriptionStatus.currentPeriodEnd)
-      : user?.planExpiresAt
-      ? formatDate(user.planExpiresAt)
+    !isExpired && !subscriptionAccess.isGrace
+      ? formatDate(subscriptionAccess.currentPeriodEnd) ??
+        (user?.planExpiresAt ? formatDate(user.planExpiresAt) : undefined)
       : undefined;
-  const trialEnds = subscriptionStatus?.trialEndsAt
-    ? formatDate(subscriptionStatus.trialEndsAt)
+  const expiredOn = isExpired
+    ? formatDate(
+        subscriptionStatus?.planExpiresAt ??
+          subscriptionStatus?.currentPeriodEnd ??
+          subscriptionAccess.currentPeriodEnd ??
+          undefined
+      )
     : undefined;
+  const trialEnds = formatDate(subscriptionAccess.trialEndsAt ?? undefined);
 
   useEffect(() => {
     if (user) {
@@ -944,6 +945,11 @@ const SettingsScreen = () => {
                     {subscriptionStatus?.cancelAtPeriodEnd
                       ? `Ends on ${renewalDate}`
                       : `Renews on ${renewalDate}`}
+                  </Text>
+                ) : null}
+                {expiredOn ? (
+                  <Text style={{ color: colors.error, fontSize: 12 }}>
+                    Expired on {expiredOn}
                   </Text>
                 ) : null}
                 {isGrace ? (

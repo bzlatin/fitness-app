@@ -1,6 +1,5 @@
 import { Pool, QueryResultRow, defaults as pgDefaults } from "pg";
 import dns from "dns";
-import { MOCK_USER_IDS } from "./data/mockUsers";
 import { loadExercisesJson } from "./utils/exerciseData";
 
 // Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
@@ -77,6 +76,35 @@ type RawExercise = {
   equipments?: string | string[];
 };
 
+const normalizePrimaryMuscleGroup = (value?: string | string[] | null) => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return "other";
+  const muscle = raw.toLowerCase();
+
+  if (muscle.includes("glute")) return "glutes";
+  if (
+    muscle.includes("quad") ||
+    muscle.includes("hamstring") ||
+    muscle.includes("calf") ||
+    muscle.includes("adductor") ||
+    muscle.includes("abductor") ||
+    muscle.includes("hip") ||
+    muscle.includes("leg")
+  ) {
+    return "legs";
+  }
+  if (muscle.includes("abdom") || muscle.includes("core") || muscle.includes("oblique")) {
+    return "core";
+  }
+  if (muscle.includes("chest") || muscle.includes("pec")) return "chest";
+  if (muscle.includes("back") || muscle.includes("lat") || muscle.includes("trap")) return "back";
+  if (muscle.includes("shoulder") || muscle.includes("deltoid")) return "shoulders";
+  if (muscle.includes("tricep")) return "triceps";
+  if (muscle.includes("bicep")) return "biceps";
+
+  return muscle || "other";
+};
+
 const normalizeEquipment = (value?: string | null) => {
   const raw = (value ?? "").toLowerCase();
   if (raw.includes("body")) return "bodyweight";
@@ -89,12 +117,9 @@ const normalizeEquipment = (value?: string | null) => {
 };
 
 const normalizeExercise = (item: RawExercise) => {
-  const primary =
-    item.primaryMuscles?.[0] ||
-    (Array.isArray(item.primaryMuscleGroup)
-      ? item.primaryMuscleGroup[0]
-      : item.primaryMuscleGroup) ||
-    "other";
+  const primary = normalizePrimaryMuscleGroup(
+    item.primaryMuscles || item.primaryMuscleGroup
+  );
   const equipment = normalizeEquipment(
     item.equipment ||
       (Array.isArray(item.equipments) ? item.equipments[0] : item.equipments) ||
@@ -125,9 +150,24 @@ const chunk = <T>(items: T[], size: number) => {
   return result;
 };
 
+const SEEDED_USER_IDS = [
+  "demo-user",
+  "demo-lifter",
+  "coach-amy",
+  "iron-mile",
+  "neon-flash",
+  "pulse-strider",
+  "corecraft",
+  "tempo-squad",
+  "lifty-liz",
+];
+
 const seedExercisesFromJson = async () => {
   const rawExercises = loadExercisesJson<RawExercise>();
   if (!rawExercises.length) return;
+
+  // Reset exercises to ensure we pick up any new metadata or images from the source JSON
+  await query(`DELETE FROM exercises`);
 
   const normalized = Array.from(
     new Map(rawExercises.map((ex) => [ex.id ?? ex.name, normalizeExercise(ex)])).values()
@@ -524,7 +564,7 @@ export const initDb = async () => {
         updated_at = NOW()
   `);
 
-  const seededValues = MOCK_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
+  const seededValues = SEEDED_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
   await query(`
     WITH seeded_users(id) AS (
       VALUES

@@ -44,6 +44,7 @@ import { isCardioExercise } from "../utils/exercises";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
 import type { ApiClientError } from "../api/client";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -113,6 +114,9 @@ const WorkoutTemplateBuilderScreen = () => {
   const queryClient = useQueryClient();
   const { data: listData } = useWorkoutTemplates();
   const { user } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
+  const hasProAccess = subscriptionAccess.hasProAccess;
+  const isProPlan = subscriptionAccess.hasProPlan;
   const [isNearTop, setIsNearTop] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(false);
 
@@ -267,11 +271,28 @@ const WorkoutTemplateBuilderScreen = () => {
 
     if (!isEditing) {
       const templateCount = listData?.length ?? 0;
-      if (!canCreateAnotherTemplate(user, templateCount)) {
-        Alert.alert(
-          "Free limit reached",
-          "You’ve reached the free template limit. Upgrades coming soon."
-        );
+      const canCreate = canCreateAnotherTemplate(user, templateCount, {
+        hasProAccess,
+      });
+      if (!canCreate) {
+        if (isProPlan && !hasProAccess) {
+          Alert.alert(
+            "Subscription inactive",
+            "Update billing or renew to keep unlimited templates."
+          );
+        } else {
+          Alert.alert(
+            "Free limit reached",
+            "Upgrade to Pro for unlimited templates.",
+            [
+              { text: "Maybe later", style: "cancel" },
+              {
+                text: "Upgrade to Pro",
+                onPress: () => navigation.navigate("Upgrade"),
+              },
+            ]
+          );
+        }
         return;
       }
     }

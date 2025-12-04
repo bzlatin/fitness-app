@@ -13,7 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -32,9 +32,8 @@ import {
 } from "../types/onboarding";
 import RecoveryBodyMap from "../components/RecoveryBodyMap";
 import TrialBanner from "../components/premium/TrialBanner";
-import { getSubscriptionStatus } from "../api/subscriptions";
-import { isPro as checkIsPro } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 // Generate unique ID for React Native (no crypto dependency)
 const generateId = () =>
@@ -44,9 +43,9 @@ const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
   const { user } = useCurrentUser();
-
-  // Check if user has Pro or Lifetime plan
-  const isPro = checkIsPro(user);
+  const subscriptionAccess = useSubscriptionAccess();
+  const hasProAccess = subscriptionAccess.hasProAccess;
+  const isPro = hasProAccess;
 
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
@@ -56,26 +55,14 @@ const HomeScreen = () => {
   );
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // Check subscription status for trial banner
-  const {
-    data: subscriptionStatus,
-    isError: subscriptionStatusError,
-    refetch: refetchSubscriptionStatus,
-  } = useQuery({
-    queryKey: ["subscription", "status"],
-    queryFn: getSubscriptionStatus,
-    staleTime: 30000,
-    retry: 1,
-  });
-  const subscriptionState = subscriptionStatus?.status?.toLowerCase();
-  const isTrial =
-    Boolean(subscriptionStatus?.trialEndsAt) ||
-    subscriptionState === "trialing";
-  const isGrace = subscriptionState === "in_grace_period";
-  const isExpired =
-    subscriptionState === "expired" || subscriptionState === "revoked";
-  const trialEndsIso = subscriptionStatus?.trialEndsAt
-    ? new Date(subscriptionStatus.trialEndsAt).toISOString()
+  // Subscription status for trial/grace/expired handling
+  const subscriptionStatusError = subscriptionAccess.isError;
+  const refetchSubscriptionStatus = subscriptionAccess.refetch;
+  const isTrial = subscriptionAccess.isTrial;
+  const isGrace = subscriptionAccess.isGrace;
+  const isExpired = subscriptionAccess.isExpired;
+  const trialEndsIso = subscriptionAccess.trialEndsAt
+    ? subscriptionAccess.trialEndsAt.toISOString()
     : null;
 
   const upNext = useMemo<WorkoutTemplate | null>(() => {
@@ -717,6 +704,7 @@ const SwapModal = ({
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
+  const { hasProAccess } = useSubscriptionAccess();
   const insets = useSafeAreaInsets();
   const [showSaved, setShowSaved] = useState(false);
   const [showMuscleFocus, setShowMuscleFocus] = useState(false);
@@ -725,7 +713,7 @@ const SwapModal = ({
   const [savedIsNearBottom, setSavedIsNearBottom] = useState(false);
   const [savedIsNearTop, setSavedIsNearTop] = useState(true);
 
-  const isPro = checkIsPro(user);
+  const isPro = hasProAccess;
   const templateCount = templates?.length ?? 0;
   const safeBottomPadding = Math.max(insets.bottom, 12);
 
