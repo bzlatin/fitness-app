@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
 > Last Updated: 2025-11-24
-> Status: Phase 1 & 2 complete — Phase 3 (Monetization) 🎯 In progress
+> Status: Phase 1-3 complete — Phase 4 (Analytics & Retention) 🎯 In progress (kicking off 4.2 Squad Management)
 
 ## Product Vision
 
@@ -473,7 +473,7 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 ---
 
-### 💰 Phase 3: Monetization (Weeks 7-9)
+### ✅ Phase 3: Monetization (Weeks 7-9) — Complete
 
 #### 3.1 Stripe Integration
 
@@ -892,6 +892,8 @@ Start 7-day free trial →
 - [ ] Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating. *(Deferred to post-Phase 4.2 alongside TestFlight/App Store Connect builds.)*
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
+
+Current focus: 4.2 Squad Management Enhancements (starting)
 
 #### 4.1 Advanced Muscle Group Analytics ✅ COMPLETE
 
