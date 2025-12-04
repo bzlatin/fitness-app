@@ -17,6 +17,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { startSubscription } from "../services/payments";
 import type { PlanChoice } from "../api/subscriptions";
+import { useAuth } from "../context/AuthContext";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import {
@@ -41,6 +42,7 @@ import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
+  const { logout, isAuthorizing } = useAuth();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const stripe = useStripe();
@@ -390,18 +392,39 @@ const OnboardingScreen = () => {
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
                 Step {currentStep} of {TOTAL_STEPS}
               </Text>
-              {isRetake && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <Pressable
-                  onPress={handleCancel}
-                  disabled={isSubmitting}
+                  onPress={logout}
+                  disabled={isSubmitting || isAuthorizing}
                   style={({ pressed }) => ({
-                    padding: 4,
-                    opacity: pressed || isSubmitting ? 0.6 : 1,
+                    paddingVertical: 6,
+                    paddingHorizontal: 8,
+                    opacity: pressed || isSubmitting || isAuthorizing ? 0.6 : 1,
                   })}
                 >
-                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 13,
+                    }}
+                  >
+                    Switch account
+                  </Text>
                 </Pressable>
-              )}
+                {isRetake && (
+                  <Pressable
+                    onPress={handleCancel}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => ({
+                      padding: 4,
+                      opacity: pressed || isSubmitting ? 0.6 : 1,
+                    })}
+                  >
+                    <Ionicons name="close" size={24} color={colors.textSecondary} />
+                  </Pressable>
+                )}
+              </View>
             </View>
             <View style={{ flexDirection: "row", gap: 6 }}>
               {Array.from({ length: TOTAL_STEPS }).map((_, index) => {
