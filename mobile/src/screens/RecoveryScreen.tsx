@@ -31,7 +31,7 @@ import {
   readinessFromFatigueScore,
 } from "../utils/fatigueReadiness";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
-import { isPro as checkIsPro } from "../utils/featureGating";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const statusOrder: Record<MuscleFatigue["status"], number> = {
   "high-fatigue": 0,
@@ -51,8 +51,9 @@ const RecoveryScreen = () => {
   const [bodySide, setBodySide] = useState<"front" | "back">("front");
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // Check if user has Pro or Lifetime plan
-  const isPro = checkIsPro(user);
+  // Check if user currently has Pro access (blocks grace/expired)
+  const subscriptionAccess = useSubscriptionAccess();
+  const isPro = subscriptionAccess.hasProAccess;
 
   const bodyGender =
     (user?.onboardingData?.bodyGender as "male" | "female" | undefined) ??

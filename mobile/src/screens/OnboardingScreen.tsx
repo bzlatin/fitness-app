@@ -36,7 +36,8 @@ import LimitationsStep from "../components/onboarding/LimitationsStep";
 import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
-import { isPro as checkIsPro } from "../utils/featureGating";
+import { normalizeHandle } from "../utils/formatHandle";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -45,10 +46,11 @@ const OnboardingScreen = () => {
   const stripe = useStripe();
   // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
   const navigation = useContext(NavigationContext);
+  const subscriptionAccess = useSubscriptionAccess();
   // Determine if this is a retake by checking if user has existing onboarding data
   // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
   const isRetake = Boolean(user?.onboardingData);
-  const isProUser = checkIsPro(user);
+  const isProUser = subscriptionAccess.hasProAccess;
 
   // Calculate total steps dynamically based on what we skip
   // Skip WelcomeStep (profile editing) if retaking
@@ -155,7 +157,9 @@ const OnboardingScreen = () => {
     const actualStep = getActualStep(currentStep);
     switch (actualStep) {
       case 1:
-        return name.trim().length > 0;
+        return (
+          name.trim().length > 0 && normalizeHandle(handle).trim().length > 0
+        );
       case 2:
         return selectedGoals.length > 0;
       case 3:
@@ -222,10 +226,17 @@ const OnboardingScreen = () => {
       preferredSplit,
     };
 
+    const normalizedHandle = normalizeHandle(handle);
+    if (!normalizedHandle) {
+      setIsSubmitting(false);
+      setError("Pick a handle so friends can find you.");
+      return;
+    }
+
     try {
       await completeOnboarding({
         name: name.trim(),
-        handle: handle.trim() || undefined,
+        handle: normalizedHandle,
         avatarUrl: avatarUri,
         onboardingData: onboardingData as any,
       });

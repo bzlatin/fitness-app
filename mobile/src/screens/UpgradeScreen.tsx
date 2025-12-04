@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -16,12 +16,12 @@ import { fontFamilies } from "../theme/typography";
 import {
   PlanChoice,
   createBillingPortalSession,
-  getSubscriptionStatus,
   switchSubscriptionPlan,
 } from "../api/subscriptions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { startSubscription } from "../services/payments";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const plans: Record<
   PlanChoice,
@@ -48,13 +48,21 @@ const plans: Record<
   },
 };
 
-const formatDate = (timestamp?: number | null, fallback?: string | null) => {
+const formatDate = (
+  timestamp?: number | Date | null,
+  fallback?: string | null
+) => {
   if (!timestamp && !fallback) return undefined;
-  const date = timestamp
-    ? new Date(timestamp * 1000)
-    : fallback
-    ? new Date(fallback)
-    : null;
+  const date =
+    timestamp instanceof Date
+      ? timestamp
+      : typeof timestamp === "number"
+      ? new Date(
+          timestamp < 2_000_000_000 ? timestamp * 1000 : (timestamp as number)
+        )
+      : fallback
+      ? new Date(fallback)
+      : null;
   return date ? date.toLocaleDateString() : undefined;
 };
 
@@ -64,25 +72,19 @@ const UpgradeScreen = () => {
   const { user } = useCurrentUser();
   const stripe = useStripe();
   const isIOS = Platform.OS === "ios";
-
-  const statusQuery = useQuery({
-    queryKey: ["subscription", "status"],
-    queryFn: getSubscriptionStatus,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchOnMount: false, // Don't refetch on every mount, use cached data
-    retry: 1,
-  });
-
-  const statusError = statusQuery.isError;
-  const platformStatus = statusQuery.data?.status?.toLowerCase();
-  const currentInterval = statusQuery.data?.currentInterval ?? null;
-  const isPro = statusQuery.data?.plan === "pro" || statusQuery.data?.plan === "lifetime";
+  const subscriptionAccess = useSubscriptionAccess();
+  const statusError = subscriptionAccess.isError;
+  const platformStatus = subscriptionAccess.status;
+  const currentInterval = subscriptionAccess.raw?.currentInterval ?? null;
+  const isPro = subscriptionAccess.hasProAccess;
   const isAppleSubscription =
-    statusQuery.data?.subscriptionPlatform === "apple";
-  const isGrace = platformStatus === "in_grace_period";
-  const isExpired = platformStatus === "expired" || platformStatus === "revoked";
-  const isTrial = platformStatus === "trialing" || Boolean(statusQuery.data?.trialEndsAt);
-  const appleEnvironment = statusQuery.data?.appleEnvironment;
+    subscriptionAccess.raw?.subscriptionPlatform === "apple";
+  const isGrace = subscriptionAccess.isGrace;
+  const isExpired = subscriptionAccess.isExpired;
+  const isTrial = subscriptionAccess.isTrial;
+  const appleEnvironment = subscriptionAccess.appleEnvironment;
+  const shouldManageInAppStore =
+    isAppleSubscription && (isPro || isGrace || isExpired);
 
   useEffect(() => {
     if (isPro && currentInterval) {
@@ -152,15 +154,30 @@ const UpgradeScreen = () => {
 
   const nextRenewal = useMemo(
     () =>
-      formatDate(
-        statusQuery.data?.currentPeriodEnd,
-        statusQuery.data?.planExpiresAt ?? undefined
-      ),
-    [statusQuery.data?.currentPeriodEnd, statusQuery.data?.planExpiresAt]
+      isExpired || isGrace
+        ? undefined
+        : formatDate(
+            subscriptionAccess.currentPeriodEnd ?? undefined,
+            subscriptionAccess.raw?.planExpiresAt ?? undefined
+          ),
+    [
+      isExpired,
+      isGrace,
+      subscriptionAccess.currentPeriodEnd,
+      subscriptionAccess.raw?.planExpiresAt,
+    ]
   );
 
-  const trialEnds = statusQuery.data?.trialEndsAt
-    ? formatDate(statusQuery.data.trialEndsAt)
+  const trialEnds = subscriptionAccess.trialEndsAt
+    ? formatDate(subscriptionAccess.trialEndsAt)
+    : undefined;
+  const expiredOn = isExpired
+    ? formatDate(
+        subscriptionAccess.raw?.planExpiresAt ??
+          subscriptionAccess.raw?.currentPeriodEnd ??
+          subscriptionAccess.currentPeriodEnd ??
+          undefined
+      )
     : undefined;
 
   const screenTitle = isPro
@@ -262,7 +279,7 @@ const UpgradeScreen = () => {
             We couldn&apos;t refresh your subscription. Check your connection or try again.
           </Text>
           <TouchableOpacity
-            onPress={() => statusQuery.refetch()}
+            onPress={() => subscriptionAccess.refetch()}
             style={{
               alignSelf: "flex-start",
               paddingHorizontal: 12,
@@ -451,9 +468,14 @@ const UpgradeScreen = () => {
           </View>
           {nextRenewal ? (
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              {statusQuery.data?.cancelAtPeriodEnd
+              {subscriptionAccess.raw?.cancelAtPeriodEnd
                 ? `Ends on ${nextRenewal}`
                 : `Renews on ${nextRenewal}`}
+            </Text>
+          ) : null}
+          {expiredOn ? (
+            <Text style={{ color: colors.error, fontSize: 13 }}>
+              Expired on {expiredOn}
             </Text>
           ) : null}
           {trialEnds ? (
@@ -675,12 +697,12 @@ const UpgradeScreen = () => {
       <TouchableOpacity
         disabled={
           startCheckout.isPending ||
-          statusQuery.isLoading ||
+          subscriptionAccess.isLoading ||
           portalMutation.isPending ||
           switchPlan.isPending
         }
         onPress={() => {
-          if (isPro && isAppleSubscription) {
+          if (shouldManageInAppStore) {
             void Linking.openURL(
               "https://apps.apple.com/account/subscriptions"
             );
@@ -728,6 +750,8 @@ const UpgradeScreen = () => {
                     selectedPlan === "annual" ? "Annual" : "Monthly"
                   } Plan`
                 : "Manage Subscription"
+              : shouldManageInAppStore
+              ? "Manage in App Store"
               : isIOS
               ? "Subscribe with Apple"
               : "Start 7-Day Trial"}

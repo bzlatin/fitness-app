@@ -9,6 +9,7 @@ export interface User {
   plan: Plan;
   planExpiresAt?: string | null;
   handle?: string | null;
+  handleLastChangedAt?: string | null;
   avatarUrl?: string;
   bio?: string;
   profileCompletedAt?: string | null;

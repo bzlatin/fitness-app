@@ -2,8 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRecentWorkouts = exports.calculateMuscleFatigue = exports.getTrainingRecommendations = exports.getFatigueScores = void 0;
 const db_1 = require("../db");
-const exercises_1 = require("../data/exercises");
-const exerciseData_1 = require("../utils/exerciseData");
 const BODYWEIGHT_FALLBACK_LBS = 100;
 const TRACKED_MUSCLES = [
     "chest",
@@ -46,82 +44,12 @@ const statusFromScore = (score, hasData) => {
         return "moderate-fatigue";
     return "high-fatigue";
 };
-const normalizeExercise = (item) => {
-    const primary = item.primaryMuscles?.[0] ||
-        (Array.isArray(item.primaryMuscleGroup)
-            ? item.primaryMuscleGroup[0]
-            : item.primaryMuscleGroup) ||
-        "other";
-    const equipment = item.equipment ||
-        (Array.isArray(item.equipments) ? item.equipments[0] : item.equipments) ||
-        "bodyweight";
-    return {
-        id: item.id || item.name.replace(/\s+/g, "_"),
-        name: item.name,
-        primaryMuscleGroup: primary.toLowerCase(),
-        equipment: equipment.toLowerCase(),
-    };
-};
-let cachedExercises = null;
-const getExerciseCatalog = () => {
-    if (cachedExercises)
-        return cachedExercises;
-    const rawExercises = (() => {
-        const bundled = (0, exerciseData_1.loadExercisesJson)();
-        return bundled.length > 0 ? bundled : exercises_1.exercises;
-    })();
-    const deduped = new Map();
-    rawExercises
-        .map(normalizeExercise)
-        .forEach((ex) => deduped.set(ex.id, ex));
-    cachedExercises = Array.from(deduped.values());
-    return cachedExercises;
-};
-let exercisesSeeded = false;
-const chunk = (items, size) => {
-    const result = [];
-    for (let i = 0; i < items.length; i += size) {
-        result.push(items.slice(i, i + size));
-    }
-    return result;
-};
-const seedExercisesTable = async () => {
-    if (exercisesSeeded)
-        return;
-    const catalog = getExerciseCatalog();
-    if (catalog.length === 0) {
-        exercisesSeeded = true;
-        return;
-    }
-    const batches = chunk(catalog, 200);
-    for (const batch of batches) {
-        const values = batch
-            .map((_ex, idx) => `($${idx * 4 + 1}, $${idx * 4 + 2}, $${idx * 4 + 3}, $${idx * 4 + 4})`)
-            .join(", ");
-        const params = batch.flatMap((ex) => [
-            ex.id,
-            ex.name,
-            ex.primaryMuscleGroup,
-            ex.equipment,
-        ]);
-        await (0, db_1.query)(`
-        INSERT INTO exercises (id, name, primary_muscle_group, equipment)
-        VALUES ${values}
-        ON CONFLICT (id) DO UPDATE
-          SET name = EXCLUDED.name,
-              primary_muscle_group = COALESCE(EXCLUDED.primary_muscle_group, exercises.primary_muscle_group),
-              equipment = COALESCE(EXCLUDED.equipment, exercises.equipment)
-      `, params);
-    }
-    exercisesSeeded = true;
-};
 const subtractDays = (date, days) => {
     const copy = new Date(date);
     copy.setDate(copy.getDate() - days);
     return copy;
 };
 const fetchVolumeByMuscle = async (userId, start, end) => {
-    await seedExercisesTable();
     const result = await (0, db_1.query)(`
       SELECT
         COALESCE(e.primary_muscle_group, 'other') as muscle_group,
@@ -252,7 +180,6 @@ const getFatigueScores = async (userId) => {
 };
 exports.getFatigueScores = getFatigueScores;
 const fetchTemplatesWithMuscles = async (userId) => {
-    await seedExercisesTable();
     const result = await (0, db_1.query)(`
       SELECT
         t.id,

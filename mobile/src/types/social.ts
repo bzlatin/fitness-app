@@ -5,6 +5,7 @@ export interface SocialUserSummary {
   name: string;
   avatarUrl?: string;
   handle?: string | null;
+  handleLastChangedAt?: string | null;
   trainingStyleTags?: string[];
 }
 

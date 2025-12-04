@@ -48,8 +48,8 @@ import {
 } from "../api/analytics";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
-import { isPro as checkIsPro } from "../utils/featureGating";
 import { playTimerSound } from "../utils/timerSound";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -305,9 +305,10 @@ const WorkoutSessionScreen = () => {
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
 
-  // Check if user has Pro or Lifetime plan
-  const isPro = checkIsPro(user);
+  // Check if user currently has Pro access (blocks grace/expired)
+  const isPro = subscriptionAccess.hasProAccess;
 
   const template = useMemo(
     () => templates?.find((t) => t.id === route.params.templateId),

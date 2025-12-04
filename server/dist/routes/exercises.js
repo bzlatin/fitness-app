@@ -38,66 +38,63 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importStar(require("express"));
 const path_1 = __importDefault(require("path"));
-const exerciseData_1 = require("../utils/exerciseData");
-const exercises_1 = require("../data/exercises");
+const db_1 = require("../db");
+const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const router = (0, express_1.Router)();
-const distExercises = (0, exerciseData_1.loadExercisesJson)();
-const exercisesSource = distExercises.length > 0 ? distExercises : exercises_1.exercises;
-const dedupeId = (id) => id.replace(/\s+/g, "_");
-const normalizeExercise = (item) => {
-    const primary = item.primaryMuscles?.[0] ||
-        (Array.isArray(item.primaryMuscleGroup)
-            ? item.primaryMuscleGroup[0]
-            : item.primaryMuscleGroup) ||
-        "other";
-    const equipment = item.equipment ||
-        (Array.isArray(item.equipments)
-            ? item.equipments[0]
-            : item.equipments) ||
-        "bodyweight";
-    const images = item.images ?? [];
-    const imageUrl = images.length > 0 ? `/api/exercises/assets/${images[0]}` : undefined;
+const mapExerciseRow = (row) => {
+    const imagePath = row.image_paths?.[0];
     return {
-        id: item.id || dedupeId(item.name),
-        name: item.name,
-        primaryMuscleGroup: primary.toLowerCase(),
-        equipment: equipment.toLowerCase(),
-        category: item.category?.toLowerCase(),
-        gifUrl: imageUrl,
+        id: row.id,
+        name: row.name,
+        primaryMuscleGroup: (row.primary_muscle_group ?? "other").toLowerCase(),
+        equipment: (row.equipment ?? "bodyweight").toLowerCase(),
+        category: row.category ?? undefined,
+        gifUrl: imagePath ? `/api/exercises/assets/${imagePath}` : undefined,
     };
 };
-// Build catalog from the JSON database
-const normalizedCatalog = exercisesSource.map(normalizeExercise);
-const exerciseMap = new Map(normalizedCatalog.map((item) => [item.id, item]));
 // Serve static exercise images (dist dataset first, then raw exercises folder as fallback)
 const imagesDirDist = path_1.default.join(__dirname, "../data/dist");
 const imagesDirLegacy = path_1.default.join(__dirname, "../data/exercises");
 router.use("/assets", express_1.default.static(imagesDirDist));
 router.use("/assets", express_1.default.static(imagesDirLegacy));
-router.get("/search", (req, res) => {
-    const { query, muscleGroup } = req.query;
-    const searchValue = typeof query === "string" ? query.toLowerCase() : "";
+router.get("/search", async (req, res) => {
+    const { query: search, muscleGroup } = req.query;
+    const searchValue = typeof search === "string" ? search.toLowerCase() : "";
     const muscleValue = typeof muscleGroup === "string" ? muscleGroup.toLowerCase() : "";
-    const results = normalizedCatalog
-        .filter((ex) => {
-        const matchesQuery = !searchValue || ex.name.toLowerCase().includes(searchValue);
-        const matchesMuscle = !muscleValue ||
-            ex.primaryMuscleGroup.toLowerCase().includes(muscleValue);
-        return matchesQuery && matchesMuscle;
-    })
-        .slice(0, 100);
-    return res.json(results);
+    const musclePattern = muscleValue ? `%${muscleValue}%` : "";
+    try {
+        const results = await (0, db_1.query)(`
+        SELECT id, name, primary_muscle_group, equipment, category, image_paths
+        FROM exercises
+        WHERE ($1 = '' OR LOWER(name) LIKE $2)
+          AND ($3 = '' OR LOWER(primary_muscle_group) LIKE $3)
+        ORDER BY name ASC
+        LIMIT 100
+      `, [searchValue, `%${searchValue}%`, musclePattern]);
+        return res.json(results.rows.map(mapExerciseRow));
+    }
+    catch (err) {
+        console.error("Failed to search exercises", err);
+        return res.status(500).json({ error: "Failed to search exercises" });
+    }
 });
 // Batch fetch exercises by IDs
-router.get("/batch", (req, res) => {
+router.get("/batch", async (req, res) => {
     const { ids } = req.query;
     if (!ids || typeof ids !== "string") {
         return res.json([]);
     }
     const requestedIds = ids.split(",").map((id) => id.trim());
-    const results = requestedIds
-        .map((id) => exerciseMap.get(id))
-        .filter((ex) => Boolean(ex));
-    return res.json(results);
+    try {
+        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(requestedIds);
+        const results = requestedIds
+            .map((id) => metaMap.get(id))
+            .filter((ex) => Boolean(ex));
+        return res.json(results);
+    }
+    catch (err) {
+        console.error("Failed to load exercises batch", err);
+        return res.status(500).json({ error: "Failed to load exercises" });
+    }
 });
 exports.default = router;

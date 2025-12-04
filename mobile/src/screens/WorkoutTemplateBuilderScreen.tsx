@@ -3,10 +3,13 @@ import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import { UNSTABLE_usePreventRemove as usePreventRemove } from "@react-navigation/core";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -41,6 +44,7 @@ import { isCardioExercise } from "../utils/exercises";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
 import type { ApiClientError } from "../api/client";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -110,6 +114,9 @@ const WorkoutTemplateBuilderScreen = () => {
   const queryClient = useQueryClient();
   const { data: listData } = useWorkoutTemplates();
   const { user } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
+  const hasProAccess = subscriptionAccess.hasProAccess;
+  const isProPlan = subscriptionAccess.hasProPlan;
   const [isNearTop, setIsNearTop] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(false);
 
@@ -249,8 +256,9 @@ const WorkoutTemplateBuilderScreen = () => {
   });
 
   const saving = createMutation.isPending || updateMutation.isPending;
+  const preventRemove = hasUnsavedChanges && !saving;
 
-  const save = () => {
+  const save = useCallback(() => {
     const validationErrors: { name?: string; exercises?: string } = {};
     if (!name.trim()) {
       validationErrors.name = "Name is required.";
@@ -263,11 +271,28 @@ const WorkoutTemplateBuilderScreen = () => {
 
     if (!isEditing) {
       const templateCount = listData?.length ?? 0;
-      if (!canCreateAnotherTemplate(user, templateCount)) {
-        Alert.alert(
-          "Free limit reached",
-          "You’ve reached the free template limit. Upgrades coming soon."
-        );
+      const canCreate = canCreateAnotherTemplate(user, templateCount, {
+        hasProAccess,
+      });
+      if (!canCreate) {
+        if (isProPlan && !hasProAccess) {
+          Alert.alert(
+            "Subscription inactive",
+            "Update billing or renew to keep unlimited templates."
+          );
+        } else {
+          Alert.alert(
+            "Free limit reached",
+            "Upgrade to Pro for unlimited templates.",
+            [
+              { text: "Maybe later", style: "cancel" },
+              {
+                text: "Upgrade to Pro",
+                onPress: () => navigation.navigate("Upgrade"),
+              },
+            ]
+          );
+        }
         return;
       }
     }
@@ -301,57 +326,55 @@ const WorkoutTemplateBuilderScreen = () => {
     } else {
       createMutation.mutate(payload);
     }
-  };
+  }, [
+    name,
+    description,
+    exercises,
+    splitType,
+    isEditing,
+    listData?.length,
+    user,
+    updateMutation,
+    createMutation,
+  ]);
 
   // Set navigation options to prevent native back gesture when there are unsaved changes
   useEffect(() => {
     navigation.setOptions({
-      gestureEnabled: !hasUnsavedChanges,
+      gestureEnabled: !preventRemove,
       headerBackButtonMenuEnabled: false,
     });
+  }, [navigation, preventRemove]);
 
-    // Add beforeRemove listener to handle back navigation or close gestures
-    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-      if (!hasUnsavedChanges || saving) {
-        return;
-      }
+  // Use dedicated hook to guard against native-stack removing the screen before JS state updates
+  usePreventRemove(preventRemove, (event) => {
+    const actionType = event.data.action.type;
+    if (actionType !== "GO_BACK" && actionType !== "POP") {
+      return;
+    }
 
-      const actionType = e.data.action.type;
-      if (actionType !== "GO_BACK" && actionType !== "POP") {
-        return;
-      }
-
-      // Prevent default behavior
-      e.preventDefault();
-
-      // Show alert
-      Alert.alert(
-        "Discard changes?",
-        "You have unsaved changes. Do you want to save before leaving?",
-        [
-          {
-            text: "Don't save",
-            style: "destructive",
-            onPress: () => {
-              setHasUnsavedChanges(false);
-              // Navigate back after clearing unsaved changes flag
-              setTimeout(() => navigation.dispatch(e.data.action), 0);
-            },
+    Alert.alert(
+      "Discard changes?",
+      "You have unsaved changes. Do you want to save before leaving?",
+      [
+        {
+          text: "Don't save",
+          style: "destructive",
+          onPress: () => {
+            setHasUnsavedChanges(false);
+            setTimeout(() => navigation.dispatch(event.data.action), 0);
           },
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Save",
-            onPress: () => {
-              // save() will handle navigation via mutation onSuccess
-              save();
-            },
+        },
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save",
+          onPress: () => {
+            save();
           },
-        ]
-      );
-    });
-
-    return unsubscribe;
-  }, [navigation, hasUnsavedChanges, save, saving]);
+        },
+      ]
+    );
+  });
 
   const handleAddExercise = (
     exerciseForm: Omit<TemplateExerciseForm, "formId">

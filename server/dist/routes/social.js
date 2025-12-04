@@ -76,6 +76,7 @@ const mapUserRow = (row) => ({
     name: row.name ?? "Athlete",
     email: row.email ?? undefined,
     handle: row.handle ?? undefined,
+    handleLastChangedAt: row.last_handle_change_at ?? row.created_at ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
     bio: row.bio ?? undefined,
     plan: row.plan ?? "free",
@@ -96,6 +97,7 @@ const fetchUserSummary = async (userId) => {
         id: userId,
         name: row?.name ?? "Athlete",
         handle: row?.handle ?? undefined,
+        handleLastChangedAt: row?.last_handle_change_at ?? row?.created_at ?? undefined,
         avatarUrl: row?.avatar_url ?? undefined,
     };
 };
@@ -295,6 +297,31 @@ router.put("/me", async (req, res) => {
         typeof progressiveOverloadEnabled !== "boolean") {
         return res.status(400).json({ error: "Invalid progressive overload flag" });
     }
+    const currentUserResult = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
+    const currentUser = currentUserResult.rows[0];
+    if (!currentUser) {
+        return res.status(404).json({ error: "User not found" });
+    }
+    if (handleProvided && !normalizedHandle) {
+        return res.status(400).json({ error: "Handle is required" });
+    }
+    if (!currentUser.handle && !normalizedHandle) {
+        return res.status(400).json({ error: "Handle is required to finish setup" });
+    }
+    const handleChanged = normalizedHandle !== undefined &&
+        normalizedHandle !== currentUser.handle;
+    if (handleChanged && currentUser.handle) {
+        const lastChangedAt = currentUser.last_handle_change_at ?? currentUser.created_at;
+        if (lastChangedAt) {
+            const lastChangeDate = new Date(lastChangedAt);
+            const nextChangeWindow = lastChangeDate.getTime() + 30 * 24 * 60 * 60 * 1000;
+            if (nextChangeWindow > Date.now()) {
+                return res.status(429).json({
+                    error: "Handle can only be changed once every 30 days. Try again later.",
+                });
+            }
+        }
+    }
     const updates = [];
     const values = [];
     let idx = 2;
@@ -303,9 +330,12 @@ router.put("/me", async (req, res) => {
         values.push(name.trim());
         idx += 1;
     }
-    if (handleProvided) {
+    if (handleChanged) {
         updates.push(`handle = $${idx}`);
-        values.push(normalizedHandle ?? null);
+        values.push(normalizedHandle);
+        idx += 1;
+        updates.push(`last_handle_change_at = $${idx}`);
+        values.push(new Date().toISOString());
         idx += 1;
     }
     if (bio !== undefined) {

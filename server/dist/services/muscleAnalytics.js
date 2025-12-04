@@ -144,7 +144,8 @@ const getPushPullBalance = async (userId, weeks = 12) => {
             otherVolume += summary.totalVolume;
         }
     });
-    const pushPullRatio = pullVolume > 0 ? pushVolume / pullVolume : pushVolume > 0 ? 999 : 1;
+    // Avoid a misleading 1:1 ratio when there is no data
+    const pushPullRatio = pullVolume > 0 ? pushVolume / pullVolume : pushVolume > 0 ? 999 : 0;
     let balanceStatus = "balanced";
     const recommendations = [];
     // Ideal ratio is 1:1 to 1.2:1 (push:pull)

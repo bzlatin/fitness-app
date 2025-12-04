@@ -1,6 +1,6 @@
 import { Pool, QueryResultRow, defaults as pgDefaults } from "pg";
 import dns from "dns";
-import { MOCK_USER_IDS } from "./data/mockUsers";
+import { loadExercisesJson } from "./utils/exerciseData";
 
 // Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
 if (dns.setDefaultResultOrder) {
@@ -60,6 +60,180 @@ export const query = <T extends QueryResultRow = QueryResultRow>(
   params?: unknown[]
 ) => pool.query<T>(text, params);
 
+type RawExercise = {
+  id?: string;
+  name: string;
+  force?: string | null;
+  level?: string | null;
+  mechanic?: string | null;
+  equipment?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  instructions?: string[];
+  category?: string;
+  images?: string[];
+  primaryMuscleGroup?: string | string[];
+  equipments?: string | string[];
+};
+
+const normalizePrimaryMuscleGroup = (value?: string | string[] | null) => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return "other";
+  const muscle = raw.toLowerCase();
+
+  if (muscle.includes("glute")) return "glutes";
+  if (
+    muscle.includes("quad") ||
+    muscle.includes("hamstring") ||
+    muscle.includes("calf") ||
+    muscle.includes("adductor") ||
+    muscle.includes("abductor") ||
+    muscle.includes("hip") ||
+    muscle.includes("leg")
+  ) {
+    return "legs";
+  }
+  if (muscle.includes("abdom") || muscle.includes("core") || muscle.includes("oblique")) {
+    return "core";
+  }
+  if (muscle.includes("chest") || muscle.includes("pec")) return "chest";
+  if (muscle.includes("back") || muscle.includes("lat") || muscle.includes("trap")) return "back";
+  if (muscle.includes("shoulder") || muscle.includes("deltoid")) return "shoulders";
+  if (muscle.includes("tricep")) return "triceps";
+  if (muscle.includes("bicep")) return "biceps";
+
+  return muscle || "other";
+};
+
+const normalizeEquipment = (value?: string | null) => {
+  const raw = (value ?? "").toLowerCase();
+  if (raw.includes("body")) return "bodyweight";
+  if (raw.includes("machine")) return "machine";
+  if (raw.includes("cable")) return "cable";
+  if (raw.includes("dumbbell")) return "dumbbell";
+  if (raw.includes("barbell")) return "barbell";
+  if (raw.includes("kettlebell")) return "kettlebell";
+  return raw || "other";
+};
+
+const normalizeExercise = (item: RawExercise) => {
+  const primary = normalizePrimaryMuscleGroup(
+    item.primaryMuscles || item.primaryMuscleGroup
+  );
+  const equipment = normalizeEquipment(
+    item.equipment ||
+      (Array.isArray(item.equipments) ? item.equipments[0] : item.equipments) ||
+      "bodyweight"
+  );
+
+  return {
+    id: (item.id || item.name.replace(/\s+/g, "_")).trim(),
+    name: item.name.trim(),
+    primaryMuscleGroup: primary.toLowerCase(),
+    equipment: equipment.toLowerCase(),
+    category: item.category?.toLowerCase() ?? null,
+    level: item.level?.toLowerCase() ?? null,
+    force: item.force?.toLowerCase() ?? null,
+    mechanic: item.mechanic?.toLowerCase() ?? null,
+    primaryMuscles: item.primaryMuscles?.map((m) => m.toLowerCase()) ?? null,
+    secondaryMuscles: item.secondaryMuscles?.map((m) => m.toLowerCase()) ?? null,
+    instructions: item.instructions ?? null,
+    imagePaths: item.images ?? null,
+  };
+};
+
+const chunk = <T>(items: T[], size: number) => {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+};
+
+const SEEDED_USER_IDS = [
+  "demo-user",
+  "demo-lifter",
+  "coach-amy",
+  "iron-mile",
+  "neon-flash",
+  "pulse-strider",
+  "corecraft",
+  "tempo-squad",
+  "lifty-liz",
+];
+
+const seedExercisesFromJson = async () => {
+  const rawExercises = loadExercisesJson<RawExercise>();
+  if (!rawExercises.length) return;
+
+  // Reset exercises to ensure we pick up any new metadata or images from the source JSON
+  await query(`DELETE FROM exercises`);
+
+  const normalized = Array.from(
+    new Map(rawExercises.map((ex) => [ex.id ?? ex.name, normalizeExercise(ex)])).values()
+  );
+
+  const batches = chunk(normalized, 150);
+  for (const batch of batches) {
+    const values: string[] = [];
+    const params: unknown[] = [];
+
+    batch.forEach((ex, idx) => {
+      const offset = idx * 12;
+      values.push(
+        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12})`
+      );
+      params.push(
+        ex.id,
+        ex.name,
+        ex.primaryMuscleGroup,
+        ex.equipment,
+        ex.category,
+        ex.level,
+        ex.force,
+        ex.mechanic,
+        ex.primaryMuscles,
+        ex.secondaryMuscles,
+        ex.instructions,
+        ex.imagePaths
+      );
+    });
+
+    await query(
+      `
+        INSERT INTO exercises (
+          id,
+          name,
+          primary_muscle_group,
+          equipment,
+          category,
+          level,
+          force,
+          mechanic,
+          primary_muscles,
+          secondary_muscles,
+          instructions,
+          image_paths
+        )
+        VALUES ${values.join(", ")}
+        ON CONFLICT (id) DO UPDATE
+          SET name = EXCLUDED.name,
+              primary_muscle_group = COALESCE(EXCLUDED.primary_muscle_group, exercises.primary_muscle_group),
+              equipment = COALESCE(EXCLUDED.equipment, exercises.equipment),
+              category = COALESCE(EXCLUDED.category, exercises.category),
+              level = COALESCE(EXCLUDED.level, exercises.level),
+              force = COALESCE(EXCLUDED.force, exercises.force),
+              mechanic = COALESCE(EXCLUDED.mechanic, exercises.mechanic),
+              primary_muscles = COALESCE(EXCLUDED.primary_muscles, exercises.primary_muscles),
+              secondary_muscles = COALESCE(EXCLUDED.secondary_muscles, exercises.secondary_muscles),
+              instructions = COALESCE(EXCLUDED.instructions, exercises.instructions),
+              image_paths = COALESCE(EXCLUDED.image_paths, exercises.image_paths)
+      `,
+      params
+    );
+  }
+};
+
 export const initDb = async () => {
   await query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -86,6 +260,7 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS apple_subscription_id TEXT,
       ADD COLUMN IF NOT EXISTS subscription_platform TEXT,
       ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS last_handle_change_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS training_style TEXT,
       ADD COLUMN IF NOT EXISTS gym_name TEXT,
       ADD COLUMN IF NOT EXISTS gym_visibility TEXT NOT NULL DEFAULT 'hidden',
@@ -331,32 +506,31 @@ export const initDb = async () => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       primary_muscle_group TEXT,
-      equipment TEXT
+      equipment TEXT,
+      category TEXT,
+      level TEXT,
+      force TEXT,
+      mechanic TEXT,
+      primary_muscles TEXT[],
+      secondary_muscles TEXT[],
+      instructions TEXT[],
+      image_paths TEXT[]
     )
   `);
 
-  // Minimal exercise seed to support fatigue analytics + templates
   await query(`
-    INSERT INTO exercises (id, name, primary_muscle_group, equipment)
-    VALUES
-      ('ex-back-squat', 'Barbell Back Squat', 'legs', 'barbell'),
-      ('ex-bench-press', 'Bench Press', 'chest', 'barbell'),
-      ('ex-deadlift', 'Deadlift', 'legs', 'barbell'),
-      ('ex-ohp', 'Overhead Press', 'shoulders', 'barbell'),
-      ('ex-row', 'Barbell Row', 'back', 'barbell'),
-      ('ex-lat-pulldown', 'Lat Pulldown', 'back', 'machine'),
-      ('ex-leg-press', 'Leg Press', 'legs', 'machine'),
-      ('ex-leg-curl', 'Leg Curl', 'legs', 'machine'),
-      ('ex-plank', 'Plank', 'core', 'bodyweight'),
-      ('ex-pushup', 'Push-Up', 'chest', 'bodyweight'),
-      ('ex-dumbbell-curl', 'Dumbbell Curl', 'biceps', 'dumbbell'),
-      ('ex-tricep-pushdown', 'Cable Pushdown', 'triceps', 'cable'),
-      ('ex-lateral-raise', 'Dumbbell Lateral Raise', 'shoulders', 'dumbbell')
-    ON CONFLICT (id) DO UPDATE
-      SET primary_muscle_group = COALESCE(EXCLUDED.primary_muscle_group, exercises.primary_muscle_group),
-          equipment = COALESCE(EXCLUDED.equipment, exercises.equipment),
-          name = EXCLUDED.name
+    ALTER TABLE exercises
+      ADD COLUMN IF NOT EXISTS category TEXT,
+      ADD COLUMN IF NOT EXISTS level TEXT,
+      ADD COLUMN IF NOT EXISTS force TEXT,
+      ADD COLUMN IF NOT EXISTS mechanic TEXT,
+      ADD COLUMN IF NOT EXISTS primary_muscles TEXT[],
+      ADD COLUMN IF NOT EXISTS secondary_muscles TEXT[],
+      ADD COLUMN IF NOT EXISTS instructions TEXT[],
+      ADD COLUMN IF NOT EXISTS image_paths TEXT[]
   `);
+
+  await seedExercisesFromJson();
 
   await query(`
     ALTER TABLE workout_sets
@@ -390,72 +564,7 @@ export const initDb = async () => {
         updated_at = NOW()
   `);
 
-  await query(`
-    UPDATE users
-    SET handle = '@exhibited'
-    WHERE id = 'demo-user'
-      AND (handle IS NULL OR handle = '')
-      AND NOT EXISTS (
-        SELECT 1
-        FROM users
-        WHERE handle = '@exhibited'
-          AND id <> 'demo-user'
-      )
-  `);
-
-  const exhibitedUserIdResult = await query<{ id: string }>(
-    `SELECT id FROM users WHERE handle = $1 ORDER BY updated_at DESC LIMIT 1`,
-    ["@exhibited"]
-  );
-  const exhibitedUserId = exhibitedUserIdResult.rows[0]?.id ?? "demo-user";
-
-  // Seed @exhibited with split templates and recent history for fatigue
-  await query(`
-    INSERT INTO workout_templates (id, user_id, name, description, split_type, is_favorite, created_at, updated_at)
-    VALUES
-      ('tmpl-exh-chest-back', '${exhibitedUserId}', 'Chest / Back Power', 'Heavy press + rows for upper balance', 'upper', false, NOW() - INTERVAL '40 days', NOW() - INTERVAL '2 days'),
-      ('tmpl-exh-arms-shoulders', '${exhibitedUserId}', 'Arms + Shoulders Volume', 'Arm pump with overhead stability', 'upper', false, NOW() - INTERVAL '39 days', NOW() - INTERVAL '1 day'),
-      ('tmpl-exh-legs', '${exhibitedUserId}', 'Legs + Glutes Strength', 'Compound lower day with hinge + squat', 'legs', false, NOW() - INTERVAL '38 days', NOW() - INTERVAL '3 days')
-    ON CONFLICT (id) DO UPDATE
-      SET name = EXCLUDED.name,
-          description = EXCLUDED.description,
-          split_type = EXCLUDED.split_type,
-          user_id = EXCLUDED.user_id,
-          updated_at = NOW()
-  `);
-
-  await query(`
-    INSERT INTO workout_template_exercises (
-      id, template_id, order_index, exercise_id, default_sets, default_reps,
-      default_rest_seconds, default_weight, default_incline, default_distance, default_duration_minutes, notes
-    )
-    VALUES
-      ('tmpl-exh-chest-back-ex1', 'tmpl-exh-chest-back', 0, 'ex-bench-press', 4, 8, 120, 185, NULL, NULL, NULL, 'Pause on first rep'),
-      ('tmpl-exh-chest-back-ex2', 'tmpl-exh-chest-back', 1, 'ex-row', 4, 10, 90, 155, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-chest-back-ex3', 'tmpl-exh-chest-back', 2, 'ex-lat-pulldown', 3, 12, 75, 140, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-chest-back-ex4', 'tmpl-exh-chest-back', 3, 'ex-plank', 3, 0, 60, NULL, NULL, NULL, 2, '60-90s holds'),
-      ('tmpl-exh-arms-shoulders-ex1', 'tmpl-exh-arms-shoulders', 0, 'ex-ohp', 4, 8, 120, 115, NULL, NULL, NULL, 'Standing'),
-      ('tmpl-exh-arms-shoulders-ex2', 'tmpl-exh-arms-shoulders', 1, 'ex-dumbbell-curl', 3, 12, 75, 35, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-arms-shoulders-ex3', 'tmpl-exh-arms-shoulders', 2, 'ex-tricep-pushdown', 3, 12, 75, 70, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-arms-shoulders-ex4', 'tmpl-exh-arms-shoulders', 3, 'ex-lateral-raise', 3, 15, 60, 25, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-legs-ex1', 'tmpl-exh-legs', 0, 'ex-back-squat', 4, 8, 150, 245, NULL, NULL, NULL, 'Depth focus'),
-      ('tmpl-exh-legs-ex2', 'tmpl-exh-legs', 1, 'ex-deadlift', 3, 6, 180, 275, NULL, NULL, NULL, 'Controlled eccentric'),
-      ('tmpl-exh-legs-ex3', 'tmpl-exh-legs', 2, 'ex-leg-press', 4, 12, 120, 360, NULL, NULL, NULL, NULL),
-      ('tmpl-exh-legs-ex4', 'tmpl-exh-legs', 3, 'ex-leg-curl', 3, 15, 90, 110, NULL, NULL, NULL, NULL)
-    ON CONFLICT (id) DO UPDATE
-      SET order_index = EXCLUDED.order_index,
-          default_sets = EXCLUDED.default_sets,
-          default_reps = EXCLUDED.default_reps,
-          default_rest_seconds = EXCLUDED.default_rest_seconds,
-          default_weight = EXCLUDED.default_weight,
-          notes = EXCLUDED.notes,
-          template_id = EXCLUDED.template_id
-  `);
-
-  // Demo workout sessions and sets removed - no longer auto-generating for @exhibited user
-  // User can create their own workout history through the app
-
-  const seededValues = MOCK_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
+  const seededValues = SEEDED_USER_IDS.map((id) => `('${id}')`).join(",\n      ");
   await query(`
     WITH seeded_users(id) AS (
       VALUES

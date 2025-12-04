@@ -1,7 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import {
@@ -11,9 +10,10 @@ import {
 import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { canCreateAnotherTemplate, isPro as checkIsPro } from "../utils/featureGating";
+import { canCreateAnotherTemplate } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { fontFamilies } from "../theme/typography";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 
 const MyWorkoutsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -21,13 +21,12 @@ const MyWorkoutsScreen = () => {
   const duplicateMutation = useDuplicateTemplate();
   const { user } = useCurrentUser();
   const [showPaywallModal, setShowPaywallModal] = useState(false);
-
-  // Check if user has Pro or Lifetime plan
-  const isPro = checkIsPro(user);
+  const subscriptionAccess = useSubscriptionAccess();
+  const hasProAccess = subscriptionAccess.hasProAccess;
 
   const templates = data ?? [];
   const templateLimitReached = user
-    ? !canCreateAnotherTemplate(user, templates.length)
+    ? !canCreateAnotherTemplate(user, templates.length, { hasProAccess })
     : false;
   const templateLimit = 3;
   const templatesUsed = templates.length;
@@ -41,7 +40,7 @@ const MyWorkoutsScreen = () => {
   };
 
   const handleGenerateWithAI = () => {
-    if (!isPro) {
+    if (!hasProAccess) {
       setShowPaywallModal(true);
       return;
     }
@@ -62,7 +61,7 @@ const MyWorkoutsScreen = () => {
       </View>
 
       {/* Template Counter */}
-      {!isPro && (
+      {!hasProAccess && (
         <View
           style={{
             backgroundColor: colors.surface,
@@ -139,7 +138,7 @@ const MyWorkoutsScreen = () => {
         <Text style={{ color: "#0B1220", fontWeight: "700", fontSize: 16 }}>
           Generate with AI
         </Text>
-        {!isPro && (
+        {!hasProAccess && (
           <View
             style={{
               backgroundColor: "#0B1220",

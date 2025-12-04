@@ -129,12 +129,17 @@ const WelcomeStep = ({
       <View style={{ gap: 10 }}>
         <InputField label="Name" value={name} onChangeText={onNameChange} placeholder="Your name" />
         {!isRetake && (
-          <InputField
-            label="Handle (optional)"
-            value={handle}
-            onChangeText={onHandleChange}
-            placeholder="@username"
-          />
+          <View style={{ gap: 6 }}>
+            <InputField
+              label="Handle (required)"
+              value={handle}
+              onChangeText={onHandleChange}
+              placeholder="@username"
+            />
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              Handles are required and can be updated every 30 days.
+            </Text>
+          </View>
         )}
       </View>
     </View>
