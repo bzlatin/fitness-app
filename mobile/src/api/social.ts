@@ -3,9 +3,12 @@ import {
   ActiveWorkoutStatus,
   SocialProfile,
   SquadDetail,
+  SquadMemberSummary,
   Visibility,
   WorkoutSummaryShare,
   SocialUserSummary,
+  ReactionsData,
+  WorkoutComment,
 } from "../types/social";
 import { User, UserProfile } from "../types/user";
 
@@ -221,4 +224,146 @@ export const getConnections = async () => {
     pendingInvites: res.data?.pendingInvites ?? [],
     outgoingInvites: res.data?.outgoingInvites ?? [],
   };
+};
+
+// Squad Management
+
+export const getSquadById = async (squadId: string): Promise<SquadDetail | null> => {
+  try {
+    const res = await apiClient.get<{ squad: SquadDetail }>(`/social/squads/${squadId}`);
+    return res.data?.squad ?? null;
+  } catch (err) {
+    if (isNotFound(err)) {
+      return null;
+    }
+    throw err;
+  }
+};
+
+export const updateSquad = async (
+  squadId: string,
+  data: { name?: string; description?: string; isPublic?: boolean }
+): Promise<SquadDetail> => {
+  const res = await apiClient.put<{ squad: SquadDetail }>(`/social/squads/${squadId}`, data);
+  if (!res.data?.squad) {
+    throw new Error("Failed to update squad");
+  }
+  return res.data.squad;
+};
+
+export const removeSquadMember = async (squadId: string, memberId: string) => {
+  await apiClient.delete<void>(`/social/squads/${squadId}/members/${memberId}`);
+};
+
+export const updateMemberRole = async (
+  squadId: string,
+  memberId: string,
+  role: "admin" | "member"
+): Promise<SquadDetail> => {
+  const res = await apiClient.put<{ squad: SquadDetail }>(
+    `/social/squads/${squadId}/members/${memberId}/role`,
+    { role }
+  );
+  if (!res.data?.squad) {
+    throw new Error("Failed to update member role");
+  }
+  return res.data.squad;
+};
+
+export const leaveSquad = async (squadId: string) => {
+  await apiClient.post<void>(`/social/squads/${squadId}/leave`);
+};
+
+export const transferSquadOwnership = async (
+  squadId: string,
+  newOwnerId: string
+): Promise<SquadDetail> => {
+  const res = await apiClient.post<{ squad: SquadDetail }>(
+    `/social/squads/${squadId}/transfer`,
+    { newOwnerId }
+  );
+  if (!res.data?.squad) {
+    throw new Error("Failed to transfer ownership");
+  }
+  return res.data.squad;
+};
+
+export const searchSquadMembers = async (
+  squadId: string,
+  query: string
+): Promise<SquadMemberSummary[]> => {
+  const res = await apiClient.get<{ members: SquadMemberSummary[] }>(
+    `/social/squads/${squadId}/members/search`,
+    { params: { q: query } }
+  );
+  return res.data?.members ?? [];
+};
+
+// Block/Report
+
+export const blockUser = async (blockedUserId: string) => {
+  await apiClient.post<void>("/social/block", { blockedUserId });
+};
+
+export const unblockUser = async (blockedId: string) => {
+  await apiClient.delete<void>(`/social/block/${blockedId}`);
+};
+
+export const getBlockedUsers = async (): Promise<SocialUserSummary[]> => {
+  const res = await apiClient.get<{ blockedUsers: SocialUserSummary[] }>("/social/blocked");
+  return res.data?.blockedUsers ?? [];
+};
+
+// Reactions & Comments
+
+export const addReaction = async (
+  targetType: "status" | "share",
+  targetId: string,
+  emoji: string
+) => {
+  await apiClient.post<{ success: boolean }>("/social/reactions", {
+    targetType,
+    targetId,
+    emoji,
+  });
+};
+
+export const removeReaction = async (
+  targetType: "status" | "share",
+  targetId: string,
+  emoji: string
+) => {
+  await apiClient.delete<void>(
+    `/social/reactions/${targetType}/${targetId}/${encodeURIComponent(emoji)}`
+  );
+};
+
+export const addComment = async (
+  targetType: "status" | "share",
+  targetId: string,
+  comment: string
+): Promise<WorkoutComment> => {
+  const res = await apiClient.post<WorkoutComment>("/social/comments", {
+    targetType,
+    targetId,
+    comment,
+  });
+  if (!res.data) {
+    throw new Error("Failed to add comment");
+  }
+  return res.data;
+};
+
+export const deleteComment = async (commentId: string) => {
+  await apiClient.delete<void>(`/social/comments/${commentId}`);
+};
+
+export const getReactions = async (
+  targetType: "status" | "share",
+  targetId: string
+): Promise<ReactionsData> => {
+  const res = await apiClient.get<ReactionsData>(
+    `/social/reactions/${targetType}/${targetId}`
+  );
+  return res.data ?? { emojis: [], comments: [] };
 };

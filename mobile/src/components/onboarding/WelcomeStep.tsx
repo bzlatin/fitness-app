@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View, Image, Alert, Linking } from "react-native";
+import { Pressable, Text, TextInput, View, Image, Alert, Linking, ActivityIndicator } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
+import { processAvatarAsset } from "../../utils/avatarImage";
 
 interface WelcomeStepProps {
   name: string;
@@ -23,6 +24,8 @@ const WelcomeStep = ({
   onAvatarChange,
   isRetake = false,
 }: WelcomeStepProps) => {
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+
   const ensurePhotoPermission = async () => {
     const current = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (current.granted || current.accessPrivileges === "limited") return true;
@@ -46,18 +49,23 @@ const WelcomeStep = ({
     const allowed = await ensurePhotoPermission();
     if (!allowed) return;
     try {
+      setIsProcessingPhoto(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
-        quality: 0.85,
+        quality: 0.75,
+        base64: true,
         aspect: [1, 1],
         presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
       if (!result.canceled && result.assets?.length) {
-        onAvatarChange(result.assets[0]?.uri);
+        const processed = await processAvatarAsset(result.assets[0]);
+        onAvatarChange(processed);
       }
     } catch (err) {
       console.warn("Image picker failed", err);
       Alert.alert("Could not open photos", "Please try again.");
+    } finally {
+      setIsProcessingPhoto(false);
     }
   };
 
@@ -78,6 +86,7 @@ const WelcomeStep = ({
         </Text>
         <Pressable
           onPress={pickAvatar}
+          disabled={isProcessingPhoto}
           style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
@@ -87,7 +96,7 @@ const WelcomeStep = ({
             backgroundColor: colors.surfaceMuted,
             borderWidth: 1,
             borderColor: colors.border,
-            opacity: pressed ? 0.9 : 1,
+            opacity: pressed || isProcessingPhoto ? 0.9 : 1,
           })}
         >
           <View
@@ -114,13 +123,22 @@ const WelcomeStep = ({
                 +
               </Text>
             )}
+            {isProcessingPhoto ? (
+              <ActivityIndicator
+                size='small'
+                color={colors.primary}
+                style={{ position: "absolute" }}
+              />
+            ) : null}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-              {avatarUri ? "Change photo" : "Add a photo"}
+              {isProcessingPhoto ? "Processing photo…" : avatarUri ? "Change photo" : "Add a photo"}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              A clear photo helps friends recognize you.
+              {isProcessingPhoto
+                ? "Making sure your picture is shareable."
+                : "A clear photo helps friends recognize you."}
             </Text>
           </View>
         </Pressable>

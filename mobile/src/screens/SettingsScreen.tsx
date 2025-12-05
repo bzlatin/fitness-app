@@ -35,6 +35,7 @@ import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { ensureShareableAvatarUri, processAvatarAsset } from "../utils/avatarImage";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -65,6 +66,7 @@ const SettingsScreen = () => {
   const [avatarUri, setAvatarUri] = useState<string | undefined>(
     user?.avatarUrl
   );
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -97,11 +99,13 @@ const SettingsScreen = () => {
   const isSubscriptionError = subscriptionAccess.isError;
   const refetchSubscriptionStatus = subscriptionAccess.refetch;
   const subscriptionPlan = subscriptionStatus?.plan ?? user?.plan ?? "free";
+  const hasProPlan = subscriptionAccess.hasProPlan;
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
   const isIOS = Platform.OS === "ios";
   const isAppleSubscription =
-    subscriptionStatus?.subscriptionPlatform === "apple";
+    subscriptionStatus?.subscriptionPlatform === "apple" ||
+    !!subscriptionStatus?.appleOriginalTransactionId;
   const platformStatus = subscriptionAccess.status;
   const isGrace = subscriptionAccess.isGrace;
   const isExpired = subscriptionAccess.isExpired;
@@ -115,11 +119,12 @@ const SettingsScreen = () => {
         : new Date(value);
     return date.toLocaleDateString();
   };
-  const renewalDate =
-    !isExpired && !subscriptionAccess.isGrace
-      ? formatDate(subscriptionAccess.currentPeriodEnd) ??
-        (user?.planExpiresAt ? formatDate(user.planExpiresAt) : undefined)
-      : undefined;
+  const shouldShowRenewalDate =
+    (hasProPlan || subscriptionAccess.isTrial || isGrace) && !isExpired;
+  const renewalDate = shouldShowRenewalDate
+    ? formatDate(subscriptionAccess.currentPeriodEnd) ??
+      (user?.planExpiresAt ? formatDate(user.planExpiresAt) : undefined)
+    : undefined;
   const expiredOn = isExpired
     ? formatDate(
         subscriptionStatus?.planExpiresAt ??
@@ -412,14 +417,19 @@ const SettingsScreen = () => {
     const allowed = await ensurePhotoPermission();
     if (!allowed) return;
     try {
+      setIsProcessingAvatar(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
-        quality: 0.85,
+        quality: 0.75,
+        base64: true,
+        aspect: [1, 1],
         presentationStyle:
           ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
       if (!result.canceled && result.assets?.length) {
-        setAvatarUri(result.assets[0]?.uri);
+        const asset = result.assets[0];
+        const processed = await processAvatarAsset(asset);
+        setAvatarUri(processed);
       } else if (result.canceled) {
         Alert.alert(
           "No photo selected",
@@ -432,12 +442,23 @@ const SettingsScreen = () => {
         "Could not open photos",
         "Please try again or reopen app permissions."
       );
+    } finally {
+      setIsProcessingAvatar(false);
     }
   };
 
   const handleSave = async () => {
+    if (isProcessingAvatar) {
+      Alert.alert(
+        "Processing photo",
+        "Hang tight—still preparing your picture. Try saving again in a moment."
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
+      const uploadReadyAvatar = await ensureShareableAvatarUri(avatarUri);
       const payload: Partial<UserProfile> = {
         name: draftName.trim() || user.name,
         bio: draftBio.trim() || undefined,
@@ -445,7 +466,7 @@ const SettingsScreen = () => {
         gymName: draftGym.trim() ? draftGym.trim() : null,
         gymVisibility: showGym ? "shown" : "hidden",
         weeklyGoal: Number(draftWeeklyGoal) || 4,
-        avatarUrl: avatarUri,
+        avatarUrl: uploadReadyAvatar,
       };
 
       if (canEditHandle) {
@@ -502,7 +523,7 @@ const SettingsScreen = () => {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ alignItems: "center" }}>
+            <View style={{ alignItems: "center", justifyContent: "center" }}>
               {avatarUri ? (
                 <Image
                   source={{ uri: avatarUri }}
@@ -539,9 +560,17 @@ const SettingsScreen = () => {
                   </Text>
                 </View>
               )}
+              {isProcessingAvatar ? (
+                <ActivityIndicator
+                  size='small'
+                  color={colors.primary}
+                  style={{ position: "absolute" }}
+                />
+              ) : null}
               {isEditing ? (
                 <Pressable
                   onPress={pickAvatar}
+                  disabled={isProcessingAvatar}
                   style={({ pressed }) => ({
                     marginTop: 6,
                     paddingHorizontal: 10,
@@ -550,7 +579,7 @@ const SettingsScreen = () => {
                     borderWidth: 1,
                     borderColor: colors.border,
                     backgroundColor: colors.surfaceMuted,
-                    opacity: pressed ? 0.9 : 1,
+                    opacity: pressed || isProcessingAvatar ? 0.9 : 1,
                   })}
                 >
                   <Text
@@ -559,7 +588,11 @@ const SettingsScreen = () => {
                       fontFamily: fontFamilies.semibold,
                     }}
                   >
-                    {avatarUri ? "Change photo" : "Add photo"}
+                    {isProcessingAvatar
+                      ? "Processing photo…"
+                      : avatarUri
+                      ? "Change photo"
+                      : "Add photo"}
                   </Text>
                 </Pressable>
               ) : null}
@@ -894,6 +927,11 @@ const SettingsScreen = () => {
             >
               {isPro ? "Pro plan" : "Free plan"}
             </Text>
+            {isAppleSubscription ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Billed through Apple. Manage from your iOS subscription settings.
+              </Text>
+            ) : null}
             {isSubscriptionLoading ? (
               <ActivityIndicator color={colors.primary} />
             ) : isSubscriptionError ? (
@@ -966,7 +1004,7 @@ const SettingsScreen = () => {
             )}
             <Pressable
               onPress={() => {
-                if (isPro && isAppleSubscription) {
+                if (isAppleSubscription) {
                   void Linking.openURL(
                     "https://apps.apple.com/account/subscriptions"
                   );
@@ -994,6 +1032,8 @@ const SettingsScreen = () => {
                   ? isAppleSubscription
                     ? "Manage in App Store"
                     : "Manage subscription"
+                  : isAppleSubscription
+                  ? "Manage in App Store"
                   : "Upgrade to Pro"}
               </Text>
             </Pressable>

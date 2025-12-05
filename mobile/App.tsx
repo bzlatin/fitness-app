@@ -85,7 +85,7 @@ const App = () => {
   };
 
   const linking: LinkingOptions<RootStackParamList> = {
-    prefixes: ["pushpullapp://", "push-pull://"],
+    prefixes: ["push-pull://", "pushpullapp://"],
     config: {
       screens: {
         RootTabs: {

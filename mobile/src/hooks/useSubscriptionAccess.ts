@@ -25,15 +25,19 @@ export const computeSubscriptionAccess = (
   user: User | null,
   status?: SubscriptionStatus
 ) => {
-  const normalizedStatus = normalizeStatus(status?.status);
+  const plan = status?.plan ?? user?.plan ?? "free";
+  const hasProPlan = plan === "pro" || plan === "lifetime";
+  let normalizedStatus = normalizeStatus(status?.status);
+
+  if (hasProPlan && (!normalizedStatus || normalizedStatus === "free")) {
+    normalizedStatus = "active";
+  }
+
   const isGrace = normalizedStatus === "in_grace_period";
   const isExpired =
     normalizedStatus === "expired" || normalizedStatus === "revoked";
   const isTrial =
     normalizedStatus === "trialing" || Boolean(status?.trialEndsAt);
-
-  const plan = status?.plan ?? user?.plan ?? "free";
-  const hasProPlan = plan === "pro" || plan === "lifetime";
   const hasProAccess = hasProPlan && !isGrace && !isExpired;
   const expiryDate = normalizeDate(
     status?.planExpiresAt ?? status?.currentPeriodEnd ?? null

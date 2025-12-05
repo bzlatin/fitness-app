@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, Text, Pressable, ActivityIndicator, Image } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -7,6 +7,7 @@ import { fontFamilies, typography } from "../theme/typography";
 import { RootRoute, RootNavigation } from "../navigation/RootNavigator";
 import { API_BASE_URL } from "../api/client";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useAuth } from "../context/AuthContext";
 
 type SquadInvitePreview = {
   squadId: string;
@@ -25,23 +26,40 @@ const SquadJoinScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { code } = route.params;
   const { getAccessToken } = useCurrentUser();
+  const { login, isAuthenticated } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [alreadyMember, setAlreadyMember] = useState(false);
   const [preview, setPreview] = useState<SquadInvitePreview | null>(null);
+  const [tokenReady, setTokenReady] = useState(false);
 
-  useEffect(() => {
-    loadPreview();
-  }, [code]);
-
-  const loadPreview = async () => {
+  const loadPreview = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      setPreview(null);
+      setAuthRequired(false);
+      setAlreadyMember(false);
 
-      const response = await fetch(`${API_BASE_URL}/social/squad-invite/${code}`);
-      const data = await response.json();
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/social/squad-invite/${code}`, {
+        headers,
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        setAuthRequired(true);
+        setError("Sign in to view this squad invite.");
+        return;
+      }
 
       if (!response.ok) {
         setError(data.error || "Failed to load invite");
@@ -55,7 +73,24 @@ const SquadJoinScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [code, getAccessToken]);
+
+  useEffect(() => {
+    void loadPreview();
+  }, [loadPreview]);
+
+  useEffect(() => {
+    // Check for a token up front so we can surface a sign-in prompt before join
+    const ensureToken = async () => {
+      const token = await getAccessToken();
+      setTokenReady(Boolean(token));
+      if (!token && isAuthenticated) {
+        setAuthRequired(true);
+        setError("Session expired. Please sign in again to join this squad.");
+      }
+    };
+    void ensureToken();
+  }, [getAccessToken, isAuthenticated]);
 
   const handleJoin = async () => {
     if (!preview) return;
@@ -63,9 +98,17 @@ const SquadJoinScreen = () => {
     try {
       setJoining(true);
       setError(null);
+      setAuthRequired(false);
+      setAlreadyMember(false);
 
       const token = await getAccessToken();
-      const response = await fetch(`${API_URL}/api/social/squad-invite/${code}/join`, {
+      if (!token) {
+        setAuthRequired(true);
+        setError("Session expired. Please sign in again to join this squad.");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/social/squad-invite/${code}/join`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -76,6 +119,20 @@ const SquadJoinScreen = () => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setAuthRequired(true);
+          setError("Session expired. Please sign in again to join this squad.");
+          return;
+        }
+        if (
+          response.status === 400 &&
+          typeof data.error === "string" &&
+          data.error.toLowerCase().includes("already a member")
+        ) {
+          setAlreadyMember(true);
+          setError("You're already a member of this squad");
+          return;
+        }
         setError(data.error || "Failed to join squad");
         return;
       }
@@ -120,26 +177,105 @@ const SquadJoinScreen = () => {
           >
             {error}
           </Text>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              paddingHorizontal: 24,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceMuted,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.medium,
-                fontSize: 16,
-              }}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            {authRequired ? (
+              <Pressable
+                onPress={() => void login()}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  Sign in to continue
+                </Text>
+              </Pressable>
+            ) : null}
+            {!authRequired && !alreadyMember && !tokenReady ? (
+              <Pressable
+                onPress={() => void login()}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            ) : null}
+            {alreadyMember && preview ? (
+              <Pressable
+                onPress={() => navigation.navigate("SquadDetail", { squadId: preview.squadId })}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  View squad
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => ({
+                flex: authRequired || alreadyMember ? 1 : undefined,
+                paddingVertical: 14,
+                paddingHorizontal: 24,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
             >
-              Go Back
-            </Text>
-          </Pressable>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.medium,
+                  fontSize: 16,
+                  textAlign: "center",
+                }}
+              >
+                Go Back
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScreenContainer>
     );

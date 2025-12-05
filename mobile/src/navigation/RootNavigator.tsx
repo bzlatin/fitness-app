@@ -15,6 +15,8 @@ import WorkoutTemplateBuilderScreen from "../screens/WorkoutTemplateBuilderScree
 import WorkoutGeneratorScreen from "../screens/WorkoutGeneratorScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
 import SquadScreen from "../screens/SquadScreen";
+import SquadDetailScreen from "../screens/SquadDetailScreen";
+import SquadSettingsScreen from "../screens/SquadSettingsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import PostWorkoutShareScreen from "../screens/PostWorkoutShareScreen";
 import HomeScreen from "../screens/HomeScreen";
@@ -173,6 +175,16 @@ const RootNavigator = () => (
       name='SquadJoin'
       component={SquadJoinScreen}
       options={{ title: "Join Squad" }}
+    />
+    <Stack.Screen
+      name='SquadDetail'
+      component={SquadDetailScreen}
+      options={{ title: "Squad" }}
+    />
+    <Stack.Screen
+      name='SquadSettings'
+      component={SquadSettingsScreen}
+      options={{ title: "Squad Settings" }}
     />
     <Stack.Screen
       name='WorkoutPreview'
