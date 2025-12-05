@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
 > Last Updated: 2025-12-05
-> Status: Phase 1-3 complete — Phase 4 (Analytics & Retention) 🎯 In progress (4.2 Squad Management ✅ Complete)
+> Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 Planned — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
 
 ## Product Vision
 
@@ -893,7 +893,7 @@ Start 7-day free trial →
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
 
-Current focus: 4.2 Squad Management Enhancements (starting)
+Current focus: 5.1 Landing Page & App Store Presence (next)
 
 #### 4.1 Advanced Muscle Group Analytics ✅ COMPLETE
 
@@ -1115,6 +1115,196 @@ Reactions & Comments:
 
 ---
 
+### 🔄 Phase 4.4: Retention & Feedback (Pre-Phase 5)
+
+#### 4.4.1 Smart Goal-Based Notifications
+
+**Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Deliver meaningful, non-spammy push notifications that protect weekly goals and celebrate consistency.
+
+**Key Triggers**:
+
+- Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
+- Inactivity nudge (no logged workout in 5-7 days, respects rest days)
+- Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
+- Weekly goal met (positive reinforcement, single celebratory push)
+
+**Implementation**:
+
+- Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
+- Add user-level quiet hours + frequency cap (max 3 per week) in settings
+- Add client-side in-app inbox for missed pushes
+- Instrument with analytics to measure open → session starts
+
+**Files to Create/Modify**:
+
+- `/server/src/jobs/notifications.ts` - Goal risk + inactivity evaluator
+- `/server/src/routes/notifications.ts` - Preferences endpoints (quiet hours, caps)
+- `/mobile/src/services/notifications.ts` - Push registration + local inbox sync
+- `/mobile/src/screens/SettingsScreen.tsx` - Notification preferences (quiet hours, toggle per trigger)
+- `/mobile/src/components/notifications/NotificationCard.tsx` - In-app inbox cards
+
+#### 4.4.2 iOS Widgets (Weekly Goal + Quick Actions)
+
+**Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
+
+**Widget Concepts**:
+
+- Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
+- Today Shortcut: Start “Log workout” or “Start session” deep link
+- Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
+
+**Implementation**:
+
+- Build WidgetKit extension (Expo config plugin) with background refresh window
+- Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
+- Deep link targets for start workout, view squad feed, view analytics
+
+**Files to Create/Modify**:
+
+- `/mobile/app.config.ts` - Widget extension config
+- `/mobile/src/widgets/GoalWidget.tsx` - Widget UI logic
+- `/mobile/src/navigation/deepLinks.ts` - Add widget deep link targets
+- `/server/src/routes/engagement.ts` - Widget data endpoint with caching
+
+#### 4.4.3 Consistency & Streaks (Weekly-Goal-Based)
+
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Encourage sustainable habits with weekly-goal streaks and squad-aware celebrations (rest-day friendly).
+
+**Experience**:
+
+- Weekly Goal Streak: Count consecutive weeks hitting goal; pauses on deload weeks flagged in fatigue service
+- Recovery-Friendly Rules: Rest days baked in; streak only depends on weekly target, not daily check-ins
+- Squad Shoutouts: Automatic feed card when a member extends streak; users can cheer/emoji react
+- Streak Saver: One “grace week” per quarter users can spend to keep streak if within 1 session of goal
+
+**Implementation**:
+
+- Add streak calculation service (server) using existing workouts + goals
+- Extend Home + Squad feeds with streak chips/badges
+- Add streak history graph to Analytics screen (lightweight)
+
+**Files to Create/Modify**:
+
+- `/server/src/services/streaks.ts` - Weekly streak calculations + grace logic
+- `/server/src/routes/engagement.ts` - Streak stats endpoint
+- `/mobile/src/components/StreakBadge.tsx` - UI chip for Home/Squad
+- `/mobile/src/screens/AnalyticsScreen.tsx` - Add streak history section
+- `/mobile/src/screens/SquadScreen.tsx` - Show squad streak shoutouts
+
+#### 4.4.4 In-App Feedback Board
+
+**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+
+**Goal**: Capture and prioritize user requests without leaving the app; surface top-voted items.
+
+**Experience**:
+
+- FeedbackBoard screen accessible from Profile → Settings (gear icon)
+- Submit ideas with category + impact tag; vote/upvote, comment optional
+- Sort by trending (weighted recent votes) and top all-time; show status pills (Planned/In Progress/Shipped)
+- Lightweight moderation (report + hide abusive content)
+
+**Implementation**:
+
+- Add feedback table + votes table; simple anti-spam (rate limit per user/IP)
+- Expose endpoints for create, vote, status update (admin-only)
+- Add client-side optimistic voting with offline cache
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/feedback.ts` - CRUD + voting endpoints
+- `/server/src/db.ts` - Tables for feedback items, votes, reports
+- `/mobile/src/screens/FeedbackBoardScreen.tsx` - New screen
+- `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button
+- `/mobile/src/navigation/RootNavigator.tsx` - Register screen, hide behind Settings gear
+
+#### 4.4.5 Profile & Settings Redesign
+
+**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Simplify profile, move controls into a dedicated settings hub, and spotlight identity/achievements.
+
+**Changes**:
+
+- Add gear icon on Profile to open SettingsScreen (no bottom nav change)
+- Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
+- Collapse billing, training preferences, account management into Settings sections
+- Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
+
+**Implementation**:
+
+- Redesign ProfileScreen layout with cleaner hierarchy and tappable cards
+- Expand SettingsScreen with grouped sections (Account, Preferences, Billing, Notifications, Feedback)
+- Add graceful empty states and consistent spacing for mobile ergonomics
+
+**Files to Create/Modify**:
+
+- `/mobile/src/screens/ProfileScreen.tsx` - New layout + gear icon nav
+- `/mobile/src/screens/SettingsScreen.tsx` - New sections and routing for billing/preferences/feedback
+- `/mobile/src/navigation/RootNavigator.tsx` - Ensure Settings accessible only via Profile gear
+- `/mobile/src/components/profile/ProfileHeader.tsx` - Extracted header for readability
+
+#### 4.4.6 Recovery-Aware Coach Cards (Post-Session)
+
+**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Capture quick RPE/soreness signals after sessions and auto-tune upcoming weekly goals and recommendations.
+
+**Experience**:
+
+- Post-session card: 10-second flow to log RPE, soreness hotspots, and energy
+- Auto-adjust next-week goal suggestions and “what to train” tips based on fatigue deload logic
+- Inline micro-coaching: “Take tomorrow as recovery” or “Green light for push”
+- Surface on Home as a dismissible card if skipped post-workout
+
+**Implementation**:
+
+- Extend fatigue service to ingest RPE/soreness and adjust risk scoring
+- Add post-session hook to prompt at workout end; cache offline until synced
+- Store structured recovery signals per session; decay over 72 hours
+
+**Files to Create/Modify**:
+
+- `/server/src/services/fatigue.ts` - Accept RPE/soreness signals and adjust recommendations
+- `/server/src/routes/analytics.ts` - Endpoint to submit recovery signals
+- `/mobile/src/components/RecoveryCoachCard.tsx` - Post-session prompt + Home resurfacing
+- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Trigger card on session completion
+- `/mobile/src/screens/HomeScreen.tsx` - Show pending recovery prompt tile
+
+#### 4.4.7 Session Quality Recap
+
+**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+
+**Goal**: Give users a lightweight timeline of their best sessions and gentle nudges when quality dips to drive re-engagement.
+
+**Experience**:
+
+- Recap feed: PRs and volume highs (last 6-8 weeks), badge moments, and streak milestones
+- Quality dip detector: flag 2-3 consecutive below-baseline sessions; suggest recovery or focus areas
+- Win-back prompt: if quality dips + inactivity, pair with notification/in-app card pointing to an easy session
+
+**Implementation**:
+
+- Add quality scoring that blends volume vs. personal baselines and RPE trends
+- Reuse analytics endpoints with a new “recap” slice; cache for quick load
+- Add in-app card on Home + Analytics to view recap timeline
+
+**Files to Create/Modify**:
+
+- `/server/src/services/recap.ts` - Quality scoring and recap aggregation
+- `/server/src/routes/analytics.ts` - Recap endpoint
+- `/mobile/src/components/RecapCard.tsx` - Compact recap card for Home/Analytics
+- `/mobile/src/screens/AnalyticsScreen.tsx` - Recap timeline section
+- `/mobile/src/screens/HomeScreen.tsx` - Win-back card surface when quality dips
+
+---
+
 ### 🌐 Phase 5: Marketing & Growth (Post-Launch)
 
 #### 5.1 Landing Page & App Store Presence
@@ -1302,6 +1492,8 @@ Reactions & Comments:
 - **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
-- **v1.3** (Current): Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
+- **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
-- **v2.0** (Target: Week 12): Advanced analytics + Squad enhancements
+- **v1.5** (Current): Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
+- **v1.6** (Next): Retention & Feedback (smart notifications, widgets, weekly streaks, feedback board, profile/settings redesign)
+- **v1.7** (Later): Marketing & Growth (landing page, App/Play listings, support flow)
