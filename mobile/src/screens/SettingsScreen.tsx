@@ -35,6 +35,7 @@ import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { ensureShareableAvatarUri, processAvatarAsset } from "../utils/avatarImage";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -65,6 +66,7 @@ const SettingsScreen = () => {
   const [avatarUri, setAvatarUri] = useState<string | undefined>(
     user?.avatarUrl
   );
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -415,14 +417,19 @@ const SettingsScreen = () => {
     const allowed = await ensurePhotoPermission();
     if (!allowed) return;
     try {
+      setIsProcessingAvatar(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
-        quality: 0.85,
+        quality: 0.75,
+        base64: true,
+        aspect: [1, 1],
         presentationStyle:
           ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
       if (!result.canceled && result.assets?.length) {
-        setAvatarUri(result.assets[0]?.uri);
+        const asset = result.assets[0];
+        const processed = await processAvatarAsset(asset);
+        setAvatarUri(processed);
       } else if (result.canceled) {
         Alert.alert(
           "No photo selected",
@@ -435,12 +442,23 @@ const SettingsScreen = () => {
         "Could not open photos",
         "Please try again or reopen app permissions."
       );
+    } finally {
+      setIsProcessingAvatar(false);
     }
   };
 
   const handleSave = async () => {
+    if (isProcessingAvatar) {
+      Alert.alert(
+        "Processing photo",
+        "Hang tight—still preparing your picture. Try saving again in a moment."
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
+      const uploadReadyAvatar = await ensureShareableAvatarUri(avatarUri);
       const payload: Partial<UserProfile> = {
         name: draftName.trim() || user.name,
         bio: draftBio.trim() || undefined,
@@ -448,7 +466,7 @@ const SettingsScreen = () => {
         gymName: draftGym.trim() ? draftGym.trim() : null,
         gymVisibility: showGym ? "shown" : "hidden",
         weeklyGoal: Number(draftWeeklyGoal) || 4,
-        avatarUrl: avatarUri,
+        avatarUrl: uploadReadyAvatar,
       };
 
       if (canEditHandle) {
@@ -505,7 +523,7 @@ const SettingsScreen = () => {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ alignItems: "center" }}>
+            <View style={{ alignItems: "center", justifyContent: "center" }}>
               {avatarUri ? (
                 <Image
                   source={{ uri: avatarUri }}
@@ -542,9 +560,17 @@ const SettingsScreen = () => {
                   </Text>
                 </View>
               )}
+              {isProcessingAvatar ? (
+                <ActivityIndicator
+                  size='small'
+                  color={colors.primary}
+                  style={{ position: "absolute" }}
+                />
+              ) : null}
               {isEditing ? (
                 <Pressable
                   onPress={pickAvatar}
+                  disabled={isProcessingAvatar}
                   style={({ pressed }) => ({
                     marginTop: 6,
                     paddingHorizontal: 10,
@@ -553,7 +579,7 @@ const SettingsScreen = () => {
                     borderWidth: 1,
                     borderColor: colors.border,
                     backgroundColor: colors.surfaceMuted,
-                    opacity: pressed ? 0.9 : 1,
+                    opacity: pressed || isProcessingAvatar ? 0.9 : 1,
                   })}
                 >
                   <Text
@@ -562,7 +588,11 @@ const SettingsScreen = () => {
                       fontFamily: fontFamilies.semibold,
                     }}
                   >
-                    {avatarUri ? "Change photo" : "Add photo"}
+                    {isProcessingAvatar
+                      ? "Processing photo…"
+                      : avatarUri
+                      ? "Change photo"
+                      : "Add photo"}
                   </Text>
                 </Pressable>
               ) : null}

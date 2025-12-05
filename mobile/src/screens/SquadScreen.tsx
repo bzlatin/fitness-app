@@ -760,6 +760,35 @@ const SquadScreen = () => {
               </Text>
             </Pressable>
           </View>
+          {selectedSquadId ? (
+            <Pressable
+              onPress={() => setSelectedSquadId(undefined)}
+              style={({ pressed }) => ({
+                marginTop: 4,
+                alignSelf: "flex-start",
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              })}
+            >
+              <Ionicons
+                name='eye-outline'
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text
+                style={{ color: colors.textSecondary, ...typography.caption }}
+              >
+                Viewing {selectedSquad?.name ?? "Squad"} — tap to switch back
+              </Text>
+            </Pressable>
+          ) : null}
           {squadsError ? (
             <Text style={{ color: colors.error, ...typography.caption }}>
               Could not load your squads. Try again shortly.
@@ -953,28 +982,6 @@ const SquadScreen = () => {
             />
           )}
         </View>
-
-        {selectedSquadId ? (
-          <Pressable
-            onPress={() => setSelectedSquadId(undefined)}
-            style={({ pressed }) => ({
-              marginTop: 8,
-              padding: 10,
-              alignSelf: "flex-start",
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-            })}
-          >
-            <Text
-              style={{ color: colors.textSecondary, ...typography.caption }}
-            >
-              Viewing squad: {selectedSquad?.name ?? "Crew"} (tap to switch
-              back)
-            </Text>
-          </Pressable>
-        ) : null}
 
         <Modal
           visible={showSocialModal}

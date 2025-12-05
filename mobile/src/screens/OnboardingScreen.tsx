@@ -39,6 +39,7 @@ import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
 import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 import { normalizeHandle } from "../utils/formatHandle";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { ensureShareableAvatarUri } from "../utils/avatarImage";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -236,10 +237,11 @@ const OnboardingScreen = () => {
     }
 
     try {
+      const uploadReadyAvatar = await ensureShareableAvatarUri(avatarUri);
       await completeOnboarding({
         name: name.trim(),
         handle: normalizedHandle,
-        avatarUrl: avatarUri,
+        avatarUrl: uploadReadyAvatar,
         onboardingData: onboardingData as any,
       });
 
