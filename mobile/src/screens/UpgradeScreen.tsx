@@ -10,6 +10,7 @@ import {
   Linking,
   Platform,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useStripe } from "@stripe/stripe-react-native";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
@@ -22,6 +23,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { startSubscription } from "../services/payments";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import type { RootNavigation } from "../navigation/RootNavigator";
 
 const plans: Record<
   PlanChoice,
@@ -69,16 +71,20 @@ const formatDate = (
 const UpgradeScreen = () => {
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>("monthly");
   const queryClient = useQueryClient();
+  const navigation = useNavigation<RootNavigation>();
   const { user } = useCurrentUser();
   const stripe = useStripe();
   const isIOS = Platform.OS === "ios";
   const subscriptionAccess = useSubscriptionAccess();
   const statusError = subscriptionAccess.isError;
   const platformStatus = subscriptionAccess.status;
-  const currentInterval = subscriptionAccess.raw?.currentInterval ?? null;
+  const rawStatus = subscriptionAccess.raw;
+  const currentInterval = rawStatus?.currentInterval ?? null;
   const isPro = subscriptionAccess.hasProAccess;
   const isAppleSubscription =
-    subscriptionAccess.raw?.subscriptionPlatform === "apple";
+    rawStatus?.subscriptionPlatform === "apple" ||
+    !!rawStatus?.appleOriginalTransactionId ||
+    !!rawStatus?.appleEnvironment;
   const isGrace = subscriptionAccess.isGrace;
   const isExpired = subscriptionAccess.isExpired;
   const isTrial = subscriptionAccess.isTrial;
@@ -189,6 +195,10 @@ const UpgradeScreen = () => {
     : isIOS
     ? "Upgrade to Pro"
     : "Upgrade to Pro";
+
+  useEffect(() => {
+    navigation.setOptions({ title: screenTitle });
+  }, [navigation, screenTitle]);
 
   const screenDescription = isPro
     ? currentInterval

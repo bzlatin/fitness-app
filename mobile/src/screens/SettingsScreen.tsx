@@ -97,11 +97,13 @@ const SettingsScreen = () => {
   const isSubscriptionError = subscriptionAccess.isError;
   const refetchSubscriptionStatus = subscriptionAccess.refetch;
   const subscriptionPlan = subscriptionStatus?.plan ?? user?.plan ?? "free";
+  const hasProPlan = subscriptionAccess.hasProPlan;
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
   const isIOS = Platform.OS === "ios";
   const isAppleSubscription =
-    subscriptionStatus?.subscriptionPlatform === "apple";
+    subscriptionStatus?.subscriptionPlatform === "apple" ||
+    !!subscriptionStatus?.appleOriginalTransactionId;
   const platformStatus = subscriptionAccess.status;
   const isGrace = subscriptionAccess.isGrace;
   const isExpired = subscriptionAccess.isExpired;
@@ -115,11 +117,12 @@ const SettingsScreen = () => {
         : new Date(value);
     return date.toLocaleDateString();
   };
-  const renewalDate =
-    !isExpired && !subscriptionAccess.isGrace
-      ? formatDate(subscriptionAccess.currentPeriodEnd) ??
-        (user?.planExpiresAt ? formatDate(user.planExpiresAt) : undefined)
-      : undefined;
+  const shouldShowRenewalDate =
+    (hasProPlan || subscriptionAccess.isTrial || isGrace) && !isExpired;
+  const renewalDate = shouldShowRenewalDate
+    ? formatDate(subscriptionAccess.currentPeriodEnd) ??
+      (user?.planExpiresAt ? formatDate(user.planExpiresAt) : undefined)
+    : undefined;
   const expiredOn = isExpired
     ? formatDate(
         subscriptionStatus?.planExpiresAt ??
@@ -894,6 +897,11 @@ const SettingsScreen = () => {
             >
               {isPro ? "Pro plan" : "Free plan"}
             </Text>
+            {isAppleSubscription ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Billed through Apple. Manage from your iOS subscription settings.
+              </Text>
+            ) : null}
             {isSubscriptionLoading ? (
               <ActivityIndicator color={colors.primary} />
             ) : isSubscriptionError ? (
@@ -966,7 +974,7 @@ const SettingsScreen = () => {
             )}
             <Pressable
               onPress={() => {
-                if (isPro && isAppleSubscription) {
+                if (isAppleSubscription) {
                   void Linking.openURL(
                     "https://apps.apple.com/account/subscriptions"
                   );
@@ -994,6 +1002,8 @@ const SettingsScreen = () => {
                   ? isAppleSubscription
                     ? "Manage in App Store"
                     : "Manage subscription"
+                  : isAppleSubscription
+                  ? "Manage in App Store"
                   : "Upgrade to Pro"}
               </Text>
             </Pressable>

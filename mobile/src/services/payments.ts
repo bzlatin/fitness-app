@@ -32,8 +32,15 @@ export const restorePurchases = async () => {
 
 export const bootstrapPayments = async () => {
   if (Platform.OS !== "ios") return;
-  await Iap.initIapConnection();
-  await Iap.settlePendingPurchases();
+  try {
+    await Iap.initIapConnection();
+    await Iap.settlePendingPurchases();
+  } catch (err) {
+    console.warn(
+      "[Payments] Skipping IAP bootstrap (likely Expo Go or missing native module):",
+      err
+    );
+  }
 };
 
 export const fetchProductMetadata = async () => {
