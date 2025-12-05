@@ -33,6 +33,7 @@ export type RootStackParamList = {
   Recovery: undefined;
   Analytics: undefined;
   Upgrade: { plan?: "monthly" | "annual" } | undefined;
+  NotificationInbox: undefined;
 };
 
 export type RootTabParamList = {

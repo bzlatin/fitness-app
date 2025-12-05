@@ -267,7 +267,9 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS weekly_goal INTEGER NOT NULL DEFAULT 4,
       ADD COLUMN IF NOT EXISTS onboarding_data JSONB,
       ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true
+      ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS push_token TEXT,
+      ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"goalReminders": true, "inactivityNudges": true, "squadActivity": true, "weeklyGoalMet": true, "quietHoursStart": 22, "quietHoursEnd": 8, "maxNotificationsPerWeek": 3}'::jsonb
   `);
 
   await query(`
@@ -544,6 +546,36 @@ export const initDb = async () => {
 
   await query(`
     CREATE INDEX IF NOT EXISTS ai_generations_created_at_idx ON ai_generations(created_at)
+  `);
+
+  // Notification events tracking
+  await query(`
+    CREATE TABLE IF NOT EXISTS notification_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notification_type TEXT NOT NULL,
+      trigger_reason TEXT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      data JSONB,
+      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at TIMESTAMPTZ,
+      clicked_at TIMESTAMPTZ,
+      delivery_status TEXT NOT NULL DEFAULT 'sent',
+      error_message TEXT
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS notification_events_user_id_idx ON notification_events(user_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS notification_events_sent_at_idx ON notification_events(sent_at)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS notification_events_user_read_idx ON notification_events(user_id, read_at)
   `);
 
   // Add exercises table for fatigue calculations

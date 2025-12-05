@@ -1117,33 +1117,138 @@ Reactions & Comments:
 
 ### 🔄 Phase 4.4: Retention & Feedback (Pre-Phase 5)
 
-#### 4.4.1 Smart Goal-Based Notifications
+#### 4.4.1 Smart Goal-Based Notifications ✅ COMPLETE
 
-**Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH | **Status**: ✅ IMPLEMENTED (2025-12-05)
 
 **Goal**: Deliver meaningful, non-spammy push notifications that protect weekly goals and celebrate consistency.
 
 **Key Triggers**:
 
-- Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
-- Inactivity nudge (no logged workout in 5-7 days, respects rest days)
-- Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
-- Weekly goal met (positive reinforcement, single celebratory push)
+- [x] Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
+- [x] Inactivity nudge (no logged workout in 5-7 days, respects rest days)
+- [x] Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
+- [x] Weekly goal met (positive reinforcement, single celebratory push)
 
 **Implementation**:
 
-- Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
-- Add user-level quiet hours + frequency cap (max 3 per week) in settings
-- Add client-side in-app inbox for missed pushes
-- Instrument with analytics to measure open → session starts
+- [x] Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
+- [x] Add user-level quiet hours + frequency cap (max 3 per week) in settings
+- [x] Add client-side in-app inbox for missed pushes
+- [x] Instrument with analytics to measure open → session starts
 
-**Files to Create/Modify**:
+**Files Created**:
 
-- `/server/src/jobs/notifications.ts` - Goal risk + inactivity evaluator
-- `/server/src/routes/notifications.ts` - Preferences endpoints (quiet hours, caps)
-- `/mobile/src/services/notifications.ts` - Push registration + local inbox sync
-- `/mobile/src/screens/SettingsScreen.tsx` - Notification preferences (quiet hours, toggle per trigger)
-- `/mobile/src/components/notifications/NotificationCard.tsx` - In-app inbox cards
+- `/server/src/jobs/notifications.ts` - Complete notification scheduler with goal risk, inactivity, weekly goal met, and squad activity checks
+- `/server/src/routes/notifications.ts` - Full notification preferences API (register token, get/update preferences, inbox management)
+- `/mobile/src/services/notifications.ts` - Push registration, Expo notifications setup, and inbox sync
+- `/mobile/src/components/notifications/NotificationInbox.tsx` - In-app notification inbox with unread badges
+- `/mobile/src/screens/NotificationInboxScreen.tsx` - Full-screen notification inbox view
+
+**Files Modified**:
+
+- `/server/src/db.ts` - Added `push_token`, `notification_preferences` JSONB to users table; created `notification_events` table
+- `/server/src/app.ts` - Registered notifications router
+- `/mobile/src/screens/SettingsScreen.tsx` - Added notification preferences UI with toggles for each trigger type
+
+**Key Features Implemented**:
+
+- **Notification Triggers**:
+  - Goal Risk: Sends 1-2 days before week end if user needs 1+ sessions to hit goal
+  - Inactivity: One nudge after 5-7 days of no workouts
+  - Weekly Goal Met: Celebration notification when completing weekly goal
+  - Squad Reactions: Real-time or daily digest of squad member reactions
+  - Squad Goal Met: When squad members complete their weekly goals
+
+- **User Preferences** (stored in JSONB):
+  - Toggle each notification type on/off
+  - Quiet hours (default: 22:00 - 8:00)
+  - Max notifications per week (default: 3)
+
+- **In-App Inbox**:
+  - View last 30 days of notifications
+  - Unread badge count
+  - Mark as read/clicked for analytics
+  - Delete individual notifications
+  - Pull-to-refresh
+
+- **Smart Delivery**:
+  - Respects quiet hours (no notifications during sleep)
+  - Weekly cap prevents notification fatigue
+  - Deduplication prevents multiple notifications for same trigger
+  - Tracks delivery status (sent, failed, no_token)
+
+**Database Schema**:
+
+```sql
+-- User notification preferences
+ALTER TABLE users ADD COLUMN push_token TEXT;
+ALTER TABLE users ADD COLUMN notification_preferences JSONB DEFAULT '{
+  "goalReminders": true,
+  "inactivityNudges": true,
+  "squadActivity": true,
+  "weeklyGoalMet": true,
+  "quietHoursStart": 22,
+  "quietHoursEnd": 8,
+  "maxNotificationsPerWeek": 3
+}';
+
+-- Notification event tracking
+CREATE TABLE notification_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notification_type TEXT NOT NULL,
+  trigger_reason TEXT,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  read_at TIMESTAMPTZ,
+  clicked_at TIMESTAMPTZ,
+  delivery_status TEXT NOT NULL DEFAULT 'sent',
+  error_message TEXT
+);
+```
+
+**API Endpoints**:
+
+- `POST /api/notifications/register-token` - Register Expo push token
+- `GET /api/notifications/preferences` - Get notification preferences
+- `PUT /api/notifications/preferences` - Update notification preferences
+- `GET /api/notifications/inbox` - Get notification inbox with pagination
+- `POST /api/notifications/inbox/:id/read` - Mark notification as read
+- `POST /api/notifications/inbox/:id/clicked` - Mark notification as clicked
+- `POST /api/notifications/inbox/mark-all-read` - Mark all as read
+- `DELETE /api/notifications/inbox/:id` - Delete notification
+
+**Notification Scheduler**:
+
+The notification job (`processNotifications()`) should be run once daily (recommended: 9am local time) using a cron job or task scheduler:
+
+```typescript
+import { processNotifications } from "./jobs/notifications";
+
+// Example: Run daily at 9am using node-cron
+import cron from "node-cron";
+cron.schedule("0 9 * * *", async () => {
+  await processNotifications();
+});
+```
+
+**Dependencies Added**:
+
+- `expo-notifications` (mobile) - Push notification handling
+- `expo-device` (mobile) - Device detection for push tokens
+- `expo-server-sdk` (server) - Sending push notifications from backend
+
+**Testing Notes**:
+
+To test notifications:
+1. Enable notifications in SettingsScreen
+2. Grant notification permissions when prompted
+3. Use the scheduler job or send test notifications via API
+4. Check inbox in SettingsScreen → "View Inbox"
+5. Verify quiet hours and weekly cap enforcement
 
 #### 4.4.2 iOS Widgets (Weekly Goal + Quick Actions)
 

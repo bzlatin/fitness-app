@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Text,
@@ -36,6 +36,12 @@ import PaywallComparisonModal from "../components/premium/PaywallComparisonModal
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { ensureShareableAvatarUri, processAvatarAsset } from "../utils/avatarImage";
+import {
+  registerForPushNotificationsAsync,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  NotificationPreferences,
+} from "../services/notifications";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -76,6 +82,11 @@ const SettingsScreen = () => {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] =
+    useState<NotificationPreferences | null>(null);
+  const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] =
+    useState(false);
+  const isLoadingNotificationPrefsRef = useRef(false);
   const lastHandleChange = user?.handleLastChangedAt
     ? new Date(user.handleLastChangedAt)
     : null;
@@ -159,12 +170,83 @@ const SettingsScreen = () => {
     user?.weeklyGoal,
   ]);
 
+  const loadNotificationPreferences = useCallback(async () => {
+    // Skip if already loading
+    if (isLoadingNotificationPrefsRef.current) return;
+    isLoadingNotificationPrefsRef.current = true;
+    try {
+      setIsLoadingNotificationPrefs(true);
+      const prefs = await getNotificationPreferences();
+      setNotificationPrefs(prefs);
+    } catch (error) {
+      console.error("[Settings] Error loading notification preferences:", error);
+    } finally {
+      setIsLoadingNotificationPrefs(false);
+      isLoadingNotificationPrefsRef.current = false;
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void refresh();
       void refetchSubscriptionStatus();
-    }, [refresh, refetchSubscriptionStatus])
+      // Only load notification prefs if we don't have them yet
+      if (!notificationPrefs) {
+        void loadNotificationPreferences();
+      }
+    }, [refresh, refetchSubscriptionStatus, loadNotificationPreferences, notificationPrefs])
   );
+
+  const handleEnableNotifications = async () => {
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        Alert.alert(
+          "Notifications Enabled",
+          "You'll now receive goal reminders and squad activity updates."
+        );
+        // Reset ref and reload prefs after enabling
+        isLoadingNotificationPrefsRef.current = false;
+        await loadNotificationPreferences();
+      } else {
+        Alert.alert(
+          "Notification Permission Required",
+          "Please enable notifications in your device settings to receive updates."
+        );
+      }
+    } catch (error) {
+      console.error("[Settings] Error enabling notifications:", error);
+
+      // Check if it's the "native module not found" error (Expo Go limitation)
+      const errorMessage = error instanceof Error ? error.message : "";
+      if (errorMessage.includes("ExpoPushTokenManager") || errorMessage.includes("native module")) {
+        Alert.alert(
+          "Development Build Required",
+          "Push notifications require a development build. In Expo Go, you can view the notification settings UI, but won't receive actual push notifications.\n\nTo test push notifications, create a development build with: eas build --profile development --platform ios",
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert("Error", "Failed to enable notifications. Please try again.");
+      }
+    }
+  };
+
+  const handleToggleNotificationPref = async (
+    key: keyof NotificationPreferences,
+    value: boolean | number
+  ) => {
+    if (!notificationPrefs) return;
+
+    try {
+      const updatedPrefs = await updateNotificationPreferences({
+        [key]: value,
+      });
+      setNotificationPrefs(updatedPrefs);
+    } catch (error) {
+      console.error("[Settings] Error updating notification preference:", error);
+      Alert.alert("Error", "Failed to update notification settings.");
+    }
+  };
 
   const restorePurchasesMutation = useMutation({
     mutationFn: () => restorePurchases(),
@@ -1463,6 +1545,220 @@ const SettingsScreen = () => {
               }
             />
           </Pressable>
+
+          {/* Notifications Section */}
+          <View
+            style={{
+              marginTop: 16,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingTop: 16,
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                }}
+              >
+                🔔 Notifications
+              </Text>
+              <Pressable onPress={() => navigation.navigate("NotificationInbox" as never)}>
+                <Text style={{ color: colors.primary, fontSize: 14 }}>
+                  View Inbox
+                </Text>
+              </Pressable>
+            </View>
+
+            {isLoadingNotificationPrefs ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : !notificationPrefs ? (
+              <Pressable
+                onPress={handleEnableNotifications}
+                style={{
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.primary,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Enable Push Notifications
+                </Text>
+              </Pressable>
+            ) : (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 8,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    >
+                      Goal Reminders
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      Remind me when at risk of missing weekly goal
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notificationPrefs.goalReminders}
+                    onValueChange={(value) =>
+                      handleToggleNotificationPref("goalReminders", value)
+                    }
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={notificationPrefs.goalReminders ? "#fff" : "#f4f3f4"}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 8,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    >
+                      Inactivity Nudges
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      Gentle reminder if inactive for 5+ days
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notificationPrefs.inactivityNudges}
+                    onValueChange={(value) =>
+                      handleToggleNotificationPref("inactivityNudges", value)
+                    }
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={notificationPrefs.inactivityNudges ? "#fff" : "#f4f3f4"}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 8,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    >
+                      Squad Activity
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      Reactions and squad members hitting goals
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notificationPrefs.squadActivity}
+                    onValueChange={(value) =>
+                      handleToggleNotificationPref("squadActivity", value)
+                    }
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={notificationPrefs.squadActivity ? "#fff" : "#f4f3f4"}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 8,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    >
+                      Weekly Goal Met
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      Celebrate when you complete your weekly goal
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notificationPrefs.weeklyGoalMet}
+                    onValueChange={(value) =>
+                      handleToggleNotificationPref("weeklyGoalMet", value)
+                    }
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={notificationPrefs.weeklyGoalMet ? "#fff" : "#f4f3f4"}
+                  />
+                </View>
+
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    marginTop: 8,
+                  }}
+                >
+                  Max 3 notifications per week
+                </Text>
+              </>
+            )}
+          </View>
 
           <Pressable
             onPress={() => {

@@ -26,6 +26,7 @@ import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
 import RecoveryScreen from "../screens/RecoveryScreen";
 import AnalyticsScreen from "../screens/AnalyticsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
+import NotificationInboxScreen from "../screens/NotificationInboxScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 // Work around a native crash on iOS (RN Screens border props under Fabric)
@@ -195,6 +196,11 @@ const RootNavigator = () => (
       name='Upgrade'
       component={UpgradeScreen}
       options={{ title: "Upgrade to Pro" }}
+    />
+    <Stack.Screen
+      name='NotificationInbox'
+      component={NotificationInboxScreen}
+      options={{ title: "Notifications" }}
     />
   </Stack.Navigator>
 );
