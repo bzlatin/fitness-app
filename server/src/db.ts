@@ -444,6 +444,13 @@ export const initDb = async () => {
       ADD COLUMN IF NOT EXISTS max_members INTEGER NOT NULL DEFAULT 50
   `);
 
+  // Squad description and visibility
+  await query(`
+    ALTER TABLE squads
+      ADD COLUMN IF NOT EXISTS description TEXT,
+      ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS squad_members (
       squad_id TEXT NOT NULL REFERENCES squads(id) ON DELETE CASCADE,
@@ -478,6 +485,45 @@ export const initDb = async () => {
 
   await query(`
     CREATE INDEX IF NOT EXISTS squad_invite_links_squad_id_idx ON squad_invite_links(squad_id)
+  `);
+
+  // Workout reactions (emoji reactions and comments)
+  await query(`
+    CREATE TABLE IF NOT EXISTS workout_reactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_type TEXT NOT NULL CHECK (target_type IN ('status', 'share')),
+      target_id TEXT NOT NULL,
+      reaction_type TEXT NOT NULL CHECK (reaction_type IN ('emoji', 'comment')),
+      emoji TEXT,
+      comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS workout_reactions_target_idx ON workout_reactions(target_type, target_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS workout_reactions_user_idx ON workout_reactions(user_id)
+  `);
+
+  // Unique constraint for emoji reactions (one emoji type per user per target)
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS workout_reactions_unique_emoji_idx
+    ON workout_reactions(user_id, target_type, target_id, emoji)
+    WHERE reaction_type = 'emoji'
+  `);
+
+  // User blocks table
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (blocker_id, blocked_id)
+    )
   `);
 
   // AI Workout Generation tracking

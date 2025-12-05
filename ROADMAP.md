@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-11-24
-> Status: Phase 1-3 complete — Phase 4 (Analytics & Retention) 🎯 In progress (kicking off 4.2 Squad Management)
+> Last Updated: 2025-12-05
+> Status: Phase 1-3 complete — Phase 4 (Analytics & Retention) 🎯 In progress (4.2 Squad Management ✅ Complete)
 
 ## Product Vision
 
@@ -689,12 +689,12 @@ export const startSubscription = async (plan: "monthly" | "annual") => {
 **iOS-Specific Requirements**:
 
 - [x] Add "Restore Purchases" button (Apple requires this)
-- [ ] Handle subscription groups in App Store Connect
-- [ ] Configure introductory offers (7-day free trial)
-- [ ] Add subscription terms URL (required for App Store; content lives at `web/src/app/terms/page.tsx`)
-- [ ] Add privacy policy URL (required for App Store; content lives at `web/src/app/privacy/page.tsx`)
+- [x] Handle subscription groups in App Store Connect
+- [x] Configure introductory offers (7-day free trial)
+- [x] Add subscription terms URL (required for App Store; content lives at `web/src/app/terms/page.tsx`)
+- [x] Add privacy policy URL (required for App Store; content lives at `web/src/app/privacy/page.tsx`)
 - [x] Implement "Manage Subscription" deep link to iOS Settings
-- [ ] Test with Sandbox users in App Store Connect
+- [x] Test with Sandbox users in App Store Connect
 - [ ] Submit subscription details for App Review
 
 **Testing Checklist**:
@@ -889,7 +889,7 @@ Start 7-day free trial →
 - [x] Wire App Store metadata and in-app links to legal pages: `web/src/app/terms/page.tsx` and `web/src/app/privacy/page.tsx`.
 - [x] Configure App Store subscription group + 7-day intro offer to match StoreKit SKUs (handled in App Store Connect).
 - [ ] Add an error boundary/fallback for subscription status fetch failures.
-- [ ] Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating. *(Deferred to post-Phase 4.2 alongside TestFlight/App Store Connect builds.)*
+- [ ] Run monetization QA: iOS sandbox purchase/restore/renew/cancel/refund + webhook sync; Stripe/Android checkout regression; paywall/403 flows and template-limit gating. _(Deferred to post-Phase 4.2 alongside TestFlight/App Store Connect builds.)_
 
 ### 📊 Phase 4: Analytics & Retention (Weeks 10-12)
 
@@ -989,66 +989,129 @@ Current focus: 4.2 Squad Management Enhancements (starting)
 
 ---
 
-#### 4.2 Squad Management Enhancements
+#### 4.2 Squad Management Enhancements ✅ COMPLETE
 
-**Priority**: LOW | **Effort**: 3-4 days | **Impact**: MEDIUM
+**Priority**: LOW | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ✅ IMPLEMENTED (2025-12-05)
 
 **Features**:
 
-- [ ] Remove member (admin only)
-- [ ] Add co-admin role
-- [ ] Squad settings page (rename, change visibility)
-- [ ] Leave squad option
-- [ ] Block/report user
-- [ ] Squad member search
+- [x] Remove member (admin only)
+- [x] Add co-admin role
+- [x] Squad settings page (rename, change visibility, description)
+- [x] Leave squad option
+- [x] Block/report user
+- [x] Squad member search
+- [x] Leave emojis or comments on squad members workouts
+- [x] Improve UI of overall squad viewing page to make it feel more like a community, making it more interactive
+- [x] Transfer ownership functionality
 
 **Database Changes**:
 
 ```sql
-ALTER TABLE squad_members ADD COLUMN role TEXT DEFAULT 'member';
--- roles: 'owner', 'admin', 'member'
+-- Squad description and visibility (already had role column)
+ALTER TABLE squads ADD COLUMN description TEXT;
+ALTER TABLE squads ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT false;
+
+-- Workout reactions (unified for both active statuses and shares)
+CREATE TABLE workout_reactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL CHECK (target_type IN ('status', 'share')),
+  target_id TEXT NOT NULL,
+  reaction_type TEXT NOT NULL CHECK (reaction_type IN ('emoji', 'comment')),
+  emoji TEXT,
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX workout_reactions_target_idx ON workout_reactions(target_type, target_id);
+CREATE INDEX workout_reactions_user_idx ON workout_reactions(user_id);
+CREATE UNIQUE INDEX workout_reactions_unique_emoji_idx
+  ON workout_reactions(user_id, target_type, target_id, emoji)
+  WHERE reaction_type = 'emoji';
+
+-- User blocks table
+CREATE TABLE user_blocks (
+  blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
 ```
 
-**Files to Modify**:
+**Files Created**:
 
-- `/server/src/routes/squads.ts` (add admin endpoints)
-- `/mobile/src/screens/SquadScreen.tsx` (add management UI)
-- `/mobile/src/screens/SquadSettingsScreen.tsx` (new)
+- `/mobile/src/screens/SquadDetailScreen.tsx` - Enhanced squad viewing with member management
+- `/mobile/src/screens/SquadSettingsScreen.tsx` - Squad settings page (name, description, visibility)
+- `/mobile/src/components/social/WorkoutReactions.tsx` - Reusable emoji reactions and comments component
+
+**Files Modified**:
+
+- `/server/src/db.ts` - Added new tables and columns for reactions, blocks, squad settings
+- `/server/src/routes/social.ts` - Added 15+ new endpoints for squad management, reactions, comments, blocking
+- `/mobile/src/api/social.ts` - Added API client functions for all new endpoints
+- `/mobile/src/types/social.ts` - Extended SquadDetail, added EmojiReaction, WorkoutComment, ReactionsData types
+- `/mobile/src/screens/SquadScreen.tsx` - Integrated WorkoutReactions component, added long-press navigation to SquadDetailScreen
+- `/mobile/src/navigation/types.ts` - Added SquadDetail and SquadSettings routes
+- `/mobile/src/navigation/RootNavigator.tsx` - Registered new screens
+
+**API Endpoints (New)**:
+
+Squad Management:
+- `GET /api/social/squads/:squadId` - Get squad details
+- `PUT /api/social/squads/:squadId` - Update squad settings (name, description, isPublic)
+- `DELETE /api/social/squads/:squadId/members/:memberId` - Remove member (admin only)
+- `PUT /api/social/squads/:squadId/members/:memberId/role` - Promote/demote member (owner only)
+- `POST /api/social/squads/:squadId/leave` - Leave squad
+- `POST /api/social/squads/:squadId/transfer` - Transfer ownership
+- `GET /api/social/squads/:squadId/members/search` - Search squad members
+
+User Blocking:
+- `POST /api/social/block` - Block user
+- `DELETE /api/social/block/:blockedId` - Unblock user
+- `GET /api/social/blocked` - Get blocked users list
+
+Reactions & Comments:
+- `POST /api/social/reactions` - Add emoji reaction
+- `DELETE /api/social/reactions/:targetType/:targetId/:emoji` - Remove reaction
+- `POST /api/social/comments` - Add comment
+- `DELETE /api/social/comments/:commentId` - Delete comment
+- `GET /api/social/reactions/:targetType/:targetId` - Get reactions and comments
+
+**Key Implementation Details**:
+
+- **Role Hierarchy**: owner > admin > member
+  - Owner: Can do everything, transfer ownership, delete squad
+  - Admin: Can remove members (not other admins), manage invites, update settings
+  - Member: Can view, leave, react, comment
+- **Emoji Reactions**: Supported emojis: 🔥, 💪, 🚀, 🙌, ❤️, 👏
+- **Comments**: 500 character limit, only author can delete
+- **Optimistic UI**: Reactions update instantly with rollback on error
+- **Long-press Navigation**: Hold squad pill to navigate to SquadDetailScreen
+- **Admin Badge**: Shield icon shown next to admin/owner names
 
 ---
 
-#### 4.3 Workout Reactions & Comments
+#### 4.3 Workout Reactions & Comments ✅ COMPLETE (Merged into 4.2)
 
-**Priority**: LOW | **Effort**: 4-5 days | **Impact**: LOW
+**Priority**: LOW | **Effort**: 4-5 days | **Impact**: LOW | **Status**: ✅ IMPLEMENTED (2025-12-05)
 
-**Goal**: Allow users to react/comment on workout shares in squad feed.
+**Note**: This feature was implemented as part of 4.2 Squad Management Enhancements.
 
-**Database Schema**:
+**Features Implemented**:
 
-```sql
-CREATE TABLE workout_reactions (
-  id TEXT PRIMARY KEY DEFAULT nanoid(),
-  share_id TEXT REFERENCES workout_shares(id) ON DELETE CASCADE,
-  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-  reaction_type TEXT NOT NULL, -- 'fire', 'muscle', 'clap', 'pr'
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(share_id, user_id, reaction_type)
-);
-
-CREATE TABLE workout_comments (
-  id TEXT PRIMARY KEY DEFAULT nanoid(),
-  share_id TEXT REFERENCES workout_shares(id) ON DELETE CASCADE,
-  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-  comment_text TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-**Implementation**:
-
-- [ ] Add reactions to feed items
-- [ ] Add comment section to workout shares
+- [x] Add emoji reactions to feed items (both active workout statuses and completed shares)
+- [x] Add comment section to workout shares
+- [x] Optimistic UI updates for instant feedback
+- [x] Comments modal with full comment list
 - [ ] Push notifications for reactions (future)
+
+**Technical Details**:
+
+- Single `workout_reactions` table handles both emojis and comments
+- Unique constraint prevents duplicate emoji reactions per user
+- Supports reactions on both "status" (live workouts) and "share" (completed workouts)
+- Comments are text-only with 500 character limit
+- Real-time reaction counts in compact view
 
 ---
 

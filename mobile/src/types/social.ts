@@ -57,13 +57,34 @@ export interface SquadMemberSummary {
   name: string;
   handle?: string;
   avatarUrl?: string | null;
-  role?: string | null;
+  role?: "owner" | "admin" | "member" | null;
 }
 
 export interface SquadDetail {
   id: string;
   name: string;
+  description?: string;
+  isPublic: boolean;
   isOwner: boolean;
+  isAdmin: boolean;
   memberCount: number;
   members: SquadMemberSummary[];
+}
+
+export interface EmojiReaction {
+  emoji: string;
+  count: number;
+  hasReacted: boolean;
+}
+
+export interface WorkoutComment {
+  id: string;
+  user: SocialUserSummary;
+  comment: string;
+  createdAt: string;
+}
+
+export interface ReactionsData {
+  emojis: EmojiReaction[];
+  comments: WorkoutComment[];
 }

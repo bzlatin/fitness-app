@@ -28,6 +28,8 @@ export type RootStackParamList = {
   };
   Onboarding: { isRetake?: boolean };
   SquadJoin: { code: string };
+  SquadDetail: { squadId: string };
+  SquadSettings: { squadId: string };
   Recovery: undefined;
   Analytics: undefined;
   Upgrade: { plan?: "monthly" | "annual" } | undefined;

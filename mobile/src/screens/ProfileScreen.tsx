@@ -178,6 +178,7 @@ const ProfileScreen = () => {
   });
 
   const handleFollowToggle = () => {
+    if (isViewingSelf) return;
     if (!profile) return;
     if (profile.isFollowing) {
       unfollowMutation.mutate(profile.id);
@@ -229,6 +230,8 @@ const ProfileScreen = () => {
   }, [profile?.avatarUrl, profile?.name]);
 
   const loadingState = isLoading;
+  const isViewingSelf =
+    route.params.userId === currentUser?.id || profile?.id === currentUser?.id;
   const isFollowing = profile?.isFollowing ?? false;
   const friendCount = useMemo(() => {
     if (!profile) return 0;
@@ -245,7 +248,16 @@ const ProfileScreen = () => {
       : "Not set";
   const formattedHandle = formatHandle(profile?.handle);
   const friendsPreview = profile?.friendsPreview ?? [];
-  const relationshipCopy = isFollowing
+  const relationshipCopy = isViewingSelf
+    ? {
+        title: "This is you",
+        body: "Your gym buddies see your updates. Manage visibility in Profile settings.",
+        icon: "person-circle-outline",
+        iconColor: colors.textSecondary,
+        bg: colors.surface,
+        border: colors.border,
+      }
+    : isFollowing
     ? {
         title: "You're gym buddies",
         body: "You follow their training. Remove if you no longer want updates.",
@@ -262,6 +274,7 @@ const ProfileScreen = () => {
         bg: colors.surfaceMuted,
         border: colors.border,
       };
+  const mutualLabel = isViewingSelf ? "Gym buddies" : "Mutual gym buddies";
 
   return (
     <ScreenContainer scroll>
@@ -308,7 +321,7 @@ const ProfileScreen = () => {
                     : profile.gymName}
                 </Text>
               ) : null}
-              {isFollowing ? (
+              {!isViewingSelf && isFollowing ? (
                 <View
                   style={{
                     marginTop: 8,
@@ -393,36 +406,38 @@ const ProfileScreen = () => {
                 {relationshipCopy.body}
               </Text>
             </View>
-            <Pressable
-              onPress={handleFollowToggle}
-              disabled={followMutation.isPending || unfollowMutation.isPending}
-              style={({ pressed }) => ({
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: 10,
-                backgroundColor: isFollowing
-                  ? colors.surfaceMuted
-                  : colors.primary,
-                borderWidth: 1,
-                borderColor: isFollowing ? colors.border : colors.primary,
-                opacity:
-                  pressed ||
-                  followMutation.isPending ||
-                  unfollowMutation.isPending
-                    ? 0.86
-                    : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: isFollowing ? colors.textPrimary : colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 13,
-                }}
+            {!isViewingSelf ? (
+              <Pressable
+                onPress={handleFollowToggle}
+                disabled={followMutation.isPending || unfollowMutation.isPending}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  backgroundColor: isFollowing
+                    ? colors.surfaceMuted
+                    : colors.primary,
+                  borderWidth: 1,
+                  borderColor: isFollowing ? colors.border : colors.primary,
+                  opacity:
+                    pressed ||
+                    followMutation.isPending ||
+                    unfollowMutation.isPending
+                      ? 0.86
+                      : 1,
+                })}
               >
-                {isFollowing ? "Remove" : "Add"}
-              </Text>
-            </Pressable>
+                <Text
+                  style={{
+                    color: isFollowing ? colors.textPrimary : colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 13,
+                  }}
+                >
+                  {isFollowing ? "Remove" : "Add"}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={{ flexDirection: "row", gap: 12 }}>
@@ -430,7 +445,7 @@ const ProfileScreen = () => {
               label='Workouts'
               value={String(profile.workoutsCompleted ?? "—")}
             />
-            <StatBlock label='Mutual gym buddies' value={String(friendCount)} />
+            <StatBlock label={mutualLabel} value={String(friendCount)} />
           </View>
 
           <View style={{ flexDirection: "row", gap: 12 }}>
@@ -481,7 +496,7 @@ const ProfileScreen = () => {
             }}
           >
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              Mutual gym buddies
+              {mutualLabel}
             </Text>
             {friendsPreview.length ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>

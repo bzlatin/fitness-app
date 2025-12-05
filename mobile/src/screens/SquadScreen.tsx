@@ -43,6 +43,7 @@ import { formatHandle } from "../utils/formatHandle";
 import * as Clipboard from "expo-clipboard";
 import { Share, Alert } from "react-native";
 import { API_BASE_URL } from "../api/client";
+import { WorkoutReactions } from "../components/social/WorkoutReactions";
 
 type FeedItem =
   | { kind: "section"; title: string; subtitle?: string }
@@ -116,27 +117,6 @@ const VisibilityPill = ({ label }: { label: string }) => (
   </View>
 );
 
-const ReactionRow = () => (
-  <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-    {reactionOptions.map((emoji) => (
-      <Pressable
-        key={emoji}
-        onPress={() => {}}
-        style={({ pressed }) => ({
-          paddingHorizontal: 10,
-          paddingVertical: 8,
-          borderRadius: 999,
-          backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-        })}
-      >
-        <Text style={{ fontSize: 16 }}>{emoji}</Text>
-      </Pressable>
-    ))}
-  </View>
-);
-
 const formatElapsed = (seconds: number) => {
   if (seconds < 60) return `${seconds}s in`;
   const minutes = Math.floor(seconds / 60);
@@ -163,6 +143,7 @@ const buildFeedItems = (
   excludeUserId?: string,
   titles?: {
     liveTitle?: string;
+    liveEmptyTitle?: string;
     liveSubtitle?: string;
     recentTitle?: string;
     recentSubtitle?: string;
@@ -174,10 +155,14 @@ const buildFeedItems = (
   const filteredShares = recentShares.filter(
     (share) => share.user.id !== excludeUserId
   );
+  const defaultLiveTitle = titles?.liveTitle ?? "Active friends";
+  const emptyLiveTitle =
+    titles?.liveEmptyTitle ??
+    (titles?.liveTitle ? titles.liveTitle : "No active friends");
   const items: FeedItem[] = [];
   items.push({
     kind: "section",
-    title: titles?.liveTitle ?? "Live crew",
+    title: filteredActive.length ? defaultLiveTitle : emptyLiveTitle,
     subtitle: titles?.liveSubtitle,
   });
   filteredActive.forEach((status) => items.push({ kind: "active", status }));
@@ -197,49 +182,54 @@ const ActiveCard = ({
   status: ActiveWorkoutStatus;
   onPressProfile: (userId: string) => void;
 }) => (
-  <Pressable
-    onPress={() => onPressProfile(status.user.id)}
-    style={({ pressed }) => ({
+  <View
+    style={{
       backgroundColor: colors.surface,
       borderRadius: 16,
       padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
-      opacity: pressed ? 0.92 : 1,
-    })}
+    }}
   >
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <Avatar user={status.user} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ ...typography.title, color: colors.textPrimary }}>
-          {status.user.name}
-        </Text>
-        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          Working out: {status.templateName ?? "Custom workout"}
-        </Text>
+    <Pressable
+      onPress={() => onPressProfile(status.user.id)}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.92 : 1,
+      })}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Avatar user={status.user} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...typography.title, color: colors.textPrimary }}>
+            {status.user.name}
+          </Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            Working out: {status.templateName ?? "Custom workout"}
+          </Text>
+        </View>
+        <VisibilityPill
+          label={
+            status.visibility === "private"
+              ? "Private"
+              : status.visibility === "followers"
+              ? "Friends"
+              : "Squad"
+          }
+        />
       </View>
-      <VisibilityPill
-        label={
-          status.visibility === "private"
-            ? "Private"
-            : status.visibility === "followers"
-            ? "Friends"
-            : "Squad"
-        }
-      />
-    </View>
-    <View style={{ marginTop: 8 }}>
-      <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-        {formatElapsed(status.elapsedSeconds)}
-      </Text>
-      {status.currentExerciseName ? (
-        <Text style={{ color: colors.textPrimary, marginTop: 4 }}>
-          Now: {status.currentExerciseName}
+      <View style={{ marginTop: 8 }}>
+        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+          {formatElapsed(status.elapsedSeconds)}
         </Text>
-      ) : null}
-    </View>
-    <ReactionRow />
-  </Pressable>
+        {status.currentExerciseName ? (
+          <Text style={{ color: colors.textPrimary, marginTop: 4 }}>
+            Now: {status.currentExerciseName}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+    <WorkoutReactions targetType='status' targetId={status.id} compact />
+  </View>
 );
 
 const ShareCard = ({
@@ -249,84 +239,89 @@ const ShareCard = ({
   share: WorkoutSummaryShare;
   onPressProfile: (userId: string) => void;
 }) => (
-  <Pressable
-    onPress={() => onPressProfile(share.user.id)}
-    style={({ pressed }) => ({
+  <View
+    style={{
       backgroundColor: colors.surface,
       borderRadius: 16,
       padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
-      opacity: pressed ? 0.92 : 1,
-    })}
+    }}
   >
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-      }}
+    <Pressable
+      onPress={() => onPressProfile(share.user.id)}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.92 : 1,
+      })}
     >
-      <Avatar user={share.user} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ ...typography.title, color: colors.textPrimary }}>
-          {share.user.name}
-        </Text>
-        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {formatRelativeTime(share.createdAt)}
-        </Text>
-      </View>
-      <VisibilityPill
-        label={
-          share.visibility === "private"
-            ? "Private"
-            : share.visibility === "followers"
-            ? "Friends"
-            : "Squad"
-        }
-      />
-    </View>
-    <View
-      style={{
-        marginTop: 10,
-        flexDirection: "row",
-        gap: 12,
-        alignItems: "center",
-      }}
-    >
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontFamily: fontFamilies.semibold,
-          }}
-        >
-          {share.templateName ?? "Custom workout"}
-        </Text>
-        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-          {share.totalSets} sets
-          {share.totalVolume
-            ? ` · ${share.totalVolume.toLocaleString()} kg`
-            : ""}{" "}
-          {share.prCount ? ` · ${share.prCount} PRs` : ""}
-        </Text>
-      </View>
-      {share.progressPhotoUrl ? (
-        <Image
-          source={{ uri: share.progressPhotoUrl }}
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surfaceMuted,
-          }}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <Avatar user={share.user} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...typography.title, color: colors.textPrimary }}>
+            {share.user.name}
+          </Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            {formatRelativeTime(share.createdAt)}
+          </Text>
+        </View>
+        <VisibilityPill
+          label={
+            share.visibility === "private"
+              ? "Private"
+              : share.visibility === "followers"
+              ? "Friends"
+              : "Squad"
+          }
         />
-      ) : null}
-    </View>
-    <ReactionRow />
-  </Pressable>
+      </View>
+      <View
+        style={{
+          marginTop: 10,
+          flexDirection: "row",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            {share.templateName ?? "Custom workout"}
+          </Text>
+          <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+            {share.totalSets} sets
+            {share.totalVolume
+              ? ` · ${share.totalVolume.toLocaleString()} kg`
+              : ""}{" "}
+            {share.prCount ? ` · ${share.prCount} PRs` : ""}
+          </Text>
+        </View>
+        {share.progressPhotoUrl ? (
+          <Image
+            source={{ uri: share.progressPhotoUrl }}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceMuted,
+            }}
+          />
+        ) : null}
+      </View>
+    </Pressable>
+    <WorkoutReactions targetType='share' targetId={share.id} compact />
+  </View>
 );
 
 const SquadScreen = () => {
@@ -524,14 +519,14 @@ const SquadScreen = () => {
 
   const handleCopyInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `pushpullapp://squad/join/${currentInviteCode}`;
+    const link = `push-pull://squad/join/${currentInviteCode}`;
     await Clipboard.setStringAsync(link);
     Alert.alert("Copied!", "Invite link copied to clipboard");
   };
 
   const handleShareInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `pushpullapp://squad/join/${currentInviteCode}`;
+    const link = `push-pull://squad/join/${currentInviteCode}`;
     const selectedSquad = squads.find((s) => s.id === inviteSquadId);
 
     try {
@@ -820,6 +815,9 @@ const SquadScreen = () => {
               activeId={selectedSquadId}
               onSelect={(id) =>
                 setSelectedSquadId((prev) => (prev === id ? undefined : id))
+              }
+              onLongPress={(id) =>
+                navigation.navigate("SquadDetail", { squadId: id })
               }
             />
           ) : (
@@ -1733,7 +1731,7 @@ const SquadScreen = () => {
                                           fontFamily: fontFamilies.regular,
                                         }}
                                       >
-                                        pushpullapp://squad/join/
+                                        push-pull://squad/join/
                                         {currentInviteCode}
                                       </Text>
                                     </View>
@@ -2297,10 +2295,12 @@ const ScrollSquads = ({
   squads,
   activeId,
   onSelect,
+  onLongPress,
 }: {
   squads: SquadDetail[];
   activeId?: string;
   onSelect: (id: string) => void;
+  onLongPress?: (id: string) => void;
 }) => (
   <ScrollView
     horizontal
@@ -2314,6 +2314,8 @@ const ScrollSquads = ({
           <Pressable
             key={squad.id}
             onPress={() => onSelect(squad.id)}
+            onLongPress={() => onLongPress?.(squad.id)}
+            delayLongPress={400}
             style={({ pressed }) => ({
               paddingHorizontal: 12,
               paddingVertical: 10,
@@ -2326,18 +2328,30 @@ const ScrollSquads = ({
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text
-              style={{
-                color: selected ? colors.primary : colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              {squad.name}
-            </Text>
+              <Text
+                style={{
+                  color: selected ? colors.primary : colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {squad.name}
+              </Text>
+              {squad.isAdmin && (
+                <Ionicons
+                  name='shield-checkmark'
+                  size={12}
+                  color={selected ? colors.primary : colors.textSecondary}
+                />
+              )}
+            </View>
             <Text
               style={{ color: colors.textSecondary, ...typography.caption }}
             >
-              {formatSquadMembersLabel(squad.members)}
+              {squad.memberCount} member{squad.memberCount !== 1 ? "s" : ""} ·
+              Hold to view
             </Text>
           </Pressable>
         );
