@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,7 +11,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -23,46 +25,97 @@ import { SocialProfile, SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ProfileHeader from "../components/profile/ProfileHeader";
+import TotalWorkoutsBottomSheet from "../components/profile/TotalWorkoutsBottomSheet";
+import TotalVolumeBottomSheet from "../components/profile/TotalVolumeBottomSheet";
+import GoalProgressBottomSheet from "../components/profile/GoalProgressBottomSheet";
 
 const initialForName = (name?: string) => {
   if (!name) return "?";
   return name[0]?.toUpperCase() ?? "?";
 };
 
-const StatBlock = ({ label, value }: { label: string; value: string }) => (
-  <LinearGradient
-    colors={[`${colors.primary}16`, colors.surfaceMuted]}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 1 }}
-    style={{
-      flex: 1,
-      borderRadius: 12,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-    }}
-  >
-    <Text
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.9}
-      style={{
-        color: colors.textPrimary,
-        fontFamily: fontFamilies.semibold,
-        fontSize: 18,
-      }}
+const AnimatedStatBlock = ({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 8,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={{ flex: 1 }}
     >
-      {value}
-    </Text>
-    <Text
-      numberOfLines={1}
-      ellipsizeMode='tail'
-      style={{ color: colors.textSecondary, ...typography.caption }}
-    >
-      {label}
-    </Text>
-  </LinearGradient>
-);
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <LinearGradient
+          colors={[`${colors.primary}16`, colors.surfaceMuted]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.9}
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 18,
+              }}
+            >
+              {value}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </View>
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={{ color: colors.textSecondary, ...typography.caption }}
+          >
+            {label}
+          </Text>
+        </LinearGradient>
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 const ProfileScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -87,6 +140,10 @@ const ProfileScreen = () => {
   const [selectedConnection, setSelectedConnection] =
     useState<SocialUserSummary | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+
+  // Bottom sheet states for interactive highlights
+  const [showWorkoutsSheet, setShowWorkoutsSheet] = useState(false);
+  const [showGoalSheet, setShowGoalSheet] = useState(false);
 
   const {
     data: profile,
@@ -234,9 +291,6 @@ const ProfileScreen = () => {
   const heroSubtitle = resolvedProfile?.trainingStyleTags?.length
     ? resolvedProfile.trainingStyleTags.join(" · ")
     : resolvedProfile?.trainingStyle;
-  const squadBadgeLabel = friendCount
-    ? `${friendCount} gym buddies`
-    : "Build your squad";
   const handleSettingsPress = () => {
     if (isViewingSelf) {
       navigation.navigate("Settings");
@@ -543,22 +597,22 @@ const ProfileScreen = () => {
               Highlights
             </Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
-              <StatBlock
-                label='Streak'
-                value={
-                  `${resolvedProfile.currentStreakDays ?? 0} day${
-                    (resolvedProfile.currentStreakDays ?? 0) === 1 ? "" : "s"
-                  }`
-                }
-              />
-              <StatBlock
-                label='Workouts'
+              <AnimatedStatBlock
+                label="Total Workouts"
                 value={String(resolvedProfile.workoutsCompleted ?? "—")}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowWorkoutsSheet(true);
+                }}
               />
             </View>
             <View style={{ flexDirection: "row", gap: 12 }}>
-              <View
-                style={{
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowGoalSheet(true);
+                }}
+                style={({ pressed }) => ({
                   flex: 1,
                   borderRadius: 12,
                   padding: 12,
@@ -566,7 +620,9 @@ const ProfileScreen = () => {
                   borderWidth: 1,
                   borderColor: colors.primary,
                   gap: 6,
-                }}
+                  opacity: pressed ? 0.9 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
               >
                 <View
                   style={{
@@ -584,9 +640,12 @@ const ProfileScreen = () => {
                   >
                     Goal progress
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {weeklyGoal ? `${goalProgress ?? 0}/${weeklyGoal}` : "Not set"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {weeklyGoal ? `${goalProgress ?? 0}/${weeklyGoal}` : "Not set"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                  </View>
                 </View>
                 <View
                   style={{
@@ -612,85 +671,10 @@ const ProfileScreen = () => {
                 </View>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {weeklyGoal
-                    ? "Keep up the pace to close the ring."
-                    : "Set a weekly target to unlock reminders."}
+                    ? "Tap to see your weekly progress"
+                    : "Tap to set a weekly goal"}
                 </Text>
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 12,
-                  padding: 12,
-                  backgroundColor: `${colors.surfaceMuted}F2`,
-                  borderWidth: 1,
-                  borderColor: colors.secondary,
-                  gap: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 16,
-                  }}
-                >
-                  Squad badge
-                </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 13,
-                  }}
-                >
-                  {squadBadgeLabel}
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 6,
-                    flexWrap: "wrap",
-                    marginTop: 6,
-                  }}
-                >
-                  {friendsPreview.slice(0, 4).map((friend) => (
-                    <View
-                      key={friend.id}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surfaceMuted,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {friend.avatarUrl ? (
-                        <Image
-                          source={{ uri: friend.avatarUrl }}
-                          style={{ width: 34, height: 34, borderRadius: 17 }}
-                        />
-                      ) : (
-                        <Text
-                          style={{
-                            color: colors.textSecondary,
-                            fontFamily: fontFamilies.semibold,
-                            fontSize: 12,
-                          }}
-                        >
-                          {initialForName(friend.name)}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                  {!friendsPreview.length ? (
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                      Invite buddies from Squads.
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
+              </Pressable>
             </View>
           </View>
 
@@ -1542,6 +1526,21 @@ const ProfileScreen = () => {
           ) : null}
         </TouchableOpacity>
       </Modal>
+
+      {/* Interactive Highlights Bottom Sheets */}
+      <TotalWorkoutsBottomSheet
+        visible={showWorkoutsSheet}
+        onClose={() => setShowWorkoutsSheet(false)}
+        totalWorkouts={resolvedProfile?.workoutsCompleted ?? 0}
+      />
+
+      <GoalProgressBottomSheet
+        visible={showGoalSheet}
+        onClose={() => setShowGoalSheet(false)}
+        weeklyGoal={weeklyGoal}
+        workoutsThisWeek={workoutsThisWeek}
+        onEditGoal={() => navigation.navigate("Onboarding", { isRetake: true })}
+      />
     </ScreenContainer>
   );
 };
