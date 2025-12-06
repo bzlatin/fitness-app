@@ -219,13 +219,13 @@ const ProfileHeader = ({
                     alignItems: "center",
                     gap: 6,
                     borderWidth: 1,
-                    borderColor: badgeTone,
+                    borderColor: isFollowing ? colors.border : colors.primary,
                     backgroundColor: isFollowing ? colors.surfaceMuted : colors.primary,
                     opacity: pressed || isFollowLoading ? 0.85 : 1,
                   })}
                 >
                   <Ionicons
-                    name={isFollowing ? "checkmark" : "add"}
+                    name={isFollowing ? "checkmark" : "person-add"}
                     size={16}
                     color={isFollowing ? colors.textPrimary : colors.surface}
                   />
@@ -236,7 +236,7 @@ const ProfileHeader = ({
                       fontSize: 13,
                     }}
                   >
-                    {isFollowing ? "Following" : "Add buddy"}
+                    {isFollowing ? "Following" : "Follow"}
                   </Text>
                 </Pressable>
               ) : null}

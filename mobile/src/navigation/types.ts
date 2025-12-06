@@ -7,7 +7,7 @@ export type RootStackParamList = {
   WorkoutTemplateBuilder: { templateId?: string };
   WorkoutGenerator: undefined;
   WorkoutSession: { templateId: string; sessionId?: string; initialVisibility?: Visibility };
-  Profile: { userId?: string };
+  UserProfile: { userId: string };
   PostWorkoutShare: {
     sessionId: string;
     templateId?: string;

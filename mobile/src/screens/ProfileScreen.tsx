@@ -7,6 +7,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -17,8 +18,7 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
-import { RootRoute } from "../navigation/types";
-import { followUser, getUserProfile, unfollowUser } from "../api/social";
+import { followUser, getConnections, getUserProfile, removeFollower, unfollowUser } from "../api/social";
 import { SocialProfile, SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -66,10 +66,11 @@ const StatBlock = ({ label, value }: { label: string; value: string }) => (
 
 const ProfileScreen = () => {
   const navigation = useNavigation<RootNavigation>();
-  const route = useRoute<RootRoute<"Profile">>();
+  const route = useRoute();
   const queryClient = useQueryClient();
   const { user: currentUser, refresh: refreshCurrentUser } = useCurrentUser();
-  const userId = route.params?.userId ?? currentUser?.id;
+  // Handle both tab navigation (no params) and stack navigation (with userId param)
+  const userId = (route.params as { userId?: string })?.userId ?? currentUser?.id;
   const invalidateConnections = () => {
     queryClient.invalidateQueries({
       queryKey: ["social", "connections"],
@@ -82,6 +83,11 @@ const ProfileScreen = () => {
   };
   const [selectedFriend, setSelectedFriend] =
     useState<SocialUserSummary | null>(null);
+  const [showConnectionsModal, setShowConnectionsModal] = useState(false);
+  const [selectedConnection, setSelectedConnection] =
+    useState<SocialUserSummary | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+
   const {
     data: profile,
     isLoading,
@@ -197,10 +203,9 @@ const ProfileScreen = () => {
   const resolvedProfile =
     profile ?? ((currentUser as unknown as SocialProfile) || null);
   const loadingState = isLoading && !resolvedProfile;
-  const isViewingSelf =
-    (!route.params?.userId && resolvedProfile?.id === currentUser?.id) ||
-    userId === currentUser?.id ||
-    resolvedProfile?.id === currentUser?.id;
+  // Determine if viewing own profile based on route params first
+  const routeUserId = (route.params as { userId?: string })?.userId;
+  const isViewingSelf = !routeUserId || userId === currentUser?.id;
   const isFollowing = resolvedProfile?.isFollowing ?? false;
   const friendCount = useMemo(() => {
     if (!resolvedProfile) return 0;
@@ -239,8 +244,219 @@ const ProfileScreen = () => {
   };
   const openConnections = useCallback(() => {
     if (!isViewingSelf) return;
-    navigation.navigate("Settings", { openConnections: true });
-  }, [isViewingSelf, navigation]);
+    // Show connections modal directly on Profile screen
+    setShowConnectionsModal(true);
+  }, [isViewingSelf]);
+
+  const connectionsQuery = useQuery({
+    queryKey: ["social", "connections", "profile"],
+    queryFn: getConnections,
+    enabled: Boolean(currentUser) && isViewingSelf && showConnectionsModal,
+  });
+
+  const friends = connectionsQuery.data?.friends ?? [];
+  const pendingInvites = connectionsQuery.data?.pendingInvites ?? [];
+  const outgoingInvites = connectionsQuery.data?.outgoingInvites ?? [];
+  const connectionsFriendCount = connectionsQuery.data
+    ? friends.length
+    : friendCount;
+
+  const refreshConnections = async () => {
+    invalidateConnections();
+    await queryClient.refetchQueries({
+      queryKey: ["social", "connections"],
+      type: "active",
+    });
+    await refreshCurrentUser();
+  };
+
+  const acceptInvite = useMutation({
+    mutationFn: followUser,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const declineInvite = useMutation({
+    mutationFn: removeFollower,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const cancelOutgoing = useMutation({
+    mutationFn: unfollowUser,
+    onMutate: (id) => setPendingActionId(id),
+    onSettled: () => setPendingActionId(null),
+    onSuccess: refreshConnections,
+  });
+
+  const closeConnectionsModal = () => {
+    setShowConnectionsModal(false);
+    setSelectedConnection(null);
+  };
+
+  const renderConnectionGroup = (
+    title: string,
+    subtitle: string,
+    list: SocialUserSummary[],
+    emptyCopy: string,
+    renderActions?: (person: SocialUserSummary) => React.ReactElement | null
+  ) => (
+    <View
+      style={{
+        gap: 10,
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surfaceMuted,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: 12,
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 14,
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
+          >
+            {subtitle}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", minWidth: 52 }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.bold,
+              fontSize: 18,
+            }}
+          >
+            {list.length}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            people
+          </Text>
+        </View>
+      </View>
+      {list.length ? (
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          {list.map((person) => (
+            <View
+              key={person.id}
+              style={{
+                flexBasis: "48%",
+                maxWidth: 200,
+                minWidth: 150,
+                alignItems: "stretch",
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={() => setSelectedConnection(person)}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingVertical: 10,
+                  borderRadius: 16,
+                  backgroundColor: pressed
+                    ? colors.surfaceMuted
+                    : colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {person.avatarUrl ? (
+                    <Image
+                      source={{ uri: person.avatarUrl }}
+                      style={{ width: 64, height: 64, borderRadius: 999 }}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 18,
+                      }}
+                    >
+                      {initialForName(person.name)}
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                  }}
+                >
+                  {person.name}
+                </Text>
+                {person.handle ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: colors.textSecondary, fontSize: 11 }}
+                  >
+                    {formatHandle(person.handle)}
+                  </Text>
+                ) : null}
+              </Pressable>
+              {renderActions ? renderActions(person) : null}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View
+          style={{
+            backgroundColor: colors.surfaceMuted,
+            borderRadius: 12,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            {emptyCopy}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
   const relationshipCopy = isViewingSelf
     ? null
     : isFollowing
@@ -264,6 +480,32 @@ const ProfileScreen = () => {
 
   return (
     <ScreenContainer scroll>
+      {/* Close/Back Button for other user profiles */}
+      {!isViewingSelf ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <Pressable
+            onPress={() => {
+              // Pop the current screen from the stack to return to previous screen
+              navigation.goBack();
+            }}
+            hitSlop={12}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+      ) : null}
+
       {loadingState ? (
         <View style={{ marginTop: 20 }}>
           <ActivityIndicator color={colors.primary} />
@@ -276,7 +518,7 @@ const ProfileScreen = () => {
       ) : null}
 
       {resolvedProfile ? (
-        <View style={{ gap: 16, marginTop: 6 }}>
+        <View style={{ gap: 16, marginTop: !isViewingSelf ? 0 : 6 }}>
           <ProfileHeader
             name={resolvedProfile.name}
             handle={formattedHandle}
@@ -452,24 +694,25 @@ const ProfileScreen = () => {
             </View>
           </View>
 
-          {relationshipCopy ? (
+          {/* Relationship status - only show for other users */}
+          {!isViewingSelf && relationshipCopy ? (
             <View
               style={{
                 borderRadius: 14,
                 backgroundColor: relationshipCopy.bg,
                 borderWidth: 1,
                 borderColor: relationshipCopy.border,
-                padding: 14,
-                gap: 10,
+                padding: 16,
+                gap: 12,
               }}
             >
               <View
-                style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
+                style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
               >
                 <View
                   style={{
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     borderRadius: 12,
                     alignItems: "center",
                     justifyContent: "center",
@@ -480,7 +723,7 @@ const ProfileScreen = () => {
                 >
                   <Ionicons
                     name={relationshipCopy.icon as keyof typeof Ionicons.glyphMap}
-                    size={22}
+                    size={24}
                     color={relationshipCopy.iconColor}
                   />
                 </View>
@@ -489,7 +732,7 @@ const ProfileScreen = () => {
                     style={{
                       color: colors.textPrimary,
                       fontFamily: fontFamilies.semibold,
-                      fontSize: 15,
+                      fontSize: 16,
                     }}
                   >
                     {relationshipCopy.title}
@@ -498,96 +741,105 @@ const ProfileScreen = () => {
                     style={{
                       color: colors.textSecondary,
                       marginTop: 2,
-                      fontSize: 12,
+                      fontSize: 13,
                     }}
                   >
                     {relationshipCopy.body}
                   </Text>
                 </View>
-                {!isViewingSelf ? (
-                  <Pressable
-                    onPress={handleFollowToggle}
-                    disabled={
-                      followMutation.isPending || unfollowMutation.isPending
-                    }
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      backgroundColor: isFollowing
-                        ? colors.surfaceMuted
-                        : colors.primary,
-                      borderWidth: 1,
-                      borderColor: isFollowing ? colors.border : colors.primary,
-                      opacity:
-                        pressed ||
-                        followMutation.isPending ||
-                        unfollowMutation.isPending
-                          ? 0.86
-                          : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        color: isFollowing ? colors.textPrimary : colors.surface,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 13,
-                      }}
-                    >
-                      {isFollowing ? "Remove" : "Add"}
-                    </Text>
-                  </Pressable>
-                ) : null}
               </View>
+              <Pressable
+                onPress={handleFollowToggle}
+                disabled={
+                  followMutation.isPending || unfollowMutation.isPending
+                }
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: isFollowing
+                    ? colors.surfaceMuted
+                    : colors.primary,
+                  borderWidth: 1,
+                  borderColor: isFollowing ? colors.border : colors.primary,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                  opacity:
+                    pressed ||
+                    followMutation.isPending ||
+                    unfollowMutation.isPending
+                      ? 0.86
+                      : 1,
+                })}
+              >
+                <Ionicons
+                  name={isFollowing ? "person-remove" : "person-add"}
+                  size={20}
+                  color={isFollowing ? colors.textPrimary : colors.surface}
+                />
+                <Text
+                  style={{
+                    color: isFollowing ? colors.textPrimary : colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                  }}
+                >
+                  {isFollowing ? "Unfollow" : "Follow"}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
-          <View style={{ gap: 10 }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              Quick actions
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-              <ShortcutCard
-                title='Edit goals'
-                subtitle='Adjust weekly targets'
-                icon='target'
-                onPress={() =>
-                  navigation.navigate("Onboarding", { isRetake: true })
-                }
-              />
-              <ShortcutCard
-                title='Manage squads'
-                subtitle='Invite buddies or join'
-                icon='people'
-                onPress={() =>
-                  navigation.navigate("RootTabs", { screen: "Squad" })
-                }
-              />
-              <ShortcutCard
-                title='Add friends'
-                subtitle='Find gym buddies fast'
-                icon='person-add'
-                onPress={() =>
-                  navigation.navigate("RootTabs", {
-                    screen: "Squad",
-                    params: { openFindBuddies: true },
-                  })
-                }
-              />
-              <ShortcutCard
-                title='View feedback board'
-                subtitle='See what we are building next'
-                icon='chatbubble-ellipses-outline'
-                onPress={() => {
-                  navigation.navigate("Settings");
-                  Alert.alert(
-                    "Feedback board",
-                    "We’re polishing the in-app board. Head to Settings → Feedback to drop ideas."
-                  );
-                }}
-              />
+          {/* Quick actions section - only show for own profile */}
+          {isViewingSelf ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                Quick actions
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+                <ShortcutCard
+                  title='Edit goals'
+                  subtitle='Adjust weekly targets'
+                  icon='trophy-outline'
+                  onPress={() =>
+                    navigation.navigate("Onboarding", { isRetake: true })
+                  }
+                />
+                <ShortcutCard
+                  title='Manage squads'
+                  subtitle='Invite buddies or join'
+                  icon='people'
+                  onPress={() =>
+                    navigation.navigate("RootTabs", { screen: "Squad" })
+                  }
+                />
+                <ShortcutCard
+                  title='Add friends'
+                  subtitle='Find gym buddies fast'
+                  icon='person-add'
+                  onPress={() =>
+                    navigation.navigate("RootTabs", {
+                      screen: "Squad",
+                      params: { openFindBuddies: true },
+                    })
+                  }
+                />
+                <ShortcutCard
+                  title='View feedback board'
+                  subtitle='See what we are building next'
+                  icon='chatbubble-ellipses-outline'
+                  onPress={() => {
+                    navigation.navigate("Settings");
+                    Alert.alert(
+                      "Feedback board",
+                      "We're polishing the in-app board. Head to Settings → Feedback to drop ideas."
+                    );
+                  }}
+                />
+              </View>
             </View>
-          </View>
+          ) : null}
 
           <View
             style={{
@@ -776,7 +1028,7 @@ const ProfileScreen = () => {
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <Pressable
                   onPress={() => {
-                    navigation.navigate("Profile", {
+                    navigation.navigate("UserProfile", {
                       userId: selectedFriend.id,
                     });
                     setSelectedFriend(null);
@@ -803,6 +1055,469 @@ const ProfileScreen = () => {
                 </Pressable>
                 <Pressable
                   onPress={() => setSelectedFriend(null)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceMuted,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Connections Modal */}
+      <Modal
+        visible={showConnectionsModal && !selectedConnection}
+        transparent
+        animationType='fade'
+        onRequestClose={closeConnectionsModal}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable style={{ flex: 1 }} onPress={closeConnectionsModal} />
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxHeight: "95%",
+              minHeight: "85%",
+            }}
+          >
+            <View style={{ alignItems: "center", paddingVertical: 6 }}>
+              <View
+                style={{
+                  width: 50,
+                  height: 5,
+                  borderRadius: 999,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              />
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                paddingBottom: 4,
+              }}
+            >
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 18,
+                  }}
+                >
+                  Friends & invites
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Manage buddies, pending requests, and invites you sent.
+                </Text>
+              </View>
+              <Pressable
+                onPress={closeConnectionsModal}
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Close
+                </Text>
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                marginTop: 6,
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceMuted,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Gym buddies
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {connectionsFriendCount ?? 0}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.primary}16`,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Pending
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {pendingInvites.length}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.secondary}22`,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Sent
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {outgoingInvites.length}
+                </Text>
+              </View>
+            </View>
+
+            {connectionsQuery.isFetching ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 24,
+                }}
+              >
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1, marginTop: 10 }}
+                contentContainerStyle={{
+                  gap: 14,
+                  paddingBottom: 32,
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                {renderConnectionGroup(
+                  "Gym buddies",
+                  "Mutual follows you can invite to squads or challenge.",
+                  friends,
+                  "Add gym buddies from the Squad tab to see them here."
+                )}
+                {renderConnectionGroup(
+                  "Pending invites",
+                  "They follow you. Follow back to make it mutual.",
+                  pendingInvites,
+                  "No pending requests from others.",
+                  (person) => (
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        onPress={() => acceptInvite.mutate(person.id)}
+                        disabled={pendingActionId === person.id}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderRadius: 10,
+                          backgroundColor: colors.primary,
+                          borderWidth: 1,
+                          borderColor: colors.primary,
+                          opacity:
+                            pressed || pendingActionId === person.id ? 0.85 : 1,
+                        })}
+                      >
+                        <Text
+                          style={{
+                            color: colors.surface,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 13,
+                            textAlign: "center",
+                          }}
+                        >
+                          {pendingActionId === person.id ? "Adding..." : "Accept"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => declineInvite.mutate(person.id)}
+                        disabled={pendingActionId === person.id}
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surfaceMuted,
+                          opacity:
+                            pressed || pendingActionId === person.id ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 13,
+                          }}
+                        >
+                          Decline
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )
+                )}
+                {renderConnectionGroup(
+                  "Invites you sent",
+                  "You're following them. They'll move to buddies when they follow back.",
+                  outgoingInvites,
+                  "You haven't sent any invites yet.",
+                  (person) => (
+                    <Pressable
+                      onPress={() => cancelOutgoing.mutate(person.id)}
+                      disabled={pendingActionId === person.id}
+                      style={({ pressed }) => ({
+                        width: "100%",
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceMuted,
+                        opacity:
+                          pressed || pendingActionId === person.id ? 0.85 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 13,
+                          textAlign: "center",
+                        }}
+                      >
+                        {pendingActionId === person.id
+                          ? "Cancelling..."
+                          : "Cancel invite"}
+                      </Text>
+                    </Pressable>
+                  )
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Selected Connection Modal */}
+      <Modal
+        visible={Boolean(selectedConnection)}
+        transparent
+        animationType='fade'
+        onRequestClose={() => setSelectedConnection(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setSelectedConnection(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            padding: 22,
+          }}
+        >
+          {selectedConnection ? (
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 16,
+                padding: 18,
+                gap: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
+              >
+                <View
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 999,
+                    backgroundColor: colors.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {selectedConnection.avatarUrl ? (
+                    <Image
+                      source={{ uri: selectedConnection.avatarUrl }}
+                      style={{ width: 72, height: 72, borderRadius: 999 }}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fontFamilies.bold,
+                        fontSize: 26,
+                      }}
+                    >
+                      {initialForName(selectedConnection.name)}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 18,
+                    }}
+                  >
+                    {selectedConnection.name}
+                  </Text>
+                  {selectedConnection.handle ? (
+                    <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
+                      {formatHandle(selectedConnection.handle)}
+                    </Text>
+                  ) : null}
+                  {selectedConnection.trainingStyleTags?.length ? (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        marginTop: 4,
+                        fontSize: 12,
+                      }}
+                    >
+                      {selectedConnection.trainingStyleTags.join(" · ")}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Jump to their profile to follow back, invite them, or view their
+                latest sessions.
+              </Text>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    navigation.navigate("UserProfile", {
+                      userId: selectedConnection.id,
+                    });
+                    setSelectedConnection(null);
+                    closeConnectionsModal();
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor: colors.primary,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    View profile
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setSelectedConnection(null)}
                   style={({ pressed }) => ({
                     paddingVertical: 12,
                     paddingHorizontal: 16,

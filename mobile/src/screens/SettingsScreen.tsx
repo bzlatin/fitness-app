@@ -183,6 +183,7 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     if (route.params?.openConnections) {
+      // Open modal immediately when navigated here with openConnections param
       setShowConnectionsModal(true);
     }
   }, [route.params?.openConnections]);
@@ -337,6 +338,11 @@ const SettingsScreen = () => {
     setConnectionsScrollHeight(0);
     setConnectionsIsNearTop(true);
     setConnectionsIsNearBottom(false);
+
+    // If the modal was opened via route params (from Profile), go back
+    if (route.params?.openConnections) {
+      navigation.goBack();
+    }
   };
 
   const declineInvite = useMutation({
@@ -628,7 +634,10 @@ const SettingsScreen = () => {
 
   return (
     <ScreenContainer scroll includeTopInset={false} paddingTop={12}>
-      <View style={{ marginTop: 10, gap: 16 }}>
+      <>
+        {/* Hide settings content if opened just to show connections modal */}
+        {!route.params?.openConnections && (
+          <View style={{ marginTop: 10, gap: 16 }}>
         <Section
           title='Account'
           subtitle='Keep your profile tidy and your gym details accurate.'
@@ -1703,6 +1712,7 @@ const SettingsScreen = () => {
           </Pressable>
         </Section>
       </View>
+      )}
 
       <Modal
         visible={showConnectionsModal}
@@ -1723,13 +1733,13 @@ const SettingsScreen = () => {
               backgroundColor: colors.surface,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              paddingHorizontal: 18,
-              paddingTop: 10,
-              paddingBottom: 12,
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 20,
               borderWidth: 1,
               borderColor: colors.border,
-              maxHeight: "90%",
-              minHeight: "60%",
+              maxHeight: "95%",
+              minHeight: "85%",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: -6 },
               shadowOpacity: 0.12,
@@ -2183,7 +2193,7 @@ const SettingsScreen = () => {
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <Pressable
                   onPress={() => {
-                    navigation.navigate("Profile", {
+                    navigation.navigate("UserProfile", {
                       userId: selectedConnection.id,
                     });
                     setSelectedConnection(null);
@@ -2322,11 +2332,12 @@ const SettingsScreen = () => {
         </View>
       </Modal>
 
-      <PaywallComparisonModal
-        visible={showPaywallModal}
-        onClose={() => setShowPaywallModal(false)}
-        triggeredBy="progression"
-      />
+        <PaywallComparisonModal
+          visible={showPaywallModal}
+          onClose={() => setShowPaywallModal(false)}
+          triggeredBy="progression"
+        />
+      </>
     </ScreenContainer>
   );
 };

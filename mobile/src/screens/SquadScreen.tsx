@@ -659,7 +659,7 @@ const {
           <ActiveCard
             status={item.status}
             onPressProfile={(userId) =>
-              navigation.navigate("Profile", { userId })
+              navigation.navigate("UserProfile", { userId })
             }
           />
         );
@@ -668,7 +668,7 @@ const {
           <ShareCard
             share={item.share}
             onPressProfile={(userId) =>
-              navigation.navigate("Profile", { userId })
+              navigation.navigate("UserProfile", { userId })
             }
           />
         );
@@ -2065,7 +2065,7 @@ const {
             user={profilePreview}
             onClose={() => setProfilePreview(null)}
             onView={() => {
-              navigation.navigate("Profile", { userId: profilePreview.id });
+              navigation.navigate("UserProfile", { userId: profilePreview.id });
               setProfilePreview(null);
               closeSocialModal();
             }}

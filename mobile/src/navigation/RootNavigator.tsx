@@ -148,9 +148,9 @@ const RootNavigator = () => (
       options={{ title: "Workout Session", headerShown: false }}
     />
     <Stack.Screen
-      name='Profile'
+      name='UserProfile'
       component={ProfileScreen}
-      options={{ title: "Profile" }}
+      options={{ title: "Profile", presentation: 'modal' }}
     />
     <Stack.Screen
       name='PostWorkoutShare'
