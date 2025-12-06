@@ -1057,6 +1057,7 @@ CREATE TABLE user_blocks (
 **API Endpoints (New)**:
 
 Squad Management:
+
 - `GET /api/social/squads/:squadId` - Get squad details
 - `PUT /api/social/squads/:squadId` - Update squad settings (name, description, isPublic)
 - `DELETE /api/social/squads/:squadId/members/:memberId` - Remove member (admin only)
@@ -1066,11 +1067,13 @@ Squad Management:
 - `GET /api/social/squads/:squadId/members/search` - Search squad members
 
 User Blocking:
+
 - `POST /api/social/block` - Block user
 - `DELETE /api/social/block/:blockedId` - Unblock user
 - `GET /api/social/blocked` - Get blocked users list
 
 Reactions & Comments:
+
 - `POST /api/social/reactions` - Add emoji reaction
 - `DELETE /api/social/reactions/:targetType/:targetId/:emoji` - Remove reaction
 - `POST /api/social/comments` - Add comment
@@ -1154,6 +1157,7 @@ Reactions & Comments:
 **Key Features Implemented**:
 
 - **Notification Triggers**:
+
   - Goal Risk: Sends 1-2 days before week end if user needs 1+ sessions to hit goal
   - Inactivity: One nudge after 5-7 days of no workouts
   - Weekly Goal Met: Celebration notification when completing weekly goal
@@ -1161,11 +1165,13 @@ Reactions & Comments:
   - Squad Goal Met: When squad members complete their weekly goals
 
 - **User Preferences** (stored in JSONB):
+
   - Toggle each notification type on/off
   - Quiet hours (default: 22:00 - 8:00)
   - Max notifications per week (default: 3)
 
 - **In-App Inbox**:
+
   - View last 30 days of notifications
   - Unread badge count
   - Mark as read/clicked for analytics
@@ -1244,36 +1250,38 @@ cron.schedule("0 9 * * *", async () => {
 **Testing Notes**:
 
 To test notifications:
+
 1. Enable notifications in SettingsScreen
 2. Grant notification permissions when prompted
 3. Use the scheduler job or send test notifications via API
 4. Check inbox in SettingsScreen → "View Inbox"
 5. Verify quiet hours and weekly cap enforcement
 
-#### 4.4.2 iOS Widgets (Weekly Goal + Quick Actions)
+#### 4.4.2 Profile & Settings Redesign
 
-**Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
 
-**Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
+**Goal**: Simplify profile, move settings-type controls into a dedicated settings hub, and spotlight identity/achievements. Tackle the SettingsScreen rework first; then refine the Profile layout and shortcuts.
 
-**Widget Concepts**:
+**Changes**:
 
-- Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
-- Today Shortcut: Start “Log workout” or “Start session” deep link
-- Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
+- Prioritize SettingsScreen: regroup Account, Preferences, Billing, Notifications, and Feedback; add clear section headers and safe defaults
+- Add gear icon on Profile to open SettingsScreen (no bottom nav change)
+- Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
+- Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
 
 **Implementation**:
 
-- Build WidgetKit extension (Expo config plugin) with background refresh window
-- Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
-- Deep link targets for start workout, view squad feed, view analytics
+- Redesign ProfileScreen layout with cleaner hierarchy and tappable cards
+- Expand SettingsScreen with grouped sections and empty states; wire navigation for billing/preferences/feedback
+- Add graceful empty states and consistent spacing for mobile ergonomics
 
 **Files to Create/Modify**:
 
-- `/mobile/app.config.ts` - Widget extension config
-- `/mobile/src/widgets/GoalWidget.tsx` - Widget UI logic
-- `/mobile/src/navigation/deepLinks.ts` - Add widget deep link targets
-- `/server/src/routes/engagement.ts` - Widget data endpoint with caching
+- `/mobile/src/screens/ProfileScreen.tsx` - New layout + gear icon nav
+- `/mobile/src/screens/SettingsScreen.tsx` - New sections and routing for billing/preferences/feedback
+- `/mobile/src/navigation/RootNavigator.tsx` - Ensure Settings accessible only via Profile gear
+- `/mobile/src/components/profile/ProfileHeader.tsx` - Extracted header for readability
 
 #### 4.4.3 Consistency & Streaks (Weekly-Goal-Based)
 
@@ -1329,31 +1337,30 @@ To test notifications:
 - `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button
 - `/mobile/src/navigation/RootNavigator.tsx` - Register screen, hide behind Settings gear
 
-#### 4.4.5 Profile & Settings Redesign
+#### 4.4.5 iOS Widgets (Weekly Goal + Quick Actions)
 
-**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ☐ PLANNED
 
-**Goal**: Simplify profile, move controls into a dedicated settings hub, and spotlight identity/achievements.
+**Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
 
-**Changes**:
+**Widget Concepts**:
 
-- Add gear icon on Profile to open SettingsScreen (no bottom nav change)
-- Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
-- Collapse billing, training preferences, account management into Settings sections
-- Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
+- Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
+- Today Shortcut: Start “Log workout” or “Start session” deep link
+- Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
 
 **Implementation**:
 
-- Redesign ProfileScreen layout with cleaner hierarchy and tappable cards
-- Expand SettingsScreen with grouped sections (Account, Preferences, Billing, Notifications, Feedback)
-- Add graceful empty states and consistent spacing for mobile ergonomics
+- Build WidgetKit extension (Expo config plugin) with background refresh window
+- Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
+- Deep link targets for start workout, view squad feed, view analytics
 
 **Files to Create/Modify**:
 
-- `/mobile/src/screens/ProfileScreen.tsx` - New layout + gear icon nav
-- `/mobile/src/screens/SettingsScreen.tsx` - New sections and routing for billing/preferences/feedback
-- `/mobile/src/navigation/RootNavigator.tsx` - Ensure Settings accessible only via Profile gear
-- `/mobile/src/components/profile/ProfileHeader.tsx` - Extracted header for readability
+- `/mobile/app.config.ts` - Widget extension config
+- `/mobile/src/widgets/GoalWidget.tsx` - Widget UI logic
+- `/mobile/src/navigation/deepLinks.ts` - Add widget deep link targets
+- `/server/src/routes/engagement.ts` - Widget data endpoint with caching
 
 #### 4.4.6 Recovery-Aware Coach Cards (Post-Session)
 
@@ -1445,17 +1452,17 @@ To test notifications:
 
 **Domain & Hosting**:
 
-- [ ] Register domain (push-pull.app )
-- [ ] Set up DNS with hosting provider
-- [ ] Deploy to Vercel/Netlify (free tier)
-- [ ] Configure SSL certificate
-- [ ] Set up redirect from www to root domain
+- [x] Register domain (push-pull.app )
+- [x] Set up DNS with hosting provider
+- [x] Deploy to Vercel/Netlify (free tier)
+- [x] Configure SSL certificate
+- [x] Set up redirect from www to root domain
 
 **App Store Optimization**:
 
 - [ ] Create App Store listing (iOS)
 - [ ] Create Google Play Store listing (Android)
-- [ ] Design app icon (1024x1024)
+- [x] Design app icon (1024x1024)
 - [ ] Create 5-6 app screenshots per platform
 - [ ] Write compelling app description
 - [ ] Choose keywords for ASO

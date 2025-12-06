@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef, ReactNode } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LegendList } from "../components/feed/LegendList";
@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { useSquadFeed } from "../hooks/useSquadFeed";
 import { useSquads } from "../hooks/useSquads";
@@ -32,6 +32,7 @@ import {
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { RootTabParamList } from "../navigation/types";
 import {
   followUser,
   getConnections,
@@ -365,12 +366,14 @@ const SquadScreen = () => {
   const [currentInviteCode, setCurrentInviteCode] = useState<string | null>(
     null
   );
-  const {
+const {
     data: selectedSquadData,
     isLoading: selectedSquadLoading,
     isError: selectedSquadError,
   } = useSquadFeed(selectedSquadId, { enabled: Boolean(selectedSquadId) });
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const hasOpenedFromParams = useRef(false);
+  const route = useRoute<RouteProp<RootTabParamList, "Squad">>();
   const [showSquadModal, setShowSquadModal] = useState(false);
   const closeSocialModal = () => {
     setShowSocialModal(false);
@@ -378,6 +381,13 @@ const SquadScreen = () => {
     setDebouncedTerm("");
     setShowFriendsSection(false);
   };
+
+  useEffect(() => {
+    if (route.params?.openFindBuddies && !hasOpenedFromParams.current) {
+      setShowSocialModal(true);
+      hasOpenedFromParams.current = true;
+    }
+  }, [route.params?.openFindBuddies]);
 
   const closeSquadModal = () => {
     setShowSquadModal(false);

@@ -110,25 +110,45 @@ const RecoveryScreen = () => {
     },
   });
 
+  const filteredMuscles = useMemo(
+    () =>
+      (fatigue?.perMuscle ?? []).filter(
+        (item) =>
+          item.muscleGroup &&
+          item.muscleGroup.trim().toLowerCase() !== "other"
+      ),
+    [fatigue?.perMuscle]
+  );
+
+  const filteredFreshMuscles = useMemo(
+    () =>
+      (fatigue?.freshMuscles ?? []).filter(
+        (muscle) =>
+          muscle &&
+          muscle.trim().toLowerCase() !== "other"
+      ),
+    [fatigue?.freshMuscles]
+  );
+
   const sortedMuscles = useMemo(
     () =>
-      (fatigue?.perMuscle ?? []).slice().sort((a, b) => {
+      filteredMuscles.slice().sort((a, b) => {
         const order = statusOrder[a.status] - statusOrder[b.status];
         if (order !== 0) return order;
         if (a.status === "under-trained")
           return a.fatigueScore - b.fatigueScore;
         return b.fatigueScore - a.fatigueScore;
       }),
-    [fatigue]
+    [filteredMuscles]
   );
 
   const readinessByMuscle = useMemo(
     () =>
-      (fatigue?.perMuscle ?? []).map((item) => ({
+      filteredMuscles.map((item) => ({
         ...item,
         readiness: readinessFromFatigueScore(item.fatigueScore),
       })),
-    [fatigue?.perMuscle]
+    [filteredMuscles]
   );
 
   const weakestMuscle = useMemo(() => {
@@ -378,9 +398,10 @@ const RecoveryScreen = () => {
 
   const emptyState =
     fatigue &&
-    fatigue.perMuscle.every(
-      (m) => m.status === "no-data" || m.last7DaysVolume === 0
-    );
+    (filteredMuscles.length === 0 ||
+      filteredMuscles.every(
+        (m) => m.status === "no-data" || m.last7DaysVolume === 0
+      ));
 
   const modalListMaxHeight = Math.round(Dimensions.get("window").height * 0.55);
 
@@ -547,7 +568,7 @@ const RecoveryScreen = () => {
 
           {/* Always show body heatmap even with no data */}
           <RecoveryBodyMap
-            data={fatigue?.perMuscle ?? []}
+            data={filteredMuscles}
             onSelectMuscle={handleMuscleSelect}
             side={bodySide}
             gender={bodyGender}
@@ -828,7 +849,7 @@ const RecoveryScreen = () => {
         )}
 
         <RecoveryBodyMap
-          data={fatigue.perMuscle}
+          data={filteredMuscles}
           onSelectMuscle={handleMuscleSelect}
           side={bodySide}
           gender={bodyGender}
@@ -917,30 +938,30 @@ const RecoveryScreen = () => {
                 justifyContent: "space-between",
               }}
             >
-            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-              Fresh muscles
-            </Text>
-            <Pressable
-              onPress={() => setShowFresh((prev) => !prev)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-              })}
-            >
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.medium,
-                  fontSize: 12,
-                }}
-              >
-                {showFresh ? "Hide" : "Show"}
+              <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+                Fresh muscles
               </Text>
-            </Pressable>
+              <Pressable
+                onPress={() => setShowFresh((prev) => !prev)}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.medium,
+                    fontSize: 12,
+                  }}
+                >
+                  {showFresh ? "Hide" : "Show"}
+                </Text>
+              </Pressable>
             </View>
             <Text style={{ color: colors.textSecondary }}>
               Ready targets below fatigue threshold. Tap to reveal.
@@ -952,11 +973,11 @@ const RecoveryScreen = () => {
                 fontSize: 18,
               }}
             >
-              {`${fatigue.freshMuscles.length} muscle groups`}
+              {`${filteredFreshMuscles.length} muscle groups`}
             </Text>
             {showFresh && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {fatigue.freshMuscles.map((muscle) => (
+                {filteredFreshMuscles.map((muscle) => (
                   <View
                     key={muscle}
                     style={{
@@ -978,7 +999,7 @@ const RecoveryScreen = () => {
                     </Text>
                   </View>
                 ))}
-                {fatigue.freshMuscles.length === 0 && (
+                {filteredFreshMuscles.length === 0 && (
                   <Text style={{ color: colors.textSecondary }}>
                     No clear fresh targets—balance intensity today.
                   </Text>

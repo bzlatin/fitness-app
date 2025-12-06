@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Text,
@@ -13,9 +13,13 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
@@ -31,6 +35,7 @@ import { UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle, normalizeHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { RootRoute } from "../navigation/types";
 import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
@@ -55,6 +60,7 @@ const HANDLE_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 const SettingsScreen = () => {
   const queryClient = useQueryClient();
   const navigation = useNavigation<RootNavigation>();
+  const route = useRoute<RootRoute<"Settings">>();
   const { logout, isAuthorizing } = useAuth();
   const { user, updateProfile, deleteAccount, refresh, isLoading } =
     useCurrentUser();
@@ -82,6 +88,11 @@ const SettingsScreen = () => {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [showConnectionsModal, setShowConnectionsModal] = useState(false);
+  const [connectionsContentHeight, setConnectionsContentHeight] = useState(0);
+  const [connectionsScrollHeight, setConnectionsScrollHeight] = useState(0);
+  const [connectionsIsNearTop, setConnectionsIsNearTop] = useState(true);
+  const [connectionsIsNearBottom, setConnectionsIsNearBottom] = useState(false);
   const [notificationPrefs, setNotificationPrefs] =
     useState<NotificationPreferences | null>(null);
   const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] =
@@ -169,6 +180,21 @@ const SettingsScreen = () => {
     user?.avatarUrl,
     user?.weeklyGoal,
   ]);
+
+  useEffect(() => {
+    if (route.params?.openConnections) {
+      setShowConnectionsModal(true);
+    }
+  }, [route.params?.openConnections]);
+
+  useEffect(() => {
+    if (showConnectionsModal) {
+      setConnectionsIsNearTop(true);
+      setConnectionsIsNearBottom(false);
+      setConnectionsContentHeight(0);
+      setConnectionsScrollHeight(0);
+    }
+  }, [showConnectionsModal]);
 
   const loadNotificationPreferences = useCallback(async () => {
     // Skip if already loading
@@ -267,6 +293,12 @@ const SettingsScreen = () => {
     queryFn: getConnections,
     enabled: Boolean(user),
   });
+  const { refetch: refetchConnections } = connectionsQuery;
+  useEffect(() => {
+    if (showConnectionsModal) {
+      void refetchConnections();
+    }
+  }, [showConnectionsModal, refetchConnections]);
   const friends = connectionsQuery.data?.friends ?? [];
   const pendingInvites = connectionsQuery.data?.pendingInvites ?? [];
   const outgoingInvites = connectionsQuery.data?.outgoingInvites ?? [];
@@ -298,6 +330,15 @@ const SettingsScreen = () => {
     onSuccess: refreshConnections,
   });
 
+  const closeConnectionsModal = () => {
+    setShowConnectionsModal(false);
+    setSelectedConnection(null);
+    setConnectionsContentHeight(0);
+    setConnectionsScrollHeight(0);
+    setConnectionsIsNearTop(true);
+    setConnectionsIsNearBottom(false);
+  };
+
   const declineInvite = useMutation({
     mutationFn: removeFollower,
     onMutate: (id) => setPendingActionId(id),
@@ -319,7 +360,16 @@ const SettingsScreen = () => {
     emptyCopy: string,
     renderActions?: (person: SocialUserSummary) => ReactElement | null
   ) => (
-    <View style={{ gap: 8 }}>
+    <View
+      style={{
+        gap: 10,
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surfaceMuted,
+      }}
+    >
       <View
         style={{
           flexDirection: "row",
@@ -577,32 +627,11 @@ const SettingsScreen = () => {
   };
 
   return (
-    <ScreenContainer scroll>
-      <View style={{ marginTop: 16, gap: 16 }}>
-        <View style={{ gap: 6 }}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: 24,
-              fontWeight: "700",
-            }}
-          >
-            Profile
-          </Text>
-          <Text style={{ color: colors.textSecondary }}>
-            Review your profile, update details, or manage your account.
-          </Text>
-        </View>
-
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
-          }}
+    <ScreenContainer scroll includeTopInset={false} paddingTop={12}>
+      <View style={{ marginTop: 10, gap: 16 }}>
+        <Section
+          title='Account'
+          subtitle='Keep your profile tidy and your gym details accurate.'
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={{ alignItems: "center", justifyContent: "center" }}>
@@ -732,7 +761,11 @@ const SettingsScreen = () => {
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Stat label='Workouts' value={user.workoutsCompleted ?? 0} />
-            <Stat label='Friends' value={friendCount ?? 0} />
+            <Stat
+              label='Friends'
+              value={friendCount ?? 0}
+              onPress={() => setShowConnectionsModal(true)}
+            />
             <Stat
               label='Streak'
               value={
@@ -740,6 +773,10 @@ const SettingsScreen = () => {
               }
             />
           </View>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            Pending invites: {pendingInvites.length} · Sent invites:{" "}
+            {outgoingInvites.length} (tap Friends to manage)
+          </Text>
 
           {user.bio && !isEditing ? (
             <View
@@ -965,436 +1002,56 @@ const SettingsScreen = () => {
               </View>
             </View>
           ) : null}
-        </View>
 
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
-          }}
-        >
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 16,
-              }}
-            >
-              Billing
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              Manage your subscription and billing details.
-            </Text>
-          </View>
-          <View
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              gap: 4,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              {isPro ? "Pro plan" : "Free plan"}
-            </Text>
-            {isAppleSubscription ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Billed through Apple. Manage from your iOS subscription settings.
-              </Text>
-            ) : null}
-            {isSubscriptionLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : isSubscriptionError ? (
-              <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.error, fontSize: 12 }}>
-                  Unable to load billing status.
-                </Text>
-                <Pressable
-                  onPress={() => refetchSubscriptionStatus()}
-                  style={({ pressed }) => ({
-                    alignSelf: "flex-start",
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 12,
-                    }}
-                  >
-                    Retry
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                {platformStatus ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Status: {platformStatus.replace(/_/g, " ")}
-                    {subscriptionStatus?.subscriptionPlatform === "apple" &&
-                    subscriptionStatus?.appleEnvironment
-                      ? ` (${subscriptionStatus.appleEnvironment})`
-                      : ""}
-                  </Text>
-                ) : null}
-                {trialEnds ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Trial ends {trialEnds}
-                  </Text>
-                ) : null}
-                {renewalDate ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {subscriptionStatus?.cancelAtPeriodEnd
-                      ? `Ends on ${renewalDate}`
-                      : `Renews on ${renewalDate}`}
-                  </Text>
-                ) : null}
-                {expiredOn ? (
-                  <Text style={{ color: colors.error, fontSize: 12 }}>
-                    Expired on {expiredOn}
-                  </Text>
-                ) : null}
-                {isGrace ? (
-                  <Text style={{ color: "#fbbf24", fontSize: 12 }}>
-                    Grace period: update your Apple billing to keep Pro access.
-                  </Text>
-                ) : null}
-                {isExpired ? (
-                  <Text style={{ color: colors.error, fontSize: 12 }}>
-                    Subscription expired — renew to restore Pro features.
-                  </Text>
-                ) : null}
-              </>
-            )}
+          <View style={{ gap: 10 }}>
             <Pressable
-              onPress={() => {
-                if (isAppleSubscription) {
-                  void Linking.openURL(
-                    "https://apps.apple.com/account/subscriptions"
-                  );
-                  return;
-                }
-                navigation.navigate("Upgrade", { plan: "monthly" });
-              }}
+              onPress={() => setIsDeleteOpen(true)}
               style={({ pressed }) => ({
-                marginTop: 10,
-                paddingVertical: 10,
+                paddingVertical: 12,
                 borderRadius: 10,
+                backgroundColor: colors.surface,
                 borderWidth: 1,
-                borderColor: colors.primary,
-                backgroundColor: pressed ? colors.primary : "transparent",
+                borderColor: colors.border,
                 alignItems: "center",
+                opacity: pressed ? 0.9 : 1,
               })}
             >
               <Text
                 style={{
-                  color: colors.primary,
+                  color: colors.textSecondary,
                   fontFamily: fontFamilies.semibold,
                 }}
               >
-                {isPro
-                  ? isAppleSubscription
-                    ? "Manage in App Store"
-                    : "Manage subscription"
-                  : isAppleSubscription
-                  ? "Manage in App Store"
-                  : "Upgrade to Pro"}
+                Manage account
               </Text>
             </Pressable>
-            {isIOS ? (
-              <Pressable
-                onPress={() => restorePurchasesMutation.mutate()}
-                disabled={restorePurchasesMutation.isPending}
-                style={({ pressed }) => ({
-                  marginTop: 8,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: pressed
-                    ? colors.surface
-                    : colors.surfaceMuted,
-                  alignItems: "center",
-                  opacity: restorePurchasesMutation.isPending ? 0.6 : 1,
-                })}
-              >
-                {restorePurchasesMutation.isPending ? (
-                  <ActivityIndicator color={colors.textPrimary} />
-                ) : (
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                    }}
-                  >
-                    Restore purchases (iOS)
-                  </Text>
-                )}
-              </Pressable>
-            ) : null}
-            <View
+            <TouchableOpacity
+              onPress={logout}
+              disabled={isAuthorizing}
               style={{
-                marginTop: 10,
-                flexDirection: "row",
-                gap: 12,
-                flexWrap: "wrap",
-                alignItems: "center",
+                paddingVertical: 12,
+                borderRadius: 999,
+                backgroundColor: isAuthorizing ? colors.border : colors.primary,
               }}
             >
               <Text
                 style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
+                  textAlign: "center",
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
                 }}
               >
-                Legal:
+                {isAuthorizing ? "Signing out..." : "Sign out"}
               </Text>
-              <Pressable onPress={() => Linking.openURL(TERMS_URL)}>
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 12,
-                  }}
-                >
-                  Terms of Service
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => Linking.openURL(PRIVACY_URL)}>
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 12,
-                  }}
-                >
-                  Privacy Policy
-                </Text>
-              </Pressable>
-            </View>
+            </TouchableOpacity>
           </View>
-        </View>
+        </Section>
 
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
-          }}
+        <Section
+          title='Preferences'
+          subtitle='Goal defaults, timers, and training smarts.'
         >
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 16,
-              }}
-            >
-              Friends
-            </Text>
-            <Text style={{ color: colors.textSecondary }}></Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              {[
-                { label: `${friends.length} buddies`, tone: colors.primary },
-                {
-                  label: `${pendingInvites.length} pending`,
-                  tone: colors.textSecondary,
-                },
-                {
-                  label: `${outgoingInvites.length} outgoing`,
-                  tone: colors.border,
-                },
-              ].map((pill, idx) => (
-                <View
-                  key={idx}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 999,
-                    backgroundColor: colors.surfaceMuted,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: 999,
-                      backgroundColor: pill.tone,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                    }}
-                  >
-                    {pill.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          {connectionsQuery.isFetching ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <View style={{ gap: 14 }}>
-              {renderConnectionGroup(
-                "Gym buddies",
-                "Mutual follows you can invite to squads or challenge.",
-                friends,
-                "Add gym buddies from the Squad tab to see them here."
-              )}
-              {renderConnectionGroup(
-                "Pending invites",
-                "They follow you. Follow back to make it mutual.",
-                pendingInvites,
-                "No pending requests from others.",
-                (person) => (
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Pressable
-                      onPress={() => acceptInvite.mutate(person.id)}
-                      disabled={pendingActionId === person.id}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        backgroundColor: colors.primary,
-                        borderWidth: 1,
-                        borderColor: colors.primary,
-                        opacity:
-                          pressed || pendingActionId === person.id ? 0.85 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: colors.surface,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 13,
-                          textAlign: "center",
-                        }}
-                      >
-                        {pendingActionId === person.id ? "Adding..." : "Accept"}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => declineInvite.mutate(person.id)}
-                      disabled={pendingActionId === person.id}
-                      style={({ pressed }) => ({
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surfaceMuted,
-                        opacity:
-                          pressed || pendingActionId === person.id ? 0.8 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 13,
-                        }}
-                      >
-                        Decline
-                      </Text>
-                    </Pressable>
-                  </View>
-                )
-              )}
-              {renderConnectionGroup(
-                "Invites you sent",
-                "You're following them. They'll move to buddies when they follow back.",
-                outgoingInvites,
-                "You haven't sent any invites yet.",
-                (person) => (
-                  <Pressable
-                    onPress={() => cancelOutgoing.mutate(person.id)}
-                    disabled={pendingActionId === person.id}
-                    style={({ pressed }) => ({
-                      width: "100%",
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceMuted,
-                      opacity:
-                        pressed || pendingActionId === person.id ? 0.85 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 13,
-                        textAlign: "center",
-                      }}
-                    >
-                      {pendingActionId === person.id
-                        ? "Cancelling..."
-                        : "Cancel invite"}
-                    </Text>
-                  </Pressable>
-                )
-              )}
-            </View>
-          )}
-        </View>
-
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
-          }}
-        >
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 16,
-              }}
-            >
-              Training Preferences
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              Update your goals, equipment, schedule, and preferences
-            </Text>
-          </View>
-
-          {/* Progressive Overload Toggle */}
           <Pressable
             onPress={() => {
               if (!isPro) {
@@ -1546,220 +1203,6 @@ const SettingsScreen = () => {
             />
           </Pressable>
 
-          {/* Notifications Section */}
-          <View
-            style={{
-              marginTop: 16,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-              paddingTop: 16,
-              gap: 12,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 16,
-                }}
-              >
-                🔔 Notifications
-              </Text>
-              <Pressable onPress={() => navigation.navigate("NotificationInbox" as never)}>
-                <Text style={{ color: colors.primary, fontSize: 14 }}>
-                  View Inbox
-                </Text>
-              </Pressable>
-            </View>
-
-            {isLoadingNotificationPrefs ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : !notificationPrefs ? (
-              <Pressable
-                onPress={handleEnableNotifications}
-                style={{
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  backgroundColor: colors.primary,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.surface,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 15,
-                  }}
-                >
-                  Enable Push Notifications
-                </Text>
-              </Pressable>
-            ) : (
-              <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: 14,
-                      }}
-                    >
-                      Goal Reminders
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      Remind me when at risk of missing weekly goal
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notificationPrefs.goalReminders}
-                    onValueChange={(value) =>
-                      handleToggleNotificationPref("goalReminders", value)
-                    }
-                    trackColor={{ true: colors.primary, false: colors.border }}
-                    thumbColor={notificationPrefs.goalReminders ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: 14,
-                      }}
-                    >
-                      Inactivity Nudges
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      Gentle reminder if inactive for 5+ days
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notificationPrefs.inactivityNudges}
-                    onValueChange={(value) =>
-                      handleToggleNotificationPref("inactivityNudges", value)
-                    }
-                    trackColor={{ true: colors.primary, false: colors.border }}
-                    thumbColor={notificationPrefs.inactivityNudges ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: 14,
-                      }}
-                    >
-                      Squad Activity
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      Reactions and squad members hitting goals
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notificationPrefs.squadActivity}
-                    onValueChange={(value) =>
-                      handleToggleNotificationPref("squadActivity", value)
-                    }
-                    trackColor={{ true: colors.primary, false: colors.border }}
-                    thumbColor={notificationPrefs.squadActivity ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: 14,
-                      }}
-                    >
-                      Weekly Goal Met
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      Celebrate when you complete your weekly goal
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notificationPrefs.weeklyGoalMet}
-                    onValueChange={(value) =>
-                      handleToggleNotificationPref("weeklyGoalMet", value)
-                    }
-                    trackColor={{ true: colors.primary, false: colors.border }}
-                    thumbColor={notificationPrefs.weeklyGoalMet ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 12,
-                    marginTop: 8,
-                  }}
-                >
-                  Max 3 notifications per week
-                </Text>
-              </>
-            )}
-          </View>
-
           <Pressable
             onPress={() => {
               navigation.navigate("Onboarding", { isRetake: true });
@@ -1784,37 +1227,469 @@ const SettingsScreen = () => {
               🎯 Update Training Preferences
             </Text>
           </Pressable>
-        </View>
+        </Section>
 
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            backgroundColor: colors.surfaceMuted,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
-          }}
+        <Section
+          title='Notifications'
+          subtitle='Reminders and inbox for streaks, goals, and squads.'
         >
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-              fontSize: 16,
-            }}
-          >
-            Account
-          </Text>
           <Pressable
-            onPress={() => setIsDeleteOpen(true)}
+            onPress={() => navigation.navigate("NotificationInbox" as never)}
             style={({ pressed }) => ({
               paddingVertical: 12,
               borderRadius: 10,
-              backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
               alignItems: "center",
-              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              View inbox
+            </Text>
+          </Pressable>
+
+          {isLoadingNotificationPrefs ? (
+            <ActivityIndicator size='small' color={colors.primary} />
+          ) : !notificationPrefs ? (
+            <Pressable
+              onPress={handleEnableNotifications}
+              style={{
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: colors.primary,
+                borderWidth: 1,
+                borderColor: colors.primary,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 15,
+                }}
+              >
+                Enable Push Notifications
+              </Text>
+            </Pressable>
+          ) : (
+            <>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                    }}
+                  >
+                    Goal Reminders
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    Remind me when at risk of missing weekly goal
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationPrefs.goalReminders}
+                  onValueChange={(value) =>
+                    handleToggleNotificationPref("goalReminders", value)
+                  }
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={notificationPrefs.goalReminders ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                    }}
+                  >
+                    Inactivity Nudges
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    Gentle reminder if inactive for 5+ days
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationPrefs.inactivityNudges}
+                  onValueChange={(value) =>
+                    handleToggleNotificationPref("inactivityNudges", value)
+                  }
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={notificationPrefs.inactivityNudges ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                    }}
+                  >
+                    Squad Activity
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    Reactions and squad members hitting goals
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationPrefs.squadActivity}
+                  onValueChange={(value) =>
+                    handleToggleNotificationPref("squadActivity", value)
+                  }
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={notificationPrefs.squadActivity ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                    }}
+                  >
+                    Weekly Goal Met
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    Celebrate when you complete your weekly goal
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationPrefs.weeklyGoalMet}
+                  onValueChange={(value) =>
+                    handleToggleNotificationPref("weeklyGoalMet", value)
+                  }
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={notificationPrefs.weeklyGoalMet ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 8,
+                }}
+              >
+                Max 3 notifications per week
+              </Text>
+            </>
+          )}
+        </Section>
+
+        <Section
+          title='Billing'
+          subtitle='Plan, renewal, and purchase recovery.'
+        >
+          <View
+            style={{
+              backgroundColor: colors.surfaceMuted,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 4,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {isPro ? "Pro plan" : "Free plan"}
+            </Text>
+            {isAppleSubscription ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Billed through Apple. Manage from your iOS subscription settings.
+              </Text>
+            ) : null}
+            {isSubscriptionLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : isSubscriptionError ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: colors.error, fontSize: 12 }}>
+                  Unable to load billing status.
+                </Text>
+                <Pressable
+                  onPress={() => refetchSubscriptionStatus()}
+                  style={({ pressed }) => ({
+                    alignSelf: "flex-start",
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 12,
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                {platformStatus ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Status: {platformStatus.replace(/_/g, " ")}
+                    {subscriptionStatus?.subscriptionPlatform === "apple" &&
+                    subscriptionStatus?.appleEnvironment
+                      ? ` (${subscriptionStatus.appleEnvironment})`
+                      : ""}
+                  </Text>
+                ) : null}
+                {trialEnds ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Trial ends {trialEnds}
+                  </Text>
+                ) : null}
+                {renewalDate ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {subscriptionStatus?.cancelAtPeriodEnd
+                      ? `Ends on ${renewalDate}`
+                      : `Renews on ${renewalDate}`}
+                  </Text>
+                ) : null}
+                {expiredOn ? (
+                  <Text style={{ color: colors.error, fontSize: 12 }}>
+                    Expired on {expiredOn}
+                  </Text>
+                ) : null}
+                {isGrace ? (
+                  <Text style={{ color: "#fbbf24", fontSize: 12 }}>
+                    Grace period: update your Apple billing to keep Pro access.
+                  </Text>
+                ) : null}
+                {isExpired ? (
+                  <Text style={{ color: colors.error, fontSize: 12 }}>
+                    Subscription expired — renew to restore Pro features.
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </View>
+          <Pressable
+            onPress={() => {
+              if (isAppleSubscription) {
+                void Linking.openURL(
+                  "https://apps.apple.com/account/subscriptions"
+                );
+                return;
+              }
+              navigation.navigate("Upgrade", { plan: "monthly" });
+            }}
+            style={({ pressed }) => ({
+              marginTop: 10,
+              paddingVertical: 10,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: colors.primary,
+              backgroundColor: pressed ? colors.primary : "transparent",
+              alignItems: "center",
+            })}
+          >
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {isPro
+                ? isAppleSubscription
+                  ? "Manage in App Store"
+                  : "Manage subscription"
+                : isAppleSubscription
+                ? "Manage in App Store"
+                : "Upgrade to Pro"}
+            </Text>
+          </Pressable>
+          {isIOS ? (
+            <Pressable
+              onPress={() => restorePurchasesMutation.mutate()}
+              disabled={restorePurchasesMutation.isPending}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                paddingVertical: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed
+                  ? colors.surface
+                  : colors.surfaceMuted,
+                alignItems: "center",
+                opacity: restorePurchasesMutation.isPending ? 0.6 : 1,
+              })}
+            >
+              {restorePurchasesMutation.isPending ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Restore purchases (iOS)
+                </Text>
+              )}
+            </Pressable>
+          ) : null}
+          <View
+            style={{
+              marginTop: 10,
+              flexDirection: "row",
+              gap: 12,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+              }}
+            >
+              Legal:
+            </Text>
+            <Pressable onPress={() => Linking.openURL(TERMS_URL)}>
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 12,
+                }}
+              >
+                Terms of Service
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => Linking.openURL(PRIVACY_URL)}>
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 12,
+                }}
+              >
+                Privacy Policy
+              </Text>
+            </Pressable>
+          </View>
+        </Section>
+
+        <Section
+          title='Feedback & Support'
+          subtitle='Spot issues or want a feature? Share it here.'
+        >
+          <Pressable
+            onPress={() =>
+              Alert.alert(
+                "Feedback board",
+                "We’re shipping the in-app board soon. For now, drop ideas here and we’ll prioritize them."
+              )
+            }
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+              alignItems: "center",
+            })}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              View feedback board
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              Alert.alert(
+                "Quick support",
+                "Need help? Share context in squads or send us your session ID—we’ll follow up."
+              )
+            }
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+              alignItems: "center",
             })}
           >
             <Text
@@ -1823,31 +1698,392 @@ const SettingsScreen = () => {
                 fontFamily: fontFamilies.semibold,
               }}
             >
-              Manage account
+              Contact support
             </Text>
           </Pressable>
-          <TouchableOpacity
-            onPress={logout}
-            disabled={isAuthorizing}
+        </Section>
+      </View>
+
+      <Modal
+        visible={showConnectionsModal}
+        transparent
+        animationType='fade'
+        onRequestClose={closeConnectionsModal}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable style={{ flex: 1 }} onPress={closeConnectionsModal} />
+          <View
             style={{
-              paddingVertical: 12,
-              borderRadius: 999,
-              backgroundColor: isAuthorizing ? colors.border : colors.primary,
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 18,
+              paddingTop: 10,
+              paddingBottom: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxHeight: "90%",
+              minHeight: "60%",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -6 },
+              shadowOpacity: 0.12,
+              shadowRadius: 12,
+              elevation: 14,
+              overflow: "hidden",
             }}
           >
-            <Text
+            <View style={{ alignItems: "center", paddingVertical: 6 }}>
+              <View
+                style={{
+                  width: 50,
+                  height: 5,
+                  borderRadius: 999,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              />
+            </View>
+
+            <View
               style={{
-                textAlign: "center",
-                color: colors.surface,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 16,
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                paddingBottom: 4,
               }}
             >
-              {isAuthorizing ? "Signing out..." : "Sign out"}
-            </Text>
-          </TouchableOpacity>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 18,
+                  }}
+                >
+                  Friends & invites
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Manage buddies, pending requests, and invites you sent.
+                </Text>
+              </View>
+              <Pressable
+                onPress={closeConnectionsModal}
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Close
+                </Text>
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                marginTop: 6,
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceMuted,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Gym buddies
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {friendCount ?? 0}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.primary}16`,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Pending
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {pendingInvites.length}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.secondary}22`,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Sent
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 18,
+                  }}
+                >
+                  {outgoingInvites.length}
+                </Text>
+              </View>
+            </View>
+
+            {connectionsQuery.isFetching ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 24,
+                }}
+              >
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <View style={{ position: "relative", flex: 1, marginTop: 10 }}>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{
+                    gap: 14,
+                    paddingBottom: 32,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  alwaysBounceVertical={false}
+                  overScrollMode='never'
+                  onContentSizeChange={(w, h) => setConnectionsContentHeight(h)}
+                  onLayout={(event) =>
+                    setConnectionsScrollHeight(event.nativeEvent.layout.height)
+                  }
+                  onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                    const {
+                      contentOffset,
+                      contentSize,
+                      layoutMeasurement,
+                    } = event.nativeEvent;
+                    const distanceFromBottom =
+                      contentSize.height - layoutMeasurement.height - contentOffset.y;
+                    setConnectionsIsNearTop(contentOffset.y < 10);
+                    setConnectionsIsNearBottom(distanceFromBottom < 40);
+                  }}
+                  scrollEventThrottle={16}
+                >
+                  {renderConnectionGroup(
+                    "Gym buddies",
+                    "Mutual follows you can invite to squads or challenge.",
+                    friends,
+                    "Add gym buddies from the Squad tab to see them here."
+                  )}
+                  {renderConnectionGroup(
+                    "Pending invites",
+                    "They follow you. Follow back to make it mutual.",
+                    pendingInvites,
+                    "No pending requests from others.",
+                    (person) => (
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pressable
+                          onPress={() => acceptInvite.mutate(person.id)}
+                          disabled={pendingActionId === person.id}
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            backgroundColor: colors.primary,
+                            borderWidth: 1,
+                            borderColor: colors.primary,
+                            opacity:
+                              pressed || pendingActionId === person.id ? 0.85 : 1,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: colors.surface,
+                              fontFamily: fontFamilies.semibold,
+                              fontSize: 13,
+                              textAlign: "center",
+                            }}
+                          >
+                            {pendingActionId === person.id ? "Adding..." : "Accept"}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => declineInvite.mutate(person.id)}
+                          disabled={pendingActionId === person.id}
+                          style={({ pressed }) => ({
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: colors.surfaceMuted,
+                            opacity:
+                              pressed || pendingActionId === person.id ? 0.8 : 1,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontFamily: fontFamilies.semibold,
+                              fontSize: 13,
+                            }}
+                          >
+                            Decline
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )
+                  )}
+                  {renderConnectionGroup(
+                    "Invites you sent",
+                    "You're following them. They'll move to buddies when they follow back.",
+                    outgoingInvites,
+                    "You haven't sent any invites yet.",
+                    (person) => (
+                      <Pressable
+                        onPress={() => cancelOutgoing.mutate(person.id)}
+                        disabled={pendingActionId === person.id}
+                        style={({ pressed }) => ({
+                          width: "100%",
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surfaceMuted,
+                          opacity:
+                            pressed || pendingActionId === person.id ? 0.85 : 1,
+                        })}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 13,
+                            textAlign: "center",
+                          }}
+                        >
+                          {pendingActionId === person.id
+                            ? "Cancelling..."
+                            : "Cancel invite"}
+                        </Text>
+                      </Pressable>
+                    )
+                  )}
+                </ScrollView>
+                {connectionsContentHeight > connectionsScrollHeight &&
+                !connectionsIsNearTop ? (
+                  <LinearGradient
+                    colors={[
+                      `${colors.surface}F0`,
+                      `${colors.surface}E0`,
+                      `${colors.surface}C0`,
+                      `${colors.surface}90`,
+                      `${colors.surface}40`,
+                      "transparent",
+                    ]}
+                    locations={[0, 0.25, 0.5, 0.7, 0.85, 1]}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 48,
+                      pointerEvents: "none",
+                    }}
+                  />
+                ) : null}
+                {connectionsContentHeight > connectionsScrollHeight &&
+                !connectionsIsNearBottom ? (
+                  <LinearGradient
+                    colors={[
+                      "transparent",
+                      `${colors.surface}40`,
+                      `${colors.surface}90`,
+                      `${colors.surface}C0`,
+                      `${colors.surface}E0`,
+                      `${colors.surface}F0`,
+                    ]}
+                    locations={[0, 0.15, 0.3, 0.5, 0.75, 1]}
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 52,
+                      pointerEvents: "none",
+                    }}
+                  />
+                ) : null}
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </Modal>
 
       <Modal
         visible={Boolean(selectedConnection)}
@@ -2104,37 +2340,93 @@ const inputStyle = {
   color: colors.textPrimary,
 };
 
-const Stat = ({ label, value }: { label: string; value: string | number }) => (
+const Section = ({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) => (
   <View
     style={{
-      flex: 1,
-      padding: 12,
-      borderRadius: 10,
-      backgroundColor: colors.surfaceMuted,
+      padding: 16,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
+      gap: 12,
     }}
   >
-    <Text
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.9}
+    <View style={{ gap: 4 }}>
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontFamily: fontFamilies.semibold,
+          fontSize: 16,
+        }}
+      >
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+    {children}
+  </View>
+);
+
+const Stat = ({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string | number;
+  onPress?: () => void;
+}) => (
+  <Pressable
+    disabled={!onPress}
+    onPress={onPress}
+    style={({ pressed }) => ({
+      flex: 1,
+      opacity: onPress && pressed ? 0.85 : 1,
+    })}
+  >
+    <View
       style={{
-        color: colors.textPrimary,
-        fontFamily: fontFamilies.semibold,
-        fontSize: 16,
+        flex: 1,
+        padding: 12,
+        borderRadius: 10,
+        backgroundColor: colors.surfaceMuted,
+        borderWidth: 1,
+        borderColor: colors.border,
       }}
     >
-      {value}
-    </Text>
-    <Text
-      style={{ color: colors.textSecondary, fontSize: 12 }}
-      numberOfLines={1}
-      ellipsizeMode='tail'
-    >
-      {label}
-    </Text>
-  </View>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.9}
+        style={{
+          color: colors.textPrimary,
+          fontFamily: fontFamilies.semibold,
+          fontSize: 16,
+        }}
+      >
+        {value}
+      </Text>
+      <Text
+        style={{ color: colors.textSecondary, fontSize: 12 }}
+        numberOfLines={1}
+        ellipsizeMode='tail'
+      >
+        {label}
+      </Text>
+    </View>
+  </Pressable>
 );
 
 export default SettingsScreen;

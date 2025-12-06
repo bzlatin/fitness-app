@@ -46,7 +46,7 @@ const tabIconMap: Record<
   Home: { focused: "barbell", unfocused: "barbell-outline" },
   Squad: { focused: "people", unfocused: "people-outline" },
   History: { focused: "time", unfocused: "time-outline" },
-  Settings: { focused: "person", unfocused: "person-outline" },
+  Profile: { focused: "person", unfocused: "person-outline" },
 };
 
 const RootTabs = () => {
@@ -93,8 +93,8 @@ const RootTabs = () => {
         options={{ tabBarLabel: "History" }}
       />
       <Tab.Screen
-        name='Settings'
-        component={SettingsScreen}
+        name='Profile'
+        component={ProfileScreen}
         options={{ tabBarLabel: "Profile" }}
       />
     </Tab.Navigator>
@@ -201,6 +201,11 @@ const RootNavigator = () => (
       name='NotificationInbox'
       component={NotificationInboxScreen}
       options={{ title: "Notifications" }}
+    />
+    <Stack.Screen
+      name='Settings'
+      component={SettingsScreen}
+      options={{ title: "Settings" }}
     />
   </Stack.Navigator>
 );
