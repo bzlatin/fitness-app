@@ -35,6 +35,7 @@ export type RootStackParamList = {
   Upgrade: { plan?: "monthly" | "annual" } | undefined;
   NotificationInbox: undefined;
   Settings: { openConnections?: boolean } | undefined;
+  FeedbackBoard: undefined;
 };
 
 export type RootTabParamList = {

@@ -578,6 +578,97 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS notification_events_user_read_idx ON notification_events(user_id, read_at)
   `);
 
+  // Admin users table (for feedback moderation and status updates)
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      granted_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  // Feedback items table
+  await query(`
+    CREATE TABLE IF NOT EXISTS feedback_items (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('feature_request', 'bug_report', 'ui_ux_improvement', 'performance', 'social_features')),
+      impact TEXT NOT NULL CHECK (impact IN ('critical', 'high', 'medium', 'low', 'must_have', 'nice_to_have')),
+      status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'under_review', 'planned', 'in_progress', 'shipped', 'wont_fix', 'duplicate')),
+      vote_count INTEGER NOT NULL DEFAULT 0,
+      is_hidden BOOLEAN NOT NULL DEFAULT false,
+      auto_hidden_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status_updated_at TIMESTAMPTZ,
+      status_updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_items_user_id_idx ON feedback_items(user_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_items_created_at_idx ON feedback_items(created_at DESC)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_items_vote_count_idx ON feedback_items(vote_count DESC)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_items_status_idx ON feedback_items(status)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_items_category_idx ON feedback_items(category)
+  `);
+
+  // Feedback votes table (one vote per user per item)
+  await query(`
+    CREATE TABLE IF NOT EXISTS feedback_votes (
+      id TEXT PRIMARY KEY,
+      feedback_item_id TEXT NOT NULL REFERENCES feedback_items(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(feedback_item_id, user_id)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_votes_feedback_item_id_idx ON feedback_votes(feedback_item_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_votes_user_id_idx ON feedback_votes(user_id)
+  `);
+
+  // Feedback reports table (for moderation)
+  await query(`
+    CREATE TABLE IF NOT EXISTS feedback_reports (
+      id TEXT PRIMARY KEY,
+      feedback_item_id TEXT NOT NULL REFERENCES feedback_items(id) ON DELETE CASCADE,
+      reported_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ,
+      reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      action_taken TEXT CHECK (action_taken IN ('hidden', 'dismissed', 'pending')),
+      UNIQUE(feedback_item_id, reported_by)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_reports_feedback_item_id_idx ON feedback_reports(feedback_item_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS feedback_reports_reviewed_at_idx ON feedback_reports(reviewed_at)
+  `);
+
   // Add exercises table for fatigue calculations
   await query(`
     CREATE TABLE IF NOT EXISTS exercises (
@@ -713,5 +804,12 @@ export const initDb = async () => {
       ('squad-pulse-gang', 'corecraft', 'member'),
       ('squad-pulse-gang', 'tempo-squad', 'member')
     ON CONFLICT (squad_id, user_id) DO NOTHING
+  `);
+
+  // Grant admin access to users with handle @exhibited
+  await query(`
+    INSERT INTO admin_users (user_id)
+    SELECT id FROM users WHERE handle = '@exhibited'
+    ON CONFLICT (user_id) DO NOTHING
   `);
 };

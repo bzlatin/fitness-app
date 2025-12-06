@@ -1312,32 +1312,51 @@ To test notifications:
 - `/mobile/src/screens/AnalyticsScreen.tsx` - Add streak history section
 - `/mobile/src/screens/SquadScreen.tsx` - Show squad streak shoutouts
 
-#### 4.4.4 In-App Feedback Board
+#### 4.4.4 In-App Feedback Board ✅ COMPLETE
 
-**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ✅ COMPLETE (2025-12-06)
 
 **Goal**: Capture and prioritize user requests without leaving the app; surface top-voted items.
 
 **Experience**:
 
-- FeedbackBoard screen accessible from Profile → Settings (gear icon)
-- Submit ideas with category + impact tag; vote/upvote, comment optional
-- Sort by trending (weighted recent votes) and top all-time; show status pills (Planned/In Progress/Shipped)
-- Lightweight moderation (report + hide abusive content)
+- [x] FeedbackBoard screen accessible from Profile → Settings (gear icon) with badge indicator for newly shipped features
+- [x] Submit ideas with category + impact tag; vote/upvote functionality (no comments - keeping it simple)
+- [x] Sort by trending (weighted recent votes), top all-time, and recent; show status pills (Submitted/Under Review/Planned/In Progress/Shipped/Won't Fix/Duplicate)
+- [x] Lightweight moderation (report + auto-hide after 5 reports, admin review panel)
+- [x] Admin interface for updating feedback status (accessible to users with handle @exhibited via admin_users table)
 
 **Implementation**:
 
-- Add feedback table + votes table; simple anti-spam (rate limit per user/IP)
-- Expose endpoints for create, vote, status update (admin-only)
-- Add client-side optimistic voting with offline cache
+- [x] Added feedback_items, feedback_votes, feedback_reports, admin_users tables to database
+- [x] Profanity filter middleware with rate limiting (5 submissions per hour per user)
+- [x] Exposed endpoints for create, vote, report, status update (admin-only)
+- [x] Client-side optimistic voting with React Query
+- [x] Unique handle constraint enforcement to prevent duplicates during onboarding
+- [x] Auto-hide feedback items after 5 reports (admin can review and unhide)
 
-**Files to Create/Modify**:
+**Files Created/Modified**:
 
-- `/server/src/routes/feedback.ts` - CRUD + voting endpoints
-- `/server/src/db.ts` - Tables for feedback items, votes, reports
-- `/mobile/src/screens/FeedbackBoardScreen.tsx` - New screen
-- `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button
-- `/mobile/src/navigation/RootNavigator.tsx` - Register screen, hide behind Settings gear
+- ✅ `/server/src/routes/feedback.ts` - Full CRUD + voting + reporting endpoints
+- ✅ `/server/src/middleware/profanityFilter.ts` - Content moderation + rate limiting
+- ✅ `/server/src/db.ts` - Database schema with admin_users, feedback_items, feedback_votes, feedback_reports tables
+- ✅ `/server/src/app.ts` - Registered feedback routes
+- ✅ `/mobile/src/api/feedback.ts` - API client with React Query hooks + helper functions
+- ✅ `/mobile/src/screens/FeedbackBoardScreen.tsx` - Main feedback board with sorting, filtering, admin controls
+- ✅ `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button, status badges, report functionality
+- ✅ `/mobile/src/components/feedback/SubmitFeedbackModal.tsx` - Full-screen modal for submitting feedback
+- ✅ `/mobile/src/screens/SettingsScreen.tsx` - Added feedback board link with badge indicator for new shipped items
+- ✅ `/mobile/src/navigation/RootNavigator.tsx` - Registered FeedbackBoard screen
+- ✅ `/mobile/src/navigation/types.ts` - Added FeedbackBoard route type
+
+**Implementation Notes**:
+
+- Admin access is granted to users with handle @exhibited via the admin_users table
+- Badge indicator shows count of newly shipped items (last 7 days) that the user voted on
+- Profanity filter includes basic word list; can be expanded based on moderation needs
+- Trending sort uses weighted algorithm: `vote_count * (1 + 1 / (days_since_creation + 1))`
+- Auto-hide threshold set to 5 reports to balance spam prevention with false positives
+- No comment system implemented to keep the feature simple and focused on voting
 
 #### 4.4.5 iOS Widgets (Weekly Goal + Quick Actions)
 

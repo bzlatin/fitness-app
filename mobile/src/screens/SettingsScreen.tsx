@@ -47,6 +47,7 @@ import {
   updateNotificationPreferences,
   NotificationPreferences,
 } from "../services/notifications";
+import { useNewShippedCount } from "../api/feedback";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -120,6 +121,10 @@ const SettingsScreen = () => {
 
   const subscriptionAccess = useSubscriptionAccess();
   const subscriptionStatus = subscriptionAccess.raw;
+
+  // Feedback board badge
+  const { data: newShippedData } = useNewShippedCount();
+  const newShippedCount = newShippedData?.count ?? 0;
   const isSubscriptionLoading = subscriptionAccess.isLoading;
   const isSubscriptionError = subscriptionAccess.isError;
   const refetchSubscriptionStatus = subscriptionAccess.refetch;
@@ -1205,19 +1210,18 @@ const SettingsScreen = () => {
           subtitle='Spot issues or want a feature? Share it here.'
         >
           <Pressable
-            onPress={() =>
-              Alert.alert(
-                "Feedback board",
-                "We’re shipping the in-app board soon. For now, drop ideas here and we’ll prioritize them."
-              )
-            }
+            onPress={() => navigation.navigate("FeedbackBoard")}
             style={({ pressed }) => ({
               paddingVertical: 12,
+              paddingHorizontal: 16,
               borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.border,
               backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+              flexDirection: "row",
               alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
             })}
           >
             <Text
@@ -1228,6 +1232,29 @@ const SettingsScreen = () => {
             >
               View feedback board
             </Text>
+            {newShippedCount > 0 && (
+              <View
+                style={{
+                  backgroundColor: colors.primary,
+                  borderRadius: 10,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  minWidth: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.background,
+                    fontSize: 11,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  {newShippedCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
           <Pressable
             onPress={() =>

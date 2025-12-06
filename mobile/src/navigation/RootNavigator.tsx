@@ -27,6 +27,7 @@ import RecoveryScreen from "../screens/RecoveryScreen";
 import AnalyticsScreen from "../screens/AnalyticsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
 import NotificationInboxScreen from "../screens/NotificationInboxScreen";
+import { FeedbackBoardScreen } from "../screens/FeedbackBoardScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 // Work around a native crash on iOS (RN Screens border props under Fabric)
@@ -206,6 +207,11 @@ const RootNavigator = () => (
       name='Settings'
       component={SettingsScreen}
       options={{ title: "Settings" }}
+    />
+    <Stack.Screen
+      name='FeedbackBoard'
+      component={FeedbackBoardScreen}
+      options={{ title: "Feedback Board", headerShown: false }}
     />
   </Stack.Navigator>
 );
