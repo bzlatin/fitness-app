@@ -162,7 +162,9 @@ export const buildWorkoutGenerationPrompt = (
       chest: ["chest", "pectorals"],
       shoulders: ["shoulders", "delts", "deltoids"],
       legs: ["quadriceps", "hamstrings", "glutes", "calves", "legs"],
-      arms: ["biceps", "triceps", "forearms", "arms"],
+      biceps: ["bicep", "biceps brachii", "arms"],
+      triceps: ["tricep", "triceps brachii", "arms"],
+      arms: ["biceps", "triceps", "forearms", "arms"], // Backwards compatibility with older clients
     };
 
     // Filter to only exercises that match these muscle groups
