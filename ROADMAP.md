@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-12-05
-> Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 Planned — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
+> Last Updated: 2025-12-06
+> Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 In progress (Profile/Settings + Streaks shipped) — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
 
 ## Product Vision
 
@@ -1259,13 +1259,14 @@ To test notifications:
 
 #### 4.4.2 Profile & Settings Redesign
 
-**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ✅ COMPLETE
 
 **Goal**: Simplify profile, move settings-type controls into a dedicated settings hub, and spotlight identity/achievements. Tackle the SettingsScreen rework first; then refine the Profile layout and shortcuts.
 
 **Changes**:
 
 - Prioritize SettingsScreen: regroup Account, Preferences, Billing, Notifications, and Feedback; add clear section headers and safe defaults
+- Compact settings into tappable rows/cards (Fitbod-style) with drill-in detail views for preferences, billing, and notifications
 - Add gear icon on Profile to open SettingsScreen (no bottom nav change)
 - Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
 - Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
@@ -1285,12 +1286,13 @@ To test notifications:
 
 #### 4.4.3 Consistency & Streaks (Weekly-Goal-Based)
 
-**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ✅ COMPLETE
 
 **Goal**: Encourage sustainable habits with weekly-goal streaks and squad-aware celebrations (rest-day friendly).
 
 **Experience**:
 
+- Surface current streak (weekly goal based) on Home hero and Profile header
 - Weekly Goal Streak: Count consecutive weeks hitting goal; pauses on deload weeks flagged in fatigue service
 - Recovery-Friendly Rules: Rest days baked in; streak only depends on weekly target, not daily check-ins
 - Squad Shoutouts: Automatic feed card when a member extends streak; users can cheer/emoji react
@@ -1347,11 +1349,15 @@ To test notifications:
 
 - Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
 - Today Shortcut: Start “Log workout” or “Start session” deep link
+- Quick Set Logger: One-tap to log current set + start rest timer from home screen widget
 - Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
+- Dynamic Island (iOS): Show active rest timer + quick “Log next set” action if ActivityKit permits
 
 **Implementation**:
 
 - Build WidgetKit extension (Expo config plugin) with background refresh window
+- Explore ActivityKit/Live Activities for Dynamic Island timer surface; fallback to local notification countdown if unsupported in Expo
+- Add widget deep links for “Log set” + “Start rest timer” that hydrate the active session in app state
 - Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
 - Deep link targets for start workout, view squad feed, view analytics
 
@@ -1414,6 +1420,88 @@ To test notifications:
 - `/mobile/src/components/RecapCard.tsx` - Compact recap card for Home/Analytics
 - `/mobile/src/screens/AnalyticsScreen.tsx` - Recap timeline section
 - `/mobile/src/screens/HomeScreen.tsx` - Win-back card surface when quality dips
+
+#### 4.4.8 Apple Health Sync (iOS)
+
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Pull Apple Health workout + activity data into the app to enrich analytics, streak accuracy, and recovery signals.
+
+**Experience**:
+
+- First-run permission prompt with clear toggle per data type: workouts, active energy, heart rate (optional)
+- Auto-import strength workouts (name, sets/reps/weight if available) into history with “Imported from Apple Health” badge
+- Merge Apple Health sessions into streak + weekly goal calculations without double-counting in-app sessions
+- Optional heart rate overlay on session summary (avg/max) and calories burned estimates
+
+**Implementation**:
+
+- Use HealthKit bindings (Expo config plugin or `react-native-health`) to read workouts/metrics; background sync once per day
+- Normalize imported sessions to existing workout schema; dedupe against manually logged sessions by timestamp + duration
+- Add user-level setting to disable/clear Apple Health imports
+- Add migration to store `source` on workouts (`manual`, `ai`, `apple_health`)
+
+**Files to Create/Modify**:
+
+- `/mobile/src/services/appleHealth.ts` - HealthKit read/sync utilities
+- `/mobile/src/screens/SettingsScreen.tsx` - Apple Health permissions + toggles
+- `/server/src/routes/analytics.ts` - Endpoint to ingest/import synced sessions
+- `/server/src/db.ts` - Add `source` + import metadata fields to workout tables
+
+#### 4.4.9 Pro Social Video Workout Import + Custom Exercises
+
+**Priority**: HIGH | **Effort**: 7-10 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout and add missing exercises (with their own media) when our library lacks them.
+
+**Experience**:
+
+- “Import from TikTok/Instagram” entry in AI workout generator; paste link → fetch transcript/captions → preview suggested workout
+- Review + edit generated exercises/sets before saving as a template; flag Pro-only
+- “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator unless shared to squad (future)
+- Content safety check to block non-fitness or inappropriate videos
+
+**Implementation**:
+
+- Backend ingestion to download captions/transcripts from shared URL; fallback to lightweight on-device transcription if needed
+- LLM prompt to extract exercises + structure a workout; gate behind Pro checks and usage limits
+- New `user_exercises` table scoped to user (or squad) with optional image upload (S3/Cloudinary)
+- Store provenance on generated templates (`source: "social_video"`, original URL) for auditability
+- Add caching of transcripts to avoid repeated fetches for the same URL
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
+- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
+- `/server/src/db.ts` - Add `user_exercises` table + template provenance fields
+- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
+- `/mobile/src/screens/ExerciseLibraryScreen.tsx` - Surface custom exercises + upload flow
+- `/mobile/src/components/premium/UpgradePrompt.tsx` - Reuse for Pro gating
+
+#### 4.4.10 Data Export (Settings)
+
+**Priority**: MEDIUM | **Effort**: 2-3 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+
+**Goal**: Provide a user-controlled export of workout history for portability/compliance.
+
+**Experience**:
+
+- Settings action: “Export my data” → choose CSV or JSON → email/share sheet with download link (time-limited)
+- Export includes workouts, sets, templates, AI generations, and streak history; excludes PII beyond profile basics
+- Show export status (queued → ready) and ability to regenerate
+
+**Implementation**:
+
+- Server job to compile export into CSV/JSON, store in object storage with signed URL (24h expiration)
+- Rate limit to one export per user per 24h; log audit trail for compliance
+- Client polling or web socket to update export status; uses share sheet for delivery if on device
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/account.ts` - Data export request + status endpoints
+- `/server/src/jobs/exportData.ts` - Export generator + storage upload
+- `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
+- `/mobile/src/api/account.ts` - Export API client
 
 ---
 
@@ -1606,6 +1694,6 @@ To test notifications:
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
-- **v1.5** (Current): Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
-- **v1.6** (Next): Retention & Feedback (smart notifications, widgets, weekly streaks, feedback board, profile/settings redesign)
-- **v1.7** (Later): Marketing & Growth (landing page, App/Play listings, support flow)
+- **v1.5**: Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
+- **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, health sync, data export pending)
+- **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

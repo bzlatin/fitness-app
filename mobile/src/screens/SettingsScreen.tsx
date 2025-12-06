@@ -88,6 +88,9 @@ const SettingsScreen = () => {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [showPreferencesSheet, setShowPreferencesSheet] = useState(false);
+  const [showNotificationsSheet, setShowNotificationsSheet] = useState(false);
+  const [showBillingSheet, setShowBillingSheet] = useState(false);
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
   const [connectionsContentHeight, setConnectionsContentHeight] = useState(0);
   const [connectionsScrollHeight, setConnectionsScrollHeight] = useState(0);
@@ -632,6 +635,42 @@ const SettingsScreen = () => {
     }
   };
 
+  const preferencesSubtitle = `${
+    isPro
+      ? `Progressive overload ${user?.progressiveOverloadEnabled ? "on" : "off"}`
+      : "Unlock progressive overload"
+  } · Rest timer ${user?.restTimerSoundEnabled ?? true ? "sound on" : "silent"} · Training goals`;
+
+  const notificationToggleKeys: Array<keyof NotificationPreferences> = [
+    "goalReminders",
+    "inactivityNudges",
+    "squadActivity",
+    "weeklyGoalMet",
+  ];
+  const notificationToggleCount = notificationPrefs
+    ? notificationToggleKeys.filter((key) => notificationPrefs[key]).length
+    : 0;
+
+  const notificationsSubtitle = isLoadingNotificationPrefs
+    ? "Loading notification preferences…"
+    : !notificationPrefs
+    ? "Enable push to manage goal reminders and squad activity"
+    : `${notificationToggleCount}/4 toggles on · Inbox`;
+
+  const billingSubtitle = isSubscriptionLoading
+    ? "Loading billing status…"
+    : isPro
+    ? `Pro · ${isAppleSubscription ? "Apple billing" : "Stripe"}${
+        renewalDate
+          ? ` · ${
+              subscriptionStatus?.cancelAtPeriodEnd
+                ? `Ends ${renewalDate}`
+                : `Renews ${renewalDate}`
+            }`
+          : ""
+      }`
+    : "Free · Upgrade for unlimited templates and AI";
+
   return (
     <ScreenContainer scroll includeTopInset={false} paddingTop={12}>
       <>
@@ -1061,528 +1100,33 @@ const SettingsScreen = () => {
           title='Preferences'
           subtitle='Goal defaults, timers, and training smarts.'
         >
-          <Pressable
-            onPress={() => {
-              if (!isPro) {
-                setShowPaywallModal(true);
-              }
-            }}
-            disabled={isPro}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: !isPro
-                ? `${colors.primary}10`
-                : colors.surfaceMuted,
-              padding: 12,
-              borderRadius: 10,
-              borderWidth: 1.5,
-              borderColor: !isPro ? colors.primary : colors.border,
-            }}
-          >
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Progressive Overload
-                </Text>
-                {!isPro && (
-                  <View
-                    style={{
-                      backgroundColor: colors.primary,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#0B1220",
-                        fontSize: 10,
-                        fontFamily: fontFamilies.bold,
-                      }}
-                    >
-                      PRO
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
-              >
-                {!isPro
-                  ? "Tap to unlock smart weight progression suggestions"
-                  : "Get smart weight increase recommendations based on your performance"}
-              </Text>
-            </View>
-            {isPro ? (
-              <Switch
-                value={user.progressiveOverloadEnabled ?? true}
-                disabled={isTogglingProgression}
-                onValueChange={async (value) => {
-                  setIsTogglingProgression(true);
-                  try {
-                    await updateProfile({ progressiveOverloadEnabled: value });
-                  } catch (err) {
-                    Alert.alert("Could not update setting", "Please try again.");
-                  } finally {
-                    setIsTogglingProgression(false);
-                  }
-                }}
-                trackColor={{ true: colors.primary, false: colors.border }}
-                thumbColor={
-                  user.progressiveOverloadEnabled ?? true ? "#fff" : "#f4f3f4"
-                }
-              />
-            ) : (
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: colors.primary + "20",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 16 }}>🔒</Text>
-              </View>
-            )}
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              const newValue = !(user?.restTimerSoundEnabled ?? true);
-              updateProfile({ restTimerSoundEnabled: newValue });
-            }}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 14,
-                }}
-              >
-                Rest Timer Sound
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
-              >
-                Play a notification sound when rest timer completes
-              </Text>
-            </View>
-            <Switch
-              value={user?.restTimerSoundEnabled ?? true}
-              onValueChange={(value) => {
-                updateProfile({ restTimerSoundEnabled: value });
-              }}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={
-                user?.restTimerSoundEnabled ?? true ? "#fff" : "#f4f3f4"
-              }
-            />
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              navigation.navigate("Onboarding", { isRetake: true });
-            }}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              borderRadius: 12,
-              backgroundColor: colors.primary,
-              borderWidth: 1,
-              borderColor: colors.primary,
-              alignItems: "center",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.surface,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 15,
-              }}
-            >
-              🎯 Update Training Preferences
-            </Text>
-          </Pressable>
+          <SettingRowCard
+            title='Workout preferences'
+            subtitle={preferencesSubtitle}
+            onPress={() => setShowPreferencesSheet(true)}
+          />
         </Section>
 
         <Section
           title='Notifications'
           subtitle='Reminders and inbox for streaks, goals, and squads.'
         >
-          <Pressable
-            onPress={() => navigation.navigate("NotificationInbox" as never)}
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-              alignItems: "center",
-            })}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              View inbox
-            </Text>
-          </Pressable>
-
-          {isLoadingNotificationPrefs ? (
-            <ActivityIndicator size='small' color={colors.primary} />
-          ) : !notificationPrefs ? (
-            <Pressable
-              onPress={handleEnableNotifications}
-              style={{
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: colors.primary,
-                borderWidth: 1,
-                borderColor: colors.primary,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 15,
-                }}
-              >
-                Enable Push Notifications
-              </Text>
-            </Pressable>
-          ) : (
-            <>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 14,
-                    }}
-                  >
-                    Goal Reminders
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    Remind me when at risk of missing weekly goal
-                  </Text>
-                </View>
-                <Switch
-                  value={notificationPrefs.goalReminders}
-                  onValueChange={(value) =>
-                    handleToggleNotificationPref("goalReminders", value)
-                  }
-                  trackColor={{ true: colors.primary, false: colors.border }}
-                  thumbColor={notificationPrefs.goalReminders ? "#fff" : "#f4f3f4"}
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 14,
-                    }}
-                  >
-                    Inactivity Nudges
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    Gentle reminder if inactive for 5+ days
-                  </Text>
-                </View>
-                <Switch
-                  value={notificationPrefs.inactivityNudges}
-                  onValueChange={(value) =>
-                    handleToggleNotificationPref("inactivityNudges", value)
-                  }
-                  trackColor={{ true: colors.primary, false: colors.border }}
-                  thumbColor={notificationPrefs.inactivityNudges ? "#fff" : "#f4f3f4"}
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 14,
-                    }}
-                  >
-                    Squad Activity
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    Reactions and squad members hitting goals
-                  </Text>
-                </View>
-                <Switch
-                  value={notificationPrefs.squadActivity}
-                  onValueChange={(value) =>
-                    handleToggleNotificationPref("squadActivity", value)
-                  }
-                  trackColor={{ true: colors.primary, false: colors.border }}
-                  thumbColor={notificationPrefs.squadActivity ? "#fff" : "#f4f3f4"}
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 14,
-                    }}
-                  >
-                    Weekly Goal Met
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    Celebrate when you complete your weekly goal
-                  </Text>
-                </View>
-                <Switch
-                  value={notificationPrefs.weeklyGoalMet}
-                  onValueChange={(value) =>
-                    handleToggleNotificationPref("weeklyGoalMet", value)
-                  }
-                  trackColor={{ true: colors.primary, false: colors.border }}
-                  thumbColor={notificationPrefs.weeklyGoalMet ? "#fff" : "#f4f3f4"}
-                />
-              </View>
-
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 8,
-                }}
-              >
-                Max 3 notifications per week
-              </Text>
-            </>
-          )}
+          <SettingRowCard
+            title='Push + inbox'
+            subtitle={notificationsSubtitle}
+            onPress={() => setShowNotificationsSheet(true)}
+          />
         </Section>
 
         <Section
           title='Billing'
           subtitle='Plan, renewal, and purchase recovery.'
         >
-          <View
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              gap: 4,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              {isPro ? "Pro plan" : "Free plan"}
-            </Text>
-            {isAppleSubscription ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Billed through Apple. Manage from your iOS subscription settings.
-              </Text>
-            ) : null}
-            {isSubscriptionLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : isSubscriptionError ? (
-              <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.error, fontSize: 12 }}>
-                  Unable to load billing status.
-                </Text>
-                <Pressable
-                  onPress={() => refetchSubscriptionStatus()}
-                  style={({ pressed }) => ({
-                    alignSelf: "flex-start",
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 12,
-                    }}
-                  >
-                    Retry
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                {platformStatus ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Status: {platformStatus.replace(/_/g, " ")}
-                    {subscriptionStatus?.subscriptionPlatform === "apple" &&
-                    subscriptionStatus?.appleEnvironment
-                      ? ` (${subscriptionStatus.appleEnvironment})`
-                      : ""}
-                  </Text>
-                ) : null}
-                {trialEnds ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    Trial ends {trialEnds}
-                  </Text>
-                ) : null}
-                {renewalDate ? (
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {subscriptionStatus?.cancelAtPeriodEnd
-                      ? `Ends on ${renewalDate}`
-                      : `Renews on ${renewalDate}`}
-                  </Text>
-                ) : null}
-                {expiredOn ? (
-                  <Text style={{ color: colors.error, fontSize: 12 }}>
-                    Expired on {expiredOn}
-                  </Text>
-                ) : null}
-                {isGrace ? (
-                  <Text style={{ color: "#fbbf24", fontSize: 12 }}>
-                    Grace period: update your Apple billing to keep Pro access.
-                  </Text>
-                ) : null}
-                {isExpired ? (
-                  <Text style={{ color: colors.error, fontSize: 12 }}>
-                    Subscription expired — renew to restore Pro features.
-                  </Text>
-                ) : null}
-              </>
-            )}
-          </View>
-          <Pressable
-            onPress={() => {
-              if (isAppleSubscription) {
-                void Linking.openURL(
-                  "https://apps.apple.com/account/subscriptions"
-                );
-                return;
-              }
-              navigation.navigate("Upgrade", { plan: "monthly" });
-            }}
-            style={({ pressed }) => ({
-              marginTop: 10,
-              paddingVertical: 10,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: colors.primary,
-              backgroundColor: pressed ? colors.primary : "transparent",
-              alignItems: "center",
-            })}
-          >
-            <Text
-              style={{
-                color: colors.primary,
-                fontFamily: fontFamilies.semibold,
-              }}
-            >
-              {isPro
-                ? isAppleSubscription
-                  ? "Manage in App Store"
-                  : "Manage subscription"
-                : isAppleSubscription
-                ? "Manage in App Store"
-                : "Upgrade to Pro"}
-            </Text>
-          </Pressable>
+          <SettingRowCard
+            title='Plan & billing'
+            subtitle={billingSubtitle}
+            onPress={() => setShowBillingSheet(true)}
+          />
           {isIOS ? (
             <Pressable
               onPress={() => restorePurchasesMutation.mutate()}
@@ -1713,6 +1257,443 @@ const SettingsScreen = () => {
         </Section>
       </View>
       )}
+
+      <DrillInSheet
+        visible={showPreferencesSheet}
+        onClose={() => setShowPreferencesSheet(false)}
+        title='Workout preferences'
+      >
+        <Pressable
+          onPress={() => {
+            if (!isPro) {
+              setShowPreferencesSheet(false);
+              setShowPaywallModal(true);
+              return;
+            }
+          }}
+          disabled={isPro && isTogglingProgression}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: !isPro ? `${colors.primary}10` : colors.surfaceMuted,
+            padding: 12,
+            borderRadius: 10,
+            borderWidth: 1.5,
+            borderColor: !isPro ? colors.primary : colors.border,
+          }}
+        >
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Progressive Overload
+              </Text>
+              {!isPro && (
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#0B1220",
+                      fontSize: 10,
+                      fontFamily: fontFamilies.bold,
+                    }}
+                  >
+                    PRO
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                marginTop: 2,
+              }}
+            >
+              {!isPro
+                ? "Tap to unlock smart weight progression suggestions"
+                : "Get smart weight increase recommendations based on your performance"}
+            </Text>
+          </View>
+          {isPro ? (
+            <Switch
+              value={user?.progressiveOverloadEnabled ?? true}
+              disabled={isTogglingProgression}
+              onValueChange={async (value) => {
+                setIsTogglingProgression(true);
+                try {
+                  await updateProfile({ progressiveOverloadEnabled: value });
+                } catch (err) {
+                  Alert.alert("Could not update setting", "Please try again.");
+                } finally {
+                  setIsTogglingProgression(false);
+                }
+              }}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={
+                user?.progressiveOverloadEnabled ?? true ? "#fff" : "#f4f3f4"
+              }
+            />
+          ) : (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: colors.primary + "20",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>🔒</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            const newValue = !(user?.restTimerSoundEnabled ?? true);
+            updateProfile({ restTimerSoundEnabled: newValue });
+          }}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 12,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 14,
+              }}
+            >
+              Rest Timer Sound
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                marginTop: 2,
+              }}
+            >
+              Play a notification sound when rest timer completes
+            </Text>
+          </View>
+          <Switch
+            value={user?.restTimerSoundEnabled ?? true}
+            onValueChange={(value) => {
+              updateProfile({ restTimerSoundEnabled: value });
+            }}
+            trackColor={{ true: colors.primary, false: colors.border }}
+            thumbColor={user?.restTimerSoundEnabled ?? true ? "#fff" : "#f4f3f4"}
+          />
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            setShowPreferencesSheet(false);
+            navigation.navigate("Onboarding", { isRetake: true });
+          }}
+          style={({ pressed }) => ({
+            paddingVertical: 14,
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            borderWidth: 1,
+            borderColor: colors.primary,
+            alignItems: "center",
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <Text
+            style={{
+              color: colors.surface,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 15,
+            }}
+          >
+            🎯 Update Training Preferences
+          </Text>
+        </Pressable>
+      </DrillInSheet>
+
+      <DrillInSheet
+        visible={showNotificationsSheet}
+        onClose={() => setShowNotificationsSheet(false)}
+        title='Notifications'
+      >
+        <Pressable
+          onPress={() => {
+            setShowNotificationsSheet(false);
+            navigation.navigate("NotificationInbox" as never);
+          }}
+          style={({ pressed }) => ({
+            paddingVertical: 12,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+            alignItems: "center",
+          })}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            View inbox
+          </Text>
+        </Pressable>
+
+        {isLoadingNotificationPrefs ? (
+          <ActivityIndicator size='small' color={colors.primary} />
+        ) : !notificationPrefs ? (
+          <Pressable
+            onPress={async () => {
+              await handleEnableNotifications();
+              setShowNotificationsSheet(false);
+            }}
+            style={{
+              paddingVertical: 14,
+              borderRadius: 12,
+              backgroundColor: colors.primary,
+              borderWidth: 1,
+              borderColor: colors.primary,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: colors.surface,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 15,
+              }}
+            >
+              Enable Push Notifications
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            {notificationToggleKeys.map((key) => (
+              <View
+                key={key}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                    }}
+                  >
+                    {key === "goalReminders"
+                      ? "Goal Reminders"
+                      : key === "inactivityNudges"
+                      ? "Inactivity Nudges"
+                      : key === "squadActivity"
+                      ? "Squad Activity"
+                      : "Weekly Goal Met"}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    {key === "goalReminders"
+                      ? "Remind me when at risk of missing weekly goal"
+                      : key === "inactivityNudges"
+                      ? "Gentle reminder if inactive for 5+ days"
+                      : key === "squadActivity"
+                      ? "Reactions and squad members hitting goals"
+                      : "Celebrate when you complete your weekly goal"}
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationPrefs[key]}
+                  onValueChange={(value) =>
+                    handleToggleNotificationPref(key, value)
+                  }
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={notificationPrefs[key] ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+            ))}
+
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                marginTop: 8,
+              }}
+            >
+              Max 3 notifications per week
+            </Text>
+          </>
+        )}
+      </DrillInSheet>
+
+      <DrillInSheet
+        visible={showBillingSheet}
+        onClose={() => setShowBillingSheet(false)}
+        title='Plan & billing'
+      >
+        <View
+          style={{
+            backgroundColor: colors.surfaceMuted,
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 4,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            {isPro ? "Pro plan" : "Free plan"}
+          </Text>
+          {isAppleSubscription ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Billed through Apple. Manage from your iOS subscription settings.
+            </Text>
+          ) : null}
+          {isSubscriptionLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : isSubscriptionError ? (
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.error, fontSize: 12 }}>
+                Unable to load billing status.
+              </Text>
+              <Pressable
+                onPress={() => refetchSubscriptionStatus()}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 12,
+                  }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              {platformStatus ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Status: {platformStatus.replace(/_/g, " ")}
+                  {subscriptionStatus?.subscriptionPlatform === "apple" &&
+                  subscriptionStatus?.appleEnvironment
+                    ? ` (${subscriptionStatus.appleEnvironment})`
+                    : ""}
+                </Text>
+              ) : null}
+              {trialEnds ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Trial ends {trialEnds}
+                </Text>
+              ) : null}
+              {renewalDate ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {subscriptionStatus?.cancelAtPeriodEnd
+                    ? `Ends on ${renewalDate}`
+                    : `Renews on ${renewalDate}`}
+                </Text>
+              ) : null}
+              {expiredOn ? (
+                <Text style={{ color: colors.error, fontSize: 12 }}>
+                  Expired on {expiredOn}
+                </Text>
+              ) : null}
+              {isGrace ? (
+                <Text style={{ color: "#fbbf24", fontSize: 12 }}>
+                  Grace period: update your Apple billing to keep Pro access.
+                </Text>
+              ) : null}
+              {isExpired ? (
+                <Text style={{ color: colors.error, fontSize: 12 }}>
+                  Subscription expired — renew to restore Pro features.
+                </Text>
+              ) : null}
+            </>
+          )}
+        </View>
+        <Pressable
+          onPress={() => {
+            setShowBillingSheet(false);
+            if (isAppleSubscription) {
+              void Linking.openURL("https://apps.apple.com/account/subscriptions");
+              return;
+            }
+            navigation.navigate("Upgrade", { plan: "monthly" });
+          }}
+          style={({ pressed }) => ({
+            marginTop: 10,
+            paddingVertical: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.primary,
+            backgroundColor: pressed ? colors.primary : "transparent",
+            alignItems: "center",
+          })}
+        >
+          <Text
+            style={{
+              color: colors.primary,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            {isPro
+              ? isAppleSubscription
+                ? "Manage in App Store"
+                : "Manage subscription"
+              : isAppleSubscription
+              ? "Manage in App Store"
+              : "Upgrade to Pro"}
+          </Text>
+        </Pressable>
+      </DrillInSheet>
 
       <Modal
         visible={showConnectionsModal}
@@ -2350,6 +2331,138 @@ const inputStyle = {
   borderColor: colors.border,
   color: colors.textPrimary,
 };
+
+const SettingRowCard = ({
+  title,
+  subtitle,
+  onPress,
+  rightSlot,
+}: {
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  rightSlot?: ReactNode;
+}) => (
+  <Pressable
+    onPress={onPress}
+    style={({ pressed }) => ({
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      opacity: pressed ? 0.92 : 1,
+    })}
+  >
+    <View style={{ flex: 1, gap: 4 }}>
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontFamily: fontFamilies.semibold,
+          fontSize: 14,
+        }}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text
+          style={{ color: colors.textSecondary, fontSize: 12 }}
+          numberOfLines={2}
+        >
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+    {rightSlot ?? (
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontFamily: fontFamilies.semibold,
+        }}
+      >
+        Manage
+      </Text>
+    )}
+  </Pressable>
+);
+
+const DrillInSheet = ({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) => (
+  <Modal
+    visible={visible}
+    animationType='slide'
+    transparent
+    onRequestClose={onClose}
+  >
+    <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.35)",
+        }}
+      />
+      <View
+        style={{
+          padding: 16,
+          paddingBottom: 28,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 12,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 16,
+            }}
+          >
+            {title}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => ({
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+            })}
+          >
+            <Text style={{ color: colors.textSecondary }}>Close</Text>
+          </Pressable>
+        </View>
+        {children}
+      </View>
+    </View>
+  </Modal>
+);
 
 const Section = ({
   title,
