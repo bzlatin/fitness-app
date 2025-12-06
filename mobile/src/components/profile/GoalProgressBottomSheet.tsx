@@ -1,6 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../theme/colors";
@@ -23,6 +33,20 @@ const GoalProgressBottomSheet = ({
   onEditGoal,
 }: GoalProgressBottomSheetProps) => {
   const insets = useSafeAreaInsets();
+
+  const [showTopFade, setShowTopFade] = useState(false);
+  const [showBottomFade, setShowBottomFade] = useState(true);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const offsetY = contentOffset.y;
+    const viewHeight = layoutMeasurement.height;
+    const contentHeight = contentSize.height;
+
+    setShowTopFade(offsetY > 8);
+    const isAtBottom = offsetY + viewHeight >= contentHeight - 8;
+    setShowBottomFade(!isAtBottom);
+  };
 
   // Fetch last 8 weeks of workout data for history
   const eightWeeksAgo = useMemo(() => {
@@ -106,6 +130,8 @@ const GoalProgressBottomSheet = ({
     ? Math.min((workoutsThisWeek / weeklyGoal) * 100, 100)
     : 0;
 
+  const historyList = useMemo(() => [...weeklyBreakdown].reverse(), [weeklyBreakdown]);
+
   const formatWeek = (weekStart: Date) => {
     const month = weekStart.toLocaleDateString("en-US", { month: "short" });
     const day = weekStart.getDate();
@@ -113,7 +139,12 @@ const GoalProgressBottomSheet = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType='slide'
+      onRequestClose={onClose}
+    >
       <View
         style={{
           flex: 1,
@@ -128,16 +159,23 @@ const GoalProgressBottomSheet = ({
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             paddingTop: 12,
-            paddingBottom: 24 + insets.bottom,
+            paddingBottom: 8 + insets.bottom,
             borderWidth: 1,
             borderColor: colors.border,
             maxHeight: "90%",
             width: "100%",
             alignSelf: "stretch",
+            overflow: "hidden",
           }}
         >
           {/* Drag handle */}
-          <View style={{ alignItems: "center", paddingVertical: 8, paddingHorizontal: 20 }}>
+          <View
+            style={{
+              alignItems: "center",
+              paddingVertical: 8,
+              paddingHorizontal: 20,
+            }}
+          >
             <View
               style={{
                 width: 50,
@@ -150,53 +188,63 @@ const GoalProgressBottomSheet = ({
 
           <ScrollView
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
             contentContainerStyle={{
               paddingBottom: 20 + insets.bottom,
               paddingHorizontal: 20,
             }}
           >
-              {/* Header */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 20,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.bold,
-                      fontSize: 24,
-                    }}
-                  >
-                    Goal Progress
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 4 }}>
-                    {weeklyGoal
-                      ? `Your weekly goal: ${weeklyGoal} workouts`
-                      : "Set a goal to track progress"}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={onClose}
-                  hitSlop={12}
-                  style={({ pressed }) => ({
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  })}
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 20,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.bold,
+                    fontSize: 24,
+                  }}
                 >
-                  <Ionicons name="close" size={20} color={colors.textSecondary} />
-                </Pressable>
+                  Goal Progress
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 14,
+                    marginTop: 4,
+                  }}
+                >
+                  {weeklyGoal
+                    ? `Your weekly goal: ${weeklyGoal} workouts`
+                    : "Set a goal to track progress"}
+                </Text>
               </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                style={({ pressed }) => ({
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: pressed
+                    ? colors.surfaceMuted
+                    : colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                })}
+              >
+                <Ionicons name='close' size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
 
             {/* Current Week Progress */}
             <View
@@ -233,7 +281,9 @@ const GoalProgressBottomSheet = ({
                     fontSize: 20,
                   }}
                 >
-                  {weeklyGoal ? `${workoutsThisWeek}/${weeklyGoal}` : workoutsThisWeek}
+                  {weeklyGoal
+                    ? `${workoutsThisWeek}/${weeklyGoal}`
+                    : workoutsThisWeek}
                 </Text>
               </View>
 
@@ -265,11 +315,17 @@ const GoalProgressBottomSheet = ({
                         transform: [{ rotate: "-90deg" }],
                         borderTopColor: "transparent",
                         borderRightColor:
-                          currentProgress >= 25 ? colors.primary : "transparent",
+                          currentProgress >= 25
+                            ? colors.primary
+                            : "transparent",
                         borderBottomColor:
-                          currentProgress >= 50 ? colors.primary : "transparent",
+                          currentProgress >= 50
+                            ? colors.primary
+                            : "transparent",
                         borderLeftColor:
-                          currentProgress >= 75 ? colors.primary : "transparent",
+                          currentProgress >= 75
+                            ? colors.primary
+                            : "transparent",
                       }}
                     />
                   )}
@@ -281,7 +337,9 @@ const GoalProgressBottomSheet = ({
                       fontSize: 36,
                     }}
                   >
-                    {weeklyGoal ? Math.round(currentProgress) : workoutsThisWeek}
+                    {weeklyGoal
+                      ? Math.round(currentProgress)
+                      : workoutsThisWeek}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
                     {weeklyGoal ? "%" : "workouts"}
@@ -300,7 +358,9 @@ const GoalProgressBottomSheet = ({
                   ? workoutsThisWeek >= weeklyGoal
                     ? "🎉 Goal crushed! Keep the momentum going."
                     : `${weeklyGoal - workoutsThisWeek} more ${
-                        weeklyGoal - workoutsThisWeek === 1 ? "workout" : "workouts"
+                        weeklyGoal - workoutsThisWeek === 1
+                          ? "workout"
+                          : "workouts"
                       } to hit your goal`
                   : "Set a weekly goal to track your progress"}
               </Text>
@@ -337,7 +397,11 @@ const GoalProgressBottomSheet = ({
                       {stats.consistencyRate}%
                     </Text>
                     <Text
-                      style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 4,
+                      }}
                     >
                       Goal hit rate
                     </Text>
@@ -363,7 +427,11 @@ const GoalProgressBottomSheet = ({
                       {stats.avgWorkoutsPerWeek}
                     </Text>
                     <Text
-                      style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 4,
+                      }}
                     >
                       Avg per week
                     </Text>
@@ -398,8 +466,8 @@ const GoalProgressBottomSheet = ({
                     </View>
                   ) : (
                     <View style={{ gap: 10 }}>
-                      {weeklyBreakdown.map((week, idx) => {
-                        const isCurrentWeek = idx === weeklyBreakdown.length - 1;
+                      {historyList.map((week, idx) => {
+                        const isCurrentWeek = idx === 0;
                         return (
                           <View
                             key={idx}
@@ -432,7 +500,7 @@ const GoalProgressBottomSheet = ({
                             >
                               {week.goalMet ? (
                                 <Ionicons
-                                  name="checkmark"
+                                  name='checkmark'
                                   size={24}
                                   color={colors.surface}
                                 />
@@ -460,7 +528,10 @@ const GoalProgressBottomSheet = ({
                                 {isCurrentWeek ? " (Current)" : ""}
                               </Text>
                               <Text
-                                style={{ color: colors.textSecondary, fontSize: 12 }}
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                }}
                               >
                                 {week.workoutCount} of {weeklyGoal} workouts
                               </Text>
@@ -512,7 +583,11 @@ const GoalProgressBottomSheet = ({
                 gap: 8,
               })}
             >
-              <Ionicons name="create-outline" size={20} color={colors.surface} />
+              <Ionicons
+                name='create-outline'
+                size={20}
+                color={colors.surface}
+              />
               <Text
                 style={{
                   color: colors.surface,
@@ -538,7 +613,7 @@ const GoalProgressBottomSheet = ({
                   gap: 12,
                 }}
               >
-                <Ionicons name="trophy" size={24} color={colors.secondary} />
+                <Ionicons name='trophy' size={24} color={colors.secondary} />
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
@@ -561,6 +636,36 @@ const GoalProgressBottomSheet = ({
               </View>
             )}
           </ScrollView>
+
+          {showTopFade && (
+            <LinearGradient
+              colors={[colors.surface, `${colors.surface}00`]}
+              style={{
+                position: "absolute",
+                top: 28,
+                left: 0,
+                right: 0,
+                height: 40,
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
+          )}
+
+          {showBottomFade && (
+            <LinearGradient
+              colors={[`${colors.surface}00`, colors.surface]}
+              style={{
+                position: "absolute",
+                bottom: 4 + insets.bottom,
+                left: 0,
+                right: 0,
+                height: 48,
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
+          )}
         </View>
       </View>
     </Modal>
