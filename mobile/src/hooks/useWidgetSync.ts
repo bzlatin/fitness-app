@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
-import { useAuth } from "./useAuth";
+import { useAuth } from "../context/AuthContext";
 import { useCurrentUser } from "./useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
 import { syncWidgetData } from "../services/widgetSync";

@@ -47,6 +47,9 @@ export interface WidgetData {
  * - When user logs in/out (update authToken)
  * - On app startup (ensure widgets have latest data)
  */
+// Track whether we've already warned about missing module (prevents spam)
+let hasWarnedAboutMissingModule = false;
+
 export const syncWidgetData = async (data: WidgetData): Promise<void> => {
   if (Platform.OS !== "ios") {
     // Only iOS supports widgets currently
@@ -55,7 +58,11 @@ export const syncWidgetData = async (data: WidgetData): Promise<void> => {
 
   try {
     if (!WidgetSyncModule) {
-      console.warn("⚠️ WidgetSyncModule not available - widgets may not update");
+      // Only warn once to avoid console spam
+      if (!hasWarnedAboutMissingModule) {
+        console.warn("⚠️ WidgetSyncModule not available - widgets will not update. To enable widgets, add the native WidgetSyncModule.");
+        hasWarnedAboutMissingModule = true;
+      }
       return;
     }
 
@@ -78,7 +85,7 @@ export const clearWidgetData = async (): Promise<void> => {
 
   try {
     if (!WidgetSyncModule) {
-      console.warn("⚠️ WidgetSyncModule not available");
+      // Silently return if module not available
       return;
     }
 
@@ -115,7 +122,7 @@ export const refreshWidgets = async (): Promise<void> => {
 
   try {
     if (!WidgetSyncModule) {
-      console.warn("⚠️ WidgetSyncModule not available");
+      // Silently return if module not available
       return;
     }
 

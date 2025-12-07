@@ -63,3 +63,42 @@ export const duplicateSession = async (id: string) => {
 export const deleteSession = async (id: string) => {
   await apiClient.delete<void>(`/sessions/${id}`);
 };
+
+export const fetchWeeklyProgress = async () => {
+  // Get start of current week (Monday)
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust for Sunday (0) or other days
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() + diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  // Get end of week (Sunday)
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  // Fetch sessions for this week
+  const res = await apiClient.get<WorkoutHistoryResponse>("/sessions/history/range", {
+    params: {
+      start: startOfWeek.toISOString(),
+      end: endOfWeek.toISOString(),
+    },
+  });
+
+  // Calculate workouts this week (completed sessions only)
+  const workoutsThisWeek = res.data.days.reduce((count, day) => {
+    const completedSessions = day.sessions.filter(
+      (session) => session.finishedAt !== null
+    );
+    return count + completedSessions.length;
+  }, 0);
+
+  // Use the streak from stats if available
+  const currentStreak = res.data.stats?.currentStreak || 0;
+
+  return {
+    workoutsThisWeek,
+    currentStreak,
+  };
+};
