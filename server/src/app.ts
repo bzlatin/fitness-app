@@ -12,6 +12,7 @@ import subscriptionsRouter from "./routes/subscriptions";
 import waitlistRouter from "./routes/waitlist";
 import notificationsRouter from "./routes/notifications";
 import feedbackRouter from "./routes/feedback";
+import engagementRouter from "./routes/engagement";
 import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
@@ -43,6 +44,7 @@ app.use("/api/analytics", ...authChain, analyticsRouter);
 app.use("/api/subscriptions", ...authChain, subscriptionsRouter);
 app.use("/api/notifications", ...authChain, notificationsRouter);
 app.use("/api/feedback", ...authChain, feedbackRouter);
+app.use("/api/engagement", ...authChain, engagementRouter);
 
 app.use(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

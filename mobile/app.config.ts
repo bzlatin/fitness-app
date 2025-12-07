@@ -59,6 +59,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         projectId: "f1c3583d-410a-4715-b4ce-6fc6386ba345",
       },
     },
-    plugins: [...(config.plugins ?? []), "react-native-iap"],
+    plugins: [
+      ...(config.plugins ?? []),
+      "react-native-iap",
+      "./plugins/withWidgets",
+    ],
   };
 };

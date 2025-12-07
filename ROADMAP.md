@@ -1358,34 +1358,68 @@ To test notifications:
 - Auto-hide threshold set to 5 reports to balance spam prevention with false positives
 - No comment system implemented to keep the feature simple and focused on voting
 
-#### 4.4.5 iOS Widgets (Weekly Goal + Quick Actions)
+#### 4.4.5 iOS Widgets (Weekly Goal + Quick Actions) ✅ COMPLETE (Phase 1)
 
-**Priority**: MEDIUM | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ✅ PHASE 1 COMPLETE (2025-12-06)
 
 **Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
 
+**Implementation Status**:
+
+**Phase 1 (Completed)** ✅:
+- [x] Weekly Goal Ring widget (Small & Medium sizes)
+- [x] Quick Start widget (Medium size with action buttons)
+- [x] Widget data API endpoint with caching
+- [x] Deep linking support for widget actions
+- [x] App Groups setup for data sharing
+- [x] Config plugin for WidgetKit extension
+
+**Phase 2 (Planned)** ☐:
+- [ ] Quick Set Logger (active session only)
+- [ ] Squad Pulse widget
+
+**Phase 3 (Planned)** ☐:
+- [ ] Dynamic Island support (iOS 16.1+)
+- [ ] Live Activities for rest timer
+
 **Widget Concepts**:
 
-- Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
-- Today Shortcut: Start “Log workout” or “Start session” deep link
-- Quick Set Logger: One-tap to log current set + start rest timer from home screen widget
-- Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
-- Dynamic Island (iOS): Show active rest timer + quick “Log next set” action if ActivityKit permits
+- ✅ **Weekly Goal Ring**: Progress toward sessions/volume goal with streak indicator
+- ✅ **Quick Start**: One-tap shortcuts to start workout or quick log
+- ☐ **Quick Set Logger**: One-tap to log current set + start rest timer from home screen widget (Phase 2)
+- ☐ **Squad Pulse**: See top squad member update or cheer count (Phase 2)
+- ☐ **Dynamic Island**: Show active rest timer + quick "Log next set" action (Phase 3)
 
-**Implementation**:
+**Files Created**:
 
-- Build WidgetKit extension (Expo config plugin) with background refresh window
-- Explore ActivityKit/Live Activities for Dynamic Island timer surface; fallback to local notification countdown if unsupported in Expo
-- Add widget deep links for “Log set” + “Start rest timer” that hydrate the active session in app state
-- Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
-- Deep link targets for start workout, view squad feed, view analytics
+- ✅ `/mobile/plugins/withWidgets.js` - Expo config plugin for WidgetKit
+- ✅ `/mobile/ios/Widgets/README.md` - Setup instructions
+- ✅ `/mobile/ios/Widgets/PushPullWidgets.swift` - Main widget bundle
+- ✅ `/mobile/ios/Widgets/WeeklyGoalWidget.swift` - Weekly goal ring widget UI
+- ✅ `/mobile/ios/Widgets/QuickStartWidget.swift` - Quick action buttons widget UI
+- ✅ `/mobile/ios/Widgets/WidgetDataProvider.swift` - Data fetching & caching logic
+- ✅ `/mobile/ios/Widgets/AppGroupUserDefaults.swift` - Shared UserDefaults helper
+- ✅ `/mobile/src/services/widgetSync.ts` - React Native widget data sync service
+- ✅ `/server/src/routes/engagement.ts` - Widget data endpoint (`/api/engagement/widget-data`)
+- ✅ `/mobile/app.config.ts` - Added widget plugin
+- ✅ `/mobile/App.tsx` - Added widget deep link routes
 
-**Files to Create/Modify**:
+**Deep Links Implemented**:
+- `pushpull://workout/start` - Start new workout (navigates to Home)
+- `pushpull://workout/log` - Quick log workout (navigates to Home)
+- `pushpull://profile` - View profile/settings
 
-- `/mobile/app.config.ts` - Widget extension config
-- `/mobile/src/widgets/GoalWidget.tsx` - Widget UI logic
-- `/mobile/src/navigation/deepLinks.ts` - Add widget deep link targets
-- `/server/src/routes/engagement.ts` - Widget data endpoint with caching
+**Widget Sizes Supported**:
+- **Small**: Weekly Goal Ring only
+- **Medium**: Weekly Goal Ring + Stats, Quick Start buttons
+
+**Next Steps for Full Implementation**:
+1. **Manual Xcode Setup Required**: Follow `/mobile/ios/Widgets/README.md` to add widget targets
+2. **Build with EAS**: Run `eas build --platform ios --profile development --local` to test widgets
+3. **Test Widget Data**: Verify API endpoint `/api/engagement/widget-data` returns correct data
+4. **Test Deep Links**: Tap widgets to ensure navigation works correctly
+5. **Phase 2**: Implement Quick Set Logger (requires active session state)
+6. **Phase 3**: Explore ActivityKit for Dynamic Island (iOS 16.1+ only)
 
 #### 4.4.6 Recovery-Aware Coach Cards (Post-Session)
 

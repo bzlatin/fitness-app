@@ -85,7 +85,7 @@ const App = () => {
   };
 
   const linking: LinkingOptions<RootStackParamList> = {
-    prefixes: ["push-pull://", "pushpullapp://"],
+    prefixes: ["push-pull://", "pushpull://", "pushpullapp://"],
     config: {
       screens: {
         RootTabs: {
@@ -94,6 +94,7 @@ const App = () => {
             Squad: "squad",
             History: "history",
             Settings: "settings",
+            Profile: "profile",
           },
         },
         SquadJoin: {
@@ -105,10 +106,31 @@ const App = () => {
         WorkoutTemplateDetail: "workout/:templateId",
         WorkoutTemplateBuilder: "workout/builder",
         WorkoutSession: "session/:templateId",
-        Profile: "profile/:userId",
+        UserProfile: "profile/:userId",
         PostWorkoutShare: "share/:sessionId",
         Onboarding: "onboarding",
         Upgrade: "upgrade",
+        // Widget deep links
+        "workout/start": {
+          path: "workout/start",
+          screens: {
+            RootTabs: {
+              screens: {
+                Home: "home",
+              },
+            },
+          },
+        },
+        "workout/log": {
+          path: "workout/log",
+          screens: {
+            RootTabs: {
+              screens: {
+                Home: "home",
+              },
+            },
+          },
+        },
       },
     },
   };
