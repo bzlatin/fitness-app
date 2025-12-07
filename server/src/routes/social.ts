@@ -41,6 +41,7 @@ type SocialProfile = {
   followersCount?: number;
   followingCount?: number;
   workoutsCompleted?: number;
+  workoutsThisWeek?: number;
   currentStreakDays?: number;
   isFollowing?: boolean;
   friendsCount?: number;
@@ -414,10 +415,31 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
     [viewerId, targetUserId]
   );
 
+  // Calculate workoutsThisWeek using same logic as sessions.ts
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const weekStart = new Date(now);
+  weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const workoutsThisWeekResult = await query<{ count: string }>(
+    `SELECT COUNT(DISTINCT DATE(started_at)) as count
+     FROM workout_sessions
+     WHERE user_id = $1
+     AND started_at >= $2
+     AND started_at < $3
+     AND finished_at IS NOT NULL`,
+    [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]
+  );
+  const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+
   return {
     ...mapUserRow(user),
     ...counts,
     ...stats,
+    workoutsThisWeek,
     friendsPreview,
     isFollowing: (isFollowingResult.rowCount ?? 0) > 0,
   } satisfies SocialProfile;

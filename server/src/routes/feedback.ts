@@ -107,7 +107,7 @@ const isAdmin = async (userId: string): Promise<boolean> => {
     `SELECT 1 FROM admin_users WHERE user_id = $1 LIMIT 1`,
     [userId]
   );
-  return result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 };
 
 /**
@@ -375,7 +375,7 @@ router.post("/:id/vote", async (req, res) => {
       [id, userId]
     );
 
-    if (voteCheck.rowCount > 0) {
+    if ((voteCheck.rowCount ?? 0) > 0) {
       // Remove vote
       await query(
         `DELETE FROM feedback_votes WHERE feedback_item_id = $1 AND user_id = $2`,
@@ -514,7 +514,7 @@ router.post("/:id/report", async (req, res) => {
       [id, userId]
     );
 
-    if (reportCheck.rowCount > 0) {
+    if ((reportCheck.rowCount ?? 0) > 0) {
       return res.status(409).json({ error: "You have already reported this item" });
     }
 

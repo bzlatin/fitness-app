@@ -20,6 +20,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AuthGate from "./src/components/auth/AuthGate";
 import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
+import { useWidgetSync } from "./src/hooks/useWidgetSync";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import { RootStackParamList } from "./src/navigation/types";
 import { bootstrapPayments } from "./src/services/payments";
@@ -233,6 +234,9 @@ export default App;
 
 const OnboardingGate = ({ children }: { children: ReactNode }) => {
   const { isOnboarded, isLoading, user } = useCurrentUser();
+
+  // Sync widget data automatically (iOS only)
+  useWidgetSync();
 
   // Only block the UI while we haven't loaded a user yet.
   if (isLoading && !user) {

@@ -40,6 +40,7 @@ export interface SocialProfile extends SocialUserSummary {
   followingCount?: number;
   friendsCount?: number;
   workoutsCompleted?: number;
+  workoutsThisWeek?: number;
   currentStreakDays?: number;
   isFollowing?: boolean;
   plan?: string;

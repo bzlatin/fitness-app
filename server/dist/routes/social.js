@@ -4,7 +4,7 @@ const express_1 = require("express");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
 const SQUAD_MEMBERS_AGGREGATE = `
-  SELECT s.id, s.name, s.created_by,
+  SELECT s.id, s.name, s.description, s.is_public, s.created_by,
     COALESCE(
       json_agg(
         json_build_object(
@@ -13,7 +13,13 @@ const SQUAD_MEMBERS_AGGREGATE = `
           'handle', u.handle,
           'avatar_url', u.avatar_url,
           'role', sm.role
-        ) ORDER BY sm.joined_at ASC
+        ) ORDER BY
+          CASE sm.role
+            WHEN 'owner' THEN 1
+            WHEN 'admin' THEN 2
+            ELSE 3
+          END,
+          sm.joined_at ASC
       ) FILTER (WHERE u.id IS NOT NULL),
       '[]'::json
     ) AS members
@@ -23,10 +29,15 @@ const SQUAD_MEMBERS_AGGREGATE = `
 `;
 const mapSquadRow = (row, viewerId) => {
     const members = row.members ?? [];
+    const viewerMember = members.find((m) => m.id === viewerId);
+    const viewerRole = viewerMember?.role;
     return {
         id: row.id,
         name: row.name,
+        description: row.description ?? undefined,
+        isPublic: row.is_public ?? false,
         isOwner: row.created_by === viewerId,
+        isAdmin: viewerRole === "owner" || viewerRole === "admin",
         memberCount: members.length,
         members: members.map((member) => ({
             id: member.id,
@@ -211,10 +222,26 @@ const fetchProfile = async (viewerId, targetUserId) => {
         ? await fetchMutualFriends(targetUserId, 12)
         : await fetchSharedFriends(viewerId, targetUserId, 12);
     const isFollowingResult = await (0, db_1.query)(`SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`, [viewerId, targetUserId]);
+    // Calculate workoutsThisWeek using same logic as sessions.ts
+    const now = new Date();
+    const dayOfWeek = now.getUTCDay();
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart = new Date(now);
+    weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const workoutsThisWeekResult = await (0, db_1.query)(`SELECT COUNT(DISTINCT DATE(started_at)) as count
+     FROM workout_sessions
+     WHERE user_id = $1
+     AND started_at >= $2
+     AND started_at < $3
+     AND finished_at IS NOT NULL`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
+    const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
     return {
         ...mapUserRow(user),
         ...counts,
         ...stats,
+        workoutsThisWeek,
         friendsPreview,
         isFollowing: (isFollowingResult.rowCount ?? 0) > 0,
     };
@@ -609,6 +636,516 @@ router.delete("/squads/:squadId", async (req, res) => {
     catch (err) {
         console.error("Failed to delete squad", err);
         return res.status(500).json({ error: "Failed to delete squad" });
+    }
+});
+// Get single squad details
+router.get("/squads/:squadId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    try {
+        const squad = await fetchSquadById(userId, squadId);
+        if (!squad) {
+            return res.status(404).json({ error: "Squad not found" });
+        }
+        return res.json({ squad });
+    }
+    catch (err) {
+        console.error("Failed to fetch squad", err);
+        return res.status(500).json({ error: "Failed to load squad" });
+    }
+});
+// Update squad settings (name, description, visibility)
+router.put("/squads/:squadId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    const { name, description, isPublic } = req.body;
+    try {
+        // Verify user is admin/owner
+        const memberResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (memberResult.rowCount === 0) {
+            return res.status(403).json({ error: "Not a member of this squad" });
+        }
+        const role = memberResult.rows[0].role;
+        if (role !== "owner" && role !== "admin") {
+            return res
+                .status(403)
+                .json({ error: "Only admins can update squad settings" });
+        }
+        const updates = [];
+        const values = [];
+        let idx = 2;
+        if (name !== undefined) {
+            const trimmedName = name.trim();
+            if (!trimmedName) {
+                return res.status(400).json({ error: "Squad name cannot be empty" });
+            }
+            updates.push(`name = $${idx}`);
+            values.push(trimmedName);
+            idx += 1;
+        }
+        if (description !== undefined) {
+            updates.push(`description = $${idx}`);
+            values.push(description.trim() || null);
+            idx += 1;
+        }
+        if (isPublic !== undefined) {
+            updates.push(`is_public = $${idx}`);
+            values.push(isPublic);
+            idx += 1;
+        }
+        if (updates.length === 0) {
+            const squad = await fetchSquadById(userId, squadId);
+            return res.json({ squad });
+        }
+        updates.push(`updated_at = NOW()`);
+        await (0, db_1.query)(`UPDATE squads SET ${updates.join(", ")} WHERE id = $1`, [squadId, ...values]);
+        const squad = await fetchSquadById(userId, squadId);
+        return res.json({ squad });
+    }
+    catch (err) {
+        console.error("Failed to update squad", err);
+        return res.status(500).json({ error: "Failed to update squad" });
+    }
+});
+// Remove member from squad (admin only)
+router.delete("/squads/:squadId/members/:memberId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId, memberId } = req.params;
+    try {
+        // Verify user is admin/owner
+        const memberResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (memberResult.rowCount === 0) {
+            return res.status(403).json({ error: "Not a member of this squad" });
+        }
+        const userRole = memberResult.rows[0].role;
+        if (userRole !== "owner" && userRole !== "admin") {
+            return res.status(403).json({ error: "Only admins can remove members" });
+        }
+        // Get target member's role
+        const targetResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, memberId]);
+        if (targetResult.rowCount === 0) {
+            return res.status(404).json({ error: "Member not found" });
+        }
+        const targetRole = targetResult.rows[0].role;
+        // Cannot remove owner
+        if (targetRole === "owner") {
+            return res.status(403).json({ error: "Cannot remove squad owner" });
+        }
+        // Admins cannot remove other admins (only owner can)
+        if (targetRole === "admin" && userRole !== "owner") {
+            return res.status(403).json({ error: "Only owner can remove admins" });
+        }
+        await (0, db_1.query)(`DELETE FROM squad_members WHERE squad_id = $1 AND user_id = $2`, [squadId, memberId]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to remove member", err);
+        return res.status(500).json({ error: "Failed to remove member" });
+    }
+});
+// Promote/demote member role
+router.put("/squads/:squadId/members/:memberId/role", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId, memberId } = req.params;
+    const { role: newRole } = req.body;
+    if (!newRole || !["admin", "member"].includes(newRole)) {
+        return res.status(400).json({ error: "Invalid role. Must be 'admin' or 'member'" });
+    }
+    try {
+        // Verify user is owner (only owner can change roles)
+        const ownerResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (ownerResult.rowCount === 0) {
+            return res.status(403).json({ error: "Not a member of this squad" });
+        }
+        if (ownerResult.rows[0].role !== "owner") {
+            return res.status(403).json({ error: "Only owner can change member roles" });
+        }
+        // Verify target is a member
+        const targetResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, memberId]);
+        if (targetResult.rowCount === 0) {
+            return res.status(404).json({ error: "Member not found" });
+        }
+        if (targetResult.rows[0].role === "owner") {
+            return res.status(403).json({ error: "Cannot change owner role" });
+        }
+        await (0, db_1.query)(`UPDATE squad_members SET role = $3 WHERE squad_id = $1 AND user_id = $2`, [squadId, memberId, newRole]);
+        const squad = await fetchSquadById(userId, squadId);
+        return res.json({ squad });
+    }
+    catch (err) {
+        console.error("Failed to update member role", err);
+        return res.status(500).json({ error: "Failed to update member role" });
+    }
+});
+// Leave squad
+router.post("/squads/:squadId/leave", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    try {
+        // Check membership
+        const memberResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (memberResult.rowCount === 0) {
+            return res.status(404).json({ error: "Not a member of this squad" });
+        }
+        const role = memberResult.rows[0].role;
+        // Owner cannot leave - must transfer ownership or delete squad
+        if (role === "owner") {
+            return res.status(403).json({
+                error: "Owner cannot leave squad. Transfer ownership or delete the squad instead.",
+            });
+        }
+        await (0, db_1.query)(`DELETE FROM squad_members WHERE squad_id = $1 AND user_id = $2`, [squadId, userId]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to leave squad", err);
+        return res.status(500).json({ error: "Failed to leave squad" });
+    }
+});
+// Transfer ownership
+router.post("/squads/:squadId/transfer", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    const { newOwnerId } = req.body;
+    if (!newOwnerId) {
+        return res.status(400).json({ error: "newOwnerId is required" });
+    }
+    try {
+        // Verify user is owner
+        const ownerResult = await (0, db_1.query)(`SELECT role FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (ownerResult.rowCount === 0 || ownerResult.rows[0].role !== "owner") {
+            return res.status(403).json({ error: "Only owner can transfer ownership" });
+        }
+        // Verify new owner is a member
+        const targetResult = await (0, db_1.query)(`SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, newOwnerId]);
+        if (targetResult.rowCount === 0) {
+            return res.status(404).json({ error: "Target user is not a squad member" });
+        }
+        // Update both roles in a transaction
+        await (0, db_1.query)(`BEGIN`);
+        try {
+            // Demote current owner to admin
+            await (0, db_1.query)(`UPDATE squad_members SET role = 'admin' WHERE squad_id = $1 AND user_id = $2`, [squadId, userId]);
+            // Promote new owner
+            await (0, db_1.query)(`UPDATE squad_members SET role = 'owner' WHERE squad_id = $1 AND user_id = $2`, [squadId, newOwnerId]);
+            // Update squads.created_by
+            await (0, db_1.query)(`UPDATE squads SET created_by = $2, updated_at = NOW() WHERE id = $1`, [squadId, newOwnerId]);
+            await (0, db_1.query)(`COMMIT`);
+        }
+        catch (err) {
+            await (0, db_1.query)(`ROLLBACK`);
+            throw err;
+        }
+        const squad = await fetchSquadById(userId, squadId);
+        return res.json({ squad });
+    }
+    catch (err) {
+        console.error("Failed to transfer ownership", err);
+        return res.status(500).json({ error: "Failed to transfer ownership" });
+    }
+});
+// Search squad members
+router.get("/squads/:squadId/members/search", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    const term = (req.query.q ?? "").trim();
+    try {
+        // Verify user is a member
+        const memberCheck = await (0, db_1.query)(`SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (memberCheck.rowCount === 0) {
+            return res.status(403).json({ error: "Not a member of this squad" });
+        }
+        if (!term) {
+            // Return all members if no search term
+            const squad = await fetchSquadById(userId, squadId);
+            return res.json({ members: squad?.members ?? [] });
+        }
+        const results = await (0, db_1.query)(`
+        SELECT u.id, u.name, u.handle, u.avatar_url, sm.role
+        FROM squad_members sm
+        JOIN users u ON u.id = sm.user_id
+        WHERE sm.squad_id = $1
+          AND (LOWER(u.name) LIKE LOWER($2) OR LOWER(u.handle) LIKE LOWER($2))
+        ORDER BY
+          CASE sm.role
+            WHEN 'owner' THEN 1
+            WHEN 'admin' THEN 2
+            ELSE 3
+          END,
+          u.name ASC
+        LIMIT 20
+      `, [squadId, `%${term}%`]);
+        return res.json({
+            members: results.rows.map((row) => ({
+                id: row.id,
+                name: row.name ?? "Athlete",
+                handle: row.handle ?? undefined,
+                avatarUrl: row.avatar_url ?? undefined,
+                role: row.role,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("Failed to search squad members", err);
+        return res.status(500).json({ error: "Failed to search members" });
+    }
+});
+// Block user
+router.post("/block", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { blockedUserId } = req.body;
+    if (!blockedUserId || blockedUserId === userId) {
+        return res.status(400).json({ error: "Invalid user to block" });
+    }
+    try {
+        await (0, db_1.query)(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [userId, blockedUserId]);
+        // Also unfollow both ways
+        await (0, db_1.query)(`DELETE FROM follows WHERE (user_id = $1 AND target_user_id = $2) OR (user_id = $2 AND target_user_id = $1)`, [userId, blockedUserId]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to block user", err);
+        return res.status(500).json({ error: "Failed to block user" });
+    }
+});
+// Unblock user
+router.delete("/block/:blockedId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        await (0, db_1.query)(`DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`, [userId, req.params.blockedId]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to unblock user", err);
+        return res.status(500).json({ error: "Failed to unblock user" });
+    }
+});
+// Get blocked users
+router.get("/blocked", async (_req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const result = await (0, db_1.query)(`
+        SELECT u.*
+        FROM user_blocks b
+        JOIN users u ON u.id = b.blocked_id
+        WHERE b.blocker_id = $1
+        ORDER BY u.name ASC
+      `, [userId]);
+        return res.json({
+            blockedUsers: result.rows.map((row) => ({
+                id: row.id,
+                name: row.name ?? "Athlete",
+                handle: row.handle ?? undefined,
+                avatarUrl: row.avatar_url ?? undefined,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("Failed to get blocked users", err);
+        return res.status(500).json({ error: "Failed to load blocked users" });
+    }
+});
+// Workout reactions - add emoji reaction
+router.post("/reactions", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { targetType, targetId, emoji } = req.body;
+    if (!targetType || !["status", "share"].includes(targetType)) {
+        return res.status(400).json({ error: "Invalid targetType" });
+    }
+    if (!targetId) {
+        return res.status(400).json({ error: "targetId is required" });
+    }
+    if (!emoji) {
+        return res.status(400).json({ error: "emoji is required" });
+    }
+    const allowedEmojis = ["🔥", "💪", "🚀", "🙌", "❤️", "👏"];
+    if (!allowedEmojis.includes(emoji)) {
+        return res.status(400).json({ error: "Invalid emoji" });
+    }
+    try {
+        const id = (0, id_1.generateId)();
+        await (0, db_1.query)(`
+        INSERT INTO workout_reactions (id, user_id, target_type, target_id, reaction_type, emoji)
+        VALUES ($1, $2, $3, $4, 'emoji', $5)
+        ON CONFLICT (user_id, target_type, target_id, emoji)
+        WHERE reaction_type = 'emoji'
+        DO NOTHING
+      `, [id, userId, targetType, targetId, emoji]);
+        return res.status(201).json({ success: true });
+    }
+    catch (err) {
+        console.error("Failed to add reaction", err);
+        return res.status(500).json({ error: "Failed to add reaction" });
+    }
+});
+// Remove emoji reaction
+router.delete("/reactions/:targetType/:targetId/:emoji", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { targetType, targetId, emoji } = req.params;
+    try {
+        await (0, db_1.query)(`
+        DELETE FROM workout_reactions
+        WHERE user_id = $1 AND target_type = $2 AND target_id = $3 AND emoji = $4 AND reaction_type = 'emoji'
+      `, [userId, targetType, targetId, emoji]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to remove reaction", err);
+        return res.status(500).json({ error: "Failed to remove reaction" });
+    }
+});
+// Add comment
+router.post("/comments", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { targetType, targetId, comment } = req.body;
+    if (!targetType || !["status", "share"].includes(targetType)) {
+        return res.status(400).json({ error: "Invalid targetType" });
+    }
+    if (!targetId) {
+        return res.status(400).json({ error: "targetId is required" });
+    }
+    if (!comment?.trim()) {
+        return res.status(400).json({ error: "comment is required" });
+    }
+    // Limit comment length
+    const trimmedComment = comment.trim().slice(0, 500);
+    try {
+        const id = (0, id_1.generateId)();
+        const result = await (0, db_1.query)(`
+        INSERT INTO workout_reactions (id, user_id, target_type, target_id, reaction_type, comment)
+        VALUES ($1, $2, $3, $4, 'comment', $5)
+        RETURNING *
+      `, [id, userId, targetType, targetId, trimmedComment]);
+        const row = result.rows[0];
+        const user = await fetchUserSummary(userId);
+        return res.status(201).json({
+            id: row.id,
+            user: {
+                id: user.id,
+                name: user.name,
+                handle: user.handle,
+                avatarUrl: user.avatarUrl,
+            },
+            comment: row.comment,
+            createdAt: row.created_at,
+        });
+    }
+    catch (err) {
+        console.error("Failed to add comment", err);
+        return res.status(500).json({ error: "Failed to add comment" });
+    }
+});
+// Delete comment
+router.delete("/comments/:commentId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        // Only allow deleting own comments
+        await (0, db_1.query)(`DELETE FROM workout_reactions WHERE id = $1 AND user_id = $2 AND reaction_type = 'comment'`, [req.params.commentId, userId]);
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to delete comment", err);
+        return res.status(500).json({ error: "Failed to delete comment" });
+    }
+});
+// Get reactions and comments for a target
+router.get("/reactions/:targetType/:targetId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { targetType, targetId } = req.params;
+    if (!["status", "share"].includes(targetType)) {
+        return res.status(400).json({ error: "Invalid targetType" });
+    }
+    try {
+        // Get emoji counts
+        const emojiCounts = await (0, db_1.query)(`
+        SELECT emoji, COUNT(*)::text as count
+        FROM workout_reactions
+        WHERE target_type = $1 AND target_id = $2 AND reaction_type = 'emoji'
+        GROUP BY emoji
+      `, [targetType, targetId]);
+        // Check which emojis current user has reacted with
+        const userReactions = await (0, db_1.query)(`
+        SELECT emoji
+        FROM workout_reactions
+        WHERE user_id = $1 AND target_type = $2 AND target_id = $3 AND reaction_type = 'emoji'
+      `, [userId, targetType, targetId]);
+        // Get comments with user info
+        const comments = await (0, db_1.query)(`
+        SELECT r.*, u.name, u.handle, u.avatar_url
+        FROM workout_reactions r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.target_type = $1 AND r.target_id = $2 AND r.reaction_type = 'comment'
+        ORDER BY r.created_at ASC
+        LIMIT 50
+      `, [targetType, targetId]);
+        const userEmojiSet = new Set(userReactions.rows.map((r) => r.emoji));
+        return res.json({
+            emojis: emojiCounts.rows.map((row) => ({
+                emoji: row.emoji,
+                count: Number(row.count),
+                hasReacted: userEmojiSet.has(row.emoji),
+            })),
+            comments: comments.rows.map((row) => ({
+                id: row.id,
+                user: {
+                    id: row.user_id,
+                    name: row.name ?? "Athlete",
+                    handle: row.handle ?? undefined,
+                    avatarUrl: row.avatar_url ?? undefined,
+                },
+                comment: row.comment,
+                createdAt: row.created_at,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("Failed to get reactions", err);
+        return res.status(500).json({ error: "Failed to load reactions" });
     }
 });
 router.get("/search", async (req, res) => {

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db";
+import { query } from "../db";
 
 const router = Router();
 
@@ -17,14 +17,14 @@ const router = Router();
  */
 router.get("/widget-data", async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = res.locals.userId;
 
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     // Fetch user data
-    const userResult = await db.query(
+    const userResult = await query(
       `SELECT
         name,
         handle,
@@ -39,48 +39,50 @@ router.get("/widget-data", async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const weeklyGoal = user.weekly_goal || 4;
+    const weeklyGoal = user.weekly_goal ?? 4;
 
-    // Calculate start of current week (Monday)
+    // Calculate start of current week (Monday) in UTC - matches sessions.ts logic
     const now = new Date();
-    const dayOfWeek = now.getDay();
+    const dayOfWeek = now.getUTCDay(); // Use UTC day
     const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday is 0
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - daysFromMonday);
-    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+    weekStart.setUTCHours(0, 0, 0, 0);
 
-    // Count workouts completed this week
-    const workoutsThisWeekResult = await db.query(
-      `SELECT COUNT(DISTINCT DATE(completed_at)) as count
+    // Count unique workout DAYS this week (not sessions) - matches sessions.ts logic
+    // Use finished_at and started_at for consistency with sessions.ts
+    const workoutsThisWeekResult = await query(
+      `SELECT COUNT(DISTINCT DATE(started_at)) as count
        FROM workout_sessions
        WHERE user_id = $1
-       AND completed_at >= $2
-       AND completed_at IS NOT NULL`,
-      [userId, weekStart]
+       AND started_at >= $2
+       AND started_at < $3
+       AND finished_at IS NOT NULL`,
+      [userId, weekStart.toISOString(), new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()]
     );
 
     const currentProgress = parseInt(workoutsThisWeekResult.rows[0]?.count || "0", 10);
 
-    // Get last workout date
-    const lastWorkoutResult = await db.query(
-      `SELECT completed_at
+    // Get last workout date (use finished_at for completed workouts)
+    const lastWorkoutResult = await query(
+      `SELECT finished_at
        FROM workout_sessions
        WHERE user_id = $1
-       AND completed_at IS NOT NULL
-       ORDER BY completed_at DESC
+       AND finished_at IS NOT NULL
+       ORDER BY finished_at DESC
        LIMIT 1`,
       [userId]
     );
 
-    const lastWorkoutDate = lastWorkoutResult.rows[0]?.completed_at || null;
+    const lastWorkoutDate = lastWorkoutResult.rows[0]?.finished_at || null;
 
-    // Calculate current streak
-    const streakResult = await db.query(
+    // Calculate current streak (use finished_at for completed workouts)
+    const streakResult = await query(
       `WITH daily_workouts AS (
-        SELECT DISTINCT DATE(completed_at) as workout_date
+        SELECT DISTINCT DATE(finished_at) as workout_date
         FROM workout_sessions
         WHERE user_id = $1
-        AND completed_at IS NOT NULL
+        AND finished_at IS NOT NULL
         ORDER BY workout_date DESC
       ),
       streaks AS (
