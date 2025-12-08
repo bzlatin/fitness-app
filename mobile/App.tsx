@@ -132,6 +132,16 @@ const App = () => {
             },
           },
         },
+        "workout/log-set": {
+          path: "workout/log-set",
+          screens: {
+            RootTabs: {
+              screens: {
+                Home: "home",
+              },
+            },
+          },
+        },
       },
     },
   };

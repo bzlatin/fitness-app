@@ -23,6 +23,16 @@ const WIDGET_KEYS = {
   authToken: "widget_authToken",
   apiBaseURL: "widget_apiBaseURL",
   currentStreak: "widget_currentStreak",
+  // Active session keys
+  activeSessionId: "widget_activeSessionId",
+  activeSessionExerciseName: "widget_activeSessionExerciseName",
+  activeSessionCurrentSet: "widget_activeSessionCurrentSet",
+  activeSessionTotalSets: "widget_activeSessionTotalSets",
+  activeSessionLastReps: "widget_activeSessionLastReps",
+  activeSessionLastWeight: "widget_activeSessionLastWeight",
+  activeSessionTargetReps: "widget_activeSessionTargetReps",
+  activeSessionTargetWeight: "widget_activeSessionTargetWeight",
+  activeSessionStartedAt: "widget_activeSessionStartedAt",
 };
 
 /**
@@ -36,6 +46,16 @@ export interface WidgetData {
   authToken?: string | null;
   apiBaseURL?: string;
   currentStreak?: number;
+  // Active session data for Quick Set Logger widget
+  activeSessionId?: string | null;
+  activeSessionExerciseName?: string | null;
+  activeSessionCurrentSet?: number | null;
+  activeSessionTotalSets?: number | null;
+  activeSessionLastReps?: number | null;
+  activeSessionLastWeight?: number | null;
+  activeSessionTargetReps?: number | null;
+  activeSessionTargetWeight?: number | null;
+  activeSessionStartedAt?: string | null;
 }
 
 /**
@@ -46,6 +66,7 @@ export interface WidgetData {
  * - When user updates their weekly goal
  * - When user logs in/out (update authToken)
  * - On app startup (ensure widgets have latest data)
+ * - When user starts/updates/completes an active workout session (for Quick Set Logger widget)
  */
 // Track whether we've already warned about missing module (prevents spam)
 let hasWarnedAboutMissingModule = false;
@@ -130,5 +151,76 @@ export const refreshWidgets = async (): Promise<void> => {
     console.log("📱 Widget refresh triggered");
   } catch (error) {
     console.error("❌ Failed to refresh widgets:", error);
+  }
+};
+
+/**
+ * Sync active workout session data to Quick Set Logger widget
+ *
+ * This should be called:
+ * - When user starts a workout session
+ * - When user logs a set (to update current set number and last performance)
+ * - When user changes exercises during the workout
+ * - When user completes or cancels the workout (pass null to clear)
+ *
+ * @param sessionData Active session data, or null to clear the widget
+ */
+export const syncActiveSessionToWidget = async (
+  sessionData: {
+    sessionId: string;
+    exerciseName: string;
+    currentSet: number;
+    totalSets: number;
+    lastReps?: number;
+    lastWeight?: number;
+    targetReps?: number;
+    targetWeight?: number;
+    startedAt: string;
+  } | null
+): Promise<void> => {
+  if (Platform.OS !== "ios") {
+    return;
+  }
+
+  try {
+    if (!WidgetSyncModule) {
+      // Silently return if module not available
+      return;
+    }
+
+    if (sessionData === null) {
+      // Clear active session data
+      await syncWidgetData({
+        activeSessionId: null,
+        activeSessionExerciseName: null,
+        activeSessionCurrentSet: null,
+        activeSessionTotalSets: null,
+        activeSessionLastReps: null,
+        activeSessionLastWeight: null,
+        activeSessionTargetReps: null,
+        activeSessionTargetWeight: null,
+        activeSessionStartedAt: null,
+      });
+      console.log("✅ Active session cleared from widget");
+    } else {
+      // Sync active session data
+      await syncWidgetData({
+        activeSessionId: sessionData.sessionId,
+        activeSessionExerciseName: sessionData.exerciseName,
+        activeSessionCurrentSet: sessionData.currentSet,
+        activeSessionTotalSets: sessionData.totalSets,
+        activeSessionLastReps: sessionData.lastReps ?? null,
+        activeSessionLastWeight: sessionData.lastWeight ?? null,
+        activeSessionTargetReps: sessionData.targetReps ?? null,
+        activeSessionTargetWeight: sessionData.targetWeight ?? null,
+        activeSessionStartedAt: sessionData.startedAt,
+      });
+      console.log("✅ Active session synced to widget:", sessionData.exerciseName);
+    }
+
+    // Refresh widgets to show updated data
+    await refreshWidgets();
+  } catch (error) {
+    console.error("❌ Failed to sync active session to widget:", error);
   }
 };

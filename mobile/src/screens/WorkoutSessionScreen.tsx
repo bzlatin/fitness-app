@@ -12,6 +12,9 @@ import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Linking,
+  AppState,
+  NativeModules,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -50,6 +53,14 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { playTimerSound } from "../utils/timerSound";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { syncActiveSessionToWidget } from "../services/widgetSync";
+import {
+  startWorkoutLiveActivity,
+  updateWorkoutLiveActivity,
+  endWorkoutLiveActivity,
+  endWorkoutLiveActivityWithSummary,
+  addLogSetListener,
+} from "../services/liveActivity";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -539,9 +550,19 @@ const WorkoutSessionScreen = () => {
     },
     onSuccess: (session) => {
       endActiveStatus();
+      // Clear widget data when workout completes
+      void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
       const loggedSets = sets.filter((set) => loggedSetIds.has(set.id));
       const summary = summarizeSets(loggedSets);
+
+      // End Live Activity with completion summary
+      void endWorkoutLiveActivityWithSummary({
+        totalSets: summary.totalSets,
+        totalVolume: summary.totalVolume ?? 0,
+        durationMinutes: Math.floor(elapsedSeconds / 60),
+      });
+
       navigation.navigate("PostWorkoutShare", {
         sessionId: session.id,
         templateId: session.templateId,
@@ -558,6 +579,10 @@ const WorkoutSessionScreen = () => {
   useEffect(
     () => () => {
       endActiveStatus();
+      // Clear widget when user navigates away from workout
+      void syncActiveSessionToWidget(null);
+      // End Live Activity when user navigates away
+      void endWorkoutLiveActivity();
     },
     [endActiveStatus]
   );
@@ -642,6 +667,42 @@ const WorkoutSessionScreen = () => {
     autoFocusEnabled,
   ]);
 
+  // Sync initial session state to widget AND start Live Activity when session loads
+  useEffect(() => {
+    if (!sessionId || !startTime || groupedSets.length === 0) return;
+
+    // Find the first exercise with unlogged sets
+    const firstIncompleteGroup = groupedSets.find((group) =>
+      group.sets.some((set) => !loggedSetIds.has(set.id))
+    );
+
+    if (firstIncompleteGroup) {
+      // Find the first unlogged set in this exercise
+      const firstUnloggedSet = firstIncompleteGroup.sets.find(
+        (set) => !loggedSetIds.has(set.id)
+      );
+      if (firstUnloggedSet) {
+        const setIndex = firstIncompleteGroup.sets.findIndex(
+          (s) => s.id === firstUnloggedSet.id
+        );
+        syncCurrentExerciseToWidget(firstIncompleteGroup.key, setIndex);
+
+        // Start Live Activity (Dynamic Island + Lock Screen)
+        void startWorkoutLiveActivity({
+          sessionId,
+          templateName: templateName || "Workout",
+          exerciseName: firstIncompleteGroup.name,
+          currentSet: setIndex + 1,
+          totalSets: firstIncompleteGroup.sets.length,
+          targetReps: firstUnloggedSet.targetReps,
+          targetWeight: firstUnloggedSet.targetWeight,
+          totalExercises: groupedSets.length,
+          completedExercises: 0,
+        });
+      }
+    }
+  }, [sessionId, startTime, groupedSets.length]);
+
   useEffect(() => {
     if (!restEndsAt) return;
     let hasPlayedSound = false;
@@ -660,6 +721,11 @@ const WorkoutSessionScreen = () => {
           hasPlayedSound = true;
           playTimerSound();
         }
+
+        // Clear Live Activity rest timer so "Log Set" button appears
+        void updateWorkoutLiveActivity({
+          restDuration: 0, // Pass 0 to explicitly clear timer
+        });
       }
     };
     tick();
@@ -667,10 +733,209 @@ const WorkoutSessionScreen = () => {
     return () => clearInterval(id);
   }, [restEndsAt, user?.restTimerSoundEnabled]);
 
+  // Listen for "Log Set" button from Live Activity (via App Group shared storage)
+  useEffect(() => {
+    const { WidgetSyncModule } = NativeModules;
+
+    const checkPendingLogSet = async () => {
+      if (!WidgetSyncModule) return;
+
+      try {
+        // Read from App Group shared UserDefaults
+        const pendingURL = await new Promise<string | null>((resolve) => {
+          WidgetSyncModule.readFromAppGroup("pendingLogSetURL", (value: string | null) => {
+            resolve(value);
+          });
+        });
+
+        const timestamp = await new Promise<number | null>((resolve) => {
+          WidgetSyncModule.readFromAppGroup("pendingLogSetTimestamp", (value: number | null) => {
+            resolve(value);
+          });
+        });
+
+        if (pendingURL && timestamp) {
+          // Only process if it's recent (within last 5 seconds)
+          const now = Date.now() / 1000;
+          if (now - timestamp < 5) {
+            console.log("🔵 [WorkoutSession] Found pending log set action:", pendingURL);
+
+            // Parse the URL
+            const urlObj = new URL(pendingURL);
+            const urlSessionId = urlObj.searchParams.get("sessionId");
+
+            // Verify this is the current session
+            if (urlSessionId === sessionId && activeSetId) {
+              console.log("✅ Logging active set from Live Activity:", activeSetId);
+              logSet(activeSetId);
+
+              // Clear the pending action
+              WidgetSyncModule.writeToAppGroup("pendingLogSetURL", null);
+              WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+            } else {
+              console.warn("⚠️ Session mismatch or no active set:", {
+                urlSessionId,
+                currentSessionId: sessionId,
+                activeSetId,
+              });
+            }
+          } else {
+            console.log("⚠️ Pending log set action is stale, ignoring");
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed to check pending log set:", error);
+      }
+    };
+
+    // Check immediately when component mounts
+    checkPendingLogSet();
+
+    // Listen for app state changes (when app comes to foreground)
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        console.log("🔵 [WorkoutSession] App became active, checking for pending actions");
+        checkPendingLogSet();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sessionId, activeSetId]);
+
+  // Legacy: Listen for "Log Set" button from Live Activity (via deep link)
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+      console.log("🔵 [WorkoutSession] Deep link received:", url);
+
+      // Parse the URL to extract sessionId
+      // Expected format: push-pull://workout/log-set?sessionId=xxx
+      if (url.includes("workout/log-set")) {
+        const urlObj = new URL(url);
+        const urlSessionId = urlObj.searchParams.get("sessionId");
+
+        console.log("🔵 [WorkoutSession] Log set from deep link, sessionId:", urlSessionId);
+
+        // Verify this is the current session
+        if (urlSessionId !== sessionId) {
+          console.warn(
+            "⚠️ Deep link session ID mismatch:",
+            urlSessionId,
+            "vs",
+            sessionId
+          );
+          return;
+        }
+
+        // Find the active set to log
+        if (activeSetId) {
+          console.log("✅ Logging active set from deep link:", activeSetId);
+          logSet(activeSetId);
+        } else {
+          console.warn("⚠️ No active set to log from deep link");
+        }
+      }
+    };
+
+    // Add listener for incoming deep links (when app is already open)
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    // Check if app was opened via deep link (when app was closed)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log("🔵 [WorkoutSession] Initial URL:", url);
+        handleDeepLink({ url });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sessionId, activeSetId]);
+
+  // Legacy: Listen for "Log Set" button from Live Activity (via NotificationCenter - deprecated)
+  // This is kept for backwards compatibility but shouldn't be triggered anymore
+  useEffect(() => {
+    const cleanup = addLogSetListener((liveActivitySessionId) => {
+      console.log(
+        "🔵 [WorkoutSession] Log set from Live Activity (legacy):",
+        liveActivitySessionId
+      );
+
+      // Verify this is the current session
+      if (liveActivitySessionId !== sessionId) {
+        console.warn(
+          "⚠️ Live Activity session ID mismatch:",
+          liveActivitySessionId,
+          "vs",
+          sessionId
+        );
+        return;
+      }
+
+      // Find the active set to log
+      if (activeSetId) {
+        console.log("✅ Logging active set from Live Activity:", activeSetId);
+        logSet(activeSetId);
+      } else {
+        console.warn("⚠️ No active set to log from Live Activity");
+      }
+    });
+
+    return cleanup;
+  }, [sessionId, activeSetId]);
+
   const startRestTimer = (seconds?: number) => {
     const duration = Math.max(10, seconds ?? 90);
     setRestRemaining(duration);
     setRestEndsAt(Date.now() + duration * 1000);
+  };
+
+  // Helper function to sync current exercise state to widget AND Live Activity
+  const syncCurrentExerciseToWidget = (
+    exerciseKey: string,
+    currentSetIndex: number,
+    lastReps?: number,
+    lastWeight?: number,
+    restDuration?: number
+  ) => {
+    if (!sessionId || !startTime) return;
+
+    const group = groupedSets.find((g) => g.key === exerciseKey);
+    if (!group) return;
+
+    const currentSet = group.sets[currentSetIndex];
+    if (!currentSet) return;
+
+    // Sync to home screen widget
+    void syncActiveSessionToWidget({
+      sessionId,
+      exerciseName: group.name,
+      currentSet: currentSetIndex + 1, // 1-indexed for display
+      totalSets: group.sets.length,
+      lastReps,
+      lastWeight,
+      targetReps: currentSet.targetReps,
+      targetWeight: currentSet.targetWeight,
+      startedAt: startTime,
+    });
+
+    // Sync to Live Activity (Dynamic Island + Lock Screen)
+    void updateWorkoutLiveActivity({
+      exerciseName: group.name,
+      currentSet: currentSetIndex + 1,
+      totalSets: group.sets.length,
+      lastReps,
+      lastWeight,
+      targetReps: currentSet.targetReps,
+      targetWeight: currentSet.targetWeight,
+      completedExercises: groupedSets.filter((g) =>
+        g.sets.every((s) => loggedSetIds.has(s.id))
+      ).length,
+      restDuration,
+    });
   };
 
   const logSet = (setId: string, restSeconds?: number) => {
@@ -695,19 +960,22 @@ const WorkoutSessionScreen = () => {
       resumeTimer();
     }
 
+    // Calculate rest duration (needed for both timer and widget sync)
+    // Priority: user-adjusted session rest times > passed restSeconds > template rest times
+    const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
+    const group = groupedSets.find((g) => g.key === groupKey);
+    const fallbackRest =
+      sessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
+      restSeconds ??
+      currentSet.targetRestSeconds ??
+      restLookup[groupKey];
+
     if (autoRestTimer) {
-      const fallbackRest =
-        restSeconds ??
-        currentSet.targetRestSeconds ??
-        restLookup[currentSet.templateExerciseId ?? currentSet.exerciseId];
       startRestTimer(fallbackRest ?? 90);
     } else {
       setRestRemaining(null);
       setRestEndsAt(null);
     }
-
-    const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
-    const group = groupedSets.find((g) => g.key === groupKey);
     if (group) {
       const sorted = [...group.sets]
         .map((s) => (s.id === setId ? updated : s))
@@ -716,6 +984,16 @@ const WorkoutSessionScreen = () => {
       if (nextSet) {
         // Immediately update activeSetId to the next unlogged set
         setActiveSetId(nextSet.id);
+        // Sync next set to widget with rest timer
+        const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
+        const restDuration = fallbackRest ?? 90;
+        syncCurrentExerciseToWidget(
+          groupKey,
+          nextSetIndex,
+          updated.actualReps,
+          updated.actualWeight,
+          autoRestTimer ? restDuration : undefined
+        );
       } else {
         // All sets in this exercise are logged, move to next exercise
         const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
@@ -733,9 +1011,24 @@ const WorkoutSessionScreen = () => {
             setActiveSetId(
               firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null
             );
+            // Sync next exercise to widget
+            if (firstUnloggedInNextGroup) {
+              const nextSetIndex = nextGroup.sets.findIndex(
+                (s) => s.id === firstUnloggedInNextGroup.id
+              );
+              syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
+            }
           } else {
             setActiveExerciseKey(null);
             setActiveSetId(null);
+            // All exercises complete, keep showing last exercise with completed state
+            const lastSetIndex = sorted.length - 1;
+            syncCurrentExerciseToWidget(
+              groupKey,
+              lastSetIndex,
+              updated.actualReps,
+              updated.actualWeight
+            );
           }
         }
       }
@@ -1423,6 +1716,16 @@ const WorkoutSessionScreen = () => {
                     const next = prev === group.key ? null : group.key;
                     if (next === group.key) {
                       setActiveSetId(group.sets[0]?.id ?? null);
+                      // Sync newly expanded exercise to widget
+                      const firstUnloggedSet = group.sets.find(
+                        (s) => !loggedSetIds.has(s.id)
+                      );
+                      if (firstUnloggedSet) {
+                        const setIndex = group.sets.findIndex(
+                          (s) => s.id === firstUnloggedSet.id
+                        );
+                        syncCurrentExerciseToWidget(group.key, setIndex);
+                      }
                     }
                     return next;
                   });
