@@ -90,8 +90,6 @@ export const syncWidgetData = async (data: WidgetData): Promise<void> => {
     widgetCurrent.state = merged;
 
     WidgetSyncModule.syncWidgetData(merged);
-
-    console.log("✅ Widget merged + synced", merged);
   } catch (error) {
     console.error("❌ Failed to sync widget data:", error);
   }
@@ -134,7 +132,6 @@ export const syncActiveSessionToWidget = async (
         activeSessionRestDuration: null,
         activeSessionRestEndsAt: null,
       });
-      console.log("🟢 cleared active widget session");
     } else {
       await syncWidgetData({
         activeSessionId: sessionData.sessionId,
@@ -149,7 +146,6 @@ export const syncActiveSessionToWidget = async (
         activeSessionRestDuration: sessionData.restDuration ?? null,
         activeSessionRestEndsAt: sessionData.restEndsAt ?? null,
       });
-      console.log("🟢 active session synced", sessionData);
     }
   } catch (error) {
     console.error("❌ Failed to sync active widget session:", error);
@@ -176,6 +172,5 @@ export const refreshWidgets = async (): Promise<void> => {
 };
 
 export const getWidgetData = async (): Promise<WidgetData> => {
-  console.log("ℹ️ stored in App Group UserDefaults");
   return widgetCurrent.state;
 };

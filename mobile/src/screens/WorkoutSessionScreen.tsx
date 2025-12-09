@@ -779,7 +779,6 @@ const WorkoutSessionScreen = () => {
 
     const checkPendingLogSet = async () => {
       if (!WidgetSyncModule) {
-        console.log("⚠️ [WorkoutSession] WidgetSyncModule not available");
         return;
       }
 
@@ -818,17 +817,9 @@ const WorkoutSessionScreen = () => {
           return;
         }
 
-        console.log(
-          "🔍 [WorkoutSession] Found pending log set - sessionId:",
-          pendingSessionId,
-          "timestamp:",
-          timestamp
-        );
-
         // Only process if it's recent (within last 10 seconds)
         const now = Date.now() / 1000;
         if (now - timestamp >= 10) {
-          console.log("⚠️ Pending log set action is stale, ignoring");
           // Clear stale actions
           WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
           WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
@@ -837,10 +828,6 @@ const WorkoutSessionScreen = () => {
 
         // Verify this is the current session
         if (pendingSessionId !== sessionId) {
-          console.warn("⚠️ Session mismatch:", {
-            pendingSessionId,
-            currentSessionId: sessionId,
-          });
           return;
         }
 
@@ -852,34 +839,16 @@ const WorkoutSessionScreen = () => {
         WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
         WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
 
-        console.log(
-          "🔵 [WorkoutSession] Processing pending log set action for session:",
-          pendingSessionId
-        );
-
         // Use the activeSetId from the ref - this is what the user sees as highlighted
         const setToLog = activeSetIdRef.current;
 
         if (setToLog) {
-          const currentSets = setsRef.current;
           const currentLoggedSetIds = loggedSetIdsRef.current;
-          const setData = currentSets.find((s) => s.id === setToLog);
 
           // Verify this set hasn't already been logged
           if (!currentLoggedSetIds.has(setToLog)) {
-            console.log(
-              "✅ Logging ACTIVE set from Live Activity (App Group):",
-              setToLog,
-              setData
-                ? `(Set ${setData.setIndex + 1}: ${setData.exerciseName})`
-                : ""
-            );
             logSet(setToLog);
-          } else {
-            console.warn("⚠️ Active set already logged, skipping:", setToLog);
           }
-        } else {
-          console.warn("⚠️ No active set to log from Live Activity");
         }
 
         // Release lock after a short delay to let state settle
@@ -901,9 +870,6 @@ const WorkoutSessionScreen = () => {
     // Listen for app state changes (when app comes to foreground)
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
-        console.log(
-          "🔵 [WorkoutSession] App became active, checking for pending actions"
-        );
         checkPendingLogSet();
       }
     });
@@ -918,7 +884,6 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       const url = event.url;
-      console.log("🔵 [WorkoutSession] Deep link received:", url);
 
       // Parse the URL to extract sessionId
       // Expected format: push-pull://workout/log-set?sessionId=xxx
@@ -926,19 +891,8 @@ const WorkoutSessionScreen = () => {
         const urlObj = new URL(url);
         const urlSessionId = urlObj.searchParams.get("sessionId");
 
-        console.log(
-          "🔵 [WorkoutSession] Log set from deep link, sessionId:",
-          urlSessionId
-        );
-
         // Verify this is the current session
         if (urlSessionId !== sessionId) {
-          console.warn(
-            "⚠️ Deep link session ID mismatch:",
-            urlSessionId,
-            "vs",
-            sessionId
-          );
           return;
         }
 
@@ -950,8 +904,6 @@ const WorkoutSessionScreen = () => {
 
           // Verify this set hasn't already been logged
           if (!currentLoggedSetIds.has(setToLog)) {
-            console.log("✅ Logging ACTIVE set from deep link:", setToLog);
-
             // Check if user has custom rest duration for this exercise
             const currentSet = setsRef.current.find((s) => s.id === setToLog);
             if (currentSet) {
@@ -959,18 +911,12 @@ const WorkoutSessionScreen = () => {
                 currentSet.templateExerciseId ?? currentSet.exerciseId;
               const customRestDuration = sessionRestTimesRef.current[groupKey];
 
-              console.log("🔵 Custom rest duration:", customRestDuration);
-
               // Call logSet with custom rest duration if it was adjusted
               logSet(setToLog, customRestDuration);
             } else {
               logSet(setToLog);
             }
-          } else {
-            console.warn("⚠️ Active set already logged, skipping:", setToLog);
           }
-        } else {
-          console.warn("⚠️ No active set to log from deep link");
         }
       }
     };
@@ -981,7 +927,6 @@ const WorkoutSessionScreen = () => {
     // Check if app was opened via deep link (when app was closed)
     Linking.getInitialURL().then((url) => {
       if (url) {
-        console.log("🔵 [WorkoutSession] Initial URL:", url);
         handleDeepLink({ url });
       }
     });
@@ -996,28 +941,14 @@ const WorkoutSessionScreen = () => {
   // This is kept for backwards compatibility but shouldn't be triggered anymore
   useEffect(() => {
     const cleanup = addLogSetListener((liveActivitySessionId) => {
-      console.log(
-        "🔵 [WorkoutSession] Log set from Live Activity (legacy):",
-        liveActivitySessionId
-      );
-
       // Verify this is the current session
       if (liveActivitySessionId !== sessionId) {
-        console.warn(
-          "⚠️ Live Activity session ID mismatch:",
-          liveActivitySessionId,
-          "vs",
-          sessionId
-        );
         return;
       }
 
       // Find the active set to log
       if (activeSetId) {
-        console.log("✅ Logging active set from Live Activity:", activeSetId);
         logSet(activeSetId);
-      } else {
-        console.warn("⚠️ No active set to log from Live Activity");
       }
     });
 
@@ -1058,14 +989,6 @@ const WorkoutSessionScreen = () => {
       ? new Date(restEndsAtTimestamp).toISOString()
       : undefined;
 
-    console.log("🔵 [syncCurrentExerciseToWidget]", {
-      exercise: group.name,
-      currentSet: currentSetIndex + 1,
-      totalSets: group.sets.length,
-      restDuration: actualRestDuration,
-      restEndsAt: restEndsAtISO,
-    });
-
     // Sync to home screen widget
     void syncActiveSessionToWidget({
       sessionId,
@@ -1099,24 +1022,18 @@ const WorkoutSessionScreen = () => {
   };
 
   const logSet = (setId: string, restSeconds?: number) => {
-    console.log("🔵 [logSet] Called with setId:", setId);
-
     // CRITICAL: Use refs for all reads to avoid stale closure issues
     // This is especially important when called from the polling interval
     const currentLoggedSetIds = loggedSetIdsRef.current;
     const currentSets = setsRef.current;
 
-    console.log("🔵 [logSet] Current loggedSetIds from ref:", Array.from(currentLoggedSetIds));
-
     const currentSet = currentSets.find((s) => s.id === setId);
     if (!currentSet) {
-      console.warn("⚠️ [logSet] Set not found:", setId);
       return;
     }
 
     // Check if this set is already logged using the ref (most up-to-date)
     if (currentLoggedSetIds.has(setId)) {
-      console.warn("⚠️ [logSet] Set already logged, ignoring:", setId);
       return;
     }
 
@@ -1127,11 +1044,6 @@ const WorkoutSessionScreen = () => {
     // IMMEDIATELY update the ref BEFORE any async operations
     // This prevents race conditions with the pending log set handler
     loggedSetIdsRef.current = updatedLoggedSetIds;
-
-    console.log(
-      "🔵 [logSet] Updated loggedSetIds:",
-      Array.from(updatedLoggedSetIds)
-    );
 
     const updated: WorkoutSet = {
       ...currentSet,
@@ -1160,13 +1072,6 @@ const WorkoutSessionScreen = () => {
       currentSet.targetRestSeconds ??
       restLookup[groupKey];
 
-    console.log(
-      "🔵 [logSet] Group:",
-      group?.name,
-      "Rest duration:",
-      fallbackRest
-    );
-
     // Start rest timer and capture the end timestamp
     let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
@@ -1187,14 +1092,6 @@ const WorkoutSessionScreen = () => {
       if (nextSet) {
         // Immediately update activeSetId to the next unlogged set
         const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
-        console.log(
-          "🔵 [logSet] Moving to next set:",
-          nextSet.id,
-          "Index:",
-          nextSetIndex + 1,
-          "/",
-          sorted.length
-        );
 
         // CRITICAL: Disable auto-focus to prevent the useEffect from overriding our state
         setAutoFocusEnabled(false);
@@ -1217,18 +1114,11 @@ const WorkoutSessionScreen = () => {
         // All sets in this exercise are logged, move to next exercise
         const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
         if (allLogged) {
-          console.log(
-            "🔵 [logSet] All sets complete for exercise:",
-            group.name
-          );
-
           const currentIndex = groupedSets.findIndex(
             (g) => g.key === group.key
           );
           const nextGroup = groupedSets[currentIndex + 1];
           if (nextGroup) {
-            console.log("🔵 [logSet] Moving to next exercise:", nextGroup.name);
-
             setAutoFocusEnabled(true);
             setActiveExerciseKey(nextGroup.key);
             const firstUnloggedInNextGroup = nextGroup.sets.find(
@@ -1249,8 +1139,6 @@ const WorkoutSessionScreen = () => {
               syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
             }
           } else {
-            console.log("🔵 [logSet] All exercises complete!");
-
             // IMMEDIATELY update the ref BEFORE React state update
             activeSetIdRef.current = null;
             setActiveExerciseKey(null);

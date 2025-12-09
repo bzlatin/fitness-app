@@ -99,8 +99,6 @@ export const startWorkoutLiveActivity = async (
       totalExercises: state.totalExercises,
       completedExercises: state.completedExercises,
     });
-
-    console.log("✅ Live Activity started:", state.exerciseName);
   } catch (error) {
     console.error("❌ Failed to start Live Activity:", error);
   }
@@ -129,7 +127,6 @@ export const updateWorkoutLiveActivity = async (
 
   try {
     LiveActivityModule.updateWorkoutActivity(updates);
-    console.log("✅ Live Activity updated");
   } catch (error) {
     console.error("❌ Failed to update Live Activity:", error);
   }
@@ -153,7 +150,6 @@ export const endWorkoutLiveActivity = async (): Promise<void> => {
 
   try {
     LiveActivityModule.endWorkoutActivity();
-    console.log("✅ Live Activity ended");
   } catch (error) {
     console.error("❌ Failed to end Live Activity:", error);
   }
@@ -186,8 +182,6 @@ export const endWorkoutLiveActivityWithSummary = async (
       totalVolume: summary.totalVolume,
       durationMinutes: summary.durationMinutes,
     });
-
-    console.log("✅ Live Activity ended with summary");
   } catch (error) {
     console.error("❌ Failed to end Live Activity with summary:", error);
   }
@@ -215,7 +209,6 @@ export const addLogSetListener = (
   const subscription = eventEmitter.addListener(
     "onLogSetFromLiveActivity",
     (event: { sessionId: string }) => {
-      console.log("🔵 [liveActivity] Received onLogSetFromLiveActivity event:", event);
       callback(event.sessionId);
     }
   );
