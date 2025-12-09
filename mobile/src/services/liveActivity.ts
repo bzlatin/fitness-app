@@ -1,4 +1,4 @@
-import { Platform, NativeModules, NativeEventEmitter } from "react-native";
+import { Platform, NativeModules } from "react-native";
 
 /**
  * Live Activity Service
@@ -13,11 +13,6 @@ import { Platform, NativeModules, NativeEventEmitter } from "react-native";
  */
 
 const { LiveActivityModule } = NativeModules;
-
-// Event emitter for listening to Live Activity interactions
-const liveActivityEmitter = Platform.OS === "ios" && LiveActivityModule
-  ? new NativeEventEmitter(LiveActivityModule)
-  : null;
 
 export interface WorkoutActivityState {
   // Session info
@@ -41,6 +36,7 @@ export interface WorkoutActivityState {
 
   // Rest timer
   restDuration?: number; // seconds
+  restEndsAt?: string; // ISO timestamp when rest timer ends
 }
 
 export interface WorkoutSummary {
@@ -82,34 +78,17 @@ export const areLiveActivitiesAvailable = async (): Promise<boolean> => {
 export const startWorkoutLiveActivity = async (
   state: WorkoutActivityState
 ): Promise<void> => {
-  console.log("🔵 [LiveActivity] startWorkoutLiveActivity called", {
-    platform: Platform.OS,
-    moduleAvailable: !!LiveActivityModule,
-    sessionId: state.sessionId,
-    exerciseName: state.exerciseName,
-  });
-
   if (Platform.OS !== "ios") {
-    console.log("⚠️ [LiveActivity] Not iOS, skipping");
     return;
   }
 
   if (!LiveActivityModule) {
-    console.warn("⚠️ [LiveActivity] LiveActivityModule not available");
-    return;
-  }
-
-  // Check if Live Activities are enabled
-  const enabled = await areLiveActivitiesAvailable();
-  console.log("🔵 [LiveActivity] Live Activities enabled:", enabled);
-
-  if (!enabled) {
-    console.warn("⚠️ [LiveActivity] Live Activities are disabled in Settings");
+    console.warn("⚠️ LiveActivityModule not available");
     return;
   }
 
   try {
-    const params = {
+    LiveActivityModule.startWorkoutActivity({
       sessionId: state.sessionId,
       templateName: state.templateName,
       exerciseName: state.exerciseName,
@@ -119,13 +98,11 @@ export const startWorkoutLiveActivity = async (
       targetWeight: state.targetWeight,
       totalExercises: state.totalExercises,
       completedExercises: state.completedExercises,
-    };
+    });
 
-    console.log("🔵 [LiveActivity] Starting with params:", params);
-    LiveActivityModule.startWorkoutActivity(params);
-    console.log("✅ [LiveActivity] Started:", state.exerciseName);
+    console.log("✅ Live Activity started:", state.exerciseName);
   } catch (error) {
-    console.error("❌ [LiveActivity] Failed to start:", error);
+    console.error("❌ Failed to start Live Activity:", error);
   }
 };
 
@@ -151,11 +128,10 @@ export const updateWorkoutLiveActivity = async (
   }
 
   try {
-    console.log("🔵 [LiveActivity] Updating with:", updates);
     LiveActivityModule.updateWorkoutActivity(updates);
-    console.log("✅ [LiveActivity] Updated");
+    console.log("✅ Live Activity updated");
   } catch (error) {
-    console.error("❌ [LiveActivity] Failed to update:", error);
+    console.error("❌ Failed to update Live Activity:", error);
   }
 };
 
@@ -218,45 +194,33 @@ export const endWorkoutLiveActivityWithSummary = async (
 };
 
 /**
- * Add listener for "Log Set" button pressed from Live Activity
+ * Add a listener for "Log Set" button presses from Live Activity
+ * (Legacy method using NotificationCenter - prefer App Group polling instead)
  *
- * This fires when the user taps the "Log Set" button in the Live Activity
- * (Lock Screen or Dynamic Island).
- *
- * @param callback Function to call when log set is triggered
+ * @param callback Function to call with sessionId when user taps "Log Set"
  * @returns Cleanup function to remove the listener
- *
- * @example
- * ```ts
- * useEffect(() => {
- *   const cleanup = addLogSetListener((sessionId) => {
- *     console.log('Log set from Live Activity:', sessionId);
- *     // Handle the log set action
- *   });
- *   return cleanup;
- * }, []);
- * ```
  */
 export const addLogSetListener = (
   callback: (sessionId: string) => void
 ): (() => void) => {
-  if (!liveActivityEmitter) {
-    return () => {}; // No-op cleanup
+  if (Platform.OS !== "ios" || !LiveActivityModule) {
+    return () => {};
   }
 
-  console.log("🔵 [LiveActivity] Adding log set listener");
+  // This is a legacy listener using NativeEventEmitter
+  // The App Group polling method is preferred and more reliable
+  const { NativeEventEmitter } = require("react-native");
+  const eventEmitter = new NativeEventEmitter(LiveActivityModule);
 
-  const subscription = liveActivityEmitter.addListener(
+  const subscription = eventEmitter.addListener(
     "onLogSetFromLiveActivity",
     (event: { sessionId: string }) => {
-      console.log("🔵 [LiveActivity] Log set event received:", event);
+      console.log("🔵 [liveActivity] Received onLogSetFromLiveActivity event:", event);
       callback(event.sessionId);
     }
   );
 
-  // Return cleanup function
   return () => {
-    console.log("🔵 [LiveActivity] Removing log set listener");
     subscription.remove();
   };
 };

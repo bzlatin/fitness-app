@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Alert,
   Image,
@@ -317,6 +317,33 @@ const WorkoutSessionScreen = () => {
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
+
+  // Refs to access latest state in deep link handler without causing re-renders
+  const activeSetIdRef = useRef<string | null>(null);
+  const setsRef = useRef<WorkoutSet[]>([]);
+  const sessionRestTimesRef = useRef<Record<string, number>>({});
+  const loggedSetIdsRef = useRef<Set<string>>(new Set());
+  // Lock to prevent duplicate processing of pending log set actions
+  const isProcessingLogSetRef = useRef<boolean>(false);
+  // Track the last processed timestamp to prevent duplicate processing
+  const lastProcessedTimestampRef = useRef<number>(0);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    activeSetIdRef.current = activeSetId;
+  }, [activeSetId]);
+
+  useEffect(() => {
+    setsRef.current = sets;
+  }, [sets]);
+
+  useEffect(() => {
+    sessionRestTimesRef.current = sessionRestTimes;
+  }, [sessionRestTimes]);
+
+  useEffect(() => {
+    loggedSetIdsRef.current = loggedSetIds;
+  }, [loggedSetIds]);
 
   // Check if user currently has Pro access (blocks grace/expired)
   const isPro = subscriptionAccess.hasProAccess;
@@ -645,19 +672,32 @@ const WorkoutSessionScreen = () => {
     [sets, restLookup, sessionRestTimes]
   );
 
+  // Auto-focus logic - only runs when autoFocusEnabled is true
+  // This should NOT override activeSetId that was just set by logSet
   useEffect(() => {
+    // Skip if auto-focus is disabled
+    if (!autoFocusEnabled) return;
+
     const firstIncompleteGroup = groupedSets.find((group) =>
       group.sets.some((set) => !loggedSetIds.has(set.id))
     );
-    if (!autoFocusEnabled) return;
+
+    // Only set activeExerciseKey if it's currently null
     if (!activeExerciseKey && firstIncompleteGroup) {
       setActiveExerciseKey(firstIncompleteGroup.key);
     }
-    if (
-      (!activeSetId || !loggedSetIds.has(activeSetId)) &&
-      firstIncompleteGroup?.sets[0]
-    ) {
-      setActiveSetId(firstIncompleteGroup.sets[0].id);
+
+    // Only set activeSetId if it's currently null OR if the current activeSetId
+    // is already logged (meaning we need to find the next one)
+    // IMPORTANT: Don't override if activeSetId was just set by logSet
+    if (activeSetId === null && firstIncompleteGroup) {
+      const firstUnloggedSet = firstIncompleteGroup.sets.find(
+        (s) => !loggedSetIds.has(s.id)
+      );
+      if (firstUnloggedSet) {
+        setActiveSetId(firstUnloggedSet.id);
+        activeSetIdRef.current = firstUnloggedSet.id;
+      }
     }
   }, [
     activeExerciseKey,
@@ -738,73 +778,143 @@ const WorkoutSessionScreen = () => {
     const { WidgetSyncModule } = NativeModules;
 
     const checkPendingLogSet = async () => {
-      if (!WidgetSyncModule) return;
+      if (!WidgetSyncModule) {
+        console.log("⚠️ [WorkoutSession] WidgetSyncModule not available");
+        return;
+      }
+
+      // Prevent concurrent processing
+      if (isProcessingLogSetRef.current) {
+        return;
+      }
 
       try {
         // Read from App Group shared UserDefaults
-        const pendingURL = await new Promise<string | null>((resolve) => {
-          WidgetSyncModule.readFromAppGroup("pendingLogSetURL", (value: string | null) => {
-            resolve(value);
-          });
+        const pendingSessionId = await new Promise<string | null>((resolve) => {
+          WidgetSyncModule.readFromAppGroup(
+            "pendingLogSetSessionId",
+            (value: string | null) => {
+              resolve(value);
+            }
+          );
         });
 
         const timestamp = await new Promise<number | null>((resolve) => {
-          WidgetSyncModule.readFromAppGroup("pendingLogSetTimestamp", (value: number | null) => {
-            resolve(value);
-          });
+          WidgetSyncModule.readFromAppGroup(
+            "pendingLogSetTimestamp",
+            (value: number | null) => {
+              resolve(value);
+            }
+          );
         });
 
-        if (pendingURL && timestamp) {
-          // Only process if it's recent (within last 5 seconds)
-          const now = Date.now() / 1000;
-          if (now - timestamp < 5) {
-            console.log("🔵 [WorkoutSession] Found pending log set action:", pendingURL);
-
-            // Parse the URL
-            const urlObj = new URL(pendingURL);
-            const urlSessionId = urlObj.searchParams.get("sessionId");
-
-            // Verify this is the current session
-            if (urlSessionId === sessionId && activeSetId) {
-              console.log("✅ Logging active set from Live Activity:", activeSetId);
-              logSet(activeSetId);
-
-              // Clear the pending action
-              WidgetSyncModule.writeToAppGroup("pendingLogSetURL", null);
-              WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
-            } else {
-              console.warn("⚠️ Session mismatch or no active set:", {
-                urlSessionId,
-                currentSessionId: sessionId,
-                activeSetId,
-              });
-            }
-          } else {
-            console.log("⚠️ Pending log set action is stale, ignoring");
-          }
+        // Only process if we have both values
+        if (!pendingSessionId || !timestamp) {
+          return;
         }
+
+        // Check if we already processed this exact timestamp
+        if (timestamp === lastProcessedTimestampRef.current) {
+          return;
+        }
+
+        console.log(
+          "🔍 [WorkoutSession] Found pending log set - sessionId:",
+          pendingSessionId,
+          "timestamp:",
+          timestamp
+        );
+
+        // Only process if it's recent (within last 10 seconds)
+        const now = Date.now() / 1000;
+        if (now - timestamp >= 10) {
+          console.log("⚠️ Pending log set action is stale, ignoring");
+          // Clear stale actions
+          WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
+          WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+          return;
+        }
+
+        // Verify this is the current session
+        if (pendingSessionId !== sessionId) {
+          console.warn("⚠️ Session mismatch:", {
+            pendingSessionId,
+            currentSessionId: sessionId,
+          });
+          return;
+        }
+
+        // Set processing lock and mark timestamp as processed BEFORE doing anything
+        isProcessingLogSetRef.current = true;
+        lastProcessedTimestampRef.current = timestamp;
+
+        // Clear the pending action IMMEDIATELY to prevent re-processing
+        WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
+        WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+
+        console.log(
+          "🔵 [WorkoutSession] Processing pending log set action for session:",
+          pendingSessionId
+        );
+
+        // Use the activeSetId from the ref - this is what the user sees as highlighted
+        const setToLog = activeSetIdRef.current;
+
+        if (setToLog) {
+          const currentSets = setsRef.current;
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+          const setData = currentSets.find((s) => s.id === setToLog);
+
+          // Verify this set hasn't already been logged
+          if (!currentLoggedSetIds.has(setToLog)) {
+            console.log(
+              "✅ Logging ACTIVE set from Live Activity (App Group):",
+              setToLog,
+              setData
+                ? `(Set ${setData.setIndex + 1}: ${setData.exerciseName})`
+                : ""
+            );
+            logSet(setToLog);
+          } else {
+            console.warn("⚠️ Active set already logged, skipping:", setToLog);
+          }
+        } else {
+          console.warn("⚠️ No active set to log from Live Activity");
+        }
+
+        // Release lock after a short delay to let state settle
+        setTimeout(() => {
+          isProcessingLogSetRef.current = false;
+        }, 500);
       } catch (error) {
         console.error("❌ Failed to check pending log set:", error);
+        isProcessingLogSetRef.current = false;
       }
     };
 
     // Check immediately when component mounts
     checkPendingLogSet();
 
+    // Poll for pending actions every 500ms while workout is active (faster response)
+    const pollInterval = setInterval(checkPendingLogSet, 500);
+
     // Listen for app state changes (when app comes to foreground)
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
-        console.log("🔵 [WorkoutSession] App became active, checking for pending actions");
+        console.log(
+          "🔵 [WorkoutSession] App became active, checking for pending actions"
+        );
         checkPendingLogSet();
       }
     });
 
     return () => {
+      clearInterval(pollInterval);
       subscription.remove();
     };
-  }, [sessionId, activeSetId]);
+  }, [sessionId]);
 
-  // Legacy: Listen for "Log Set" button from Live Activity (via deep link)
+  // Listen for "Log Set" button from Live Activity (via deep link)
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       const url = event.url;
@@ -816,7 +926,10 @@ const WorkoutSessionScreen = () => {
         const urlObj = new URL(url);
         const urlSessionId = urlObj.searchParams.get("sessionId");
 
-        console.log("🔵 [WorkoutSession] Log set from deep link, sessionId:", urlSessionId);
+        console.log(
+          "🔵 [WorkoutSession] Log set from deep link, sessionId:",
+          urlSessionId
+        );
 
         // Verify this is the current session
         if (urlSessionId !== sessionId) {
@@ -829,10 +942,33 @@ const WorkoutSessionScreen = () => {
           return;
         }
 
-        // Find the active set to log
-        if (activeSetId) {
-          console.log("✅ Logging active set from deep link:", activeSetId);
-          logSet(activeSetId);
+        // Use the activeSetId - this is what the user sees as highlighted
+        const setToLog = activeSetIdRef.current;
+
+        if (setToLog) {
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+
+          // Verify this set hasn't already been logged
+          if (!currentLoggedSetIds.has(setToLog)) {
+            console.log("✅ Logging ACTIVE set from deep link:", setToLog);
+
+            // Check if user has custom rest duration for this exercise
+            const currentSet = setsRef.current.find((s) => s.id === setToLog);
+            if (currentSet) {
+              const groupKey =
+                currentSet.templateExerciseId ?? currentSet.exerciseId;
+              const customRestDuration = sessionRestTimesRef.current[groupKey];
+
+              console.log("🔵 Custom rest duration:", customRestDuration);
+
+              // Call logSet with custom rest duration if it was adjusted
+              logSet(setToLog, customRestDuration);
+            } else {
+              logSet(setToLog);
+            }
+          } else {
+            console.warn("⚠️ Active set already logged, skipping:", setToLog);
+          }
         } else {
           console.warn("⚠️ No active set to log from deep link");
         }
@@ -853,7 +989,8 @@ const WorkoutSessionScreen = () => {
     return () => {
       subscription.remove();
     };
-  }, [sessionId, activeSetId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // Only re-register when sessionId changes
 
   // Legacy: Listen for "Log Set" button from Live Activity (via NotificationCenter - deprecated)
   // This is kept for backwards compatibility but shouldn't be triggered anymore
@@ -899,7 +1036,8 @@ const WorkoutSessionScreen = () => {
     currentSetIndex: number,
     lastReps?: number,
     lastWeight?: number,
-    restDuration?: number
+    restDuration?: number,
+    restEndsAtTimestamp?: number // Pass the actual restEndsAt timestamp from state
   ) => {
     if (!sessionId || !startTime) return;
 
@@ -908,6 +1046,25 @@ const WorkoutSessionScreen = () => {
 
     const currentSet = group.sets[currentSetIndex];
     if (!currentSet) return;
+
+    // Determine actual rest duration for widgets
+    // If restDuration is explicitly 0, pass 0 to clear the timer
+    // If undefined, use the group's rest seconds as fallback
+    const actualRestDuration =
+      restDuration !== undefined ? restDuration : group.restSeconds ?? 90;
+
+    // Calculate restEndsAt ISO string if we have a timestamp
+    const restEndsAtISO = restEndsAtTimestamp
+      ? new Date(restEndsAtTimestamp).toISOString()
+      : undefined;
+
+    console.log("🔵 [syncCurrentExerciseToWidget]", {
+      exercise: group.name,
+      currentSet: currentSetIndex + 1,
+      totalSets: group.sets.length,
+      restDuration: actualRestDuration,
+      restEndsAt: restEndsAtISO,
+    });
 
     // Sync to home screen widget
     void syncActiveSessionToWidget({
@@ -920,6 +1077,8 @@ const WorkoutSessionScreen = () => {
       targetReps: currentSet.targetReps,
       targetWeight: currentSet.targetWeight,
       startedAt: startTime,
+      restDuration: actualRestDuration,
+      restEndsAt: restEndsAtISO,
     });
 
     // Sync to Live Activity (Dynamic Island + Lock Screen)
@@ -934,16 +1093,45 @@ const WorkoutSessionScreen = () => {
       completedExercises: groupedSets.filter((g) =>
         g.sets.every((s) => loggedSetIds.has(s.id))
       ).length,
-      restDuration,
+      restDuration: actualRestDuration, // Always pass a defined value
+      restEndsAt: restEndsAtISO,
     });
   };
 
   const logSet = (setId: string, restSeconds?: number) => {
-    const currentSet = sets.find((s) => s.id === setId);
-    if (!currentSet) return;
+    console.log("🔵 [logSet] Called with setId:", setId);
 
-    const updatedLoggedSetIds = new Set(loggedSetIds);
+    // CRITICAL: Use refs for all reads to avoid stale closure issues
+    // This is especially important when called from the polling interval
+    const currentLoggedSetIds = loggedSetIdsRef.current;
+    const currentSets = setsRef.current;
+
+    console.log("🔵 [logSet] Current loggedSetIds from ref:", Array.from(currentLoggedSetIds));
+
+    const currentSet = currentSets.find((s) => s.id === setId);
+    if (!currentSet) {
+      console.warn("⚠️ [logSet] Set not found:", setId);
+      return;
+    }
+
+    // Check if this set is already logged using the ref (most up-to-date)
+    if (currentLoggedSetIds.has(setId)) {
+      console.warn("⚠️ [logSet] Set already logged, ignoring:", setId);
+      return;
+    }
+
+    // Create updated loggedSetIds from the ref (not stale state)
+    const updatedLoggedSetIds = new Set(currentLoggedSetIds);
     updatedLoggedSetIds.add(setId);
+
+    // IMMEDIATELY update the ref BEFORE any async operations
+    // This prevents race conditions with the pending log set handler
+    loggedSetIdsRef.current = updatedLoggedSetIds;
+
+    console.log(
+      "🔵 [logSet] Updated loggedSetIds:",
+      Array.from(updatedLoggedSetIds)
+    );
 
     const updated: WorkoutSet = {
       ...currentSet,
@@ -964,53 +1152,95 @@ const WorkoutSessionScreen = () => {
     // Priority: user-adjusted session rest times > passed restSeconds > template rest times
     const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
     const group = groupedSets.find((g) => g.key === groupKey);
+    // Use ref to get current session rest times to avoid stale closure
+    const currentSessionRestTimes = sessionRestTimesRef.current;
     const fallbackRest =
-      sessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
+      currentSessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
       restSeconds ??
       currentSet.targetRestSeconds ??
       restLookup[groupKey];
 
+    console.log(
+      "🔵 [logSet] Group:",
+      group?.name,
+      "Rest duration:",
+      fallbackRest
+    );
+
+    // Start rest timer and capture the end timestamp
+    let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
-      startRestTimer(fallbackRest ?? 90);
+      const restDuration = fallbackRest ?? 90;
+      calculatedRestEndsAt = Date.now() + restDuration * 1000;
+      startRestTimer(restDuration);
     } else {
       setRestRemaining(null);
       setRestEndsAt(null);
     }
+
     if (group) {
       const sorted = [...group.sets]
         .map((s) => (s.id === setId ? updated : s))
         .sort((a, b) => a.setIndex - b.setIndex);
       const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
+
       if (nextSet) {
         // Immediately update activeSetId to the next unlogged set
-        setActiveSetId(nextSet.id);
-        // Sync next set to widget with rest timer
         const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
+        console.log(
+          "🔵 [logSet] Moving to next set:",
+          nextSet.id,
+          "Index:",
+          nextSetIndex + 1,
+          "/",
+          sorted.length
+        );
+
+        // CRITICAL: Disable auto-focus to prevent the useEffect from overriding our state
+        setAutoFocusEnabled(false);
+
+        // IMMEDIATELY update the ref BEFORE React state update
+        activeSetIdRef.current = nextSet.id;
+        setActiveSetId(nextSet.id);
+
+        // Sync next set to widget with rest timer
         const restDuration = fallbackRest ?? 90;
         syncCurrentExerciseToWidget(
           groupKey,
           nextSetIndex,
           updated.actualReps,
           updated.actualWeight,
-          autoRestTimer ? restDuration : undefined
+          autoRestTimer ? restDuration : 0, // Pass 0 to explicitly clear timer when disabled
+          autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
         );
       } else {
         // All sets in this exercise are logged, move to next exercise
         const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
         if (allLogged) {
+          console.log(
+            "🔵 [logSet] All sets complete for exercise:",
+            group.name
+          );
+
           const currentIndex = groupedSets.findIndex(
             (g) => g.key === group.key
           );
           const nextGroup = groupedSets[currentIndex + 1];
           if (nextGroup) {
+            console.log("🔵 [logSet] Moving to next exercise:", nextGroup.name);
+
             setAutoFocusEnabled(true);
             setActiveExerciseKey(nextGroup.key);
             const firstUnloggedInNextGroup = nextGroup.sets.find(
               (s) => !updatedLoggedSetIds.has(s.id)
             );
-            setActiveSetId(
-              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null
-            );
+            const nextSetId =
+              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+
+            // IMMEDIATELY update the ref BEFORE React state update
+            activeSetIdRef.current = nextSetId;
+            setActiveSetId(nextSetId);
+
             // Sync next exercise to widget
             if (firstUnloggedInNextGroup) {
               const nextSetIndex = nextGroup.sets.findIndex(
@@ -1019,6 +1249,10 @@ const WorkoutSessionScreen = () => {
               syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
             }
           } else {
+            console.log("🔵 [logSet] All exercises complete!");
+
+            // IMMEDIATELY update the ref BEFORE React state update
+            activeSetIdRef.current = null;
             setActiveExerciseKey(null);
             setActiveSetId(null);
             // All exercises complete, keep showing last exercise with completed state
@@ -1027,7 +1261,8 @@ const WorkoutSessionScreen = () => {
               groupKey,
               lastSetIndex,
               updated.actualReps,
-              updated.actualWeight
+              updated.actualWeight,
+              0 // No rest timer after workout complete
             );
           }
         }
@@ -1036,11 +1271,15 @@ const WorkoutSessionScreen = () => {
   };
 
   const undoSet = (setId: string) => {
-    setLoggedSetIds((prev) => {
-      const next = new Set(prev);
-      next.delete(setId);
-      return next;
-    });
+    // Create updated loggedSetIds without the undone set
+    const updatedLoggedSetIds = new Set(loggedSetIds);
+    updatedLoggedSetIds.delete(setId);
+
+    // IMMEDIATELY update refs BEFORE any async operations
+    loggedSetIdsRef.current = updatedLoggedSetIds;
+    activeSetIdRef.current = setId;
+
+    setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId((prev) => (prev === setId ? null : prev));
     if (restEndsAt && lastLoggedSetId === setId) {
       setRestRemaining(null);
@@ -1048,6 +1287,25 @@ const WorkoutSessionScreen = () => {
     }
     setActiveSetId(setId);
     setAutoFocusEnabled(false);
+
+    // Sync Live Activity to reflect undo
+    // Find the undone set and update widget to show it as active again
+    const undoneSet = sets.find((s) => s.id === setId);
+    if (undoneSet) {
+      const groupKey = undoneSet.templateExerciseId ?? undoneSet.exerciseId;
+      const group = groupedSets.find((g) => g.key === groupKey);
+      if (group) {
+        const setIndex = group.sets.findIndex((s) => s.id === setId);
+        // Sync without rest timer since we're undoing
+        syncCurrentExerciseToWidget(
+          groupKey,
+          setIndex,
+          undefined,
+          undefined,
+          0
+        );
+      }
+    }
   };
 
   const handleSwapExercise = (
