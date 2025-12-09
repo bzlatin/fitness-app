@@ -1401,6 +1401,7 @@ To test notifications:
 **Files Created**:
 
 **Phase 1 (Widgets - Weekly Goal)**:
+
 - ✅ `/mobile/plugins/withWidgets.js` - Expo config plugin for WidgetKit
 - ✅ `/mobile/ios/Widgets/README.md` - Setup instructions
 - ✅ `/mobile/ios/Widgets/PushPullWidgets.swift` - Weekly Goal widget
@@ -1412,12 +1413,14 @@ To test notifications:
 - ✅ `/mobile/App.tsx` - Added widget deep link routes
 
 **Phase 2 (Quick Set Logger Widget)**:
+
 - ✅ `/mobile/ios/Widgets/QuickSetLoggerWidget.swift` - Quick Set Logger widget UI
 - ✅ `/mobile/WIDGET_INTEGRATION_GUIDE.md` - Integration guide
 - ✅ `/mobile/src/services/widgetSync.ts` - Extended with active session support
 - ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Integrated widget sync
 
 **Phase 3 (Live Activities)**:
+
 - ✅ `/mobile/ios/Widgets/WorkoutActivityAttributes.swift` - Live Activity data model
 - ✅ `/mobile/ios/Widgets/WorkoutLiveActivity.swift` - Dynamic Island + Lock Screen UI
 - ✅ `/mobile/ios/pushpull/LiveActivityModule.swift` - Native bridge for Live Activities
@@ -1441,6 +1444,7 @@ To test notifications:
 **Phase 2 Implementation Details**:
 
 **Quick Set Logger Widget:**
+
 - Displays current exercise name, set number (e.g., "Set 3/4"), and target reps/weight
 - Shows last set performance after logging (e.g., "Last set: 8 reps @ 185 lbs")
 - "Log Set" button deep links to app (`pushpull://workout/log-set`)
@@ -1449,12 +1453,14 @@ To test notifications:
 - Refreshes every 30 seconds during active workout, every 5 minutes otherwise
 
 **Data Sync Architecture:**
+
 - `syncActiveSessionToWidget()` helper function syncs session data to App Group UserDefaults
 - Called when: workout starts, set logged, exercise changed, workout completed
 - Widget reads from App Group UserDefaults via `QuickSetLoggerProvider`
 - Deep link opens app and navigates to active WorkoutSessionScreen
 
 **Integration Required:**
+
 - Developers must integrate `syncActiveSessionToWidget()` into `WorkoutSessionScreen.tsx`
 - See `/mobile/WIDGET_INTEGRATION_GUIDE.md` for detailed integration steps
 - Test thoroughly using the provided testing checklist
@@ -1681,7 +1687,6 @@ To test notifications:
 ### High Priority
 
 - [ ] Implement proper database migrations (migrate from initDb() approach)
-- [ ] Move exercise JSON to database (currently in-memory)
 - [ ] Add image upload to cloud storage (Cloudinary/S3) instead of local URIs
 - [ ] Add API rate limiting (express-rate-limit)
 - [ ] Add input validation (Zod schemas)

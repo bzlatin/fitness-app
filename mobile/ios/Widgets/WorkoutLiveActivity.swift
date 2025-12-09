@@ -136,125 +136,113 @@ struct WorkoutLiveActivity: Widget {
 struct LockScreenLiveActivityView: View {
     let context: ActivityViewContext<WorkoutActivityAttributes>
 
+    private var restActive: Bool {
+        context.state.restEndTime.map { $0 > Date() } ?? false
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            // Header
-            HStack(spacing: 12) {
-                Image(systemName: "dumbbell.fill")
-                    .foregroundColor(.green)
-
-                Text(context.attributes.templateName)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-
-            // Current Exercise + Set/Rest Info
-            let restActive = context.state.restEndTime.map { $0 > Date() } ?? false
-
-            HStack(alignment: .center, spacing: 12) {
-                // Exercise name (always visible)
-                VStack(alignment: .leading, spacing: 4) {
+            // Row 1: Exercise name + Resting/Set info
+            HStack(alignment: .center) {
+                // Left: Exercise name (takes available space)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(context.state.exerciseName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Text("\(context.state.currentSet)/\(context.state.totalSets) sets")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 12)
 
-                // Right side - Rest timer (if active) or Set number
+                // Right: Timer or status
                 if restActive, let restEndTime = context.state.restEndTime {
-                    // Rest timer is active - show with green highlight
-                    HStack(spacing: 8) {
-                        Image(systemName: "timer")
-                            .font(.caption)
+                    HStack(spacing: 6) {
+                        Text("Resting")
+                            .font(.caption2)
                             .foregroundColor(.green)
 
                         TimerText(endTime: restEndTime)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .monospacedDigit()
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color.green.opacity(0.2))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.green, lineWidth: 2)
-                    )
+                    .cornerRadius(10)
                 } else {
-                    // No active rest timer - show current set with green highlight
-                    HStack(spacing: 6) {
-                        Image(systemName: "dumbbell.fill")
-                            .font(.caption)
-                            .foregroundColor(.green)
+                    // Show target reps
+                    if let targetReps = context.state.targetReps {
+                        VStack(alignment: .trailing, spacing: 0) {
+                            Text("\(targetReps) reps")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
 
-                        Text("Set \(context.state.currentSet)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-
-                        Text("of \(context.state.totalSets)")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            if let weight = context.state.targetWeight, weight > 0 {
+                                Text(formatWeight(weight))
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                        }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.green.opacity(0.2))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.green, lineWidth: 2)
-                    )
                 }
             }
 
-            // Last set performance (hide during active rest timer)
-            if !restActive {
+            // Row 2: Progress + Last set
+            HStack {
+                Text("\(context.state.completedExercises)/\(context.state.totalExercises) exercises")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
                 if let lastReps = context.state.lastReps,
                    let lastWeight = context.state.lastWeight {
-                    HStack {
-                        Text("Last set:")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-
-                        Text("\(lastReps) reps @ \(formatWeight(lastWeight))")
-                            .font(.caption)
-                            .foregroundColor(.green)
-
-                        Spacer()
-                    }
+                    Text("Last: \(lastReps) × \(formatWeight(lastWeight))")
+                        .font(.caption2)
+                        .foregroundColor(.green)
                 }
             }
 
-            // Progress bar
-            ProgressView(value: Double(context.state.completedExercises), total: Double(context.state.totalExercises))
+            // Row 3: Progress bar
+            ProgressView(value: Double(context.state.completedExercises), total: Double(max(context.state.totalExercises, 1)))
                 .tint(.green)
 
-            // Log Set Button (show when rest timer expired or not resting)
+            // Row 4: Log Set button (only when not resting)
             if !restActive {
-                Link(destination: URL(string: "push-pull://workout/log-set?sessionId=\(context.state.sessionId)")!) {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16))
-
-                        Text("Log Set")
-                            .font(.system(.subheadline, design: .rounded))
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.green)
-                    .cornerRadius(10)
-                }
+                logSetButton
             }
         }
         .padding(16)
         .activityBackgroundTint(Color(red: 5/255, green: 8/255, blue: 22/255))
         .activitySystemActionForegroundColor(.white)
+    }
+
+    private var logSetButton: some View {
+        // Use deep link - opens the app to log the set
+        Link(destination: URL(string: "push-pull://workout/log-set?sessionId=\(context.state.sessionId)")!) {
+            logSetButtonContent
+        }
+    }
+
+    private var logSetButtonContent: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 16))
+
+            Text("Log Set")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 44) // Ensure minimum touch target
+        .background(Color.green)
+        .cornerRadius(10)
+        .contentShape(Rectangle()) // Make entire area tappable
     }
 
     private func formatWeight(_ weight: Double) -> String {
@@ -281,13 +269,10 @@ struct TimerText: View {
     let endTime: Date
 
     var body: some View {
-        // Use SwiftUI's native timer style - this works in Live Activities
-        // It automatically counts down to the target date
-        if endTime > Date() {
-            Text(endTime, style: .timer)
-        } else {
-            Text("0:00")
-        }
+        // Use timerInterval to show countdown that stops at 0
+        // This prevents the timer from counting UP after it expires
+        Text(timerInterval: Date()...endTime, countsDown: true, showsHours: false)
+            .monospacedDigit()
     }
 }
 
@@ -304,19 +289,11 @@ struct RestTimerView: View {
                 .font(.caption2)
                 .foregroundColor(.orange)
 
-            if endTime > Date() {
-                Text(endTime, style: .timer)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
-                    .monospacedDigit()
-            } else {
-                Text("0:00")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
-                    .monospacedDigit()
-            }
+            Text(timerInterval: Date()...endTime, countsDown: true, showsHours: false)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.orange)
+                .monospacedDigit()
         }
     }
 }
