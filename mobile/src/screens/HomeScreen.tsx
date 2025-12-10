@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useActiveSession } from "../hooks/useActiveSession";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -25,6 +26,7 @@ import { WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
+import { deleteSession } from "../api/sessions";
 import { useFatigue } from "../hooks/useFatigue";
 import {
   TRAINING_SPLIT_LABELS,
@@ -47,6 +49,9 @@ const HomeScreen = () => {
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
 
+  // Check for active (uncompleted) workout session
+  const { data: activeSession } = useActiveSession();
+
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -54,6 +59,10 @@ const HomeScreen = () => {
     null
   );
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [dismissedSession, setDismissedSession] = useState<{
+    id: string;
+    dismissedAt: number;
+  } | null>(null);
 
   // Subscription status for trial/grace/expired handling
   const subscriptionStatusError = subscriptionAccess.isError;
@@ -78,10 +87,80 @@ const HomeScreen = () => {
     return "Ready to train";
   }, [fatigue]);
 
+  const queryClient = useQueryClient();
+
   const startWorkout = (template: WorkoutTemplate | null) => {
     if (!template) return;
     navigation.navigate("WorkoutSession", { templateId: template.id });
   };
+
+  const cancelActiveWorkout = useMutation({
+    mutationFn: async (sessionId: string) => {
+      await deleteSession(sessionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to cancel workout");
+      setDismissedSession(null);
+    },
+  });
+
+  const handleCancelWorkout = (sessionId: string) => {
+    Alert.alert(
+      "Cancel Workout?",
+      "This will delete your unfinished workout. This cannot be undone.",
+      [
+        { text: "Keep Workout", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDismissedSession({
+              id: sessionId,
+              dismissedAt: Date.now(),
+            });
+            // Optimistically drop the banner so it doesn't flash back
+            queryClient.setQueryData(["activeSession"], null);
+            cancelActiveWorkout.mutate(sessionId);
+          },
+        },
+      ]
+    );
+  };
+
+  // If a different session comes in, clear any dismissal guard
+  useEffect(() => {
+    if (!dismissedSession || !activeSession?.startedAt) return;
+    const startedAtMs = new Date(activeSession.startedAt).getTime();
+    if (Number.isNaN(startedAtMs)) return;
+
+    // Only re-show the banner if a newer session appears after the dismissal
+    if (
+      activeSession.id !== dismissedSession.id &&
+      startedAtMs > dismissedSession.dismissedAt
+    ) {
+      setDismissedSession(null);
+    }
+  }, [activeSession, dismissedSession]);
+
+  const shouldShowResumeBanner = useMemo(() => {
+    if (!activeSession) return false;
+    if (!dismissedSession) return true;
+
+    const startedAtMs = activeSession.startedAt
+      ? new Date(activeSession.startedAt).getTime()
+      : NaN;
+
+    if (activeSession.id === dismissedSession.id) return false;
+    if (Number.isNaN(startedAtMs)) return true;
+
+    // Hide any sessions that started before or at the time we dismissed the banner
+    return startedAtMs > dismissedSession.dismissedAt;
+  }, [activeSession, dismissedSession]);
+
+  const resumeSession = shouldShowResumeBanner ? activeSession : null;
 
   return (
     <ScreenContainer scroll>
@@ -191,6 +270,93 @@ const HomeScreen = () => {
             Renew your plan to unlock AI workouts, analytics, and progression.
           </Text>
         </Pressable>
+      ) : null}
+
+      {/* Resume Workout Banner - Show for any unfinished workout */}
+      {resumeSession ? (
+        <View
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: "rgba(34,197,94,0.15)",
+            borderColor: colors.primary,
+            borderWidth: 1,
+            borderRadius: 12,
+            overflow: "hidden",
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Pressable
+            onPress={() =>
+              navigation.navigate("WorkoutSession", {
+                sessionId: resumeSession.id,
+                templateId: resumeSession.templateId || "",
+              })
+            }
+            style={{
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              flex: 1,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: colors.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name='play' size={20} color='#0B1220' />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                }}
+              >
+                Resume Workout
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.regular,
+                  marginTop: 2,
+                  fontSize: 13,
+                }}
+              >
+                {resumeSession.templateName || "Workout in progress"}
+              </Text>
+            </View>
+            <Ionicons name='chevron-forward' size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              cancelActiveWorkout.isPending
+                ? undefined
+                : handleCancelWorkout(resumeSession.id)
+            }
+            style={({ pressed }) => ({
+              paddingHorizontal: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              borderLeftWidth: 1,
+              borderLeftColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+              opacity: cancelActiveWorkout.isPending ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name='close' size={18} color={colors.textPrimary} />
+          </Pressable>
+        </View>
       ) : null}
 
       <View style={{ gap: 12 }}>

@@ -402,6 +402,17 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS workout_sets_session_idx ON workout_sets(session_id)
   `);
 
+  // Add cardio-specific columns to workout_sets table
+  await query(`
+    ALTER TABLE workout_sets
+      ADD COLUMN IF NOT EXISTS target_distance NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_distance NUMERIC,
+      ADD COLUMN IF NOT EXISTS target_incline NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_incline NUMERIC,
+      ADD COLUMN IF NOT EXISTS target_duration_minutes NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_duration_minutes NUMERIC
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS active_workout_statuses (
       session_id TEXT PRIMARY KEY,

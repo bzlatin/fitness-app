@@ -17,6 +17,11 @@ export const fetchSession = async (id: string) => {
   return res.data;
 };
 
+export const fetchActiveSession = async () => {
+  const res = await apiClient.get<{ session: WorkoutSession | null }>("/sessions/active/current");
+  return res.data.session;
+};
+
 export const completeSession = async (id: string, sets: WorkoutSession["sets"]) => {
   const res = await apiClient.patch<WorkoutSession>(`/sessions/${id}`, {
     sets,

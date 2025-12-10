@@ -20,7 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
@@ -218,6 +218,22 @@ const formatExerciseName = (id: string) =>
     .replace(/[_-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
+
+// Helper to identify cardio exercises
+const isCardioExercise = (exerciseId: string, exerciseName?: string): boolean => {
+  const name = (exerciseName || exerciseId).toLowerCase();
+  const cardioKeywords = [
+    'treadmill', 'running', 'jogging', 'walking',
+    'bike', 'cycling', 'bicycle', 'biking',
+    'rowing', 'rower',
+    'elliptical',
+    'stair', 'stepper',
+    'swimming', 'swim',
+    'jumping rope', 'jump rope',
+    'air bike'
+  ];
+  return cardioKeywords.some(keyword => name.includes(keyword));
+};
 
 const resolveExerciseImageUri = (uri?: string) => {
   if (!uri) return undefined;
@@ -569,6 +585,8 @@ const WorkoutSessionScreen = () => {
       initialVisibility: route.params.initialVisibility,
     });
 
+  const queryClient = useQueryClient();
+
   const finishMutation = useMutation({
     mutationFn: () => {
       // Pause timer before finishing
@@ -589,6 +607,13 @@ const WorkoutSessionScreen = () => {
         totalVolume: summary.totalVolume ?? 0,
         durationMinutes: Math.floor(elapsedSeconds / 60),
       });
+
+      // Invalidate fatigue query to refresh recovery data
+      queryClient.invalidateQueries({ queryKey: ["fatigue"] });
+      queryClient.invalidateQueries({ queryKey: ["training-recommendations"] });
+
+      // Invalidate active session query to remove "Resume Workout" banner
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
 
       navigation.navigate("PostWorkoutShare", {
         sessionId: session.id,
@@ -1405,6 +1430,8 @@ const WorkoutSessionScreen = () => {
           onPress: () => {
             pauseTimer();
             endActiveStatus();
+            // Invalidate active session query so the "Resume Workout" banner appears
+            queryClient.invalidateQueries({ queryKey: ["activeSession"] });
             navigation.goBack();
           },
         },
@@ -1959,15 +1986,36 @@ const SetInputRow = ({
   onRemove,
   canRemove,
 }: SetInputRowProps) => {
-  const targetLine = [
-    set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
-    set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
 
-  const updateField = (field: keyof WorkoutSet, value: number | undefined) => {
-    onChange({ ...set, [field]: value });
+  const targetLine = isCardio
+    ? [
+        set.targetDistance !== undefined ? `${set.targetDistance} mi` : undefined,
+        set.targetIncline !== undefined ? `${set.targetIncline}% incline` : undefined,
+        set.targetDurationMinutes !== undefined ? `${set.targetDurationMinutes} min` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : [
+        set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
+        set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+  const updateField = (field: keyof WorkoutSet, text: string) => {
+    // Allow empty string, decimals in progress (e.g., "135."), and valid numbers
+    if (text === "") {
+      onChange({ ...set, [field]: undefined });
+      return;
+    }
+
+    // Allow partial decimal input (e.g., "135." or "135.5")
+    // Only parse to number if it's a complete valid number
+    const numValue = parseFloat(text);
+    if (!isNaN(numValue)) {
+      onChange({ ...set, [field]: numValue });
+    }
   };
 
   return (
@@ -2036,11 +2084,13 @@ const SetInputRow = ({
               gap: 6,
             })}
           >
-            <Ionicons
-              name={logged ? "checkmark-circle" : "radio-button-off"}
-              color={logged ? "#0B1220" : colors.textSecondary}
-              size={18}
-            />
+            {!logged ? (
+              <Ionicons
+                name='radio-button-off'
+                color={colors.textSecondary}
+                size={18}
+              />
+            ) : null}
             <Text
               style={{
                 color: logged ? "#0B1220" : colors.textPrimary,
@@ -2070,52 +2120,120 @@ const SetInputRow = ({
           ) : null}
         </View>
       </View>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Weight
-          </Text>
-          <TextInput
-            style={{
-              color: colors.textPrimary,
-              backgroundColor: colors.surface,
-              borderRadius: 8,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-            keyboardType='numeric'
-            placeholder='--'
-            placeholderTextColor={colors.textSecondary}
-            value={set.actualWeight?.toString() ?? ""}
-            onChangeText={(text) =>
-              updateField("actualWeight", text ? Number(text) : undefined)
-            }
-          />
+      {isCardio ? (
+        // Cardio inputs: Distance, Incline, Duration
+        <>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Distance (mi)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualDistance?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualDistance", text)}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Incline (%)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualIncline?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualIncline", text)}
+              />
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Duration (min)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualDurationMinutes?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualDurationMinutes", text)}
+              />
+            </View>
+            <View style={{ flex: 1 }} />
+          </View>
+        </>
+      ) : (
+        // Strength training inputs: Weight & Reps
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Weight
+            </Text>
+            <TextInput
+              style={{
+                color: colors.textPrimary,
+                backgroundColor: colors.surface,
+                borderRadius: 8,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+              keyboardType='decimal-pad'
+              placeholder='--'
+              placeholderTextColor={colors.textSecondary}
+              value={set.actualWeight?.toString() ?? ""}
+              onChangeText={(text) => updateField("actualWeight", text)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Reps
+            </Text>
+            <TextInput
+              style={{
+                color: colors.textPrimary,
+                backgroundColor: colors.surface,
+                borderRadius: 8,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+              keyboardType='number-pad'
+              placeholder='--'
+              placeholderTextColor={colors.textSecondary}
+              value={set.actualReps?.toString() ?? ""}
+              onChangeText={(text) => updateField("actualReps", text)}
+            />
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Reps
-          </Text>
-          <TextInput
-            style={{
-              color: colors.textPrimary,
-              backgroundColor: colors.surface,
-              borderRadius: 8,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-            keyboardType='numeric'
-            placeholder='--'
-            placeholderTextColor={colors.textSecondary}
-            value={set.actualReps?.toString() ?? ""}
-            onChangeText={(text) =>
-              updateField("actualReps", text ? Number(text) : undefined)
-            }
-          />
-        </View>
-      </View>
+      )}
       <View
         style={{
           flexDirection: "row",
@@ -2181,6 +2299,9 @@ const ExerciseCard = ({
   onDeleteExercise,
   onImagePress,
 }: ExerciseCardProps) => {
+  const loggedSetsCount = group.sets.filter((s) => loggedSetIds.has(s.id)).length;
+  const allSetsLogged = loggedSetsCount === group.sets.length;
+
   const summaryLine = `${group.sets.length} sets · ${
     group.sets[0]?.targetReps
       ? `${group.sets[0].targetReps} reps`
@@ -2192,8 +2313,8 @@ const ExerciseCard = ({
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: isDragging ? colors.primary : colors.border,
-        backgroundColor: colors.surface,
+        borderColor: isDragging ? colors.primary : allSetsLogged && !expanded ? colors.primary : colors.border,
+        backgroundColor: allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
         marginBottom: 12,
         opacity: isDragging ? 0.7 : 1,
       }}
@@ -2238,7 +2359,9 @@ const ExerciseCard = ({
               {group.name}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              {summaryLine}
+              {allSetsLogged && !expanded
+                ? `Complete · ${loggedSetsCount}/${group.sets.length} sets logged`
+                : summaryLine}
             </Text>
           </View>
           <Ionicons

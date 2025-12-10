@@ -53,6 +53,13 @@ type SetRow = {
   actual_reps: number | null;
   actual_weight: string | null;
   rpe: string | null;
+  // Cardio-specific fields
+  target_distance: string | null;
+  actual_distance: string | null;
+  target_incline: string | null;
+  actual_incline: string | null;
+  target_duration_minutes: string | null;
+  actual_duration_minutes: string | null;
 };
 
 const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet => {
@@ -71,6 +78,13 @@ const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet =>
     rpe: row.rpe === null ? undefined : Number(row.rpe),
     exerciseName,
     exerciseImageUrl: exerciseMeta?.gifUrl,
+    // Cardio-specific fields
+    targetDistance: row.target_distance === null ? undefined : Number(row.target_distance),
+    actualDistance: row.actual_distance === null ? undefined : Number(row.actual_distance),
+    targetIncline: row.target_incline === null ? undefined : Number(row.target_incline),
+    actualIncline: row.actual_incline === null ? undefined : Number(row.actual_incline),
+    targetDurationMinutes: row.target_duration_minutes === null ? undefined : Number(row.target_duration_minutes),
+    actualDurationMinutes: row.actual_duration_minutes === null ? undefined : Number(row.actual_duration_minutes),
   };
 };
 
@@ -450,6 +464,57 @@ router.get("/history/range", async (req, res) => {
   } catch (err) {
     console.error("Failed to fetch history", err);
     return res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
+// Get active (uncompleted) session for current user
+router.get("/active/current", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Find most recent uncompleted session
+    // Sessions are only "finished" when user completes or explicitly deletes them
+    const sessionResult = await query<SessionRow>(
+      `SELECT * FROM workout_sessions
+       WHERE user_id = $1 AND finished_at IS NULL
+       ORDER BY started_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      return res.json({ session: null });
+    }
+
+    const sessionRow = sessionResult.rows[0];
+
+    // Fetch sets for this session
+    const setsResult = await query<SetRow>(
+      `SELECT * FROM workout_sets WHERE session_id = $1 ORDER BY set_index ASC`,
+      [sessionRow.id]
+    );
+
+    // Build meta map for exercise names and images
+    const metaMap = await buildMetaMapFromSets(setsResult.rows);
+
+    // Get template name if exists
+    let templateName: string | undefined;
+    if (sessionRow.template_id) {
+      const templateResult = await query<{ name: string }>(
+        `SELECT name FROM workout_templates WHERE id = $1`,
+        [sessionRow.template_id]
+      );
+      templateName = templateResult.rows[0]?.name;
+    }
+
+    const session = mapSession(sessionRow, setsResult.rows, { templateName }, metaMap);
+    return res.json({ session });
+  } catch (err) {
+    console.error("Failed to fetch active session", err);
+    return res.status(500).json({ error: "Failed to fetch active session" });
   }
 });
 
