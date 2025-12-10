@@ -36,7 +36,7 @@ export interface WorkoutActivityState {
 
   // Rest timer
   restDuration?: number; // seconds
-  restEndsAt?: string; // ISO timestamp when rest timer ends
+  restEndsAt?: string | null; // ISO timestamp when rest timer ends (null clears timer)
 }
 
 export interface WorkoutSummary {

@@ -790,6 +790,7 @@ const WorkoutSessionScreen = () => {
         // Clear Live Activity rest timer so "Log Set" button appears
         void updateWorkoutLiveActivity({
           restDuration: 0, // Pass 0 to explicitly clear timer
+          restEndsAt: null,
         });
       }
     };
@@ -1010,9 +1011,12 @@ const WorkoutSessionScreen = () => {
       restDuration !== undefined ? restDuration : group.restSeconds ?? 90;
 
     // Calculate restEndsAt ISO string if we have a timestamp
-    const restEndsAtISO = restEndsAtTimestamp
-      ? new Date(restEndsAtTimestamp).toISOString()
-      : undefined;
+    const restEndsAtISO =
+      restEndsAtTimestamp && restEndsAtTimestamp > 0
+        ? new Date(restEndsAtTimestamp).toISOString()
+        : actualRestDuration === 0
+        ? null
+        : undefined;
 
     // Sync to home screen widget
     void syncActiveSessionToWidget({
