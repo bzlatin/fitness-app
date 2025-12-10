@@ -1475,32 +1475,7 @@ To test notifications:
 6. **Test Active Session Sync**: Verify Quick Set Logger updates during workout
 7. **Phase 3**: Explore ActivityKit for Dynamic Island (iOS 16.1+ only)
 
-#### 4.4.6 Recovery-Aware Coach Cards (Post-Session)
-
-**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
-
-**Goal**: Capture quick RPE/soreness signals after sessions and auto-tune upcoming weekly goals and recommendations.
-
-**Experience**:
-
-- Post-session card: 10-second flow to log RPE, soreness hotspots, and energy
-- Auto-adjust next-week goal suggestions and “what to train” tips based on fatigue deload logic
-- Inline micro-coaching: “Take tomorrow as recovery” or “Green light for push”
-- Surface on Home as a dismissible card if skipped post-workout
-
-**Implementation**:
-
-- Extend fatigue service to ingest RPE/soreness and adjust risk scoring
-- Add post-session hook to prompt at workout end; cache offline until synced
-- Store structured recovery signals per session; decay over 72 hours
-
-**Files to Create/Modify**:
-
-- `/server/src/services/fatigue.ts` - Accept RPE/soreness signals and adjust recommendations
-- `/server/src/routes/analytics.ts` - Endpoint to submit recovery signals
-- `/mobile/src/components/RecoveryCoachCard.tsx` - Post-session prompt + Home resurfacing
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Trigger card on session completion
-- `/mobile/src/screens/HomeScreen.tsx` - Show pending recovery prompt tile
+#### 4.4.6 Skip this - remove from roadmap
 
 #### 4.4.7 Session Quality Recap
 
