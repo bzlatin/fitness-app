@@ -732,7 +732,8 @@ router.post("/:id/undo-auto-end", async (req, res) => {
         .json({ error: "Session was not auto-ended and cannot be resumed automatically" });
     }
 
-    const resumeStart = sessionRow.auto_ended_at ?? sessionRow.finished_at ?? sessionRow.started_at;
+    // When resuming, start a fresh timer window so we don't immediately auto-end again
+    const resumeStart = new Date().toISOString();
 
     await withTransaction(async (client) => {
       await client.query(

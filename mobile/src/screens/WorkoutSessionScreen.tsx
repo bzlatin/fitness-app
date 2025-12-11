@@ -379,6 +379,8 @@ const WorkoutSessionScreen = () => {
     return lookup;
   }, [template]);
 
+  const queryClient = useQueryClient();
+
   const initializeTimer = (startedAt: string, autoStart = true) => {
     const base = Math.max(
       0,
@@ -425,6 +427,7 @@ const WorkoutSessionScreen = () => {
       setDefaultsApplied(false);
       setSets(data.sets);
       initializeTimer(data.startedAt);
+      queryClient.setQueryData(["activeSession"], { session: data, autoEndedSession: null });
     },
   });
 
@@ -435,6 +438,7 @@ const WorkoutSessionScreen = () => {
       setSessionId(session.id);
       setSets(session.sets);
       initializeTimer(session.startedAt);
+      queryClient.setQueryData(["activeSession"], { session, autoEndedSession: null });
     },
     onError: () => Alert.alert("Could not start session", "Please try again."),
   });
@@ -584,8 +588,6 @@ const WorkoutSessionScreen = () => {
       templateName,
       initialVisibility: route.params.initialVisibility,
     });
-
-  const queryClient = useQueryClient();
 
   const finishMutation = useMutation({
     mutationFn: () => {
