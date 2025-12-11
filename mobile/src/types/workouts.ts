@@ -65,6 +65,8 @@ export interface WorkoutSession {
   templateName?: string;
   startedAt: string;
   finishedAt?: string;
+  endedReason?: string;
+  autoEndedAt?: string;
   sets: WorkoutSet[];
 }
 
@@ -100,6 +102,11 @@ export interface WorkoutHistoryStats {
 export interface WorkoutHistoryResponse {
   days: WorkoutHistoryDay[];
   stats: WorkoutHistoryStats;
+}
+
+export interface ActiveSessionResponse {
+  session: WorkoutSession | null;
+  autoEndedSession?: WorkoutSession | null;
 }
 
 export interface Exercise {

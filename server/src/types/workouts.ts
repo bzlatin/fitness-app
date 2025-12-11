@@ -92,6 +92,8 @@ export interface WorkoutSession {
   templateName?: string;
   startedAt: string;
   finishedAt?: string;
+  endedReason?: string;
+  autoEndedAt?: string;
   sets: WorkoutSet[];
 }
 

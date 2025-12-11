@@ -3,6 +3,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  ScrollView,
   Share,
   Text,
   TextInput,
@@ -179,6 +180,9 @@ const HistoryScreen = () => {
   );
 
   const stats: WorkoutHistoryStats | undefined = data?.stats;
+  const sessionsForSelectedDay = selectedDay
+    ? dayMap.get(formatDateKey(selectedDay))?.sessions ?? []
+    : [];
 
   // Reset month cursor to current month when opening
   const handleToggleMonth = () => {
@@ -1258,47 +1262,48 @@ const HistoryScreen = () => {
                       {formatDateLong(selectedDay)}
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      {dayMap.get(formatDateKey(selectedDay))?.sessions.length ||
-                        0}{" "}
-                      workout(s)
+                      {sessionsForSelectedDay.length} workout(s)
                     </Text>
-                    <View style={{ gap: 10 }}>
-                      {dayMap
-                        .get(formatDateKey(selectedDay))
-                        ?.sessions.map((session) => (
-                          <Pressable
-                            key={session.id}
-                            onPress={() => {
-                              setSelectedDay(null);
-                              handleSessionClick(session);
+                    <ScrollView
+                      style={{ maxHeight: 360 }}
+                      contentContainerStyle={{ gap: 10, paddingVertical: 2 }}
+                      showsVerticalScrollIndicator
+                      nestedScrollEnabled
+                    >
+                      {sessionsForSelectedDay.map((session) => (
+                        <Pressable
+                          key={session.id}
+                          onPress={() => {
+                            setSelectedDay(null);
+                            handleSessionClick(session);
+                          }}
+                          style={({ pressed }) => ({
+                            backgroundColor: pressed
+                              ? colors.surfaceMuted
+                              : colors.surface,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            padding: 12,
+                            gap: 8,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.semibold,
                             }}
-                            style={({ pressed }) => ({
-                              backgroundColor: pressed
-                                ? colors.surfaceMuted
-                                : colors.surface,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              padding: 12,
-                              gap: 8,
-                            })}
                           >
-                            <Text
-                              style={{
-                                color: colors.textPrimary,
-                                fontFamily: fontFamilies.semibold,
-                              }}
-                            >
-                              {session.templateName || "Logged workout"}
-                            </Text>
-                            <Text style={{ color: colors.textSecondary }}>
-                              {formatTime(new Date(session.startedAt))}{" "}
-                              · {session.exercises.length} exercises ·{" "}
-                              {Math.round(session.totalVolumeLbs)} lbs
-                            </Text>
-                          </Pressable>
-                        ))}
-                    </View>
+                            {session.templateName || "Logged workout"}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary }}>
+                            {formatTime(new Date(session.startedAt))} ·{" "}
+                            {session.exercises.length} exercises ·{" "}
+                            {Math.round(session.totalVolumeLbs)} lbs
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
                     <Pressable
                       onPress={() => setSelectedDay(null)}
                       style={({ pressed }) => ({
@@ -1333,21 +1338,45 @@ const HistoryScreen = () => {
               justifyContent: "center",
               padding: 16,
             }}
+      >
+        <TouchableWithoutFeedback>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 18,
+              padding: 18,
+              gap: 14,
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxHeight: "80%",
+              position: "relative",
+            }}
           >
-            <TouchableWithoutFeedback>
-              <View
-                style={{
-                  backgroundColor: colors.surface,
-                  borderRadius: 18,
-                  padding: 18,
-                  gap: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  maxHeight: "80%",
-                }}
-              >
-                {selectedSession && (
-                  <>
+            {selectedSession && (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => setSelectedSession(null)}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      padding: 6,
+                      borderRadius: 10,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    })}
+                  >
+                    <Ionicons name='close' size={18} color={colors.textPrimary} />
+                  </Pressable>
+                  <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       style={{ ...typography.title, color: colors.textPrimary }}
                     >
@@ -1356,11 +1385,13 @@ const HistoryScreen = () => {
                     <Text style={{ color: colors.textSecondary }}>
                       {formatDateTimeShort(new Date(selectedSession.startedAt))}
                     </Text>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      <MetricPill
-                        label='Volume'
-                        value={`${Math.round(
-                          selectedSession.totalVolumeLbs
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <MetricPill
+                    label='Volume'
+                    value={`${Math.round(
+                      selectedSession.totalVolumeLbs
                         )} lbs`}
                       />
                       <MetricPill
@@ -1547,20 +1578,6 @@ const HistoryScreen = () => {
                         </Text>
                       </Pressable>
                     </View>
-
-                    <Pressable
-                      onPress={() => setSelectedSession(null)}
-                      style={({ pressed }) => ({
-                        paddingVertical: 12,
-                        alignItems: "center",
-                        borderRadius: 12,
-                        backgroundColor: "transparent",
-                        opacity: pressed ? 0.7 : 1,
-                        marginTop: 4,
-                      })}
-                    >
-                      <Text style={{ color: colors.textSecondary }}>Close</Text>
-                    </Pressable>
                   </>
                 )}
               </View>

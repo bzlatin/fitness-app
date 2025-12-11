@@ -22,11 +22,11 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
-import { WorkoutTemplate } from "../types/workouts";
+import { WorkoutSession, WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
-import { deleteSession } from "../api/sessions";
+import { deleteSession, undoAutoEndSession } from "../api/sessions";
 import { useFatigue } from "../hooks/useFatigue";
 import {
   TRAINING_SPLIT_LABELS,
@@ -50,7 +50,9 @@ const HomeScreen = () => {
   const isPro = hasProAccess;
 
   // Check for active (uncompleted) workout session
-  const { data: activeSession } = useActiveSession();
+  const { data: activeSessionData } = useActiveSession();
+  const activeSession = activeSessionData?.session ?? null;
+  const serverAutoEndedSession = activeSessionData?.autoEndedSession ?? null;
 
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
@@ -60,6 +62,11 @@ const HomeScreen = () => {
   );
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [dismissedSession, setDismissedSession] = useState<{
+    id: string;
+    dismissedAt: number;
+  } | null>(null);
+  const [autoEndedSession, setAutoEndedSession] = useState<WorkoutSession | null>(null);
+  const [dismissedAutoEndedSession, setDismissedAutoEndedSession] = useState<{
     id: string;
     dismissedAt: number;
   } | null>(null);
@@ -107,6 +114,22 @@ const HomeScreen = () => {
     },
   });
 
+  const undoAutoEnd = useMutation({
+    mutationFn: async (sessionId: string) => undoAutoEndSession(sessionId),
+    onSuccess: (session) => {
+      setAutoEndedSession(null);
+      setDismissedAutoEndedSession(null);
+      queryClient.setQueryData(["activeSession"], { session, autoEndedSession: null });
+      navigation.navigate("WorkoutSession", {
+        sessionId: session.id,
+        templateId: session.templateId || "",
+      });
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to resume workout");
+    },
+  });
+
   const handleCancelWorkout = (sessionId: string) => {
     Alert.alert(
       "Cancel Workout?",
@@ -122,7 +145,10 @@ const HomeScreen = () => {
               dismissedAt: Date.now(),
             });
             // Optimistically drop the banner so it doesn't flash back
-            queryClient.setQueryData(["activeSession"], null);
+            queryClient.setQueryData(["activeSession"], {
+              session: null,
+              autoEndedSession: null,
+            });
             cancelActiveWorkout.mutate(sessionId);
           },
         },
@@ -160,7 +186,49 @@ const HomeScreen = () => {
     return startedAtMs > dismissedSession.dismissedAt;
   }, [activeSession, dismissedSession]);
 
+  useEffect(() => {
+    if (!serverAutoEndedSession) {
+      setAutoEndedSession(null);
+      return;
+    }
+
+    if (
+      dismissedAutoEndedSession &&
+      dismissedAutoEndedSession.id === serverAutoEndedSession.id
+    ) {
+      return;
+    }
+
+    setAutoEndedSession(serverAutoEndedSession);
+  }, [serverAutoEndedSession, dismissedAutoEndedSession]);
+
   const resumeSession = shouldShowResumeBanner ? activeSession : null;
+  const autoEndedDurationHours = useMemo(() => {
+    if (!autoEndedSession?.autoEndedAt || !autoEndedSession.startedAt) return null;
+    const autoEndedAtMs = new Date(autoEndedSession.autoEndedAt).getTime();
+    const startedAtMs = new Date(autoEndedSession.startedAt).getTime();
+    if (Number.isNaN(autoEndedAtMs) || Number.isNaN(startedAtMs)) return null;
+    const hours = (autoEndedAtMs - startedAtMs) / (1000 * 60 * 60);
+    if (hours <= 0) return null;
+    return Math.round(hours * 10) / 10;
+  }, [autoEndedSession]);
+
+  const handleResumeAutoEnded = (sessionId: string) => {
+    if (undoAutoEnd.isPending) return;
+    undoAutoEnd.mutate(sessionId);
+  };
+
+  const handleDismissAutoEnded = (sessionId: string) => {
+    setAutoEndedSession(null);
+    setDismissedAutoEndedSession({ id: sessionId, dismissedAt: Date.now() });
+    queryClient.setQueryData(["activeSession"], (prev) => {
+      const currentSession =
+        prev && typeof prev === "object" && "session" in prev
+          ? (prev as { session: WorkoutSession | null }).session
+          : null;
+      return { session: currentSession, autoEndedSession: null };
+    });
+  };
 
   return (
     <ScreenContainer scroll>
@@ -270,6 +338,84 @@ const HomeScreen = () => {
             Renew your plan to unlock AI workouts, analytics, and progression.
           </Text>
         </Pressable>
+      ) : null}
+
+      {autoEndedSession ? (
+        <View
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: "rgba(251,191,36,0.12)",
+            borderColor: "#fbbf24",
+            borderWidth: 1,
+            borderRadius: 12,
+            overflow: "hidden",
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Pressable
+            onPress={() => handleResumeAutoEnded(autoEndedSession.id)}
+            disabled={undoAutoEnd.isPending}
+            style={{
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              flex: 1,
+              opacity: undoAutoEnd.isPending ? 0.7 : 1,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "#fbbf24",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name='time' size={20} color='#0B1220' />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                }}
+              >
+                Workout auto-ended
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.regular,
+                  marginTop: 2,
+                  fontSize: 13,
+                }}
+              >
+                Auto-ended after {autoEndedDurationHours ?? 4}h of inactivity. Tap to resume.
+              </Text>
+            </View>
+            <Ionicons name='chevron-forward' size={20} color='#fbbf24' />
+          </Pressable>
+          <Pressable
+            onPress={() => handleDismissAutoEnded(autoEndedSession.id)}
+            style={({ pressed }) => ({
+              paddingHorizontal: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              borderLeftWidth: 1,
+              borderLeftColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+            })}
+          >
+            <Ionicons name='close' size={18} color={colors.textPrimary} />
+          </Pressable>
+        </View>
       ) : null}
 
       {/* Resume Workout Banner - Show for any unfinished workout */}

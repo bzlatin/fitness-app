@@ -7,6 +7,8 @@ import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
 
 const router = Router();
 
+const AUTO_END_LIMIT_MS = 1000 * 60 * 60 * 4; // 4 hours
+
 const formatExerciseId = (id: string) =>
   id
     .replace(/[_-]/g, " ")
@@ -38,6 +40,8 @@ type SessionRow = {
   template_name?: string | null;
   started_at: string;
   finished_at: string | null;
+  ended_reason: string | null;
+  auto_ended_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -100,6 +104,8 @@ const mapSession = (
   templateName: meta?.templateName ?? row.template_name ?? undefined,
   startedAt: row.started_at,
   finishedAt: row.finished_at ?? undefined,
+  endedReason: row.ended_reason ?? undefined,
+  autoEndedAt: row.auto_ended_at ?? undefined,
   sets: setRows
     .filter((set) => set.session_id === row.id)
     .sort((a, b) => a.set_index - b.set_index)
@@ -141,6 +147,58 @@ const computeStreak = (dates: string[], today: Date) => {
     cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
   return streak;
+};
+
+const autoEndSessionsForUser = async (userId: string, sessions: SessionRow[]) => {
+  const now = Date.now();
+  const staleSessions = sessions.filter((session) => {
+    const startedAt = new Date(session.started_at).getTime();
+    if (Number.isNaN(startedAt)) return false;
+    return now - startedAt > AUTO_END_LIMIT_MS;
+  });
+
+  if (!staleSessions.length) {
+    return { autoEndedSession: null as WorkoutSession | null, autoEndedIds: [] as string[] };
+  }
+
+  // End all stale sessions to keep data clean; the most recent one is returned for UI context
+  const mostRecentStale = staleSessions.reduce((latest, current) => {
+    const latestStart = new Date(latest.started_at).getTime();
+    const currentStart = new Date(current.started_at).getTime();
+    return currentStart > latestStart ? current : latest;
+  });
+
+  await withTransaction(async (client) => {
+    for (const stale of staleSessions) {
+      const startedAt = new Date(stale.started_at).getTime();
+      const cutoff = new Date(startedAt + AUTO_END_LIMIT_MS).toISOString();
+
+      await client.query(
+        `
+          UPDATE workout_sessions
+          SET
+            finished_at = $1,
+            auto_ended_at = $1,
+            ended_reason = 'auto_inactivity',
+            updated_at = NOW()
+          WHERE id = $2 AND user_id = $3
+        `,
+        [cutoff, stale.id, userId]
+      );
+
+      await client.query(
+        `
+          UPDATE active_workout_statuses
+          SET is_active = false, updated_at = NOW()
+          WHERE session_id = $1 AND user_id = $2
+        `,
+        [stale.id, userId]
+      );
+    }
+  });
+
+  const autoEndedSession = await fetchSessionById(mostRecentStale.id, userId);
+  return { autoEndedSession, autoEndedIds: staleSessions.map((session) => session.id) };
 };
 
 type SessionSummary = {
@@ -279,6 +337,8 @@ router.post("/from-template/:templateId", async (req, res) => {
           template_id: template.id,
           started_at: now,
           finished_at: null,
+          ended_reason: null,
+          auto_ended_at: null,
           created_at: now,
           updated_at: now,
         },
@@ -475,26 +535,36 @@ router.get("/active/current", async (req, res) => {
   }
 
   try {
-    // Find most recent uncompleted session
-    // Sessions are only "finished" when user completes or explicitly deletes them
+    // Fetch all uncompleted sessions to evaluate stale timeouts
     const sessionResult = await query<SessionRow>(
       `SELECT * FROM workout_sessions
        WHERE user_id = $1 AND finished_at IS NULL
-       ORDER BY started_at DESC
-       LIMIT 1`,
+       ORDER BY started_at DESC`,
       [userId]
     );
 
     if (sessionResult.rows.length === 0) {
-      return res.json({ session: null });
+      return res.json({ session: null, autoEndedSession: null });
     }
 
-    const sessionRow = sessionResult.rows[0];
+    const { autoEndedSession, autoEndedIds } = await autoEndSessionsForUser(
+      userId,
+      sessionResult.rows
+    );
+
+    // Find the most recent still-active session (one that was not auto-ended)
+    const activeRow = sessionResult.rows.find(
+      (row) => !autoEndedIds.includes(row.id)
+    );
+
+    if (!activeRow) {
+      return res.json({ session: null, autoEndedSession });
+    }
 
     // Fetch sets for this session
     const setsResult = await query<SetRow>(
       `SELECT * FROM workout_sets WHERE session_id = $1 ORDER BY set_index ASC`,
-      [sessionRow.id]
+      [activeRow.id]
     );
 
     // Build meta map for exercise names and images
@@ -502,16 +572,16 @@ router.get("/active/current", async (req, res) => {
 
     // Get template name if exists
     let templateName: string | undefined;
-    if (sessionRow.template_id) {
+    if (activeRow.template_id) {
       const templateResult = await query<{ name: string }>(
         `SELECT name FROM workout_templates WHERE id = $1`,
-        [sessionRow.template_id]
+        [activeRow.template_id]
       );
       templateName = templateResult.rows[0]?.name;
     }
 
-    const session = mapSession(sessionRow, setsResult.rows, { templateName }, metaMap);
-    return res.json({ session });
+    const session = mapSession(activeRow, setsResult.rows, { templateName }, metaMap);
+    return res.json({ session, autoEndedSession });
   } catch (err) {
     console.error("Failed to fetch active session", err);
     return res.status(500).json({ error: "Failed to fetch active session" });
@@ -542,9 +612,12 @@ router.patch("/:id", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { sets, startedAt, finishedAt } = req.body as Partial<WorkoutSession> & {
+  const { sets, startedAt, finishedAt, endedReason, autoEndedAt } = req.body as Partial<WorkoutSession> & {
     startedAt?: string;
   };
+
+  const endedReasonProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "endedReason");
+  const autoEndedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "autoEndedAt");
 
   try {
     const sessionExists = await query(
@@ -580,18 +653,44 @@ router.patch("/:id", async (req, res) => {
         }
       }
 
-      if (startedAt !== undefined || finishedAt !== undefined) {
-        await client.query(
-          `
-            UPDATE workout_sessions
-            SET
-              started_at = COALESCE($1, started_at),
-              finished_at = COALESCE($2, finished_at),
-              updated_at = NOW()
-            WHERE id = $3
-          `,
-          [startedAt ?? null, finishedAt ?? null, req.params.id]
-        );
+      if (
+        startedAt !== undefined ||
+        finishedAt !== undefined ||
+        endedReasonProvided ||
+        autoEndedAtProvided
+      ) {
+        const updateFragments: string[] = [];
+        const values: Array<string | null> = [];
+
+        if (startedAt !== undefined) {
+          updateFragments.push(`started_at = COALESCE($${values.length + 1}, started_at)`);
+          values.push(startedAt ?? null);
+        }
+
+        if (finishedAt !== undefined) {
+          updateFragments.push(`finished_at = COALESCE($${values.length + 1}, finished_at)`);
+          values.push(finishedAt ?? null);
+        }
+
+        if (endedReasonProvided) {
+          updateFragments.push(`ended_reason = $${values.length + 1}`);
+          values.push(endedReason ?? null);
+        }
+
+        if (autoEndedAtProvided) {
+          updateFragments.push(`auto_ended_at = $${values.length + 1}`);
+          values.push(autoEndedAt ?? null);
+        }
+
+        updateFragments.push("updated_at = NOW()");
+
+        const queryText = `
+          UPDATE workout_sessions
+          SET ${updateFragments.join(", ")}
+          WHERE id = $${values.length + 1}
+        `;
+
+        await client.query(queryText, [...values, req.params.id]);
       } else {
         await client.query(`UPDATE workout_sessions SET updated_at = NOW() WHERE id = $1`, [
           req.params.id,
@@ -604,6 +703,79 @@ router.patch("/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to update session", err);
     return res.status(500).json({ error: "Failed to update session" });
+  }
+});
+
+router.post("/:id/undo-auto-end", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const sessionResult = await query<SessionRow>(
+      `SELECT * FROM workout_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.id, userId]
+    );
+
+    if (!sessionResult.rowCount) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const sessionRow = sessionResult.rows[0];
+    if (sessionRow.finished_at === null) {
+      return res.status(400).json({ error: "Session is already active" });
+    }
+    if (sessionRow.ended_reason !== "auto_inactivity") {
+      return res
+        .status(400)
+        .json({ error: "Session was not auto-ended and cannot be resumed automatically" });
+    }
+
+    const resumeStart = sessionRow.auto_ended_at ?? sessionRow.finished_at ?? sessionRow.started_at;
+
+    await withTransaction(async (client) => {
+      await client.query(
+        `
+          UPDATE workout_sessions
+          SET
+            started_at = $1,
+            finished_at = NULL,
+            ended_reason = NULL,
+            auto_ended_at = NULL,
+            updated_at = NOW()
+          WHERE id = $2 AND user_id = $3
+        `,
+        [resumeStart, req.params.id, userId]
+      );
+
+      await client.query(
+        `
+          INSERT INTO active_workout_statuses (session_id, user_id, template_id, template_name, started_at, visibility, current_exercise_name, is_active)
+          VALUES ($1, $2, $3, $4, $5, 'private', NULL, true)
+          ON CONFLICT (session_id) DO UPDATE
+          SET
+            started_at = EXCLUDED.started_at,
+            template_id = EXCLUDED.template_id,
+            template_name = EXCLUDED.template_name,
+            is_active = true,
+            updated_at = NOW()
+        `,
+        [
+          sessionRow.id,
+          userId,
+          sessionRow.template_id,
+          sessionRow.template_name ?? null,
+          resumeStart,
+        ]
+      );
+    });
+
+    const session = await fetchSessionById(req.params.id, userId);
+    return res.json(session);
+  } catch (err) {
+    console.error("Failed to undo auto-end", err);
+    return res.status(500).json({ error: "Failed to undo auto-end" });
   }
 });
 
@@ -688,6 +860,8 @@ router.post("/manual", async (req, res) => {
           template_name: templateName ?? null,
           started_at: safeStart.toISOString(),
           finished_at: safeFinish?.toISOString() ?? null,
+          ended_reason: null,
+          auto_ended_at: null,
           created_at: safeStart.toISOString(),
           updated_at: safeFinish?.toISOString() ?? safeStart.toISOString(),
         },

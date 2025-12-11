@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import {
+  ActiveSessionResponse,
   WorkoutHistoryResponse,
   WorkoutSession,
   WorkoutSet,
@@ -18,8 +19,8 @@ export const fetchSession = async (id: string) => {
 };
 
 export const fetchActiveSession = async () => {
-  const res = await apiClient.get<{ session: WorkoutSession | null }>("/sessions/active/current");
-  return res.data.session;
+  const res = await apiClient.get<ActiveSessionResponse>("/sessions/active/current");
+  return res.data;
 };
 
 export const completeSession = async (id: string, sets: WorkoutSession["sets"]) => {
@@ -35,6 +36,11 @@ export const updateSession = async (
   payload: Partial<WorkoutSession> & { sets?: WorkoutSet[] }
 ) => {
   const res = await apiClient.patch<WorkoutSession>(`/sessions/${id}`, payload);
+  return res.data;
+};
+
+export const undoAutoEndSession = async (id: string) => {
+  const res = await apiClient.post<WorkoutSession>(`/sessions/${id}/undo-auto-end`);
   return res.data;
 };
 

@@ -23,6 +23,7 @@ type Props = {
   paddingTop?: number; // Override top padding on the scroll/view wrapper
   includeTopInset?: boolean; // Disable top safe area when native header already provides it
   refreshControl?: ReactNode;
+  adjustScrollInsets?: boolean; // Disable automatic nav inset adjustments when header already offsets content
 };
 
 const ScreenContainer = forwardRef<ScrollView, Props>(({
@@ -33,6 +34,7 @@ const ScreenContainer = forwardRef<ScrollView, Props>(({
   paddingTop = 16,
   includeTopInset = true,
   refreshControl,
+  adjustScrollInsets = true,
 }, ref) => {
   const insets = useSafeAreaInsets();
   const [contentHeight, setContentHeight] = useState(0);
@@ -77,6 +79,8 @@ const ScreenContainer = forwardRef<ScrollView, Props>(({
             ref={ref}
             style={{ flex: 1, paddingHorizontal: 16, paddingTop }}
             contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 120 }}
+            contentInsetAdjustmentBehavior={adjustScrollInsets ? "automatic" : "never"}
+            automaticallyAdjustsScrollIndicatorInsets={adjustScrollInsets}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={(w, h) => setContentHeight(h)}
             onLayout={(e: LayoutChangeEvent) => setScrollViewHeight(e.nativeEvent.layout.height)}

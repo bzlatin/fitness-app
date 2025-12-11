@@ -384,6 +384,12 @@ export const initDb = async () => {
   `);
 
   await query(`
+    ALTER TABLE workout_sessions
+      ADD COLUMN IF NOT EXISTS ended_reason TEXT,
+      ADD COLUMN IF NOT EXISTS auto_ended_at TIMESTAMPTZ
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS workout_sets (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
