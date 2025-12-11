@@ -24,6 +24,9 @@ type UserRow = {
   onboarding_data: unknown;
   progressive_overload_enabled: boolean | null;
   rest_timer_sound_enabled: boolean | null;
+  apple_health_enabled: boolean | null;
+  apple_health_permissions: unknown;
+  apple_health_last_sync_at: string | null;
 };
 
 type SocialProfile = {
@@ -51,12 +54,21 @@ type SocialProfile = {
   onboardingData?: unknown;
   progressiveOverloadEnabled?: boolean;
   restTimerSoundEnabled?: boolean;
+  appleHealthEnabled?: boolean;
+  appleHealthPermissions?: AppleHealthPermissions;
+  appleHealthLastSyncAt?: string | null;
   friendsPreview?: {
     id: string;
     name: string;
     handle?: string | null;
     avatarUrl?: string | null;
   }[];
+};
+
+type AppleHealthPermissions = {
+  workouts?: boolean;
+  activeEnergy?: boolean;
+  heartRate?: boolean;
 };
 
 type ActiveStatusRow = {
@@ -245,6 +257,9 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   onboardingData: row.onboarding_data ?? undefined,
   progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
   restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
+  appleHealthEnabled: row.apple_health_enabled ?? false,
+  appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
+  appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -532,6 +547,9 @@ router.put("/me", async (req, res) => {
     onboardingData,
     progressiveOverloadEnabled,
     restTimerSoundEnabled,
+    appleHealthEnabled,
+    appleHealthPermissions,
+    appleHealthLastSyncAt,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -555,6 +573,9 @@ router.put("/me", async (req, res) => {
     typeof progressiveOverloadEnabled !== "boolean"
   ) {
     return res.status(400).json({ error: "Invalid progressive overload flag" });
+  }
+  if (appleHealthEnabled !== undefined && typeof appleHealthEnabled !== "boolean") {
+    return res.status(400).json({ error: "Invalid Apple Health enabled flag" });
   }
 
   const currentUserResult = await query<UserRow>(
@@ -660,6 +681,21 @@ router.put("/me", async (req, res) => {
   if (restTimerSoundEnabled !== undefined) {
     updates.push(`rest_timer_sound_enabled = $${idx}`);
     values.push(restTimerSoundEnabled);
+    idx += 1;
+  }
+  if (appleHealthEnabled !== undefined) {
+    updates.push(`apple_health_enabled = $${idx}`);
+    values.push(appleHealthEnabled);
+    idx += 1;
+  }
+  if (appleHealthPermissions !== undefined) {
+    updates.push(`apple_health_permissions = $${idx}`);
+    values.push(appleHealthPermissions ?? null);
+    idx += 1;
+  }
+  if (appleHealthLastSyncAt !== undefined) {
+    updates.push(`apple_health_last_sync_at = $${idx}`);
+    values.push(appleHealthLastSyncAt ?? null);
     idx += 1;
   }
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
 import { pool, query } from "../db";
-import { WorkoutSession, WorkoutSet } from "../types/workouts";
+import { WorkoutSession, WorkoutSet, WorkoutSource } from "../types/workouts";
 import { generateId } from "../utils/id";
 import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
 
@@ -42,6 +42,13 @@ type SessionRow = {
   finished_at: string | null;
   ended_reason: string | null;
   auto_ended_at: string | null;
+  duration_seconds: number | null;
+  source: WorkoutSource | null;
+  external_id: string | null;
+  import_metadata: Record<string, unknown> | null;
+  total_energy_burned: string | null;
+  avg_heart_rate: string | null;
+  max_heart_rate: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -97,20 +104,35 @@ const mapSession = (
   setRows: SetRow[],
   meta?: { templateName?: string },
   metaMap?: Map<string, ExerciseMeta>
-): WorkoutSession => ({
-  id: row.id,
-  userId: row.user_id,
-  templateId: row.template_id ?? undefined,
-  templateName: meta?.templateName ?? row.template_name ?? undefined,
-  startedAt: row.started_at,
-  finishedAt: row.finished_at ?? undefined,
-  endedReason: row.ended_reason ?? undefined,
-  autoEndedAt: row.auto_ended_at ?? undefined,
-  sets: setRows
-    .filter((set) => set.session_id === row.id)
-    .sort((a, b) => a.set_index - b.set_index)
-    .map((set) => mapSet(set, metaMap)),
-});
+): WorkoutSession => {
+  const finished = row.finished_at ? new Date(row.finished_at) : null;
+  const started = new Date(row.started_at);
+  const derivedDuration =
+    row.duration_seconds ??
+    (finished ? Math.max(0, Math.round((finished.getTime() - started.getTime()) / 1000)) : undefined);
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    templateId: row.template_id ?? undefined,
+    templateName: meta?.templateName ?? row.template_name ?? undefined,
+    source: row.source ?? "manual",
+    startedAt: row.started_at,
+    finishedAt: row.finished_at ?? undefined,
+    endedReason: row.ended_reason ?? undefined,
+    autoEndedAt: row.auto_ended_at ?? undefined,
+    durationSeconds: derivedDuration,
+    totalEnergyBurned:
+      row.total_energy_burned === null ? undefined : Number(row.total_energy_burned),
+    avgHeartRate: row.avg_heart_rate === null ? undefined : Number(row.avg_heart_rate),
+    maxHeartRate: row.max_heart_rate === null ? undefined : Number(row.max_heart_rate),
+    importMetadata: row.import_metadata ?? undefined,
+    sets: setRows
+      .filter((set) => set.session_id === row.id)
+      .sort((a, b) => a.set_index - b.set_index)
+      .map((set) => mapSet(set, metaMap)),
+  };
+};
 
 const startOfDayUtc = (date: Date) => {
   const copy = new Date(date);
@@ -206,8 +228,13 @@ type SessionSummary = {
   startedAt: string;
   finishedAt?: string;
   templateName?: string;
+  source?: WorkoutSource;
+  durationSeconds?: number;
   totalVolumeLbs: number;
   estimatedCalories: number;
+  totalEnergyBurned?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
   exercises: {
     exerciseId: string;
     name: string;
@@ -339,6 +366,13 @@ router.post("/from-template/:templateId", async (req, res) => {
           finished_at: null,
           ended_reason: null,
           auto_ended_at: null,
+          duration_seconds: null,
+          source: "manual",
+          external_id: null,
+          import_metadata: null,
+          total_energy_burned: null,
+          avg_heart_rate: null,
+          max_heart_rate: null,
           created_at: now,
           updated_at: now,
         },
@@ -414,6 +448,29 @@ router.get("/history/range", async (req, res) => {
         .filter((set) => set.session_id === row.id)
         .map((set) => mapSet(set, metaMap));
       const totalVolume = computeSessionVolume(sets);
+      const durationSeconds =
+        row.duration_seconds ??
+        (row.finished_at
+          ? Math.max(
+              0,
+              Math.round(
+                (new Date(row.finished_at).getTime() -
+                  new Date(row.started_at).getTime()) /
+                  1000
+              )
+            )
+          : undefined);
+      const energyBurned =
+        row.total_energy_burned === null
+          ? undefined
+          : Number(row.total_energy_burned);
+      const avgHeartRate =
+        row.avg_heart_rate === null ? undefined : Number(row.avg_heart_rate);
+      const maxHeartRate =
+        row.max_heart_rate === null ? undefined : Number(row.max_heart_rate);
+      const estimatedCalories =
+        energyBurned !== undefined ? Math.round(energyBurned) : Math.round(totalVolume * 0.03);
+
       const exerciseMap = new Map<
         string,
         { name: string; sets: number; volumeLbs: number }
@@ -441,8 +498,13 @@ router.get("/history/range", async (req, res) => {
         startedAt: row.started_at,
         finishedAt: row.finished_at ?? undefined,
         templateName: row.template_name ?? undefined,
+        source: row.source ?? "manual",
+        durationSeconds,
         totalVolumeLbs: totalVolume,
-        estimatedCalories: Math.round(totalVolume * 0.03),
+        estimatedCalories,
+        totalEnergyBurned: energyBurned,
+        avgHeartRate,
+        maxHeartRate,
         exercises: Array.from(exerciseMap.entries()).map(
           ([exerciseId, details]) => ({
             exerciseId,
@@ -618,6 +680,7 @@ router.patch("/:id", async (req, res) => {
 
   const endedReasonProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "endedReason");
   const autoEndedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "autoEndedAt");
+  const shouldUpdateDuration = startedAt !== undefined || finishedAt !== undefined;
 
   try {
     const sessionExists = await query(
@@ -691,6 +754,20 @@ router.patch("/:id", async (req, res) => {
         `;
 
         await client.query(queryText, [...values, req.params.id]);
+
+        if (shouldUpdateDuration) {
+          await client.query(
+            `
+              UPDATE workout_sessions
+              SET duration_seconds = CASE
+                WHEN finished_at IS NULL THEN duration_seconds
+                ELSE GREATEST(0, EXTRACT(EPOCH FROM (finished_at - started_at)))::int
+              END
+              WHERE id = $1 AND user_id = $2
+            `,
+            [req.params.id, userId]
+          );
+        }
       } else {
         await client.query(`UPDATE workout_sessions SET updated_at = NOW() WHERE id = $1`, [
           req.params.id,
@@ -803,6 +880,9 @@ router.post("/manual", async (req, res) => {
   const sessionId = generateId();
   const safeStart = startedAt ? new Date(startedAt) : new Date();
   const safeFinish = finishedAt ? new Date(finishedAt) : undefined;
+  const durationSeconds = safeFinish
+    ? Math.max(0, Math.round((safeFinish.getTime() - safeStart.getTime()) / 1000))
+    : null;
 
   if (Number.isNaN(safeStart.getTime())) {
     return res.status(400).json({ error: "Invalid start date" });
@@ -863,6 +943,13 @@ router.post("/manual", async (req, res) => {
           finished_at: safeFinish?.toISOString() ?? null,
           ended_reason: null,
           auto_ended_at: null,
+          duration_seconds: durationSeconds,
+          source: "manual",
+          external_id: null,
+          import_metadata: null,
+          total_energy_burned: null,
+          avg_heart_rate: null,
+          max_heart_rate: null,
           created_at: safeStart.toISOString(),
           updated_at: safeFinish?.toISOString() ?? safeStart.toISOString(),
         },
