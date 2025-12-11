@@ -147,7 +147,9 @@ const request = async <T>(
       }
 
       const message = parsedError?.error ?? raw ?? response.statusText;
-      throw new ApiRequestError(`Request failed: ${response.status} ${message}`, response.status, parsedError?.requiresUpgrade);
+      // For user-friendly errors, just show the message without the status code
+      const displayMessage = parsedError?.error || message;
+      throw new ApiRequestError(displayMessage, response.status, parsedError?.requiresUpgrade);
     }
 
   if (!expectJson || response.status === 204) {
@@ -181,5 +183,5 @@ export const apiClient = {
       config
     ),
   delete: <T>(path: string, config?: RequestConfig) =>
-    request<T>(path, { method: "DELETE" }, config, false),
+    request<T>(path, { method: "DELETE" }, config, true),
 };

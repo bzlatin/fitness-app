@@ -28,12 +28,12 @@ export const playTimerSound = async () => {
       }
     }, 160);
 
-    // Play audible notification sound (respects silent mode)
+    // Play audible notification sound (plays even when ringer is off)
     try {
       if (!audioConfigured) {
         await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: false, // Respect silent mode
-          staysActiveInBackground: false,
+          playsInSilentModeIOS: true, // Play even when ringer is off
+          staysActiveInBackground: true, // Keep playing when app is in background/lock screen
           shouldDuckAndroid: true,
         });
         audioConfigured = true;

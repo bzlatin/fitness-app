@@ -15,6 +15,9 @@ const ai_1 = __importDefault(require("./routes/ai"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
 const subscriptions_1 = __importDefault(require("./routes/subscriptions"));
 const waitlist_1 = __importDefault(require("./routes/waitlist"));
+const notifications_1 = __importDefault(require("./routes/notifications"));
+const feedback_1 = __importDefault(require("./routes/feedback"));
+const engagement_1 = __importDefault(require("./routes/engagement"));
 const stripe_1 = __importDefault(require("./webhooks/stripe"));
 const appstore_1 = __importDefault(require("./webhooks/appstore"));
 const auth_1 = require("./middleware/auth");
@@ -23,7 +26,7 @@ const app = (0, express_1.default)();
 app.use("/webhooks/stripe", stripe_1.default);
 app.use("/webhooks/appstore", appstore_1.default);
 app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: "5mb" }));
 // Serve static files from public directory
 app.use(express_1.default.static(path_1.default.join(__dirname, "..", "public")));
 app.get("/health", (_req, res) => {
@@ -38,6 +41,9 @@ app.use("/api/social", ...authChain, social_1.default);
 app.use("/api/ai", ...authChain, ai_1.default);
 app.use("/api/analytics", ...authChain, analytics_1.default);
 app.use("/api/subscriptions", ...authChain, subscriptions_1.default);
+app.use("/api/notifications", ...authChain, notifications_1.default);
+app.use("/api/feedback", ...authChain, feedback_1.default);
+app.use("/api/engagement", ...authChain, engagement_1.default);
 app.use(
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 (err, _req, res, _next) => {

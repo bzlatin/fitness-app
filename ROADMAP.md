@@ -1,7 +1,7 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-12-05
-> Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 Planned — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
+> Last Updated: 2025-12-06
+> Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 In progress (Profile/Settings + Streaks shipped) — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
 
 ## Product Vision
 
@@ -1057,6 +1057,7 @@ CREATE TABLE user_blocks (
 **API Endpoints (New)**:
 
 Squad Management:
+
 - `GET /api/social/squads/:squadId` - Get squad details
 - `PUT /api/social/squads/:squadId` - Update squad settings (name, description, isPublic)
 - `DELETE /api/social/squads/:squadId/members/:memberId` - Remove member (admin only)
@@ -1066,11 +1067,13 @@ Squad Management:
 - `GET /api/social/squads/:squadId/members/search` - Search squad members
 
 User Blocking:
+
 - `POST /api/social/block` - Block user
 - `DELETE /api/social/block/:blockedId` - Unblock user
 - `GET /api/social/blocked` - Get blocked users list
 
 Reactions & Comments:
+
 - `POST /api/social/reactions` - Add emoji reaction
 - `DELETE /api/social/reactions/:targetType/:targetId/:emoji` - Remove reaction
 - `POST /api/social/comments` - Add comment
@@ -1117,67 +1120,179 @@ Reactions & Comments:
 
 ### 🔄 Phase 4.4: Retention & Feedback (Pre-Phase 5)
 
-#### 4.4.1 Smart Goal-Based Notifications
+#### 4.4.1 Smart Goal-Based Notifications ✅ COMPLETE
 
-**Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-5 days | **Impact**: HIGH | **Status**: ✅ IMPLEMENTED (2025-12-05)
 
 **Goal**: Deliver meaningful, non-spammy push notifications that protect weekly goals and celebrate consistency.
 
 **Key Triggers**:
 
-- Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
-- Inactivity nudge (no logged workout in 5-7 days, respects rest days)
-- Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
-- Weekly goal met (positive reinforcement, single celebratory push)
+- [x] Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
+- [x] Inactivity nudge (no logged workout in 5-7 days, respects rest days)
+- [x] Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
+- [x] Weekly goal met (positive reinforcement, single celebratory push)
 
 **Implementation**:
 
-- Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
-- Add user-level quiet hours + frequency cap (max 3 per week) in settings
-- Add client-side in-app inbox for missed pushes
-- Instrument with analytics to measure open → session starts
+- [x] Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
+- [x] Add user-level quiet hours + frequency cap (max 3 per week) in settings
+- [x] Add client-side in-app inbox for missed pushes
+- [x] Instrument with analytics to measure open → session starts
 
-**Files to Create/Modify**:
+**Files Created**:
 
-- `/server/src/jobs/notifications.ts` - Goal risk + inactivity evaluator
-- `/server/src/routes/notifications.ts` - Preferences endpoints (quiet hours, caps)
-- `/mobile/src/services/notifications.ts` - Push registration + local inbox sync
-- `/mobile/src/screens/SettingsScreen.tsx` - Notification preferences (quiet hours, toggle per trigger)
-- `/mobile/src/components/notifications/NotificationCard.tsx` - In-app inbox cards
+- `/server/src/jobs/notifications.ts` - Complete notification scheduler with goal risk, inactivity, weekly goal met, and squad activity checks
+- `/server/src/routes/notifications.ts` - Full notification preferences API (register token, get/update preferences, inbox management)
+- `/mobile/src/services/notifications.ts` - Push registration, Expo notifications setup, and inbox sync
+- `/mobile/src/components/notifications/NotificationInbox.tsx` - In-app notification inbox with unread badges
+- `/mobile/src/screens/NotificationInboxScreen.tsx` - Full-screen notification inbox view
 
-#### 4.4.2 iOS Widgets (Weekly Goal + Quick Actions)
+**Files Modified**:
 
-**Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+- `/server/src/db.ts` - Added `push_token`, `notification_preferences` JSONB to users table; created `notification_events` table
+- `/server/src/app.ts` - Registered notifications router
+- `/mobile/src/screens/SettingsScreen.tsx` - Added notification preferences UI with toggles for each trigger type
 
-**Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
+**Key Features Implemented**:
 
-**Widget Concepts**:
+- **Notification Triggers**:
 
-- Weekly Goal Ring: Progress toward sessions/volume goal with streak indicator
-- Today Shortcut: Start “Log workout” or “Start session” deep link
-- Squad Pulse: See top squad member update or cheer count (refresh-friendly, avoids rapid polling)
+  - Goal Risk: Sends 1-2 days before week end if user needs 1+ sessions to hit goal
+  - Inactivity: One nudge after 5-7 days of no workouts
+  - Weekly Goal Met: Celebration notification when completing weekly goal
+  - Squad Reactions: Real-time or daily digest of squad member reactions
+  - Squad Goal Met: When squad members complete their weekly goals
+
+- **User Preferences** (stored in JSONB):
+
+  - Toggle each notification type on/off
+  - Quiet hours (default: 22:00 - 8:00)
+  - Max notifications per week (default: 3)
+
+- **In-App Inbox**:
+
+  - View last 30 days of notifications
+  - Unread badge count
+  - Mark as read/clicked for analytics
+  - Delete individual notifications
+  - Pull-to-refresh
+
+- **Smart Delivery**:
+  - Respects quiet hours (no notifications during sleep)
+  - Weekly cap prevents notification fatigue
+  - Deduplication prevents multiple notifications for same trigger
+  - Tracks delivery status (sent, failed, no_token)
+
+**Database Schema**:
+
+```sql
+-- User notification preferences
+ALTER TABLE users ADD COLUMN push_token TEXT;
+ALTER TABLE users ADD COLUMN notification_preferences JSONB DEFAULT '{
+  "goalReminders": true,
+  "inactivityNudges": true,
+  "squadActivity": true,
+  "weeklyGoalMet": true,
+  "quietHoursStart": 22,
+  "quietHoursEnd": 8,
+  "maxNotificationsPerWeek": 3
+}';
+
+-- Notification event tracking
+CREATE TABLE notification_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notification_type TEXT NOT NULL,
+  trigger_reason TEXT,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  read_at TIMESTAMPTZ,
+  clicked_at TIMESTAMPTZ,
+  delivery_status TEXT NOT NULL DEFAULT 'sent',
+  error_message TEXT
+);
+```
+
+**API Endpoints**:
+
+- `POST /api/notifications/register-token` - Register Expo push token
+- `GET /api/notifications/preferences` - Get notification preferences
+- `PUT /api/notifications/preferences` - Update notification preferences
+- `GET /api/notifications/inbox` - Get notification inbox with pagination
+- `POST /api/notifications/inbox/:id/read` - Mark notification as read
+- `POST /api/notifications/inbox/:id/clicked` - Mark notification as clicked
+- `POST /api/notifications/inbox/mark-all-read` - Mark all as read
+- `DELETE /api/notifications/inbox/:id` - Delete notification
+
+**Notification Scheduler**:
+
+The notification job (`processNotifications()`) should be run once daily (recommended: 9am local time) using a cron job or task scheduler:
+
+```typescript
+import { processNotifications } from "./jobs/notifications";
+
+// Example: Run daily at 9am using node-cron
+import cron from "node-cron";
+cron.schedule("0 9 * * *", async () => {
+  await processNotifications();
+});
+```
+
+**Dependencies Added**:
+
+- `expo-notifications` (mobile) - Push notification handling
+- `expo-device` (mobile) - Device detection for push tokens
+- `expo-server-sdk` (server) - Sending push notifications from backend
+
+**Testing Notes**:
+
+To test notifications:
+
+1. Enable notifications in SettingsScreen
+2. Grant notification permissions when prompted
+3. Use the scheduler job or send test notifications via API
+4. Check inbox in SettingsScreen → "View Inbox"
+5. Verify quiet hours and weekly cap enforcement
+
+#### 4.4.2 Profile & Settings Redesign
+
+**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ✅ COMPLETE
+
+**Goal**: Simplify profile, move settings-type controls into a dedicated settings hub, and spotlight identity/achievements. Tackle the SettingsScreen rework first; then refine the Profile layout and shortcuts.
+
+**Changes**:
+
+- Prioritize SettingsScreen: regroup Account, Preferences, Billing, Notifications, and Feedback; add clear section headers and safe defaults
+- Compact settings into tappable rows/cards (Fitbod-style) with drill-in detail views for preferences, billing, and notifications
+- Add gear icon on Profile to open SettingsScreen (no bottom nav change)
+- Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
+- Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
 
 **Implementation**:
 
-- Build WidgetKit extension (Expo config plugin) with background refresh window
-- Expose minimal widget data endpoint (`/api/engagement/widget-data`) with cache headers
-- Deep link targets for start workout, view squad feed, view analytics
+- Redesign ProfileScreen layout with cleaner hierarchy and tappable cards
+- Expand SettingsScreen with grouped sections and empty states; wire navigation for billing/preferences/feedback
+- Add graceful empty states and consistent spacing for mobile ergonomics
 
 **Files to Create/Modify**:
 
-- `/mobile/app.config.ts` - Widget extension config
-- `/mobile/src/widgets/GoalWidget.tsx` - Widget UI logic
-- `/mobile/src/navigation/deepLinks.ts` - Add widget deep link targets
-- `/server/src/routes/engagement.ts` - Widget data endpoint with caching
+- `/mobile/src/screens/ProfileScreen.tsx` - New layout + gear icon nav
+- `/mobile/src/screens/SettingsScreen.tsx` - New sections and routing for billing/preferences/feedback
+- `/mobile/src/navigation/RootNavigator.tsx` - Ensure Settings accessible only via Profile gear
+- `/mobile/src/components/profile/ProfileHeader.tsx` - Extracted header for readability
 
 #### 4.4.3 Consistency & Streaks (Weekly-Goal-Based)
 
-**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ✅ COMPLETE
 
 **Goal**: Encourage sustainable habits with weekly-goal streaks and squad-aware celebrations (rest-day friendly).
 
 **Experience**:
 
+- Surface current streak (weekly goal based) on Home hero and Profile header
 - Weekly Goal Streak: Count consecutive weeks hitting goal; pauses on deload weeks flagged in fatigue service
 - Recovery-Friendly Rules: Rest days baked in; streak only depends on weekly target, not daily check-ins
 - Squad Shoutouts: Automatic feed card when a member extends streak; users can cheer/emoji react
@@ -1197,85 +1312,170 @@ Reactions & Comments:
 - `/mobile/src/screens/AnalyticsScreen.tsx` - Add streak history section
 - `/mobile/src/screens/SquadScreen.tsx` - Show squad streak shoutouts
 
-#### 4.4.4 In-App Feedback Board
+#### 4.4.4 In-App Feedback Board ✅ COMPLETE
 
-**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 4-5 days | **Impact**: MEDIUM | **Status**: ✅ COMPLETE (2025-12-06)
 
 **Goal**: Capture and prioritize user requests without leaving the app; surface top-voted items.
 
 **Experience**:
 
-- FeedbackBoard screen accessible from Profile → Settings (gear icon)
-- Submit ideas with category + impact tag; vote/upvote, comment optional
-- Sort by trending (weighted recent votes) and top all-time; show status pills (Planned/In Progress/Shipped)
-- Lightweight moderation (report + hide abusive content)
+- [x] FeedbackBoard screen accessible from Profile → Settings (gear icon) with badge indicator for newly shipped features
+- [x] Submit ideas with category + impact tag; vote/upvote functionality (no comments - keeping it simple)
+- [x] Sort by trending (weighted recent votes), top all-time, and recent; show status pills (Submitted/Under Review/Planned/In Progress/Shipped/Won't Fix/Duplicate)
+- [x] Lightweight moderation (report + auto-hide after 5 reports, admin review panel)
+- [x] Admin interface for updating feedback status (accessible to users with handle @exhibited via admin_users table)
 
 **Implementation**:
 
-- Add feedback table + votes table; simple anti-spam (rate limit per user/IP)
-- Expose endpoints for create, vote, status update (admin-only)
-- Add client-side optimistic voting with offline cache
+- [x] Added feedback_items, feedback_votes, feedback_reports, admin_users tables to database
+- [x] Profanity filter middleware with rate limiting (5 submissions per hour per user)
+- [x] Exposed endpoints for create, vote, report, status update (admin-only)
+- [x] Client-side optimistic voting with React Query
+- [x] Unique handle constraint enforcement to prevent duplicates during onboarding
+- [x] Auto-hide feedback items after 5 reports (admin can review and unhide)
 
-**Files to Create/Modify**:
+**Files Created/Modified**:
 
-- `/server/src/routes/feedback.ts` - CRUD + voting endpoints
-- `/server/src/db.ts` - Tables for feedback items, votes, reports
-- `/mobile/src/screens/FeedbackBoardScreen.tsx` - New screen
-- `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button
-- `/mobile/src/navigation/RootNavigator.tsx` - Register screen, hide behind Settings gear
+- ✅ `/server/src/routes/feedback.ts` - Full CRUD + voting + reporting endpoints
+- ✅ `/server/src/middleware/profanityFilter.ts` - Content moderation + rate limiting
+- ✅ `/server/src/db.ts` - Database schema with admin_users, feedback_items, feedback_votes, feedback_reports tables
+- ✅ `/server/src/app.ts` - Registered feedback routes
+- ✅ `/mobile/src/api/feedback.ts` - API client with React Query hooks + helper functions
+- ✅ `/mobile/src/screens/FeedbackBoardScreen.tsx` - Main feedback board with sorting, filtering, admin controls
+- ✅ `/mobile/src/components/feedback/FeedbackCard.tsx` - Card UI with vote button, status badges, report functionality
+- ✅ `/mobile/src/components/feedback/SubmitFeedbackModal.tsx` - Full-screen modal for submitting feedback
+- ✅ `/mobile/src/screens/SettingsScreen.tsx` - Added feedback board link with badge indicator for new shipped items
+- ✅ `/mobile/src/navigation/RootNavigator.tsx` - Registered FeedbackBoard screen
+- ✅ `/mobile/src/navigation/types.ts` - Added FeedbackBoard route type
 
-#### 4.4.5 Profile & Settings Redesign
+**Implementation Notes**:
 
-**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+- Admin access is granted to users with handle @exhibited via the admin_users table
+- Badge indicator shows count of newly shipped items (last 7 days) that the user voted on
+- Profanity filter includes basic word list; can be expanded based on moderation needs
+- Trending sort uses weighted algorithm: `vote_count * (1 + 1 / (days_since_creation + 1))`
+- Auto-hide threshold set to 5 reports to balance spam prevention with false positives
+- No comment system implemented to keep the feature simple and focused on voting
 
-**Goal**: Simplify profile, move controls into a dedicated settings hub, and spotlight identity/achievements.
+#### 4.4.5 iOS Widgets (Weekly Goal + Quick Actions) ✅ COMPLETE (Phase 1)
 
-**Changes**:
+**Priority**: MEDIUM | **Effort**: 5-7 days | **Impact**: HIGH | **Status**: ✅ PHASE 1 COMPLETE (2025-12-06)
 
-- Add gear icon on Profile to open SettingsScreen (no bottom nav change)
-- Profile layout: hero with avatar/handle, quick stats (streak, goal progress), squad badge
-- Collapse billing, training preferences, account management into Settings sections
-- Add shortcuts: “Edit goals”, “Manage squads”, “View feedback board”
+**Goal**: Improve retention with glanceable progress and one-tap entry points on iOS.
 
-**Implementation**:
+**Implementation Status**:
 
-- Redesign ProfileScreen layout with cleaner hierarchy and tappable cards
-- Expand SettingsScreen with grouped sections (Account, Preferences, Billing, Notifications, Feedback)
-- Add graceful empty states and consistent spacing for mobile ergonomics
+**Phase 1 (Completed)** ✅:
 
-**Files to Create/Modify**:
+- [x] Weekly Goal Ring widget (Small & Medium sizes)
+- [x] Quick Start widget (Medium size with action buttons)
+- [x] Widget data API endpoint with caching
+- [x] Deep linking support for widget actions
+- [x] App Groups setup for data sharing
+- [x] Config plugin for WidgetKit extension
 
-- `/mobile/src/screens/ProfileScreen.tsx` - New layout + gear icon nav
-- `/mobile/src/screens/SettingsScreen.tsx` - New sections and routing for billing/preferences/feedback
-- `/mobile/src/navigation/RootNavigator.tsx` - Ensure Settings accessible only via Profile gear
-- `/mobile/src/components/profile/ProfileHeader.tsx` - Extracted header for readability
+**Phase 2 (Completed)** ✅:
 
-#### 4.4.6 Recovery-Aware Coach Cards (Post-Session)
+- [x] Quick Set Logger (active session only) - COMPLETE (2025-12-07)
 
-**Priority**: HIGH | **Effort**: 3-4 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Phase 3 (Completed)** ✅:
 
-**Goal**: Capture quick RPE/soreness signals after sessions and auto-tune upcoming weekly goals and recommendations.
+- [x] Dynamic Island support (iOS 16.1+) - COMPLETE (2025-12-07)
+- [x] Live Activities for active workout sessions - COMPLETE (2025-12-07)
+- [x] Live rest timer countdown in Live Activity
 
-**Experience**:
+**Widget & Live Activity Concepts**:
 
-- Post-session card: 10-second flow to log RPE, soreness hotspots, and energy
-- Auto-adjust next-week goal suggestions and “what to train” tips based on fatigue deload logic
-- Inline micro-coaching: “Take tomorrow as recovery” or “Green light for push”
-- Surface on Home as a dismissible card if skipped post-workout
+- ✅ **Weekly Goal Ring** (Widget): Progress toward sessions/volume goal with streak indicator
+- ✅ **Quick Start** (Widget): One-tap shortcuts to start workout or quick log
+- ✅ **Quick Set Logger** (Widget): One-tap to log current set from home screen (Phase 2 COMPLETE)
+- ✅ **Live Activities** (Dynamic Island + Lock Screen): Auto-appearing workout tracker (Phase 3 COMPLETE)
+  - ✅ Appears automatically when workout starts (no manual install)
+  - ✅ Dynamic Island support (iPhone 14 Pro+)
+  - ✅ Lock Screen persistent notification (all devices iOS 16.1+)
+  - ✅ Live rest timer countdown
+  - ✅ Real-time exercise/set updates
+  - ✅ Auto-dismisses on workout completion
 
-**Implementation**:
+**Files Created**:
 
-- Extend fatigue service to ingest RPE/soreness and adjust risk scoring
-- Add post-session hook to prompt at workout end; cache offline until synced
-- Store structured recovery signals per session; decay over 72 hours
+**Phase 1 (Widgets - Weekly Goal)**:
 
-**Files to Create/Modify**:
+- ✅ `/mobile/plugins/withWidgets.js` - Expo config plugin for WidgetKit
+- ✅ `/mobile/ios/Widgets/README.md` - Setup instructions
+- ✅ `/mobile/ios/Widgets/PushPullWidgets.swift` - Weekly Goal widget
+- ✅ `/mobile/ios/Widgets/WidgetsBundle.swift` - Widget bundle registration
+- ✅ `/mobile/ios/pushpull/WidgetSyncModule.swift` - Native bridge for widget data sync
+- ✅ `/mobile/src/services/widgetSync.ts` - React Native widget data sync service
+- ✅ `/server/src/routes/engagement.ts` - Widget data endpoint
+- ✅ `/mobile/app.config.ts` - Added widget plugin
+- ✅ `/mobile/App.tsx` - Added widget deep link routes
 
-- `/server/src/services/fatigue.ts` - Accept RPE/soreness signals and adjust recommendations
-- `/server/src/routes/analytics.ts` - Endpoint to submit recovery signals
-- `/mobile/src/components/RecoveryCoachCard.tsx` - Post-session prompt + Home resurfacing
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Trigger card on session completion
-- `/mobile/src/screens/HomeScreen.tsx` - Show pending recovery prompt tile
+**Phase 2 (Quick Set Logger Widget)**:
+
+- ✅ `/mobile/ios/Widgets/QuickSetLoggerWidget.swift` - Quick Set Logger widget UI
+- ✅ `/mobile/WIDGET_INTEGRATION_GUIDE.md` - Integration guide
+- ✅ `/mobile/src/services/widgetSync.ts` - Extended with active session support
+- ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Integrated widget sync
+
+**Phase 3 (Live Activities)**:
+
+- ✅ `/mobile/ios/Widgets/WorkoutActivityAttributes.swift` - Live Activity data model
+- ✅ `/mobile/ios/Widgets/WorkoutLiveActivity.swift` - Dynamic Island + Lock Screen UI
+- ✅ `/mobile/ios/pushpull/LiveActivityModule.swift` - Native bridge for Live Activities
+- ✅ `/mobile/ios/pushpull/LiveActivityModule.m` - Objective-C bridge
+- ✅ `/mobile/src/services/liveActivity.ts` - JavaScript API wrapper
+- ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Integrated Live Activity calls
+- ✅ `/LIVE_ACTIVITIES_COMPLETE.md` - Complete implementation guide
+
+**Deep Links Implemented**:
+
+- `pushpull://workout/start` - Start new workout (navigates to Home)
+- `pushpull://workout/log` - Quick log workout (navigates to Home)
+- `pushpull://workout/log-set` - Log current set in active workout (Phase 2)
+- `pushpull://profile` - View profile/settings
+
+**Widget Sizes Supported**:
+
+- **Small**: Weekly Goal Ring, Quick Set Logger
+- **Medium**: Weekly Goal Ring + Stats, Quick Start buttons, Quick Set Logger with details
+
+**Phase 2 Implementation Details**:
+
+**Quick Set Logger Widget:**
+
+- Displays current exercise name, set number (e.g., "Set 3/4"), and target reps/weight
+- Shows last set performance after logging (e.g., "Last set: 8 reps @ 185 lbs")
+- "Log Set" button deep links to app (`pushpull://workout/log-set`)
+- Automatically updates when user logs sets in the app
+- Shows "No Active Workout" state when no session is active
+- Refreshes every 30 seconds during active workout, every 5 minutes otherwise
+
+**Data Sync Architecture:**
+
+- `syncActiveSessionToWidget()` helper function syncs session data to App Group UserDefaults
+- Called when: workout starts, set logged, exercise changed, workout completed
+- Widget reads from App Group UserDefaults via `QuickSetLoggerProvider`
+- Deep link opens app and navigates to active WorkoutSessionScreen
+
+**Integration Required:**
+
+- Developers must integrate `syncActiveSessionToWidget()` into `WorkoutSessionScreen.tsx`
+- See `/mobile/WIDGET_INTEGRATION_GUIDE.md` for detailed integration steps
+- Test thoroughly using the provided testing checklist
+
+**Next Steps for Full Implementation**:
+
+1. **Integrate Quick Set Logger**: Follow `/mobile/WIDGET_INTEGRATION_GUIDE.md` to add sync calls to WorkoutSessionScreen
+2. **Manual Xcode Setup Required**: Follow `/mobile/ios/Widgets/README.md` to add widget targets
+3. **Build with EAS**: Run `eas build --platform ios --profile development --local` to test widgets
+4. **Test Widget Data**: Verify API endpoint `/api/engagement/widget-data` returns correct data
+5. **Test Deep Links**: Tap widgets to ensure navigation works correctly
+6. **Test Active Session Sync**: Verify Quick Set Logger updates during workout
+7. **Phase 3**: Explore ActivityKit for Dynamic Island (iOS 16.1+ only)
+
+#### 4.4.6 Skip this - remove from roadmap
 
 #### 4.4.7 Session Quality Recap
 
@@ -1302,6 +1502,88 @@ Reactions & Comments:
 - `/mobile/src/components/RecapCard.tsx` - Compact recap card for Home/Analytics
 - `/mobile/src/screens/AnalyticsScreen.tsx` - Recap timeline section
 - `/mobile/src/screens/HomeScreen.tsx` - Win-back card surface when quality dips
+
+#### 4.4.8 Apple Health Sync (iOS)
+
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Pull Apple Health workout + activity data into the app to enrich analytics, streak accuracy, and recovery signals.
+
+**Experience**:
+
+- First-run permission prompt with clear toggle per data type: workouts, active energy, heart rate (optional)
+- Auto-import strength workouts (name, sets/reps/weight if available) into history with “Imported from Apple Health” badge
+- Merge Apple Health sessions into streak + weekly goal calculations without double-counting in-app sessions
+- Optional heart rate overlay on session summary (avg/max) and calories burned estimates
+
+**Implementation**:
+
+- Use HealthKit bindings (Expo config plugin or `react-native-health`) to read workouts/metrics; background sync once per day
+- Normalize imported sessions to existing workout schema; dedupe against manually logged sessions by timestamp + duration
+- Add user-level setting to disable/clear Apple Health imports
+- Add migration to store `source` on workouts (`manual`, `ai`, `apple_health`)
+
+**Files to Create/Modify**:
+
+- `/mobile/src/services/appleHealth.ts` - HealthKit read/sync utilities
+- `/mobile/src/screens/SettingsScreen.tsx` - Apple Health permissions + toggles
+- `/server/src/routes/analytics.ts` - Endpoint to ingest/import synced sessions
+- `/server/src/db.ts` - Add `source` + import metadata fields to workout tables
+
+#### 4.4.9 Pro Social Video Workout Import + Custom Exercises
+
+**Priority**: HIGH | **Effort**: 7-10 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout and add missing exercises (with their own media) when our library lacks them.
+
+**Experience**:
+
+- “Import from TikTok/Instagram” entry in AI workout generator; paste link → fetch transcript/captions → preview suggested workout
+- Review + edit generated exercises/sets before saving as a template; flag Pro-only
+- “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator unless shared to squad (future)
+- Content safety check to block non-fitness or inappropriate videos
+
+**Implementation**:
+
+- Backend ingestion to download captions/transcripts from shared URL; fallback to lightweight on-device transcription if needed
+- LLM prompt to extract exercises + structure a workout; gate behind Pro checks and usage limits
+- New `user_exercises` table scoped to user (or squad) with optional image upload (S3/Cloudinary)
+- Store provenance on generated templates (`source: "social_video"`, original URL) for auditability
+- Add caching of transcripts to avoid repeated fetches for the same URL
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
+- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
+- `/server/src/db.ts` - Add `user_exercises` table + template provenance fields
+- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
+- `/mobile/src/screens/ExerciseLibraryScreen.tsx` - Surface custom exercises + upload flow
+- `/mobile/src/components/premium/UpgradePrompt.tsx` - Reuse for Pro gating
+
+#### 4.4.10 Data Export (Settings)
+
+**Priority**: MEDIUM | **Effort**: 2-3 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+
+**Goal**: Provide a user-controlled export of workout history for portability/compliance.
+
+**Experience**:
+
+- Settings action: “Export my data” → choose CSV or JSON → email/share sheet with download link (time-limited)
+- Export includes workouts, sets, templates, AI generations, and streak history; excludes PII beyond profile basics
+- Show export status (queued → ready) and ability to regenerate
+
+**Implementation**:
+
+- Server job to compile export into CSV/JSON, store in object storage with signed URL (24h expiration)
+- Rate limit to one export per user per 24h; log audit trail for compliance
+- Client polling or web socket to update export status; uses share sheet for delivery if on device
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/account.ts` - Data export request + status endpoints
+- `/server/src/jobs/exportData.ts` - Export generator + storage upload
+- `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
+- `/mobile/src/api/account.ts` - Export API client
 
 ---
 
@@ -1340,17 +1622,17 @@ Reactions & Comments:
 
 **Domain & Hosting**:
 
-- [ ] Register domain (push-pull.app )
-- [ ] Set up DNS with hosting provider
-- [ ] Deploy to Vercel/Netlify (free tier)
-- [ ] Configure SSL certificate
-- [ ] Set up redirect from www to root domain
+- [x] Register domain (push-pull.app )
+- [x] Set up DNS with hosting provider
+- [x] Deploy to Vercel/Netlify (free tier)
+- [x] Configure SSL certificate
+- [x] Set up redirect from www to root domain
 
 **App Store Optimization**:
 
 - [ ] Create App Store listing (iOS)
 - [ ] Create Google Play Store listing (Android)
-- [ ] Design app icon (1024x1024)
+- [x] Design app icon (1024x1024)
 - [ ] Create 5-6 app screenshots per platform
 - [ ] Write compelling app description
 - [ ] Choose keywords for ASO
@@ -1380,7 +1662,6 @@ Reactions & Comments:
 ### High Priority
 
 - [ ] Implement proper database migrations (migrate from initDb() approach)
-- [ ] Move exercise JSON to database (currently in-memory)
 - [ ] Add image upload to cloud storage (Cloudinary/S3) instead of local URIs
 - [ ] Add API rate limiting (express-rate-limit)
 - [ ] Add input validation (Zod schemas)
@@ -1494,6 +1775,6 @@ Reactions & Comments:
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
-- **v1.5** (Current): Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
-- **v1.6** (Next): Retention & Feedback (smart notifications, widgets, weekly streaks, feedback board, profile/settings redesign)
-- **v1.7** (Later): Marketing & Growth (landing page, App/Play listings, support flow)
+- **v1.5**: Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
+- **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, health sync, data export pending)
+- **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

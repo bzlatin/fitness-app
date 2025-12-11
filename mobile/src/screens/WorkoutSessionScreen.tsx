@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Alert,
   Image,
@@ -12,12 +12,15 @@ import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Linking,
+  AppState,
+  NativeModules,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
@@ -50,6 +53,14 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { playTimerSound } from "../utils/timerSound";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { syncActiveSessionToWidget } from "../services/widgetSync";
+import {
+  startWorkoutLiveActivity,
+  updateWorkoutLiveActivity,
+  endWorkoutLiveActivity,
+  endWorkoutLiveActivityWithSummary,
+  addLogSetListener,
+} from "../services/liveActivity";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -208,6 +219,22 @@ const formatExerciseName = (id: string) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
+// Helper to identify cardio exercises
+const isCardioExercise = (exerciseId: string, exerciseName?: string): boolean => {
+  const name = (exerciseName || exerciseId).toLowerCase();
+  const cardioKeywords = [
+    'treadmill', 'running', 'jogging', 'walking',
+    'bike', 'cycling', 'bicycle', 'biking',
+    'rowing', 'rower',
+    'elliptical',
+    'stair', 'stepper',
+    'swimming', 'swim',
+    'jumping rope', 'jump rope',
+    'air bike'
+  ];
+  return cardioKeywords.some(keyword => name.includes(keyword));
+};
+
 const resolveExerciseImageUri = (uri?: string) => {
   if (!uri) return undefined;
   if (uri.startsWith("http")) return uri;
@@ -306,6 +333,33 @@ const WorkoutSessionScreen = () => {
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
+
+  // Refs to access latest state in deep link handler without causing re-renders
+  const activeSetIdRef = useRef<string | null>(null);
+  const setsRef = useRef<WorkoutSet[]>([]);
+  const sessionRestTimesRef = useRef<Record<string, number>>({});
+  const loggedSetIdsRef = useRef<Set<string>>(new Set());
+  // Lock to prevent duplicate processing of pending log set actions
+  const isProcessingLogSetRef = useRef<boolean>(false);
+  // Track the last processed timestamp to prevent duplicate processing
+  const lastProcessedTimestampRef = useRef<number>(0);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    activeSetIdRef.current = activeSetId;
+  }, [activeSetId]);
+
+  useEffect(() => {
+    setsRef.current = sets;
+  }, [sets]);
+
+  useEffect(() => {
+    sessionRestTimesRef.current = sessionRestTimes;
+  }, [sessionRestTimes]);
+
+  useEffect(() => {
+    loggedSetIdsRef.current = loggedSetIds;
+  }, [loggedSetIds]);
 
   // Check if user currently has Pro access (blocks grace/expired)
   const isPro = subscriptionAccess.hasProAccess;
@@ -531,6 +585,8 @@ const WorkoutSessionScreen = () => {
       initialVisibility: route.params.initialVisibility,
     });
 
+  const queryClient = useQueryClient();
+
   const finishMutation = useMutation({
     mutationFn: () => {
       // Pause timer before finishing
@@ -539,9 +595,26 @@ const WorkoutSessionScreen = () => {
     },
     onSuccess: (session) => {
       endActiveStatus();
+      // Clear widget data when workout completes
+      void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
       const loggedSets = sets.filter((set) => loggedSetIds.has(set.id));
       const summary = summarizeSets(loggedSets);
+
+      // End Live Activity with completion summary
+      void endWorkoutLiveActivityWithSummary({
+        totalSets: summary.totalSets,
+        totalVolume: summary.totalVolume ?? 0,
+        durationMinutes: Math.floor(elapsedSeconds / 60),
+      });
+
+      // Invalidate fatigue query to refresh recovery data
+      queryClient.invalidateQueries({ queryKey: ["fatigue"] });
+      queryClient.invalidateQueries({ queryKey: ["training-recommendations"] });
+
+      // Invalidate active session query to remove "Resume Workout" banner
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
+
       navigation.navigate("PostWorkoutShare", {
         sessionId: session.id,
         templateId: session.templateId,
@@ -558,6 +631,10 @@ const WorkoutSessionScreen = () => {
   useEffect(
     () => () => {
       endActiveStatus();
+      // Clear widget when user navigates away from workout
+      void syncActiveSessionToWidget(null);
+      // End Live Activity when user navigates away
+      void endWorkoutLiveActivity();
     },
     [endActiveStatus]
   );
@@ -620,19 +697,32 @@ const WorkoutSessionScreen = () => {
     [sets, restLookup, sessionRestTimes]
   );
 
+  // Auto-focus logic - only runs when autoFocusEnabled is true
+  // This should NOT override activeSetId that was just set by logSet
   useEffect(() => {
+    // Skip if auto-focus is disabled
+    if (!autoFocusEnabled) return;
+
     const firstIncompleteGroup = groupedSets.find((group) =>
       group.sets.some((set) => !loggedSetIds.has(set.id))
     );
-    if (!autoFocusEnabled) return;
+
+    // Only set activeExerciseKey if it's currently null
     if (!activeExerciseKey && firstIncompleteGroup) {
       setActiveExerciseKey(firstIncompleteGroup.key);
     }
-    if (
-      (!activeSetId || !loggedSetIds.has(activeSetId)) &&
-      firstIncompleteGroup?.sets[0]
-    ) {
-      setActiveSetId(firstIncompleteGroup.sets[0].id);
+
+    // Only set activeSetId if it's currently null OR if the current activeSetId
+    // is already logged (meaning we need to find the next one)
+    // IMPORTANT: Don't override if activeSetId was just set by logSet
+    if (activeSetId === null && firstIncompleteGroup) {
+      const firstUnloggedSet = firstIncompleteGroup.sets.find(
+        (s) => !loggedSetIds.has(s.id)
+      );
+      if (firstUnloggedSet) {
+        setActiveSetId(firstUnloggedSet.id);
+        activeSetIdRef.current = firstUnloggedSet.id;
+      }
     }
   }, [
     activeExerciseKey,
@@ -641,6 +731,42 @@ const WorkoutSessionScreen = () => {
     loggedSetIds,
     autoFocusEnabled,
   ]);
+
+  // Sync initial session state to widget AND start Live Activity when session loads
+  useEffect(() => {
+    if (!sessionId || !startTime || groupedSets.length === 0) return;
+
+    // Find the first exercise with unlogged sets
+    const firstIncompleteGroup = groupedSets.find((group) =>
+      group.sets.some((set) => !loggedSetIds.has(set.id))
+    );
+
+    if (firstIncompleteGroup) {
+      // Find the first unlogged set in this exercise
+      const firstUnloggedSet = firstIncompleteGroup.sets.find(
+        (set) => !loggedSetIds.has(set.id)
+      );
+      if (firstUnloggedSet) {
+        const setIndex = firstIncompleteGroup.sets.findIndex(
+          (s) => s.id === firstUnloggedSet.id
+        );
+        syncCurrentExerciseToWidget(firstIncompleteGroup.key, setIndex);
+
+        // Start Live Activity (Dynamic Island + Lock Screen)
+        void startWorkoutLiveActivity({
+          sessionId,
+          templateName: templateName || "Workout",
+          exerciseName: firstIncompleteGroup.name,
+          currentSet: setIndex + 1,
+          totalSets: firstIncompleteGroup.sets.length,
+          targetReps: firstUnloggedSet.targetReps,
+          targetWeight: firstUnloggedSet.targetWeight,
+          totalExercises: groupedSets.length,
+          completedExercises: 0,
+        });
+      }
+    }
+  }, [sessionId, startTime, groupedSets.length]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -660,6 +786,12 @@ const WorkoutSessionScreen = () => {
           hasPlayedSound = true;
           playTimerSound();
         }
+
+        // Clear Live Activity rest timer so "Log Set" button appears
+        void updateWorkoutLiveActivity({
+          restDuration: 0, // Pass 0 to explicitly clear timer
+          restEndsAt: null,
+        });
       }
     };
     tick();
@@ -667,18 +799,280 @@ const WorkoutSessionScreen = () => {
     return () => clearInterval(id);
   }, [restEndsAt, user?.restTimerSoundEnabled]);
 
+  // Listen for "Log Set" button from Live Activity (via App Group shared storage)
+  useEffect(() => {
+    const { WidgetSyncModule } = NativeModules;
+
+    const checkPendingLogSet = async () => {
+      if (!WidgetSyncModule) {
+        return;
+      }
+
+      // Prevent concurrent processing
+      if (isProcessingLogSetRef.current) {
+        return;
+      }
+
+      try {
+        // Read from App Group shared UserDefaults
+        const pendingSessionId = await new Promise<string | null>((resolve) => {
+          WidgetSyncModule.readFromAppGroup(
+            "pendingLogSetSessionId",
+            (value: string | null) => {
+              resolve(value);
+            }
+          );
+        });
+
+        const timestamp = await new Promise<number | null>((resolve) => {
+          WidgetSyncModule.readFromAppGroup(
+            "pendingLogSetTimestamp",
+            (value: number | null) => {
+              resolve(value);
+            }
+          );
+        });
+
+        // Only process if we have both values
+        if (!pendingSessionId || !timestamp) {
+          return;
+        }
+
+        // Check if we already processed this exact timestamp
+        if (timestamp === lastProcessedTimestampRef.current) {
+          return;
+        }
+
+        // Only process if it's recent (within last 10 seconds)
+        const now = Date.now() / 1000;
+        if (now - timestamp >= 10) {
+          // Clear stale actions
+          WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
+          WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+          return;
+        }
+
+        // Verify this is the current session
+        if (pendingSessionId !== sessionId) {
+          return;
+        }
+
+        // Set processing lock and mark timestamp as processed BEFORE doing anything
+        isProcessingLogSetRef.current = true;
+        lastProcessedTimestampRef.current = timestamp;
+
+        // Clear the pending action IMMEDIATELY to prevent re-processing
+        WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
+        WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+
+        // Use the activeSetId from the ref - this is what the user sees as highlighted
+        const setToLog = activeSetIdRef.current;
+
+        if (setToLog) {
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+
+          // Verify this set hasn't already been logged
+          if (!currentLoggedSetIds.has(setToLog)) {
+            logSet(setToLog);
+          }
+        }
+
+        // Release lock after a short delay to let state settle
+        setTimeout(() => {
+          isProcessingLogSetRef.current = false;
+        }, 500);
+      } catch (error) {
+        console.error("❌ Failed to check pending log set:", error);
+        isProcessingLogSetRef.current = false;
+      }
+    };
+
+    // Check immediately when component mounts
+    checkPendingLogSet();
+
+    // Poll for pending actions every 500ms while workout is active (faster response)
+    const pollInterval = setInterval(checkPendingLogSet, 500);
+
+    // Listen for app state changes (when app comes to foreground)
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        checkPendingLogSet();
+      }
+    });
+
+    return () => {
+      clearInterval(pollInterval);
+      subscription.remove();
+    };
+  }, [sessionId]);
+
+  // Listen for "Log Set" button from Live Activity (via deep link)
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+
+      // Parse the URL to extract sessionId
+      // Expected format: push-pull://workout/log-set?sessionId=xxx
+      if (url.includes("workout/log-set")) {
+        const urlObj = new URL(url);
+        const urlSessionId = urlObj.searchParams.get("sessionId");
+
+        // Verify this is the current session
+        if (urlSessionId !== sessionId) {
+          return;
+        }
+
+        // Use the activeSetId - this is what the user sees as highlighted
+        const setToLog = activeSetIdRef.current;
+
+        if (setToLog) {
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+
+          // Verify this set hasn't already been logged
+          if (!currentLoggedSetIds.has(setToLog)) {
+            // Check if user has custom rest duration for this exercise
+            const currentSet = setsRef.current.find((s) => s.id === setToLog);
+            if (currentSet) {
+              const groupKey =
+                currentSet.templateExerciseId ?? currentSet.exerciseId;
+              const customRestDuration = sessionRestTimesRef.current[groupKey];
+
+              // Call logSet with custom rest duration if it was adjusted
+              logSet(setToLog, customRestDuration);
+            } else {
+              logSet(setToLog);
+            }
+          }
+        }
+      }
+    };
+
+    // Add listener for incoming deep links (when app is already open)
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    // Check if app was opened via deep link (when app was closed)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink({ url });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // Only re-register when sessionId changes
+
+  // Legacy: Listen for "Log Set" button from Live Activity (via NotificationCenter - deprecated)
+  // This is kept for backwards compatibility but shouldn't be triggered anymore
+  useEffect(() => {
+    const cleanup = addLogSetListener((liveActivitySessionId) => {
+      // Verify this is the current session
+      if (liveActivitySessionId !== sessionId) {
+        return;
+      }
+
+      // Find the active set to log
+      if (activeSetId) {
+        logSet(activeSetId);
+      }
+    });
+
+    return cleanup;
+  }, [sessionId, activeSetId]);
+
   const startRestTimer = (seconds?: number) => {
     const duration = Math.max(10, seconds ?? 90);
     setRestRemaining(duration);
     setRestEndsAt(Date.now() + duration * 1000);
   };
 
-  const logSet = (setId: string, restSeconds?: number) => {
-    const currentSet = sets.find((s) => s.id === setId);
+  // Helper function to sync current exercise state to widget AND Live Activity
+  const syncCurrentExerciseToWidget = (
+    exerciseKey: string,
+    currentSetIndex: number,
+    lastReps?: number,
+    lastWeight?: number,
+    restDuration?: number,
+    restEndsAtTimestamp?: number // Pass the actual restEndsAt timestamp from state
+  ) => {
+    if (!sessionId || !startTime) return;
+
+    const group = groupedSets.find((g) => g.key === exerciseKey);
+    if (!group) return;
+
+    const currentSet = group.sets[currentSetIndex];
     if (!currentSet) return;
 
-    const updatedLoggedSetIds = new Set(loggedSetIds);
+    // Determine actual rest duration for widgets
+    // If restDuration is explicitly 0, pass 0 to clear the timer
+    // If undefined, use the group's rest seconds as fallback
+    const actualRestDuration =
+      restDuration !== undefined ? restDuration : group.restSeconds ?? 90;
+
+    // Calculate restEndsAt ISO string if we have a timestamp
+    const restEndsAtISO =
+      restEndsAtTimestamp && restEndsAtTimestamp > 0
+        ? new Date(restEndsAtTimestamp).toISOString()
+        : actualRestDuration === 0
+        ? null
+        : undefined;
+
+    // Sync to home screen widget
+    void syncActiveSessionToWidget({
+      sessionId,
+      exerciseName: group.name,
+      currentSet: currentSetIndex + 1, // 1-indexed for display
+      totalSets: group.sets.length,
+      lastReps,
+      lastWeight,
+      targetReps: currentSet.targetReps,
+      targetWeight: currentSet.targetWeight,
+      startedAt: startTime,
+      restDuration: actualRestDuration,
+      restEndsAt: restEndsAtISO,
+    });
+
+    // Sync to Live Activity (Dynamic Island + Lock Screen)
+    void updateWorkoutLiveActivity({
+      exerciseName: group.name,
+      currentSet: currentSetIndex + 1,
+      totalSets: group.sets.length,
+      lastReps,
+      lastWeight,
+      targetReps: currentSet.targetReps,
+      targetWeight: currentSet.targetWeight,
+      completedExercises: groupedSets.filter((g) =>
+        g.sets.every((s) => loggedSetIds.has(s.id))
+      ).length,
+      restDuration: actualRestDuration, // Always pass a defined value
+      restEndsAt: restEndsAtISO,
+    });
+  };
+
+  const logSet = (setId: string, restSeconds?: number) => {
+    // CRITICAL: Use refs for all reads to avoid stale closure issues
+    // This is especially important when called from the polling interval
+    const currentLoggedSetIds = loggedSetIdsRef.current;
+    const currentSets = setsRef.current;
+
+    const currentSet = currentSets.find((s) => s.id === setId);
+    if (!currentSet) {
+      return;
+    }
+
+    // Check if this set is already logged using the ref (most up-to-date)
+    if (currentLoggedSetIds.has(setId)) {
+      return;
+    }
+
+    // Create updated loggedSetIds from the ref (not stale state)
+    const updatedLoggedSetIds = new Set(currentLoggedSetIds);
     updatedLoggedSetIds.add(setId);
+
+    // IMMEDIATELY update the ref BEFORE any async operations
+    // This prevents race conditions with the pending log set handler
+    loggedSetIdsRef.current = updatedLoggedSetIds;
 
     const updated: WorkoutSet = {
       ...currentSet,
@@ -695,27 +1089,56 @@ const WorkoutSessionScreen = () => {
       resumeTimer();
     }
 
+    // Calculate rest duration (needed for both timer and widget sync)
+    // Priority: user-adjusted session rest times > passed restSeconds > template rest times
+    const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
+    const group = groupedSets.find((g) => g.key === groupKey);
+    // Use ref to get current session rest times to avoid stale closure
+    const currentSessionRestTimes = sessionRestTimesRef.current;
+    const fallbackRest =
+      currentSessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
+      restSeconds ??
+      currentSet.targetRestSeconds ??
+      restLookup[groupKey];
+
+    // Start rest timer and capture the end timestamp
+    let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
-      const fallbackRest =
-        restSeconds ??
-        currentSet.targetRestSeconds ??
-        restLookup[currentSet.templateExerciseId ?? currentSet.exerciseId];
-      startRestTimer(fallbackRest ?? 90);
+      const restDuration = fallbackRest ?? 90;
+      calculatedRestEndsAt = Date.now() + restDuration * 1000;
+      startRestTimer(restDuration);
     } else {
       setRestRemaining(null);
       setRestEndsAt(null);
     }
 
-    const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
-    const group = groupedSets.find((g) => g.key === groupKey);
     if (group) {
       const sorted = [...group.sets]
         .map((s) => (s.id === setId ? updated : s))
         .sort((a, b) => a.setIndex - b.setIndex);
       const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
+
       if (nextSet) {
         // Immediately update activeSetId to the next unlogged set
+        const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
+
+        // CRITICAL: Disable auto-focus to prevent the useEffect from overriding our state
+        setAutoFocusEnabled(false);
+
+        // IMMEDIATELY update the ref BEFORE React state update
+        activeSetIdRef.current = nextSet.id;
         setActiveSetId(nextSet.id);
+
+        // Sync next set to widget with rest timer
+        const restDuration = fallbackRest ?? 90;
+        syncCurrentExerciseToWidget(
+          groupKey,
+          nextSetIndex,
+          updated.actualReps,
+          updated.actualWeight,
+          autoRestTimer ? restDuration : 0, // Pass 0 to explicitly clear timer when disabled
+          autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
+        );
       } else {
         // All sets in this exercise are logged, move to next exercise
         const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
@@ -730,12 +1153,34 @@ const WorkoutSessionScreen = () => {
             const firstUnloggedInNextGroup = nextGroup.sets.find(
               (s) => !updatedLoggedSetIds.has(s.id)
             );
-            setActiveSetId(
-              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null
-            );
+            const nextSetId =
+              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+
+            // IMMEDIATELY update the ref BEFORE React state update
+            activeSetIdRef.current = nextSetId;
+            setActiveSetId(nextSetId);
+
+            // Sync next exercise to widget
+            if (firstUnloggedInNextGroup) {
+              const nextSetIndex = nextGroup.sets.findIndex(
+                (s) => s.id === firstUnloggedInNextGroup.id
+              );
+              syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
+            }
           } else {
+            // IMMEDIATELY update the ref BEFORE React state update
+            activeSetIdRef.current = null;
             setActiveExerciseKey(null);
             setActiveSetId(null);
+            // All exercises complete, keep showing last exercise with completed state
+            const lastSetIndex = sorted.length - 1;
+            syncCurrentExerciseToWidget(
+              groupKey,
+              lastSetIndex,
+              updated.actualReps,
+              updated.actualWeight,
+              0 // No rest timer after workout complete
+            );
           }
         }
       }
@@ -743,11 +1188,15 @@ const WorkoutSessionScreen = () => {
   };
 
   const undoSet = (setId: string) => {
-    setLoggedSetIds((prev) => {
-      const next = new Set(prev);
-      next.delete(setId);
-      return next;
-    });
+    // Create updated loggedSetIds without the undone set
+    const updatedLoggedSetIds = new Set(loggedSetIds);
+    updatedLoggedSetIds.delete(setId);
+
+    // IMMEDIATELY update refs BEFORE any async operations
+    loggedSetIdsRef.current = updatedLoggedSetIds;
+    activeSetIdRef.current = setId;
+
+    setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId((prev) => (prev === setId ? null : prev));
     if (restEndsAt && lastLoggedSetId === setId) {
       setRestRemaining(null);
@@ -755,6 +1204,25 @@ const WorkoutSessionScreen = () => {
     }
     setActiveSetId(setId);
     setAutoFocusEnabled(false);
+
+    // Sync Live Activity to reflect undo
+    // Find the undone set and update widget to show it as active again
+    const undoneSet = sets.find((s) => s.id === setId);
+    if (undoneSet) {
+      const groupKey = undoneSet.templateExerciseId ?? undoneSet.exerciseId;
+      const group = groupedSets.find((g) => g.key === groupKey);
+      if (group) {
+        const setIndex = group.sets.findIndex((s) => s.id === setId);
+        // Sync without rest timer since we're undoing
+        syncCurrentExerciseToWidget(
+          groupKey,
+          setIndex,
+          undefined,
+          undefined,
+          0
+        );
+      }
+    }
   };
 
   const handleSwapExercise = (
@@ -966,6 +1434,8 @@ const WorkoutSessionScreen = () => {
           onPress: () => {
             pauseTimer();
             endActiveStatus();
+            // Invalidate active session query so the "Resume Workout" banner appears
+            queryClient.invalidateQueries({ queryKey: ["activeSession"] });
             navigation.goBack();
           },
         },
@@ -1423,6 +1893,16 @@ const WorkoutSessionScreen = () => {
                     const next = prev === group.key ? null : group.key;
                     if (next === group.key) {
                       setActiveSetId(group.sets[0]?.id ?? null);
+                      // Sync newly expanded exercise to widget
+                      const firstUnloggedSet = group.sets.find(
+                        (s) => !loggedSetIds.has(s.id)
+                      );
+                      if (firstUnloggedSet) {
+                        const setIndex = group.sets.findIndex(
+                          (s) => s.id === firstUnloggedSet.id
+                        );
+                        syncCurrentExerciseToWidget(group.key, setIndex);
+                      }
                     }
                     return next;
                   });
@@ -1510,15 +1990,36 @@ const SetInputRow = ({
   onRemove,
   canRemove,
 }: SetInputRowProps) => {
-  const targetLine = [
-    set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
-    set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
 
-  const updateField = (field: keyof WorkoutSet, value: number | undefined) => {
-    onChange({ ...set, [field]: value });
+  const targetLine = isCardio
+    ? [
+        set.targetDistance !== undefined ? `${set.targetDistance} mi` : undefined,
+        set.targetIncline !== undefined ? `${set.targetIncline}% incline` : undefined,
+        set.targetDurationMinutes !== undefined ? `${set.targetDurationMinutes} min` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : [
+        set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
+        set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+  const updateField = (field: keyof WorkoutSet, text: string) => {
+    // Allow empty string, decimals in progress (e.g., "135."), and valid numbers
+    if (text === "") {
+      onChange({ ...set, [field]: undefined });
+      return;
+    }
+
+    // Allow partial decimal input (e.g., "135." or "135.5")
+    // Only parse to number if it's a complete valid number
+    const numValue = parseFloat(text);
+    if (!isNaN(numValue)) {
+      onChange({ ...set, [field]: numValue });
+    }
   };
 
   return (
@@ -1587,11 +2088,13 @@ const SetInputRow = ({
               gap: 6,
             })}
           >
-            <Ionicons
-              name={logged ? "checkmark-circle" : "radio-button-off"}
-              color={logged ? "#0B1220" : colors.textSecondary}
-              size={18}
-            />
+            {!logged ? (
+              <Ionicons
+                name='radio-button-off'
+                color={colors.textSecondary}
+                size={18}
+              />
+            ) : null}
             <Text
               style={{
                 color: logged ? "#0B1220" : colors.textPrimary,
@@ -1621,52 +2124,120 @@ const SetInputRow = ({
           ) : null}
         </View>
       </View>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Weight
-          </Text>
-          <TextInput
-            style={{
-              color: colors.textPrimary,
-              backgroundColor: colors.surface,
-              borderRadius: 8,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-            keyboardType='numeric'
-            placeholder='--'
-            placeholderTextColor={colors.textSecondary}
-            value={set.actualWeight?.toString() ?? ""}
-            onChangeText={(text) =>
-              updateField("actualWeight", text ? Number(text) : undefined)
-            }
-          />
+      {isCardio ? (
+        // Cardio inputs: Distance, Incline, Duration
+        <>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Distance (mi)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualDistance?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualDistance", text)}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Incline (%)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualIncline?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualIncline", text)}
+              />
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Duration (min)
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualDurationMinutes?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualDurationMinutes", text)}
+              />
+            </View>
+            <View style={{ flex: 1 }} />
+          </View>
+        </>
+      ) : (
+        // Strength training inputs: Weight & Reps
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Weight
+            </Text>
+            <TextInput
+              style={{
+                color: colors.textPrimary,
+                backgroundColor: colors.surface,
+                borderRadius: 8,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+              keyboardType='decimal-pad'
+              placeholder='--'
+              placeholderTextColor={colors.textSecondary}
+              value={set.actualWeight?.toString() ?? ""}
+              onChangeText={(text) => updateField("actualWeight", text)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Reps
+            </Text>
+            <TextInput
+              style={{
+                color: colors.textPrimary,
+                backgroundColor: colors.surface,
+                borderRadius: 8,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+              keyboardType='number-pad'
+              placeholder='--'
+              placeholderTextColor={colors.textSecondary}
+              value={set.actualReps?.toString() ?? ""}
+              onChangeText={(text) => updateField("actualReps", text)}
+            />
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Reps
-          </Text>
-          <TextInput
-            style={{
-              color: colors.textPrimary,
-              backgroundColor: colors.surface,
-              borderRadius: 8,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-            keyboardType='numeric'
-            placeholder='--'
-            placeholderTextColor={colors.textSecondary}
-            value={set.actualReps?.toString() ?? ""}
-            onChangeText={(text) =>
-              updateField("actualReps", text ? Number(text) : undefined)
-            }
-          />
-        </View>
-      </View>
+      )}
       <View
         style={{
           flexDirection: "row",
@@ -1732,6 +2303,9 @@ const ExerciseCard = ({
   onDeleteExercise,
   onImagePress,
 }: ExerciseCardProps) => {
+  const loggedSetsCount = group.sets.filter((s) => loggedSetIds.has(s.id)).length;
+  const allSetsLogged = loggedSetsCount === group.sets.length;
+
   const summaryLine = `${group.sets.length} sets · ${
     group.sets[0]?.targetReps
       ? `${group.sets[0].targetReps} reps`
@@ -1743,8 +2317,8 @@ const ExerciseCard = ({
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: isDragging ? colors.primary : colors.border,
-        backgroundColor: colors.surface,
+        borderColor: isDragging ? colors.primary : allSetsLogged && !expanded ? colors.primary : colors.border,
+        backgroundColor: allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
         marginBottom: 12,
         opacity: isDragging ? 0.7 : 1,
       }}
@@ -1789,7 +2363,9 @@ const ExerciseCard = ({
               {group.name}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              {summaryLine}
+              {allSetsLogged && !expanded
+                ? `Complete · ${loggedSetsCount}/${group.sets.length} sets logged`
+                : summaryLine}
             </Text>
           </View>
           <Ionicons

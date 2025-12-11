@@ -76,6 +76,13 @@ export interface WorkoutSet {
   actualReps?: number;
   actualWeight?: number;
   rpe?: number;
+  // Cardio-specific fields
+  targetDistance?: number;
+  actualDistance?: number;
+  targetIncline?: number;
+  actualIncline?: number;
+  targetDurationMinutes?: number;
+  actualDurationMinutes?: number;
 }
 
 export interface WorkoutSession {

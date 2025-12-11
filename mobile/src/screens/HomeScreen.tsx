@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useActiveSession } from "../hooks/useActiveSession";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -25,6 +26,7 @@ import { WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
+import { deleteSession } from "../api/sessions";
 import { useFatigue } from "../hooks/useFatigue";
 import {
   TRAINING_SPLIT_LABELS,
@@ -47,6 +49,9 @@ const HomeScreen = () => {
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
 
+  // Check for active (uncompleted) workout session
+  const { data: activeSession } = useActiveSession();
+
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -54,6 +59,10 @@ const HomeScreen = () => {
     null
   );
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [dismissedSession, setDismissedSession] = useState<{
+    id: string;
+    dismissedAt: number;
+  } | null>(null);
 
   // Subscription status for trial/grace/expired handling
   const subscriptionStatusError = subscriptionAccess.isError;
@@ -78,10 +87,80 @@ const HomeScreen = () => {
     return "Ready to train";
   }, [fatigue]);
 
+  const queryClient = useQueryClient();
+
   const startWorkout = (template: WorkoutTemplate | null) => {
     if (!template) return;
     navigation.navigate("WorkoutSession", { templateId: template.id });
   };
+
+  const cancelActiveWorkout = useMutation({
+    mutationFn: async (sessionId: string) => {
+      await deleteSession(sessionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to cancel workout");
+      setDismissedSession(null);
+    },
+  });
+
+  const handleCancelWorkout = (sessionId: string) => {
+    Alert.alert(
+      "Cancel Workout?",
+      "This will delete your unfinished workout. This cannot be undone.",
+      [
+        { text: "Keep Workout", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDismissedSession({
+              id: sessionId,
+              dismissedAt: Date.now(),
+            });
+            // Optimistically drop the banner so it doesn't flash back
+            queryClient.setQueryData(["activeSession"], null);
+            cancelActiveWorkout.mutate(sessionId);
+          },
+        },
+      ]
+    );
+  };
+
+  // If a different session comes in, clear any dismissal guard
+  useEffect(() => {
+    if (!dismissedSession || !activeSession?.startedAt) return;
+    const startedAtMs = new Date(activeSession.startedAt).getTime();
+    if (Number.isNaN(startedAtMs)) return;
+
+    // Only re-show the banner if a newer session appears after the dismissal
+    if (
+      activeSession.id !== dismissedSession.id &&
+      startedAtMs > dismissedSession.dismissedAt
+    ) {
+      setDismissedSession(null);
+    }
+  }, [activeSession, dismissedSession]);
+
+  const shouldShowResumeBanner = useMemo(() => {
+    if (!activeSession) return false;
+    if (!dismissedSession) return true;
+
+    const startedAtMs = activeSession.startedAt
+      ? new Date(activeSession.startedAt).getTime()
+      : NaN;
+
+    if (activeSession.id === dismissedSession.id) return false;
+    if (Number.isNaN(startedAtMs)) return true;
+
+    // Hide any sessions that started before or at the time we dismissed the banner
+    return startedAtMs > dismissedSession.dismissedAt;
+  }, [activeSession, dismissedSession]);
+
+  const resumeSession = shouldShowResumeBanner ? activeSession : null;
 
   return (
     <ScreenContainer scroll>
@@ -191,6 +270,93 @@ const HomeScreen = () => {
             Renew your plan to unlock AI workouts, analytics, and progression.
           </Text>
         </Pressable>
+      ) : null}
+
+      {/* Resume Workout Banner - Show for any unfinished workout */}
+      {resumeSession ? (
+        <View
+          style={{
+            marginTop: 8,
+            marginBottom: 4,
+            backgroundColor: "rgba(34,197,94,0.15)",
+            borderColor: colors.primary,
+            borderWidth: 1,
+            borderRadius: 12,
+            overflow: "hidden",
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Pressable
+            onPress={() =>
+              navigation.navigate("WorkoutSession", {
+                sessionId: resumeSession.id,
+                templateId: resumeSession.templateId || "",
+              })
+            }
+            style={{
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              flex: 1,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: colors.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name='play' size={20} color='#0B1220' />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 16,
+                }}
+              >
+                Resume Workout
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.regular,
+                  marginTop: 2,
+                  fontSize: 13,
+                }}
+              >
+                {resumeSession.templateName || "Workout in progress"}
+              </Text>
+            </View>
+            <Ionicons name='chevron-forward' size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              cancelActiveWorkout.isPending
+                ? undefined
+                : handleCancelWorkout(resumeSession.id)
+            }
+            style={({ pressed }) => ({
+              paddingHorizontal: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              borderLeftWidth: 1,
+              borderLeftColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+              opacity: cancelActiveWorkout.isPending ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name='close' size={18} color={colors.textPrimary} />
+          </Pressable>
+        </View>
       ) : null}
 
       <View style={{ gap: 12 }}>
@@ -485,7 +651,11 @@ const HomeScreen = () => {
           >
             <View style={{ gap: 4 }}>
               <Text
-                style={{ ...typography.heading2, color: colors.textPrimary, fontSize: 18 }}
+                style={{
+                  ...typography.heading2,
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                }}
               >
                 Recovery Status
               </Text>
@@ -523,9 +693,20 @@ const HomeScreen = () => {
               <RecoveryBodyMap
                 data={fatigue.perMuscle}
                 onSelectMuscle={() => navigation.navigate("Recovery")}
-                gender={(user?.onboardingData?.bodyGender as "male" | "female" | undefined) ?? "male"}
+                gender={
+                  (user?.onboardingData?.bodyGender as
+                    | "male"
+                    | "female"
+                    | undefined) ?? "male"
+                }
               />
-              <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  textAlign: "center",
+                }}
+              >
                 {isPro
                   ? "Tap a muscle to see detailed recovery insights."
                   : "Tap the body map to explore recovery features."}
@@ -533,7 +714,9 @@ const HomeScreen = () => {
             </View>
           ) : (
             <View style={{ gap: 10, paddingVertical: 8 }}>
-              <Text style={{ color: colors.textSecondary, textAlign: "center" }}>
+              <Text
+                style={{ color: colors.textSecondary, textAlign: "center" }}
+              >
                 {fatigueLoading
                   ? "Loading recovery data..."
                   : "Log a few workouts to see your muscle recovery heatmap and track which muscles need rest."}
@@ -564,7 +747,11 @@ const HomeScreen = () => {
             >
               <View style={{ gap: 4 }}>
                 <Text
-                  style={{ ...typography.heading2, color: colors.textPrimary, fontSize: 18 }}
+                  style={{
+                    ...typography.heading2,
+                    color: colors.textPrimary,
+                    fontSize: 18,
+                  }}
                 >
                   Advanced Analytics
                 </Text>
@@ -572,7 +759,7 @@ const HomeScreen = () => {
                   Volume trends & muscle balance
                 </Text>
               </View>
-              <Ionicons name="bar-chart" size={24} color={colors.primary} />
+              <Ionicons name='bar-chart' size={24} color={colors.primary} />
             </View>
             <Pressable
               onPress={() => navigation.navigate("Analytics")}
@@ -674,7 +861,8 @@ const MUSCLE_GROUPS = [
   { value: "back", label: "Back", emoji: "🦾" },
   { value: "legs", label: "Legs", emoji: "🦵" },
   { value: "shoulders", label: "Shoulders", emoji: "🏋️" },
-  { value: "arms", label: "Arms", emoji: "💪" },
+  { value: "biceps", label: "Biceps", emoji: "💪" },
+  { value: "triceps", label: "Triceps", emoji: "💪" },
 ];
 
 const SPLIT_OPTIONS = [
@@ -771,7 +959,10 @@ const SwapModal = ({
     },
   });
 
-  const handleAIWorkout = (type: "muscle" | "split", showPaywallCallback: () => void) => {
+  const handleAIWorkout = (
+    type: "muscle" | "split",
+    showPaywallCallback: () => void
+  ) => {
     if (!isPro) {
       showPaywallCallback();
       return;
@@ -862,609 +1053,600 @@ const SwapModal = ({
   ];
 
   return (
-      <Modal visible={visible} animationType='slide' transparent>
+    <Modal visible={visible} animationType='slide' transparent>
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "flex-end",
+        }}
+      >
         <Pressable
-          onPress={onClose}
+          onPress={(e) => e.stopPropagation()}
           style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            justifyContent: "flex-end",
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 16,
+            paddingBottom: 16 + safeBottomPadding,
+            maxHeight: "80%",
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 12,
+            marginBottom: -1,
           }}
         >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
+          <View
             style={{
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 16,
-              paddingBottom: 16 + safeBottomPadding,
-              maxHeight: "80%",
-              borderWidth: 1,
-              borderColor: colors.border,
-              gap: 12,
-              marginBottom: -1,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+              Choose a workout
+            </Text>
+            <Pressable onPress={onClose}>
               <Text
-                style={{ ...typography.heading2, color: colors.textPrimary }}
-              >
-                Choose a workout
-              </Text>
-              <Pressable onPress={onClose}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Close
-                </Text>
-              </Pressable>
-            </View>
-
-            {generateMutation.isPending && (
-              <View
                 style={{
-                  padding: 16,
-                  backgroundColor: colors.surfaceMuted,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  gap: 8,
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.semibold,
                 }}
               >
-                <ActivityIndicator color={colors.primary} size='large' />
-                <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
-                  Generating your personalized workout...
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  This may take 10-30 seconds
-                </Text>
-              </View>
-            )}
+                Close
+              </Text>
+            </Pressable>
+          </View>
 
+          {generateMutation.isPending && (
             <View
               style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 10,
-                marginBottom: 12,
+                padding: 16,
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: 12,
+                alignItems: "center",
+                gap: 8,
               }}
             >
-              {actionOptions.map((option) => {
-                const isActive =
-                  (option.action === "saved" && showSaved) ||
-                  (option.action === "muscle" && showMuscleFocus) ||
-                  (option.action === "ai" && showAISplits);
+              <ActivityIndicator color={colors.primary} size='large' />
+              <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
+                Generating your personalized workout...
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                This may take 10-30 seconds
+              </Text>
+            </View>
+          )}
 
-                return (
-                  <Pressable
-                    key={option.label}
-                    disabled={generateMutation.isPending}
-                    onPress={() => {
-                      if (option.action === "scratch") {
-                        onClose();
-                        navigation.navigate("WorkoutTemplateBuilder", {});
-                        return;
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 12,
+            }}
+          >
+            {actionOptions.map((option) => {
+              const isActive =
+                (option.action === "saved" && showSaved) ||
+                (option.action === "muscle" && showMuscleFocus) ||
+                (option.action === "ai" && showAISplits);
+
+              return (
+                <Pressable
+                  key={option.label}
+                  disabled={generateMutation.isPending}
+                  onPress={() => {
+                    if (option.action === "scratch") {
+                      onClose();
+                      navigation.navigate("WorkoutTemplateBuilder", {});
+                      return;
+                    }
+                    if (option.action === "saved") {
+                      if (showSaved) {
+                        // Toggle off
+                        setShowSaved(false);
+                      } else {
+                        // Toggle on, turn others off
+                        setShowSaved(true);
+                        setShowMuscleFocus(false);
+                        setShowAISplits(false);
+                        setSavedIsNearTop(true);
+                        setSavedIsNearBottom(false);
                       }
-                      if (option.action === "saved") {
-                        if (showSaved) {
-                          // Toggle off
-                          setShowSaved(false);
-                        } else {
-                          // Toggle on, turn others off
-                          setShowSaved(true);
-                          setShowMuscleFocus(false);
-                          setShowAISplits(false);
-                          setSavedIsNearTop(true);
-                          setSavedIsNearBottom(false);
-                        }
-                        return;
+                      return;
+                    }
+                    if (option.action === "muscle") {
+                      if (showMuscleFocus) {
+                        // Toggle off
+                        setShowMuscleFocus(false);
+                        setSelectedMuscles([]);
+                      } else {
+                        handleAIWorkout("muscle", showPaywallModal);
                       }
-                      if (option.action === "muscle") {
-                        if (showMuscleFocus) {
-                          // Toggle off
-                          setShowMuscleFocus(false);
-                          setSelectedMuscles([]);
-                        } else {
-                          handleAIWorkout("muscle", showPaywallModal);
-                        }
-                        return;
+                      return;
+                    }
+                    if (option.action === "ai") {
+                      if (showAISplits) {
+                        // Toggle off
+                        setShowAISplits(false);
+                      } else {
+                        handleAIWorkout("split", showPaywallModal);
                       }
-                      if (option.action === "ai") {
-                        if (showAISplits) {
-                          // Toggle off
-                          setShowAISplits(false);
-                        } else {
-                          handleAIWorkout("split", showPaywallModal);
-                        }
-                        return;
-                      }
-                    }}
-                    style={({ pressed }) => ({
-                      width: "48%",
-                      padding: 14,
+                      return;
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    width: "48%",
+                    padding: 14,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.primary : colors.border,
+                    backgroundColor: isActive
+                      ? `${colors.primary}15`
+                      : pressed
+                      ? colors.surfaceMuted
+                      : colors.surface,
+                    opacity: generateMutation.isPending ? 0.5 : 1,
+                    alignItems: "center",
+                    gap: 8,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
                       borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: isActive ? colors.primary : colors.border,
-                      backgroundColor: isActive
-                        ? `${colors.primary}15`
-                        : pressed
-                        ? colors.surfaceMuted
-                        : colors.surface,
-                      opacity: generateMutation.isPending ? 0.5 : 1,
+                      backgroundColor: `${colors.primary}15`,
                       alignItems: "center",
-                      gap: 8,
-                    })}
+                      justifyContent: "center",
+                    }}
                   >
+                    <Text style={{ fontSize: 24 }}>{option.icon}</Text>
+                  </View>
+                  <View style={{ alignItems: "center" }}>
                     <View
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 12,
-                        backgroundColor: `${colors.primary}15`,
+                        flexDirection: "row",
                         alignItems: "center",
-                        justifyContent: "center",
+                        gap: 4,
                       }}
                     >
-                      <Text style={{ fontSize: 24 }}>{option.icon}</Text>
-                    </View>
-                    <View style={{ alignItems: "center" }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                            fontSize: 14,
-                            textAlign: "center",
-                          }}
-                        >
-                          {option.label}
-                        </Text>
-                        {!isPro &&
-                          (option.action === "muscle" ||
-                            option.action === "ai") && (
-                            <View
-                              style={{
-                                backgroundColor: colors.primary,
-                                paddingHorizontal: 5,
-                                paddingVertical: 2,
-                                borderRadius: 4,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: "#0B1220",
-                                  fontSize: 8,
-                                  fontWeight: "700",
-                                }}
-                              >
-                                PRO
-                              </Text>
-                            </View>
-                          )}
-                      </View>
                       <Text
                         style={{
-                          color: colors.textSecondary,
-                          fontSize: 11,
-                          marginTop: 4,
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 14,
                           textAlign: "center",
                         }}
-                        numberOfLines={2}
                       >
-                        {option.helper}
+                        {option.label}
                       </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Muscle Group Selection */}
-            {showMuscleFocus && (
-              <>
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginVertical: 4,
-                  }}
-                />
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
-                    marginBottom: 4,
-                  }}
-                >
-                  Select muscle groups
-                </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 12,
-                    marginBottom: 8,
-                  }}
-                >
-                  Choose one or more muscle groups to focus on
-                </Text>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                >
-                  {MUSCLE_GROUPS.map((muscle) => {
-                    const isSelected = selectedMuscles.includes(
-                      muscle.label.toLowerCase()
-                    );
-                    return (
-                      <Pressable
-                        key={muscle.value}
-                        onPress={() => toggleMuscle(muscle.label.toLowerCase())}
-                        disabled={generateMutation.isPending}
-                        style={({ pressed }) => ({
-                          paddingHorizontal: 16,
-                          paddingVertical: 12,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: isSelected
-                            ? colors.primary
-                            : colors.border,
-                          backgroundColor: isSelected
-                            ? `${colors.primary}20`
-                            : colors.surfaceMuted,
-                          opacity:
-                            pressed || generateMutation.isPending ? 0.6 : 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        })}
-                      >
-                        <Text style={{ fontSize: 18 }}>{muscle.emoji}</Text>
-                        <Text
-                          style={{
-                            color: isSelected
-                              ? colors.primary
-                              : colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                          }}
-                        >
-                          {muscle.label}
-                        </Text>
-                        {isSelected && (
-                          <Ionicons
-                            name='checkmark-circle'
-                            size={16}
-                            color={colors.primary}
-                          />
+                      {!isPro &&
+                        (option.action === "muscle" ||
+                          option.action === "ai") && (
+                          <View
+                            style={{
+                              backgroundColor: colors.primary,
+                              paddingHorizontal: 5,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: "#0B1220",
+                                fontSize: 8,
+                                fontWeight: "700",
+                              }}
+                            >
+                              PRO
+                            </Text>
+                          </View>
                         )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {selectedMuscles.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      generateMutation.mutate({ muscles: selectedMuscles });
-                    }}
-                    disabled={generateMutation.isPending}
-                    style={({ pressed }) => ({
-                      marginTop: 12,
-                      paddingVertical: 14,
-                      borderRadius: 12,
-                      backgroundColor: colors.primary,
-                      alignItems: "center",
-                      opacity: pressed || generateMutation.isPending ? 0.8 : 1,
-                    })}
-                  >
+                    </View>
                     <Text
                       style={{
-                        color: colors.surface,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 16,
+                        color: colors.textSecondary,
+                        fontSize: 11,
+                        marginTop: 4,
+                        textAlign: "center",
                       }}
+                      numberOfLines={2}
                     >
-                      Generate Workout
+                      {option.helper}
                     </Text>
-                  </Pressable>
-                )}
-              </>
-            )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
 
-            {/* AI Split Selection */}
-            {showAISplits && (
-              <>
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginVertical: 4,
-                  }}
-                />
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
-                    marginBottom: 8,
-                  }}
-                >
-                  Select workout split
-                </Text>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                >
-                  {SPLIT_OPTIONS.map((split) => (
+          {/* Muscle Group Selection */}
+          {showMuscleFocus && (
+            <>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: colors.border,
+                  marginVertical: 4,
+                }}
+              />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  marginBottom: 4,
+                }}
+              >
+                Select muscle groups
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginBottom: 8,
+                }}
+              >
+                Choose one or more muscle groups to focus on
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {MUSCLE_GROUPS.map((muscle) => {
+                  const isSelected = selectedMuscles.includes(
+                    muscle.label.toLowerCase()
+                  );
+                  return (
                     <Pressable
-                      key={split.value}
-                      onPress={() => {
-                        generateMutation.mutate({ split: split.value });
-                      }}
+                      key={muscle.value}
+                      onPress={() => toggleMuscle(muscle.label.toLowerCase())}
                       disabled={generateMutation.isPending}
                       style={({ pressed }) => ({
                         paddingHorizontal: 16,
                         paddingVertical: 12,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: colors.primary,
-                        backgroundColor: colors.surfaceMuted,
+                        borderColor: isSelected
+                          ? colors.primary
+                          : colors.border,
+                        backgroundColor: isSelected
+                          ? `${colors.primary}20`
+                          : colors.surfaceMuted,
                         opacity:
                           pressed || generateMutation.isPending ? 0.6 : 1,
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 8,
-                        minWidth: 100,
                       })}
                     >
-                      <Text style={{ fontSize: 18 }}>{split.emoji}</Text>
+                      <Text style={{ fontSize: 18 }}>{muscle.emoji}</Text>
                       <Text
                         style={{
-                          color: colors.textPrimary,
+                          color: isSelected
+                            ? colors.primary
+                            : colors.textPrimary,
                           fontFamily: fontFamilies.semibold,
                         }}
                       >
-                        {split.label}
+                        {muscle.label}
                       </Text>
+                      {isSelected && (
+                        <Ionicons
+                          name='checkmark-circle'
+                          size={16}
+                          color={colors.primary}
+                        />
+                      )}
                     </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {/* Saved Workouts */}
-            {showSaved && (
-              <>
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginVertical: 8,
+                  );
+                })}
+              </View>
+              {selectedMuscles.length > 0 && (
+                <Pressable
+                  onPress={() => {
+                    generateMutation.mutate({ muscles: selectedMuscles });
                   }}
-                />
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
+                  disabled={generateMutation.isPending}
+                  style={({ pressed }) => ({
+                    marginTop: 12,
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    backgroundColor: colors.primary,
                     alignItems: "center",
-                    marginBottom: 12,
-                  }}
+                    opacity: pressed || generateMutation.isPending ? 0.8 : 1,
+                  })}
                 >
                   <Text
                     style={{
-                      color: colors.textPrimary,
+                      color: colors.surface,
                       fontFamily: fontFamilies.semibold,
                       fontSize: 16,
                     }}
                   >
-                    Saved Workouts
+                    Generate Workout
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                    {templates.length}{" "}
-                    {templates.length === 1 ? "template" : "templates"}
-                  </Text>
-                </View>
-                <View
+                </Pressable>
+              )}
+            </>
+          )}
+
+          {/* AI Split Selection */}
+          {showAISplits && (
+            <>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: colors.border,
+                  marginVertical: 4,
+                }}
+              />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  marginBottom: 8,
+                }}
+              >
+                Select workout split
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {SPLIT_OPTIONS.map((split) => (
+                  <Pressable
+                    key={split.value}
+                    onPress={() => {
+                      generateMutation.mutate({ split: split.value });
+                    }}
+                    disabled={generateMutation.isPending}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.primary,
+                      backgroundColor: colors.surfaceMuted,
+                      opacity: pressed || generateMutation.isPending ? 0.6 : 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 100,
+                    })}
+                  >
+                    <Text style={{ fontSize: 18 }}>{split.emoji}</Text>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                      }}
+                    >
+                      {split.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* Saved Workouts */}
+          {showSaved && (
+            <>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: colors.border,
+                  marginVertical: 8,
+                }}
+              />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <Text
                   style={{
-                    position: "relative",
-                    height: 420 + safeBottomPadding,
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
                   }}
                 >
-                  {showSavedTopShadow && (
-                    <LinearGradient
-                      colors={[colors.surface, `${colors.surface}00`]}
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: 40,
-                        pointerEvents: "none",
-                        zIndex: 1,
-                      }}
-                    />
-                  )}
-                  <FlatList
-                    data={templates}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item: template }) => (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
-                          marginBottom: 10,
-                          backgroundColor: colors.surface,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          padding: 12,
-                        }}
-                      >
-                        <Pressable
-                          style={{ flex: 1 }}
-                          onPress={() => {
-                            onSelect(template);
-                            onClose();
-                          }}
-                        >
-                          <View>
-                            <Text
-                              style={{
-                                color: colors.textPrimary,
-                                fontFamily: fontFamilies.semibold,
-                                fontSize: 15,
-                                marginBottom: 4,
-                              }}
-                            >
-                              {template.name}
-                            </Text>
-                            <Text
-                              style={{
-                                color: colors.textSecondary,
-                                fontSize: 12,
-                              }}
-                            >
-                              {template.exercises.length} exercises
-                              {template.splitType && ` · ${template.splitType}`}
-                            </Text>
-                          </View>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            Alert.alert(
-                              "Delete Workout",
-                              `Are you sure you want to delete "${template.name}"? This cannot be undone.`,
-                              [
-                                { text: "Cancel", style: "cancel" },
-                                {
-                                  text: "Delete",
-                                  style: "destructive",
-                                  onPress: async () => {
-                                    try {
-                                      await deleteTemplate(template.id);
-                                      // Invalidate and refetch the templates query to update UI
-                                      queryClient.invalidateQueries({
-                                        queryKey: ["templates"],
-                                      });
-                                    } catch (error) {
-                                      Alert.alert(
-                                        "Error",
-                                        "Failed to delete workout. Please try again."
-                                      );
-                                    }
-                                  },
-                                },
-                              ]
-                            );
-                          }}
-                          style={({ pressed }) => ({
-                            padding: 10,
-                            borderRadius: 8,
-                            backgroundColor: pressed
-                              ? `${colors.border}50`
-                              : "transparent",
-                          })}
-                        >
-                          <Ionicons
-                            name='trash-outline'
-                            size={20}
-                            color='#ef4444'
-                          />
-                        </Pressable>
-                      </View>
-                    )}
-                    contentContainerStyle={{
-                      paddingBottom: 48 + safeBottomPadding,
-                      paddingTop: templateCount > 3 ? 12 : 4,
-                      paddingHorizontal: 2,
+                  Saved Workouts
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {templates.length}{" "}
+                  {templates.length === 1 ? "template" : "templates"}
+                </Text>
+              </View>
+              <View
+                style={{
+                  position: "relative",
+                  height: 420 + safeBottomPadding,
+                }}
+              >
+                {showSavedTopShadow && (
+                  <LinearGradient
+                    colors={[colors.surface, `${colors.surface}00`]}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 40,
+                      pointerEvents: "none",
+                      zIndex: 1,
                     }}
-                    showsVerticalScrollIndicator={false}
-                    nestedScrollEnabled
-                    style={{ maxHeight: 420 + safeBottomPadding }}
-                    onScroll={handleSavedScroll}
-                    scrollEventThrottle={16}
-                    scrollIndicatorInsets={{
-                      right: 1,
-                      bottom: safeBottomPadding,
-                    }}
-                    ListHeaderComponent={<View style={{ height: 4 }} />}
-                    ListFooterComponent={
-                      <View style={{ height: safeBottomPadding + 64 }} />
-                    }
-                    ListEmptyComponent={
-                      <View
-                        style={{
-                          padding: 32,
-                          alignItems: "center",
-                          backgroundColor: colors.surfaceMuted,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          borderStyle: "dashed",
-                        }}
-                      >
-                        <Text style={{ fontSize: 40, marginBottom: 8 }}>
-                          📋
-                        </Text>
-                        <Text
-                          style={{
-                            color: colors.textPrimary,
-                            fontFamily: fontFamilies.semibold,
-                            marginBottom: 4,
-                          }}
-                        >
-                          No saved workouts yet
-                        </Text>
-                        <Text
-                          style={{
-                            color: colors.textSecondary,
-                            fontSize: 13,
-                            textAlign: "center",
-                          }}
-                        >
-                          Create a workout template to get started
-                        </Text>
-                      </View>
-                    }
                   />
-                  {showSavedBottomShadow && (
-                    <LinearGradient
-                      colors={[
-                        "transparent",
-                        `${colors.surface}10`,
-                        `${colors.surface}30`,
-                        `${colors.surface}60`,
-                        `${colors.surface}90`,
-                        colors.surface,
-                      ]}
+                )}
+                <FlatList
+                  data={templates}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item: template }) => (
+                    <View
                       style={{
-                        position: "absolute",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: 80,
-                        pointerEvents: "none",
-                        zIndex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                        marginBottom: 10,
+                        backgroundColor: colors.surface,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        padding: 12,
                       }}
-                    />
+                    >
+                      <Pressable
+                        style={{ flex: 1 }}
+                        onPress={() => {
+                          onSelect(template);
+                          onClose();
+                        }}
+                      >
+                        <View>
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.semibold,
+                              fontSize: 15,
+                              marginBottom: 4,
+                            }}
+                          >
+                            {template.name}
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                            }}
+                          >
+                            {template.exercises.length} exercises
+                            {template.splitType && ` · ${template.splitType}`}
+                          </Text>
+                        </View>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          Alert.alert(
+                            "Delete Workout",
+                            `Are you sure you want to delete "${template.name}"? This cannot be undone.`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Delete",
+                                style: "destructive",
+                                onPress: async () => {
+                                  try {
+                                    await deleteTemplate(template.id);
+                                    // Invalidate and refetch the templates query to update UI
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["templates"],
+                                    });
+                                  } catch (error) {
+                                    Alert.alert(
+                                      "Error",
+                                      "Failed to delete workout. Please try again."
+                                    );
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          padding: 10,
+                          borderRadius: 8,
+                          backgroundColor: pressed
+                            ? `${colors.border}50`
+                            : "transparent",
+                        })}
+                      >
+                        <Ionicons
+                          name='trash-outline'
+                          size={20}
+                          color='#ef4444'
+                        />
+                      </Pressable>
+                    </View>
                   )}
-                </View>
-              </>
-            )}
-          </Pressable>
+                  contentContainerStyle={{
+                    paddingBottom: 48 + safeBottomPadding,
+                    paddingTop: templateCount > 3 ? 12 : 4,
+                    paddingHorizontal: 2,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  nestedScrollEnabled
+                  style={{ maxHeight: 420 + safeBottomPadding }}
+                  onScroll={handleSavedScroll}
+                  scrollEventThrottle={16}
+                  scrollIndicatorInsets={{
+                    right: 1,
+                    bottom: safeBottomPadding,
+                  }}
+                  ListHeaderComponent={<View style={{ height: 4 }} />}
+                  ListFooterComponent={
+                    <View style={{ height: safeBottomPadding + 64 }} />
+                  }
+                  ListEmptyComponent={
+                    <View
+                      style={{
+                        padding: 32,
+                        alignItems: "center",
+                        backgroundColor: colors.surfaceMuted,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        borderStyle: "dashed",
+                      }}
+                    >
+                      <Text style={{ fontSize: 40, marginBottom: 8 }}>📋</Text>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          marginBottom: 4,
+                        }}
+                      >
+                        No saved workouts yet
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 13,
+                          textAlign: "center",
+                        }}
+                      >
+                        Create a workout template to get started
+                      </Text>
+                    </View>
+                  }
+                />
+                {showSavedBottomShadow && (
+                  <LinearGradient
+                    colors={[
+                      "transparent",
+                      `${colors.surface}10`,
+                      `${colors.surface}30`,
+                      `${colors.surface}60`,
+                      `${colors.surface}90`,
+                      colors.surface,
+                    ]}
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 80,
+                      pointerEvents: "none",
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+              </View>
+            </>
+          )}
         </Pressable>
-      </Modal>
+      </Pressable>
+    </Modal>
   );
 };
 

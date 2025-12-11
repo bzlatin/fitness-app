@@ -36,8 +36,10 @@ import ScheduleStep from "../components/onboarding/ScheduleStep";
 import LimitationsStep from "../components/onboarding/LimitationsStep";
 import BodyProfileStep from "../components/onboarding/BodyProfileStep";
 import TrainingStyleStep from "../components/onboarding/TrainingStyleStep";
+import NotificationsStep from "../components/onboarding/NotificationsStep";
 import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 import { normalizeHandle } from "../utils/formatHandle";
+import { registerForPushNotificationsAsync } from "../services/notifications";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { ensureShareableAvatarUri } from "../utils/avatarImage";
 
@@ -58,9 +60,11 @@ const OnboardingScreen = () => {
   // Calculate total steps dynamically based on what we skip
   // Skip WelcomeStep (profile editing) if retaking
   // Skip PlanSelectionStep if user is already Pro
+  // Skip NotificationsStep if retaking (they can manage in Settings)
   const skipWelcome = isRetake;
   const skipPlanSelection = isRetake && isProUser;
-  const TOTAL_STEPS = 9 - (skipWelcome ? 1 : 0) - (skipPlanSelection ? 1 : 0);
+  const skipNotifications = isRetake;
+  const TOTAL_STEPS = 10 - (skipWelcome ? 1 : 0) - (skipPlanSelection ? 1 : 0) - (skipNotifications ? 1 : 0);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,7 +101,10 @@ const OnboardingScreen = () => {
   // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
 
-  // Step 9: Plan Selection
+  // Step 9: Notifications
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // Step 10: Plan Selection
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("free");
 
   const handlePlanChange = (plan: "free" | "pro") => {
@@ -148,10 +155,14 @@ const OnboardingScreen = () => {
     if (skipWelcome) {
       actualStep += 1;
     }
+    // If skipping notifications (retake), shift steps after 8 up
+    if (skipNotifications && actualStep >= 9) {
+      actualStep += 1;
+    }
     // If we're at the plan selection step and skipping it, handle separately
-    if (skipPlanSelection && actualStep >= 9) {
+    if (skipPlanSelection && actualStep >= 10) {
       // This shouldn't happen as we adjusted TOTAL_STEPS, but handle it gracefully
-      return 9; // Map to plan selection (which we'll skip in renderStep)
+      return 10; // Map to plan selection (which we'll skip in renderStep)
     }
     return actualStep;
   };
@@ -178,6 +189,8 @@ const OnboardingScreen = () => {
       case 8:
         return preferredSplit !== undefined;
       case 9:
+        return true; // Notifications step - always can proceed (optional)
+      case 10:
         return true; // Plan selection step - always can proceed
       default:
         return false;
@@ -244,6 +257,16 @@ const OnboardingScreen = () => {
         avatarUrl: uploadReadyAvatar,
         onboardingData: onboardingData as any,
       });
+
+      // Register for push notifications if user opted in
+      if (notificationsEnabled && !isRetake) {
+        try {
+          await registerForPushNotificationsAsync();
+        } catch (notifError) {
+          // Don't block onboarding completion if notification registration fails
+          console.error("[Onboarding] Failed to register for notifications:", notifError);
+        }
+      }
 
       // If editing preferences (isRetake) and inside a navigator, go back
       if (isRetake && navigation) {
@@ -334,6 +357,17 @@ const OnboardingScreen = () => {
           <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
         );
       case 9:
+        // Skip NotificationsStep if retaking (they can manage in Settings)
+        if (skipNotifications) {
+          return null;
+        }
+        return (
+          <NotificationsStep
+            notificationsEnabled={notificationsEnabled}
+            onNotificationsEnabledChange={setNotificationsEnabled}
+          />
+        );
+      case 10:
         // Skip PlanSelectionStep if user is already Pro and retaking
         if (skipPlanSelection) {
           return null;

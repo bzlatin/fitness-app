@@ -7,9 +7,18 @@ build/
 .DS_Store
 .vscode/
 coverage/
-ios/
-android/
 web-build/
+
+# iOS - ignore generated files but keep custom native modules
+mobile/ios/Pods/
+mobile/ios/build/
+mobile/ios/*.xcworkspace/xcuserdata/
+mobile/ios/*.xcodeproj/xcuserdata/
+mobile/ios/*.xcodeproj/project.xcworkspace/xcshareddata/
+mobile/ios/DerivedData/
+
+# Android - ignore generated files
+android/
 *.tgz
 npm-debug.log*
 yarn-error.log*

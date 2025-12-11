@@ -214,7 +214,9 @@ const initDb = async () => {
       ADD COLUMN IF NOT EXISTS weekly_goal INTEGER NOT NULL DEFAULT 4,
       ADD COLUMN IF NOT EXISTS onboarding_data JSONB,
       ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true
+      ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS push_token TEXT,
+      ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"goalReminders": true, "inactivityNudges": true, "squadActivity": true, "weeklyGoalMet": true, "quietHoursStart": 22, "quietHoursEnd": 8, "maxNotificationsPerWeek": 3}'::jsonb
   `);
     await (0, exports.query)(`
     CREATE UNIQUE INDEX IF NOT EXISTS users_handle_unique_idx
@@ -331,6 +333,16 @@ const initDb = async () => {
     await (0, exports.query)(`
     CREATE INDEX IF NOT EXISTS workout_sets_session_idx ON workout_sets(session_id)
   `);
+    // Add cardio-specific columns to workout_sets table
+    await (0, exports.query)(`
+    ALTER TABLE workout_sets
+      ADD COLUMN IF NOT EXISTS target_distance NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_distance NUMERIC,
+      ADD COLUMN IF NOT EXISTS target_incline NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_incline NUMERIC,
+      ADD COLUMN IF NOT EXISTS target_duration_minutes NUMERIC,
+      ADD COLUMN IF NOT EXISTS actual_duration_minutes NUMERIC
+  `);
     await (0, exports.query)(`
     CREATE TABLE IF NOT EXISTS active_workout_statuses (
       session_id TEXT PRIMARY KEY,
@@ -371,6 +383,12 @@ const initDb = async () => {
     ALTER TABLE squads
       ADD COLUMN IF NOT EXISTS max_members INTEGER NOT NULL DEFAULT 50
   `);
+    // Squad description and visibility
+    await (0, exports.query)(`
+    ALTER TABLE squads
+      ADD COLUMN IF NOT EXISTS description TEXT,
+      ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false
+  `);
     await (0, exports.query)(`
     CREATE TABLE IF NOT EXISTS squad_members (
       squad_id TEXT NOT NULL REFERENCES squads(id) ON DELETE CASCADE,
@@ -402,6 +420,40 @@ const initDb = async () => {
     await (0, exports.query)(`
     CREATE INDEX IF NOT EXISTS squad_invite_links_squad_id_idx ON squad_invite_links(squad_id)
   `);
+    // Workout reactions (emoji reactions and comments)
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS workout_reactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_type TEXT NOT NULL CHECK (target_type IN ('status', 'share')),
+      target_id TEXT NOT NULL,
+      reaction_type TEXT NOT NULL CHECK (reaction_type IN ('emoji', 'comment')),
+      emoji TEXT,
+      comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS workout_reactions_target_idx ON workout_reactions(target_type, target_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS workout_reactions_user_idx ON workout_reactions(user_id)
+  `);
+    // Unique constraint for emoji reactions (one emoji type per user per target)
+    await (0, exports.query)(`
+    CREATE UNIQUE INDEX IF NOT EXISTS workout_reactions_unique_emoji_idx
+    ON workout_reactions(user_id, target_type, target_id, emoji)
+    WHERE reaction_type = 'emoji'
+  `);
+    // User blocks table
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (blocker_id, blocked_id)
+    )
+  `);
     // AI Workout Generation tracking
     await (0, exports.query)(`
     CREATE TABLE IF NOT EXISTS ai_generations (
@@ -418,6 +470,110 @@ const initDb = async () => {
   `);
     await (0, exports.query)(`
     CREATE INDEX IF NOT EXISTS ai_generations_created_at_idx ON ai_generations(created_at)
+  `);
+    // Notification events tracking
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS notification_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notification_type TEXT NOT NULL,
+      trigger_reason TEXT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      data JSONB,
+      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at TIMESTAMPTZ,
+      clicked_at TIMESTAMPTZ,
+      delivery_status TEXT NOT NULL DEFAULT 'sent',
+      error_message TEXT
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS notification_events_user_id_idx ON notification_events(user_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS notification_events_sent_at_idx ON notification_events(sent_at)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS notification_events_user_read_idx ON notification_events(user_id, read_at)
+  `);
+    // Admin users table (for feedback moderation and status updates)
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      granted_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+    // Feedback items table
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS feedback_items (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('feature_request', 'bug_report', 'ui_ux_improvement', 'performance', 'social_features')),
+      impact TEXT NOT NULL CHECK (impact IN ('critical', 'high', 'medium', 'low', 'must_have', 'nice_to_have')),
+      status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'under_review', 'planned', 'in_progress', 'shipped', 'wont_fix', 'duplicate')),
+      vote_count INTEGER NOT NULL DEFAULT 0,
+      is_hidden BOOLEAN NOT NULL DEFAULT false,
+      auto_hidden_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status_updated_at TIMESTAMPTZ,
+      status_updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_items_user_id_idx ON feedback_items(user_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_items_created_at_idx ON feedback_items(created_at DESC)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_items_vote_count_idx ON feedback_items(vote_count DESC)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_items_status_idx ON feedback_items(status)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_items_category_idx ON feedback_items(category)
+  `);
+    // Feedback votes table (one vote per user per item)
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS feedback_votes (
+      id TEXT PRIMARY KEY,
+      feedback_item_id TEXT NOT NULL REFERENCES feedback_items(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(feedback_item_id, user_id)
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_votes_feedback_item_id_idx ON feedback_votes(feedback_item_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_votes_user_id_idx ON feedback_votes(user_id)
+  `);
+    // Feedback reports table (for moderation)
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS feedback_reports (
+      id TEXT PRIMARY KEY,
+      feedback_item_id TEXT NOT NULL REFERENCES feedback_items(id) ON DELETE CASCADE,
+      reported_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ,
+      reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      action_taken TEXT CHECK (action_taken IN ('hidden', 'dismissed', 'pending')),
+      UNIQUE(feedback_item_id, reported_by)
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_reports_feedback_item_id_idx ON feedback_reports(feedback_item_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS feedback_reports_reviewed_at_idx ON feedback_reports(reviewed_at)
   `);
     // Add exercises table for fatigue calculations
     await (0, exports.query)(`
@@ -545,6 +701,12 @@ const initDb = async () => {
       ('squad-pulse-gang', 'corecraft', 'member'),
       ('squad-pulse-gang', 'tempo-squad', 'member')
     ON CONFLICT (squad_id, user_id) DO NOTHING
+  `);
+    // Grant admin access to users with handle @exhibited
+    await (0, exports.query)(`
+    INSERT INTO admin_users (user_id)
+    SELECT id FROM users WHERE handle = '@exhibited'
+    ON CONFLICT (user_id) DO NOTHING
   `);
 };
 exports.initDb = initDb;

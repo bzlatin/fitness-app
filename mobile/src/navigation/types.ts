@@ -7,7 +7,7 @@ export type RootStackParamList = {
   WorkoutTemplateBuilder: { templateId?: string };
   WorkoutGenerator: undefined;
   WorkoutSession: { templateId: string; sessionId?: string; initialVisibility?: Visibility };
-  Profile: { userId: string };
+  UserProfile: { userId: string };
   PostWorkoutShare: {
     sessionId: string;
     templateId?: string;
@@ -33,13 +33,16 @@ export type RootStackParamList = {
   Recovery: undefined;
   Analytics: undefined;
   Upgrade: { plan?: "monthly" | "annual" } | undefined;
+  NotificationInbox: undefined;
+  Settings: { openConnections?: boolean } | undefined;
+  FeedbackBoard: undefined;
 };
 
 export type RootTabParamList = {
   Home: { selectedTemplateId?: string } | undefined;
-  Squad: undefined;
+  Squad: { openFindBuddies?: boolean } | undefined;
   History: undefined;
-  Settings: undefined;
+  Profile: undefined;
 };
 
 export type RootRoute<T extends keyof RootStackParamList> = RouteProp<

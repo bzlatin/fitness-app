@@ -26,6 +26,8 @@ import WorkoutPreviewScreen from "../screens/WorkoutPreviewScreen";
 import RecoveryScreen from "../screens/RecoveryScreen";
 import AnalyticsScreen from "../screens/AnalyticsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
+import NotificationInboxScreen from "../screens/NotificationInboxScreen";
+import { FeedbackBoardScreen } from "../screens/FeedbackBoardScreen";
 import { RootStackParamList, RootTabParamList } from "./types";
 
 // Work around a native crash on iOS (RN Screens border props under Fabric)
@@ -45,7 +47,7 @@ const tabIconMap: Record<
   Home: { focused: "barbell", unfocused: "barbell-outline" },
   Squad: { focused: "people", unfocused: "people-outline" },
   History: { focused: "time", unfocused: "time-outline" },
-  Settings: { focused: "person", unfocused: "person-outline" },
+  Profile: { focused: "person", unfocused: "person-outline" },
 };
 
 const RootTabs = () => {
@@ -92,8 +94,8 @@ const RootTabs = () => {
         options={{ tabBarLabel: "History" }}
       />
       <Tab.Screen
-        name='Settings'
-        component={SettingsScreen}
+        name='Profile'
+        component={ProfileScreen}
         options={{ tabBarLabel: "Profile" }}
       />
     </Tab.Navigator>
@@ -147,9 +149,9 @@ const RootNavigator = () => (
       options={{ title: "Workout Session", headerShown: false }}
     />
     <Stack.Screen
-      name='Profile'
+      name='UserProfile'
       component={ProfileScreen}
-      options={{ title: "Profile" }}
+      options={{ title: "Profile", presentation: 'modal' }}
     />
     <Stack.Screen
       name='PostWorkoutShare'
@@ -195,6 +197,21 @@ const RootNavigator = () => (
       name='Upgrade'
       component={UpgradeScreen}
       options={{ title: "Upgrade to Pro" }}
+    />
+    <Stack.Screen
+      name='NotificationInbox'
+      component={NotificationInboxScreen}
+      options={{ title: "Notifications" }}
+    />
+    <Stack.Screen
+      name='Settings'
+      component={SettingsScreen}
+      options={{ title: "Settings" }}
+    />
+    <Stack.Screen
+      name='FeedbackBoard'
+      component={FeedbackBoardScreen}
+      options={{ title: "Feedback Board", headerShown: false }}
     />
   </Stack.Navigator>
 );

@@ -676,7 +676,7 @@ const SquadDetailScreen = () => {
                   <Pressable
                     onPress={() => {
                       setShowMemberModal(false);
-                      navigation.navigate("Profile", { userId: selectedMember.id });
+                      navigation.navigate("UserProfile", { userId: selectedMember.id });
                     }}
                     style={({ pressed }) => ({
                       flexDirection: "row",
