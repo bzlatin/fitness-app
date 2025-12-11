@@ -13,7 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -27,6 +27,7 @@ import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import { generateWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
 import { deleteSession, undoAutoEndSession } from "../api/sessions";
+import { fetchRecap } from "../api/analytics";
 import { useFatigue } from "../hooks/useFatigue";
 import {
   TRAINING_SPLIT_LABELS,
@@ -36,6 +37,8 @@ import RecoveryBodyMap from "../components/RecoveryBodyMap";
 import TrialBanner from "../components/premium/TrialBanner";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import RecapCard from "../components/RecapCard";
+import { RecapSlice } from "../types/analytics";
 
 // Generate unique ID for React Native (no crypto dependency)
 const generateId = () =>
@@ -95,6 +98,13 @@ const HomeScreen = () => {
   }, [fatigue]);
 
   const queryClient = useQueryClient();
+  const { data: recap, isLoading: recapLoading, isError: recapError, refetch: refetchRecap } =
+    useQuery<RecapSlice>({
+      queryKey: ["recap"],
+      queryFn: fetchRecap,
+      enabled: isPro,
+      staleTime: 2 * 60 * 1000,
+    });
 
   const startWorkout = (template: WorkoutTemplate | null) => {
     if (!template) return;
@@ -902,15 +912,28 @@ const HomeScreen = () => {
                   Advanced Analytics
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                  Volume trends & muscle balance
+                  Recap quality + volume trends
                 </Text>
               </View>
               <Ionicons name='bar-chart' size={24} color={colors.primary} />
             </View>
+            <RecapCard
+              data={recap}
+              loading={recapLoading}
+              error={recapError}
+              onRetry={refetchRecap}
+              onPress={() => navigation.navigate("Analytics")}
+              ctaLabel='Open recap'
+              variant='compact'
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              }}
+            />
             <Pressable
               onPress={() => navigation.navigate("Analytics")}
               style={({ pressed }) => ({
-                marginTop: 8,
+                marginTop: 10,
                 paddingVertical: 12,
                 borderRadius: 10,
                 backgroundColor: colors.primary,

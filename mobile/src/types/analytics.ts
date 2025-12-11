@@ -88,3 +88,50 @@ export type AdvancedAnalytics = {
   volumePRs: VolumePR[];
   frequencyHeatmap: FrequencyHeatmapData[];
 };
+
+export type RecapSessionQuality = {
+  sessionId: string;
+  finishedAt: string;
+  templateName?: string | null;
+  qualityScore: number;
+  status: "peak" | "solid" | "dip";
+  totalVolume: number;
+  avgRpe: number | null;
+};
+
+export type RecapHighlight = {
+  id: string;
+  type: "pr" | "volume_high" | "streak" | "badge" | "dip";
+  title: string;
+  subtitle?: string;
+  date: string;
+  tone: "positive" | "warning" | "info";
+  value?: number;
+};
+
+export type RecapSlice = {
+  generatedAt: string;
+  lookbackWeeks: number;
+  baselineVolume: number | null;
+  baselineRpe: number | null;
+  streak: {
+    current: number;
+    best: number;
+    lastWorkoutAt: string | null;
+  };
+  quality: RecapSessionQuality[];
+  highlights: RecapHighlight[];
+  qualityDip: {
+    consecutive: number;
+    since: string;
+    suggestion: string;
+    lastScore: number;
+  } | null;
+  winBack:
+    | {
+        headline: string;
+        message: string;
+        since: string | null;
+      }
+    | null;
+};

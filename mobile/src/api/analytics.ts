@@ -8,6 +8,7 @@ import {
   PushPullBalance,
   VolumePR,
   FrequencyHeatmapData,
+  RecapSlice,
 } from "../types/analytics";
 import { ProgressionData } from "../components/ProgressionSuggestion";
 
@@ -83,5 +84,10 @@ export const fetchFrequencyHeatmap = async (weeks: number = 12): Promise<Frequen
   const res = await apiClient.get<{ data: FrequencyHeatmapData[] }>(
     `/analytics/frequency-heatmap?weeks=${weeks}`
   );
+  return res.data.data;
+};
+
+export const fetchRecap = async (): Promise<RecapSlice> => {
+  const res = await apiClient.get<{ data: RecapSlice }>(`/analytics/recap`);
   return res.data.data;
 };

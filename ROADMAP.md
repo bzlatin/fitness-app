@@ -1479,7 +1479,7 @@ To test notifications:
 
 #### 4.4.7 Session Quality Recap
 
-**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ✅ IMPLEMENTED
 
 **Goal**: Give users a lightweight timeline of their best sessions and gentle nudges when quality dips to drive re-engagement.
 
@@ -1777,4 +1777,5 @@ To test notifications:
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
 - **v1.5**: Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
 - **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, health sync, data export pending)
+- **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

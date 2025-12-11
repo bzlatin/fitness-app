@@ -12,6 +12,7 @@ import {
   getVolumePRs,
   getFrequencyHeatmap,
 } from "../services/muscleAnalytics";
+import { getRecapSlice } from "../services/recap";
 import { requireProPlan } from "../middleware/planLimits";
 
 const router = Router();
@@ -189,6 +190,21 @@ router.get("/frequency-heatmap", requireProPlan, async (req, res) => {
   } catch (err) {
     console.error("[Analytics] Failed to fetch frequency heatmap", err);
     return res.status(500).json({ error: "Failed to fetch frequency heatmap" });
+  }
+});
+
+router.get("/recap", requireProPlan, async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const data = await getRecapSlice(userId);
+    return res.json({ data });
+  } catch (err) {
+    console.error("[Analytics] Failed to fetch recap slice", err);
+    return res.status(500).json({ error: "Failed to fetch recap" });
   }
 });
 
