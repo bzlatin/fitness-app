@@ -11,6 +11,7 @@ import {
   RecapSlice,
 } from "../types/analytics";
 import { ProgressionData } from "../components/ProgressionSuggestion";
+import { AppleHealthPermissions, AppleHealthSessionPayload } from "../types/health";
 
 export const fetchFatigue = async (): Promise<FatigueResult> => {
   const res = await apiClient.get<{ data: FatigueResult }>("/analytics/fatigue");
@@ -90,4 +91,23 @@ export const fetchFrequencyHeatmap = async (weeks: number = 12): Promise<Frequen
 export const fetchRecap = async (): Promise<RecapSlice> => {
   const res = await apiClient.get<{ data: RecapSlice }>(`/analytics/recap`);
   return res.data.data;
+};
+
+export const importAppleHealthSessions = async (payload: {
+  sessions: AppleHealthSessionPayload[];
+  permissions?: AppleHealthPermissions;
+  lastSyncAt?: string;
+}) => {
+  const res = await apiClient.post<{
+    importedCount: number;
+    skippedCount: number;
+  }>("/analytics/apple-health/import", payload);
+  return res.data;
+};
+
+export const clearAppleHealthImports = async () => {
+  const res = await apiClient.delete<{ deletedCount: number }>(
+    "/analytics/apple-health/imports"
+  );
+  return res.data;
 };

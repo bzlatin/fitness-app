@@ -1,4 +1,5 @@
 import { OnboardingData } from "./onboarding";
+import { AppleHealthPermissions } from "./health";
 
 export type Plan = "free" | "pro" | "lifetime";
 
@@ -20,6 +21,9 @@ export interface User {
   onboardingData?: OnboardingData | null;
   progressiveOverloadEnabled?: boolean;
   restTimerSoundEnabled?: boolean;
+  appleHealthEnabled?: boolean;
+  appleHealthPermissions?: AppleHealthPermissions | null;
+  appleHealthLastSyncAt?: string | null;
 }
 
 export interface UserProfile extends User {

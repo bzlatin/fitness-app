@@ -184,6 +184,37 @@ const HistoryScreen = () => {
     ? dayMap.get(formatDateKey(selectedDay))?.sessions ?? []
     : [];
 
+  const buildSessionMetrics = (session?: WorkoutHistorySession | null) => {
+    if (!session) return null;
+    const startDate = new Date(session.startedAt);
+    const durationSeconds =
+      session.durationSeconds ??
+      (session.finishedAt
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(session.finishedAt).getTime() - startDate.getTime()) / 1000
+            )
+          )
+        : null);
+
+    return {
+      durationMinutes:
+        durationSeconds !== null && durationSeconds !== undefined
+          ? Math.max(1, Math.round(durationSeconds / 60))
+          : null,
+      caloriesValue:
+        session.totalEnergyBurned !== undefined
+          ? `${Math.round(session.totalEnergyBurned)} kcal`
+          : `${session.estimatedCalories}`,
+      avgHr: session.avgHeartRate ? Math.round(session.avgHeartRate) : null,
+      maxHr: session.maxHeartRate ? Math.round(session.maxHeartRate) : null,
+      isImported: session.source === "apple_health",
+    };
+  };
+
+  const selectedMetrics = buildSessionMetrics(selectedSession);
+
   // Reset month cursor to current month when opening
   const handleToggleMonth = () => {
     if (!showMonth) {
@@ -486,14 +517,27 @@ const HistoryScreen = () => {
 
   const renderSessionCard = (session: WorkoutHistorySession) => {
     const startDate = new Date(session.startedAt);
-    const duration = session.finishedAt
-      ? Math.max(
-          10,
-          Math.round(
-            (new Date(session.finishedAt).getTime() - startDate.getTime()) / 60000
+    const durationSeconds =
+      session.durationSeconds ??
+      (session.finishedAt
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(session.finishedAt).getTime() - startDate.getTime()) / 1000
+            )
           )
-        )
-      : null;
+        : null);
+    const durationMinutes =
+      durationSeconds !== null && durationSeconds !== undefined
+        ? Math.max(1, Math.round(durationSeconds / 60))
+        : null;
+    const caloriesValue =
+      session.totalEnergyBurned !== undefined
+        ? `${Math.round(session.totalEnergyBurned)} kcal`
+        : `${session.estimatedCalories}`;
+    const isImported = session.source === "apple_health";
+    const avgHr = session.avgHeartRate ? Math.round(session.avgHeartRate) : null;
+    const maxHr = session.maxHeartRate ? Math.round(session.maxHeartRate) : null;
 
     return (
       <Pressable
@@ -514,12 +558,34 @@ const HistoryScreen = () => {
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
               {session.templateName || "Logged workout"}
             </Text>
+            {isImported ? (
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  marginTop: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                  backgroundColor: colors.primary + "22",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 11,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Imported from Apple Health
+                </Text>
+              </View>
+            ) : null}
             <Text style={{ color: colors.textSecondary }}>
               {formatDateMedium(startDate)}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
               {formatTime(startDate)} · {session.exercises.length} exercises
-              {duration ? ` · ${duration} min` : ""}
+              {durationMinutes ? ` · ${durationMinutes} min` : ""}
             </Text>
           </View>
         <Pressable
@@ -539,25 +605,20 @@ const HistoryScreen = () => {
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
         <MetricPill
           label='Volume'
           value={`${Math.round(session.totalVolumeLbs)} lbs`}
         />
-        <MetricPill label='Calories' value={`${session.estimatedCalories}`} />
-        {session.finishedAt ? (
+        <MetricPill label='Calories' value={caloriesValue} />
+        {durationMinutes ? (
           <MetricPill
             label='Duration'
-            value={`${Math.max(
-              10,
-              Math.round(
-                (new Date(session.finishedAt).getTime() -
-                  new Date(session.startedAt).getTime()) /
-                  60000
-              )
-            )} min`}
+            value={`${durationMinutes} min`}
           />
         ) : null}
+        {avgHr ? <MetricPill label='Avg HR' value={`${avgHr} bpm`} /> : null}
+        {maxHr ? <MetricPill label='Max HR' value={`${maxHr} bpm`} /> : null}
       </View>
 
       <View style={{ gap: 6 }}>
@@ -1382,38 +1443,57 @@ const HistoryScreen = () => {
                     >
                       {selectedSession.templateName || "Logged workout"}
                     </Text>
+                    {selectedMetrics?.isImported ? (
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          marginTop: 2,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 10,
+                          backgroundColor: colors.primary + "22",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          Imported from Apple Health
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={{ color: colors.textSecondary }}>
                       {formatDateTimeShort(new Date(selectedSession.startedAt))}
                     </Text>
                   </View>
                 </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                   <MetricPill
                     label='Volume'
-                    value={`${Math.round(
-                      selectedSession.totalVolumeLbs
-                        )} lbs`}
-                      />
-                      <MetricPill
-                        label='Calories'
-                        value={`${selectedSession.estimatedCalories}`}
-                      />
-                      {selectedSession.finishedAt && (
-                        <MetricPill
-                          label='Duration'
-                          value={`${Math.max(
-                            10,
-                            Math.round(
-                              (new Date(selectedSession.finishedAt).getTime() -
-                                new Date(
-                                  selectedSession.startedAt
-                                ).getTime()) /
-                                60000
-                            )
-                          )} min`}
-                        />
-                      )}
-                    </View>
+                    value={`${Math.round(selectedSession.totalVolumeLbs)} lbs`}
+                  />
+                  <MetricPill
+                    label='Calories'
+                    value={
+                      selectedMetrics?.caloriesValue ?? `${selectedSession.estimatedCalories}`
+                    }
+                  />
+                  {selectedMetrics?.durationMinutes ? (
+                    <MetricPill
+                      label='Duration'
+                      value={`${selectedMetrics.durationMinutes} min`}
+                    />
+                  ) : null}
+                  {selectedMetrics?.avgHr ? (
+                    <MetricPill label='Avg HR' value={`${selectedMetrics.avgHr} bpm`} />
+                  ) : null}
+                  {selectedMetrics?.maxHr ? (
+                    <MetricPill label='Max HR' value={`${selectedMetrics.maxHr} bpm`} />
+                  ) : null}
+                </View>
                     <View
                       style={{
                         borderTopWidth: 1,

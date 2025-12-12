@@ -28,6 +28,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     infoPlist: {
       ...config.ios?.infoPlist,
       ITSAppUsesNonExemptEncryption: false,
+      NSHealthShareUsageDescription:
+        "Allow Push/Pull to read your Apple Health workouts, calories, and heart rate to keep your streak accurate.",
+      NSHealthUpdateUsageDescription:
+        "Push/Pull writes workout metadata to your history so you can track progress alongside Apple Health.",
+    },
+    entitlements: {
+      ...(config.ios?.entitlements ?? {}),
+      "com.apple.developer.healthkit": true,
+      "com.apple.developer.healthkit.background-delivery": true,
     },
   };
 
