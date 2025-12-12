@@ -119,6 +119,7 @@ const SettingsScreen = () => {
     });
   const [isSyncingHealth, setIsSyncingHealth] = useState(false);
   const [lastHealthSync, setLastHealthSync] = useState<Date | null>(null);
+  const [appleHealthEnabledUi, setAppleHealthEnabledUi] = useState<boolean | null>(null);
   const lastHandleChange = user?.handleLastChangedAt
     ? new Date(user.handleLastChangedAt)
     : null;
@@ -150,7 +151,8 @@ const SettingsScreen = () => {
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
   const isIOS = Platform.OS === "ios";
-  const appleHealthEnabled = user?.appleHealthEnabled ?? false;
+  const appleHealthEnabledFromProfile = user?.appleHealthEnabled ?? false;
+  const appleHealthEnabled = appleHealthEnabledUi ?? appleHealthEnabledFromProfile;
   const isAppleSubscription =
     subscriptionStatus?.subscriptionPlatform === "apple" ||
     !!subscriptionStatus?.appleOriginalTransactionId;
@@ -192,6 +194,12 @@ const SettingsScreen = () => {
       hour: "2-digit",
       minute: "2-digit",
     }) ?? "Not synced yet";
+
+  useEffect(() => {
+    if (appleHealthEnabledUi !== null && appleHealthEnabledUi === appleHealthEnabledFromProfile) {
+      setAppleHealthEnabledUi(null);
+    }
+  }, [appleHealthEnabledFromProfile, appleHealthEnabledUi]);
 
   useEffect(() => {
     if (user) {
@@ -334,19 +342,30 @@ const SettingsScreen = () => {
   };
 
   const handleAppleHealthToggle = async (enabled: boolean) => {
-    const availability = getAppleHealthAvailability();
-    if (!availability.available) {
-      Alert.alert("Apple Health unavailable", availability.reason ?? "Apple Health sync is unavailable on this device.");
-      return;
+    const previousEnabled = appleHealthEnabledFromProfile;
+    const previousPermissions = { ...healthPermissions };
+    setAppleHealthEnabledUi(enabled);
+
+    if (enabled) {
+      const availability = getAppleHealthAvailability();
+      if (!availability.available) {
+        setAppleHealthEnabledUi(previousEnabled);
+        Alert.alert(
+          "Apple Health unavailable",
+          availability.reason ?? "Apple Health sync is unavailable on this device."
+        );
+        return;
+      }
     }
 
     setIsSyncingHealth(true);
     try {
       if (enabled) {
-        const permissionsToUse = { ...healthPermissions, workouts: true };
+        const permissionsToUse = { workouts: true, activeEnergy: true, heartRate: true };
         setHealthPermissions(permissionsToUse);
         const granted = await requestAppleHealthPermissions(permissionsToUse);
         if (!granted) {
+          setAppleHealthEnabledUi(previousEnabled);
           Alert.alert(
             "Permission needed",
             "Please allow Apple Health access in the system prompt or Settings > Health > Apps."
@@ -373,16 +392,31 @@ const SettingsScreen = () => {
           `Imported ${result.importedCount ?? 0} workouts${result.skippedCount ? ` · ${result.skippedCount} skipped` : ""}`
         );
       } else {
-        await clearAppleHealthData();
+        const disabledPermissions: AppleHealthPermissions = {
+          workouts: false,
+          activeEnergy: false,
+          heartRate: false,
+        };
+        setHealthPermissions(disabledPermissions);
         await updateProfile({
           appleHealthEnabled: false,
-          appleHealthPermissions: { workouts: false, activeEnergy: false, heartRate: false },
+          appleHealthPermissions: disabledPermissions,
           appleHealthLastSyncAt: null,
         });
-        setHealthPermissions({ workouts: false, activeEnergy: false, heartRate: false });
         setLastHealthSync(null);
+        try {
+          await clearAppleHealthData();
+        } catch (err) {
+          console.error("[Settings] Failed to clear Apple Health imports", err);
+          Alert.alert(
+            "Apple Health",
+            "Sync was turned off, but we couldn't clear imported workouts yet."
+          );
+        }
       }
     } catch (err) {
+      setAppleHealthEnabledUi(previousEnabled);
+      setHealthPermissions(previousPermissions);
       console.error("[Settings] Apple Health toggle failed", err);
       Alert.alert("Apple Health", "Could not update Apple Health sync. Please try again.");
     } finally {
@@ -465,17 +499,37 @@ const SettingsScreen = () => {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
+            const disabledPermissions: AppleHealthPermissions = {
+              workouts: false,
+              activeEnergy: false,
+              heartRate: false,
+            };
+            const previousPermissions = { ...healthPermissions };
+            const previousLastSync = lastHealthSync;
+            const previousEnabled = appleHealthEnabledFromProfile;
+            setAppleHealthEnabledUi(false);
+            setHealthPermissions(disabledPermissions);
+            setLastHealthSync(null);
             setIsSyncingHealth(true);
             try {
-              await clearAppleHealthData();
               await updateProfile({
                 appleHealthEnabled: false,
-                appleHealthPermissions: { workouts: false, activeEnergy: false, heartRate: false },
+                appleHealthPermissions: disabledPermissions,
                 appleHealthLastSyncAt: null,
               });
-              setHealthPermissions({ workouts: false, activeEnergy: false, heartRate: false });
-              setLastHealthSync(null);
+              try {
+                await clearAppleHealthData();
+              } catch (err) {
+                console.error("[Settings] Failed to clear Apple Health imports", err);
+                Alert.alert(
+                  "Apple Health",
+                  "Sync was turned off, but we couldn't clear imported workouts yet."
+                );
+              }
             } catch (err) {
+              setAppleHealthEnabledUi(previousEnabled);
+              setHealthPermissions(previousPermissions);
+              setLastHealthSync(previousLastSync);
               console.error("[Settings] Failed to clear Apple Health imports", err);
               Alert.alert("Apple Health", "Could not clear imported workouts right now.");
             } finally {

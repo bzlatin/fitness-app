@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import {
+  debugPushPullAppleHealthKitShape,
+  getPushPullAppleHealthKit,
+} from "../native/pushPullAppleHealthKit";
+import {
   AppleHealthPermissions,
   AppleHealthSessionPayload,
   AppleHealthSyncResult,
@@ -22,11 +26,16 @@ const DEFAULT_PERMISSIONS: AppleHealthPermissions = {
 const getHealthKitModule = (): any | null => {
   if (Platform.OS !== "ios") return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require("react-native-health");
-    const healthKit = mod?.default ?? mod;
-    if (typeof healthKit?.initHealthKit !== "function") {
-      console.warn("[AppleHealth] HealthKit module missing initHealthKit; treating as unavailable");
+    const healthKit = getPushPullAppleHealthKit();
+    if (!healthKit) {
+      console.warn("[AppleHealth] Native module PushPullAppleHealthKit not found; treating as unavailable");
+      return null;
+    }
+    if (typeof healthKit.initHealthKit !== "function") {
+      console.warn(
+        "[AppleHealth] Native module missing initHealthKit; treating as unavailable",
+        debugPushPullAppleHealthKitShape()
+      );
       return null;
     }
     return healthKit;
@@ -49,7 +58,7 @@ export const getAppleHealthAvailability = () => {
     return {
       available: false,
       reason:
-        "Apple HealthKit is not available in this build. Install a build with HealthKit enabled (react-native-health) or rebuild the iOS dev client.",
+        "Apple HealthKit is not available in this build. Rebuild and reinstall the iOS dev client with HealthKit enabled.",
     };
   }
 
@@ -71,31 +80,20 @@ export const requestAppleHealthPermissions = async (
   const HealthKit = getHealthKitModule();
   if (!HealthKit) return false;
 
-  const readPermissions = [HealthKit.Constants?.Permissions?.Workout].filter(Boolean);
-  if (permissions.activeEnergy) {
-    readPermissions.push(HealthKit.Constants?.Permissions?.ActiveEnergyBurned);
-  }
-  if (permissions.heartRate) {
-    readPermissions.push(HealthKit.Constants?.Permissions?.HeartRate);
-  }
+  const readPermissions: string[] = ["Workout"];
+  if (permissions.activeEnergy) readPermissions.push("ActiveEnergyBurned");
+  if (permissions.heartRate) readPermissions.push("HeartRate");
 
-  return new Promise<boolean>((resolve) => {
-    HealthKit.initHealthKit(
-      {
-        permissions: {
-          read: readPermissions,
-        },
+  try {
+    return await HealthKit.initHealthKit({
+      permissions: {
+        read: readPermissions,
       },
-      (error: unknown) => {
-        if (error) {
-          console.warn("[AppleHealth] Permission request failed", error);
-          resolve(false);
-          return;
-        }
-        resolve(true);
-      }
-    );
-  });
+    });
+  } catch (error) {
+    console.warn("[AppleHealth] Permission request failed", error);
+    return false;
+  }
 };
 
 const fetchWorkoutsSince = async (
@@ -106,16 +104,9 @@ const fetchWorkoutsSince = async (
   if (!HealthKit) return [];
 
   try {
-    const workouts = await new Promise<unknown[]>((resolve, reject) => {
-      HealthKit.getWorkouts(
-        {
-          startDate: since.toISOString(),
-        },
-        (err: unknown, result: unknown[]) => {
-          if (err) return reject(err);
-          resolve(result ?? []);
-        }
-      );
+    const workouts = await HealthKit.getWorkouts({
+      startDate: since.toISOString(),
+      includeHeartRate: permissions.heartRate,
     });
 
     return workouts

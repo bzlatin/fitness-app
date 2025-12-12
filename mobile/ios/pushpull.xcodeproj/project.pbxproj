@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -21,7 +21,6 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		CBABC636C09442435DB78B5B /* WidgetSyncModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 810D8614D501CDA368955111 /* WidgetSyncModule.m */; };
 		D07AD122EAAD364FD5203F77 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 607A486BFB7CA6AF73D80804 /* PrivacyInfo.xcprivacy */; };
-		D8816D949162EB0E258D391B /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35D651EA5BCB745D00F284D /* WorkoutActivityAttributes.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F14C7D1569B37E3D4F6577B8 /* LiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C634B0C1A8358C28F8029FEB /* LiveActivityModule.swift */; };
 /* End PBXBuildFile section */
@@ -78,7 +77,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B5125AB22EE616AF00D1E37F /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		B5125AB22EE616AF00D1E37F /* Exceptions for "Widgets" folder in "WidgetsExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -88,7 +87,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B5125AA02EE616AE00D1E37F /* Widgets */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B5125AB22EE616AF00D1E37F /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Widgets; sourceTree = "<group>"; };
+		B5125AA02EE616AE00D1E37F /* Widgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B5125AB22EE616AF00D1E37F /* Exceptions for "Widgets" folder in "WidgetsExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -481,7 +491,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D8816D949162EB0E258D391B /* WorkoutActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

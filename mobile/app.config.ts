@@ -28,6 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     infoPlist: {
       ...config.ios?.infoPlist,
       ITSAppUsesNonExemptEncryption: false,
+      ReactNativeReleaseLevel: "canary",
       NSHealthShareUsageDescription:
         "Allow Push/Pull to read your Apple Health workouts, calories, and heart rate to keep your streak accurate.",
       NSHealthUpdateUsageDescription:

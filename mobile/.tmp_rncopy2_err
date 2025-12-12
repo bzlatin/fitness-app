@@ -1,0 +1,1396 @@
+rsync(82430): error: React.framework/Headers/React_RCTImage/.RCTImageLoaderWithAttributionProtocol.h.xMDH6gTjNs: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Info.plist: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Info.plist: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/React: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/React: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBLazyVector/FBLazyIterator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBLazyVector/FBLazyIterator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBLazyVector/FBLazyVector.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBLazyVector/FBLazyVector.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/ComponentDescriptors.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/ComponentDescriptors.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/EventEmitters.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/EventEmitters.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/FBReactNativeSpec.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/FBReactNativeSpec.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/FBReactNativeSpecJSI.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/FBReactNativeSpecJSI.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/Props.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/Props.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/RCTComponentViewHelpers.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/RCTComponentViewHelpers.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/ShadowNodes.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/ShadowNodes.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/States.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/FBReactNativeSpec/States.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTDeprecation/RCTDeprecation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTDeprecation/RCTDeprecation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTRequired/RCTRequired.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTRequired/RCTRequired.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTTypeSafety/RCTConvertHelpers.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTTypeSafety/RCTConvertHelpers.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTTypeSafety/RCTTypedModuleConstants.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/RCTTypeSafety/RCTTypedModuleConstants.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/AString.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/AString.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Array.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Array.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Base.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Base.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Bool.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Bool.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Bridging.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Bridging.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/BridgingTest.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/BridgingTest.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/CallbackWrapper.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/CallbackWrapper.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Class.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Class.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Convert.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Convert.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/CxxTurboModuleUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/CxxTurboModuleUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Dynamic.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Dynamic.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Error.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Error.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/EventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/EventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Function.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Function.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/HighResTimeStamp.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/HighResTimeStamp.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/LongLivedObject.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/LongLivedObject.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Number.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Number.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Object.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Object.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Promise.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Promise.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboCxxModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboCxxModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleBinding.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleBinding.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModulePerfLogger.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModulePerfLogger.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleWithJSIBindings.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/TurboModuleWithJSIBindings.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Value.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/ReactCommon/Value.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/AppleEventBeat.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/AppleEventBeat.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/ComponentDescriptors.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/ComponentDescriptors.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/CoreModulesPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/CoreModulesPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/DispatchMessageQueueThread.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/DispatchMessageQueueThread.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/EventEmitters.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/EventEmitters.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBReactNativeSpec.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBReactNativeSpec.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBReactNativeSpecJSI.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBReactNativeSpecJSI.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBXXHashUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/FBXXHashUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/NSDataBigString.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/NSDataBigString.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/PlatformRunLoopObserver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/PlatformRunLoopObserver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/Props.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/Props.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityElement.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityElement.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityManager+Internal.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityManager+Internal.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAccessibilityManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActionSheetManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActionSheetManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTActivityIndicatorViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAlertController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAlertController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAlertManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAlertManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAnimationType.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAnimationType.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAppState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAppState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAppearance.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAppearance.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAssert.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAssert.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAutoInsetsProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTAutoInsetsProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderCurve.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderCurve.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderDrawing.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderDrawing.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderStyle.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBorderStyle.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBoxShadow.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBoxShadow.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge+Inspector.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge+Inspector.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge+Private.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge+Private.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridge.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeConstants.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeConstants.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeMethod.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeMethod.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeModuleDecorator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeModuleDecorator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeProxy+Cxx.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeProxy+Cxx.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeProxy.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBridgeProxy.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBundleManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBundleManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBundleURLProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTBundleURLProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCallInvoker.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCallInvoker.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCallInvokerModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCallInvokerModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTClipboard.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTClipboard.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTColorSpaceUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTColorSpaceUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentData.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentData.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewClassDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewClassDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewHelpers.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewHelpers.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTComponentViewRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConstants.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConstants.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert+CoreLocation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert+CoreLocation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert+Transform.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert+Transform.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTConvert.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCursor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCursor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCustomPullToRefreshViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCustomPullToRefreshViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxBridgeDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxBridgeDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxConvert.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxConvert.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorPackagerConnection.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorPackagerConnection.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorPackagerConnectionDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorPackagerConnectionDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorWebSocketAdapter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxInspectorWebSocketAdapter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxMethod.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxMethod.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTCxxUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlay.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlay.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlayComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlayComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlayManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDebuggingOverlayManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDefaultCxxLogFunction.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDefaultCxxLogFunction.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDefines.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDefines.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingViewSetEnabled.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevLoadingViewSetEnabled.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevMenu.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevMenu.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevSettings.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevSettings.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevToolsRuntimeSettingsModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDevToolsRuntimeSettingsModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDeviceInfo.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDeviceInfo.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDisplayLink.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTDisplayLink.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEnhancedScrollView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEnhancedScrollView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTErrorCustomizer.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTErrorCustomizer.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTErrorInfo.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTErrorInfo.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventDispatcher.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventDispatcher.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventDispatcherProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventDispatcherProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTExceptionsManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTExceptionsManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFPSGraph.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFPSGraph.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricComponentsPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricComponentsPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricModalHostViewController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricModalHostViewController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricSurface.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFabricSurface.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFollyConvert.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFollyConvert.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFont.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFont.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFrameUpdate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTFrameUpdate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTGenericDelegateSplitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTGenericDelegateSplitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTGradientUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTGradientUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTHermesInstanceFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTHermesInstanceFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTI18nManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTI18nManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTI18nUtil.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTI18nUtil.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTIdentifierPool.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTIdentifierPool.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageResponseDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageResponseDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageResponseObserverProxy.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageResponseObserverProxy.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageSource.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTImageSource.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInitializing.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInitializing.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInputAccessoryComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInputAccessoryComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInputAccessoryContentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInputAccessoryContentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspector.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspector.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorDevServerHelper.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorDevServerHelper.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorNetworkHelper.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorNetworkHelper.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorPackagerConnection.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorPackagerConnection.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInspectorUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInvalidating.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTInvalidating.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSIExecutorRuntimeInstaller.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSIExecutorRuntimeInstaller.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSStackFrame.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSStackFrame.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSThread.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJSThread.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJavaScriptExecutor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJavaScriptExecutor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJavaScriptLoader.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTJavaScriptLoader.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTKeyCommands.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTKeyCommands.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTKeyboardObserver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTKeyboardObserver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayout.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayout.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayoutAnimation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayoutAnimation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayoutAnimationGroup.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLayoutAnimationGroup.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLegacyViewManagerInteropComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLegacyViewManagerInteropComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLegacyViewManagerInteropCoordinatorAdapter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLegacyViewManagerInteropCoordinatorAdapter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLinearGradient.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLinearGradient.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLocalizationProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLocalizationProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLocalizedString.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLocalizedString.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLog.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLog.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLogBox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLogBox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLogBoxView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTLogBoxView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMacros.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMacros.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTManagedPointer.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTManagedPointer.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMessageThread.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMessageThread.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMockDef.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMockDef.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalHostViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModalManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModuleData.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModuleData.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModuleMethod.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTModuleMethod.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingManagerDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingManagerDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingTransactionObserverCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingTransactionObserverCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingTransactionObserving.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMountingTransactionObserving.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMultipartDataTask.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMultipartDataTask.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMultipartStreamReader.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTMultipartStreamReader.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTNativeModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTNativeModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTNullability.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTNullability.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTObjcExecutor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTObjcExecutor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPLTag.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPLTag.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPackagerClient.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPackagerClient.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPackagerConnection.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPackagerConnection.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParagraphComponentAccessibilityProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParagraphComponentAccessibilityProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParagraphComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParagraphComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParserUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTParserUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPausedInDebuggerOverlayController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPausedInDebuggerOverlayController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPerformanceLogger.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPerformanceLogger.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPerformanceLoggerLabels.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPerformanceLoggerLabels.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPlatform.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPlatform.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPointerEvents.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPointerEvents.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTProfile.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTProfile.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPullToRefreshViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTPullToRefreshViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRadialGradient.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRadialGradient.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReactTaggedView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReactTaggedView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReconnectingWebSocket.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReconnectingWebSocket.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBoxExtraDataViewController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBoxExtraDataViewController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBoxSetEnabled.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRedBoxSetEnabled.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshControl.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshControl.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshControlManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshControlManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshableProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRefreshableProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReloadCommand.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTReloadCommand.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootContentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootContentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootViewDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootViewDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootViewInternal.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTRootViewInternal.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewLocalData.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewLocalData.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSafeAreaViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScheduler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScheduler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollContentViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollableProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTScrollableProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView+Internal.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView+Internal.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView+Layout.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView+Layout.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSourceCode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSourceCode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTStatusBarManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTStatusBarManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurface.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurface.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceHostingProxyRootView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceHostingProxyRootView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceHostingView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceHostingView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePointerHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePointerHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenterBridgeAdapter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenterBridgeAdapter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenterStub.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfacePresenterStub.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootShadowViewDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootShadowViewDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceRootView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceSizeMeasureMode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceSizeMeasureMode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceStage.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceStage.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceTouchHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceTouchHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceView+Internal.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceView+Internal.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSurfaceView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitch.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitch.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitchComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitchComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitchManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTSwitchManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextDecorationLineType.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextDecorationLineType.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputNativeCommands.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputNativeCommands.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTextInputUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTiming.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTiming.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchableComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTouchableComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTurboModuleRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTTurboModuleRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManagerObserverCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManagerObserverCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManagerUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUIManagerUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTURLRequestDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTURLRequestDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTURLRequestHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTURLRequestHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUnimplementedNativeComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUnimplementedNativeComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUnimplementedViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUnimplementedViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUtilsUIOverride.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTUtilsUIOverride.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTVersion.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTVersion.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewAccessibilityElement.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewAccessibilityElement.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTViewUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTVirtualViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTVirtualViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTWebSocketModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTWebSocketModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTWrapperViewController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/RCTWrapperViewController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/React_Core-umbrella.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/React_Core-umbrella.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/ShadowNodes.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/ShadowNodes.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/States.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/States.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+ComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+ComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+Private.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+Private.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+React.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Core/UIView+React.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/CoreModulesPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/CoreModulesPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAccessibilityManager+Internal.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAccessibilityManager+Internal.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAccessibilityManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAccessibilityManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTActionSheetManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTActionSheetManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAlertController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAlertController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAlertManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAlertManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAppState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAppState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAppearance.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTAppearance.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTClipboard.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTClipboard.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevLoadingView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevLoadingView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevMenu.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevMenu.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevSettings.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevSettings.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevToolsRuntimeSettingsModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDevToolsRuntimeSettingsModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDeviceInfo.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTDeviceInfo.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTEventDispatcher.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTEventDispatcher.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTExceptionsManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTExceptionsManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTFPSGraph.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTFPSGraph.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTI18nManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTI18nManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTKeyboardObserver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTKeyboardObserver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTLogBox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTLogBox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTLogBoxView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTLogBoxView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTPlatform.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTPlatform.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTRedBox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTRedBox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTSourceCode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTSourceCode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTStatusBarManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTStatusBarManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTTiming.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTTiming.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTWebSocketModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_CoreModules/RCTWebSocketModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AccessibilityPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AccessibilityPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AccessibilityProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AccessibilityProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AndroidHorizontalScrollContentViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AndroidHorizontalScrollContentViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AndroidHorizontalScrollContentViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AndroidHorizontalScrollContentViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AppRegistryBinding.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AppRegistryBinding.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AttributedString.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AttributedString.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AttributedStringBox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/AttributedStringBox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseTouch.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseTouch.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseViewEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseViewEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BaseViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BoxShadowPropsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/BoxShadowPropsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/CSSConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/CSSConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorProviderRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorProviderRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ComponentDescriptorRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ConcreteViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/CullingContext.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/CullingContext.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DOM.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DOM.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Differentiator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Differentiator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DynamicEventPayload.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DynamicEventPayload.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DynamicPropsUtilities.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/DynamicPropsUtilities.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventBeat.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventBeat.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventDispatcher.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventDispatcher.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventListener.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventListener.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventLogger.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventLogger.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPayload.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPayload.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPayloadType.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPayloadType.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPerformanceLogger.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPerformanceLogger.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPipe.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventPipe.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventQueue.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventQueue.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventQueueProcessor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventQueueProcessor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventTarget.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/EventTarget.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/FilterPropsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/FilterPropsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformTouch.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformTouch.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewTraitsInitializer.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/HostPlatformViewTraitsInitializer.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageRequest.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageRequest.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponse.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponse.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponseObserver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponseObserver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponseObserverCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageResponseObserverCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageTelemetry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ImageTelemetry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/InspectorData.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/InspectorData.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/InstanceHandle.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/InstanceHandle.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationCallbackWrapper.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationCallbackWrapper.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationDriver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationDriver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationKeyFrameManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationKeyFrameManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationStatusDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutAnimationStatusDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConformanceShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConstraints.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutConstraints.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutContext.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutContext.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutMetrics.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutMetrics.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutableShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LayoutableShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LazyShadowTreeRevisionConsistencyManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LazyShadowTreeRevisionConsistencyManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LeakChecker.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LeakChecker.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/LegacyViewManagerInteropViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingOverrideDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingOverrideDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingTransaction.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/MountingTransaction.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/NativeComponentRegistryBinding.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/NativeComponentRegistryBinding.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ParagraphAttributes.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ParagraphAttributes.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PlaceholderAttributedString.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PlaceholderAttributedString.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerEventsProcessor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerEventsProcessor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerHoverTracker.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PointerHoverTracker.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Props.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Props.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PropsMacros.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PropsMacros.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PropsParserContext.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/PropsParserContext.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RCTComponentViewHelpers.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RCTComponentViewHelpers.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RCTLegacyViewManagerInteropCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RCTLegacyViewManagerInteropCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsKey.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsKey.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsKeyMap.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsKeyMap.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsParser.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsParser.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawPropsPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawValue.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RawValue.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactEventPriority.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactEventPriority.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactRootViewTagGenerator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ReactRootViewTagGenerator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/RootShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Scheduler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Scheduler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SchedulerDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SchedulerDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SchedulerToolbox.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SchedulerToolbox.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScopedShadowTreeRevisionLock.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScopedShadowTreeRevisionLock.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ScrollViewState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Sealable.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Sealable.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeFamily.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeFamily.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeFragment.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeFragment.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeTraits.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowNodeTraits.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTree.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTree.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevision.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevision.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevisionConsistencyManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevisionConsistencyManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevisionProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowTreeRevisionProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowViewMutation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowViewMutation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowViewNodePair.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ShadowViewNodePair.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/State.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/State.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StateData.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StateData.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StatePipe.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StatePipe.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StateUpdate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StateUpdate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StubView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StubView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StubViewTree.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/StubViewTree.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceRegistryBinding.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceRegistryBinding.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceTelemetry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/SurfaceTelemetry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TelemetryController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TelemetryController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TestComponent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TestComponent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TextAttributes.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TextAttributes.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TinyMap.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TinyMap.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Touch.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/Touch.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TouchEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TouchEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TouchEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TouchEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TransactionTelemetry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/TransactionTelemetry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerAnimationDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerAnimationDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerBinding.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerBinding.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerCommitHook.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerCommitHook.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerMountHook.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerMountHook.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerNativeAnimatedDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UIManagerNativeAnimatedDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerAutomaticComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerAutomaticComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerAutomaticShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerAutomaticShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerInteropComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/UnstableLegacyViewManagerInteropComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ValueFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ValueFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ValueFactoryEventPayload.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ValueFactoryEventPayload.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewPropsInterpolation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewPropsInterpolation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/ViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/WeakFamilyRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/WeakFamilyRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/YogaLayoutableShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/YogaLayoutableShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/YogaStylableProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/YogaStylableProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/accessibilityPropsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/accessibilityPropsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/bridging.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/bridging.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/componentNameByReactViewName.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/componentNameByReactViewName.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/conversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/conversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/graphicsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/graphicsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/primitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/primitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/propsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/propsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/sliceChildShadowNodeViewPairs.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/sliceChildShadowNodeViewPairs.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/stubs.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/stubs.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/updateMountedFlag.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/updateMountedFlag.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/utils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Fabric/utils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AndroidTextInputState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AppleSwitchComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AppleSwitchComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AppleSwitchShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/AppleSwitchShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextInputProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextInputProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextInputShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextInputShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/BaseTextShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ComponentDescriptors.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ComponentDescriptors.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/EventEmitters.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/EventEmitters.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/HostPlatformScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/HostPlatformScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/InputAccessoryState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ModalHostViewUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ParagraphState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/Props.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/Props.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTAttributedTextUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTAttributedTextUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTComponentViewHelpers.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTComponentViewHelpers.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTFontProperties.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTFontProperties.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTFontUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTFontUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTTextLayoutManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTTextLayoutManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTTextPrimitivesConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RCTTextPrimitivesConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/RawTextShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/SafeAreaViewState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollEvent.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollEvent.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ScrollViewState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ShadowNodes.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/ShadowNodes.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/States.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/States.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextInputState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutContext.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutContext.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutManagerExtended.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextLayoutManagerExtended.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextMeasureCache.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextMeasureCache.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/TextShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/UnimplementedViewShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/baseConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/baseConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/basePrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/basePrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/conversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/conversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/primitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/primitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/propsConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricComponents/propsConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageComponentDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageComponentDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageEventEmitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageEventEmitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageProps.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageProps.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageShadowNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageShadowNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageState.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/ImageState.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/conversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_FabricImage/conversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/ImageRequestParams.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/ImageRequestParams.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImageManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImageManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImageManagerProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImageManagerProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImagePrimitivesConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTImagePrimitivesConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTSyncImageManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_ImageManager/RCTSyncImageManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Mapbuffer/MapBuffer.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Mapbuffer/MapBuffer.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Mapbuffer/MapBufferBuilder.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_Mapbuffer/MapBufferBuilder.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTInteropTurboModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTInteropTurboModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModuleManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModuleManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModuleWithJSIBindings.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_NativeModulesApple/RCTTurboModuleWithJSIBindings.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAdditionAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAdditionAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationDriver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationDriver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTAnimationUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTColorAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTColorAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDecayAnimation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDecayAnimation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDiffClampAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDiffClampAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDivisionAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTDivisionAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTEventAnimation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTEventAnimation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTFrameAnimation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTFrameAnimation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTInterpolationAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTInterpolationAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTModuloAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTModuloAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTMultiplicationAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTMultiplicationAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedNodesManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedNodesManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedTurboModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTNativeAnimatedTurboModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTObjectAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTObjectAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTPropsAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTPropsAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTSpringAnimation.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTSpringAnimation.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTStyleAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTStyleAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTSubtractionAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTSubtractionAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTTrackingAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTTrackingAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTTransformAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTTransformAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTValueAnimatedNode.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAnimation/RCTValueAnimatedNode.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTAppDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTAppDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTAppSetupUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTAppSetupUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTArchConfiguratorProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTArchConfiguratorProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTDefaultReactNativeFactoryDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTDefaultReactNativeFactoryDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTDependencyProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTDependencyProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTJSRuntimeConfiguratorProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTJSRuntimeConfiguratorProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTReactNativeFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTReactNativeFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTRootViewFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTRootViewFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTUIConfiguratorProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/RCTUIConfiguratorProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/React_RCTAppDelegate-umbrella.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTAppDelegate/React_RCTAppDelegate-umbrella.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobCollector.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobCollector.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTBlobPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTFileReaderModule.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTBlob/RCTFileReaderModule.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/AppleEventBeat.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/AppleEventBeat.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/PlatformRunLoopObserver.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/PlatformRunLoopObserver.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTAccessibilityElement.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTAccessibilityElement.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTActivityIndicatorViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTActivityIndicatorViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTBoxShadow.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTBoxShadow.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTColorSpaceUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTColorSpaceUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewClassDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewClassDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewDescriptor.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewDescriptor.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewFactory.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewFactory.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTComponentViewRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTConversions.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTConversions.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTCustomPullToRefreshViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTCustomPullToRefreshViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTDebuggingOverlayComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTDebuggingOverlayComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTEnhancedScrollView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTEnhancedScrollView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricComponentsPlugins.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricComponentsPlugins.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricModalHostViewController.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricModalHostViewController.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricSurface.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTFabricSurface.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTGenericDelegateSplitter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTGenericDelegateSplitter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTGradientUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTGradientUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTIdentifierPool.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTIdentifierPool.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageResponseDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageResponseDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageResponseObserverProxy.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTImageResponseObserverProxy.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTInputAccessoryComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTInputAccessoryComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTInputAccessoryContentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTInputAccessoryContentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLegacyViewManagerInteropComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLegacyViewManagerInteropComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLegacyViewManagerInteropCoordinatorAdapter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLegacyViewManagerInteropCoordinatorAdapter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLinearGradient.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLinearGradient.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLocalizationProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTLocalizationProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTModalHostViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTModalHostViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingManagerDelegate.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingManagerDelegate.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingTransactionObserverCoordinator.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingTransactionObserverCoordinator.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingTransactionObserving.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTMountingTransactionObserving.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTParagraphComponentAccessibilityProvider.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTParagraphComponentAccessibilityProvider.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTParagraphComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTParagraphComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTPrimitives.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTPrimitives.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTPullToRefreshViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTPullToRefreshViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTRadialGradient.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTRadialGradient.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTReactTaggedView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTReactTaggedView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTRootComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTRootComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSafeAreaViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSafeAreaViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTScheduler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTScheduler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTScrollViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTScrollViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePointerHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePointerHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePresenter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePresenter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePresenterBridgeAdapter.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfacePresenterBridgeAdapter.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfaceRegistry.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfaceRegistry.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfaceTouchHandler.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSurfaceTouchHandler.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSwitchComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTSwitchComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputNativeCommands.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputNativeCommands.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTextInputUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTouchableComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTTouchableComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTUnimplementedNativeComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTUnimplementedNativeComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTUnimplementedViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTUnimplementedViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTViewAccessibilityElement.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTViewAccessibilityElement.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTVirtualViewComponentView.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/RCTVirtualViewComponentView.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/UIView+ComponentViewProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTFabric/UIView+ComponentViewProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTAnimatedImage.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTAnimatedImage.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTBundleAssetImageLoader.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTBundleAssetImageLoader.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTDisplayWeakRefreshable.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTDisplayWeakRefreshable.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTGIFImageDecoder.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTGIFImageDecoder.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageBlurUtils.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageBlurUtils.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageCache.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageCache.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageDataDecoder.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageDataDecoder.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageEditingManager.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageEditingManager.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoader.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoader.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoaderLoggable.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoaderLoggable.h: unlinkat: Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoaderProtocol.h: utimensat (2): Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoaderProtocol.h: unlinkat: Operation not permitted
+rsync(82430): error: mkstempat: 'React.framework/Headers/React_RCTImage/.RCTImageLoaderWithAttributionProtocol.h.nMj9O8YM4y': Operation not permitted
+rsync(82430): error: React.framework/Headers/React_RCTImage/RCTImageLoaderWithAttributionProtocol.h: utimensat (2): No such file or directory
+rsync(82430): error: rsync_set_metadata
+rsync(82430): error: rsync_downloader
+rsync(82430): error: rsync_receiver
+rsync(82429): error: unexpected end of file
+rsync(82429): error: io_read_nonblocking
+rsync(82429): error: io_read_blocking
+rsync(82429): error: io_read_flush
+rsync(82429): error: rsync_sender
+rsync(82429): warning: child 82430 exited with status 1
