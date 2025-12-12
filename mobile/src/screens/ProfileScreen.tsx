@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Image,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -813,13 +812,7 @@ const ProfileScreen = () => {
                   title='View feedback board'
                   subtitle='See what we are building next'
                   icon='chatbubble-ellipses-outline'
-                  onPress={() => {
-                    navigation.navigate("Settings");
-                    Alert.alert(
-                      "Feedback board",
-                      "We're polishing the in-app board. Head to Settings → Feedback to drop ideas."
-                    );
-                  }}
+                  onPress={() => navigation.navigate("FeedbackBoard")}
                 />
               </View>
             </View>

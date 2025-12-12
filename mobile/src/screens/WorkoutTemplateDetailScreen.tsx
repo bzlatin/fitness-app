@@ -104,7 +104,12 @@ const WorkoutTemplateDetailScreen = () => {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer
+      scroll
+      includeTopInset={false}
+      paddingTop={12}
+      adjustScrollInsets={false}
+    >
       {template ? (
         <View style={{ gap: 12 }}>
           <View
@@ -208,7 +213,7 @@ const WorkoutTemplateDetailScreen = () => {
             </Text>
           ) : null}
 
-          <MuscleGroupBreakdown template={template} variant="detailed" />
+          <MuscleGroupBreakdown template={template} variant='detailed' />
 
           <View style={{ marginTop: 8 }}>
             <Text

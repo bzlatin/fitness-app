@@ -2,6 +2,7 @@ require File.join(File.dirname(`node --print "require.resolve('expo/package.json
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
 require 'json'
+require 'fileutils'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 def ccache_enabled?(podfile_properties)
@@ -56,5 +57,55 @@ target 'pushpull' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Work around missing modulemaps under Pods/Headers/Public/* for some Swift pods.
+    # We mirror each pod's generated *.modulemap + umbrella header from
+    # Pods/Target Support Files/* into Pods/Headers/Public/<ModuleName>/.
+    support_root = File.join(__dir__, 'Pods', 'Target Support Files')
+    public_root = File.join(__dir__, 'Pods', 'Headers', 'Public')
+
+    modules_to_mirror = %w[
+      OpenIAP
+      Stripe
+      StripeApplePay
+      StripeCore
+      StripeFinancialConnections
+      StripePaymentSheet
+      StripePayments
+      StripePaymentsUI
+      StripeUICore
+    ].freeze
+
+    def safe_copy(src, dest)
+      return unless File.exist?(src)
+
+      if File.exist?(dest)
+        begin
+          return if File.realpath(src) == File.realpath(dest)
+        rescue StandardError
+          # If realpath fails (broken symlink, etc), fall through.
+        end
+        return
+      end
+
+      FileUtils.cp(src, dest)
+    end
+
+    Dir.glob(File.join(support_root, '*', '*.modulemap')).each do |modulemap_src|
+      modulemap = File.read(modulemap_src)
+      module_name = modulemap[/^\s*module\s+([A-Za-z0-9_]+)/, 1]
+      umbrella_header = modulemap[/^\s*umbrella\s+header\s+\"([^\"]+)\"/, 1]
+      next unless module_name && umbrella_header
+      next unless modules_to_mirror.include?(module_name)
+
+      support_dir = File.dirname(modulemap_src)
+      umbrella_src = File.join(support_dir, umbrella_header)
+      next unless File.exist?(umbrella_src)
+
+      dest_dir = File.join(public_root, module_name)
+      FileUtils.mkdir_p(dest_dir)
+      safe_copy(modulemap_src, File.join(dest_dir, File.basename(modulemap_src)))
+      safe_copy(umbrella_src, File.join(dest_dir, umbrella_header))
+    end
   end
 end

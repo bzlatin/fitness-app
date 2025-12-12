@@ -316,6 +316,8 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - openiap (1.2.42)
+  - PushPullAppleHealthKit (1.0.0):
+    - ExpoModulesCore
   - RCTDeprecation (0.81.5)
   - RCTRequired (0.81.5)
   - RCTTypeSafety (0.81.5):
@@ -2014,6 +2016,8 @@ PODS:
     - React-utils (= 0.81.5)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.81.5)
+  - RNAppleHealthKit (1.7.0):
+    - React
   - RNCAsyncStorage (1.24.0):
     - hermes-engine
     - RCTRequired
@@ -2388,6 +2392,7 @@ DEPENDENCIES:
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - NitroIap (from `../node_modules/react-native-iap`)
   - NitroModules (from `../node_modules/react-native-nitro-modules`)
+  - PushPullAppleHealthKit (from `../modules/pushpull-apple-healthkit/ios`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
   - RCTTypeSafety (from `../node_modules/react-native/Libraries/TypeSafety`)
@@ -2454,6 +2459,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
+  - RNAppleHealthKit (from `../node_modules/react-native-health`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - "RNCPicker (from `../node_modules/@react-native-picker/picker`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
@@ -2542,6 +2548,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-iap"
   NitroModules:
     :path: "../node_modules/react-native-nitro-modules"
+  PushPullAppleHealthKit:
+    :path: "../modules/pushpull-apple-healthkit/ios"
   RCTDeprecation:
     :path: "../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -2672,6 +2680,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNAppleHealthKit:
+    :path: "../node_modules/react-native-health"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNCPicker:
@@ -2725,6 +2735,7 @@ SPEC CHECKSUMS:
   NitroIap: e3180b6b79618a167ab5f5d3f09f141bd24ff92d
   NitroModules: a71a5ab2911caf79e45170e6e12475b5260a12d0
   openiap: 36a945650cd4115d83a00882e3bd924b602c0619
+  PushPullAppleHealthKit: 515fc40eb33110fcd0fb569f4925ef80ae3823ed
   RCTDeprecation: 943572d4be82d480a48f4884f670135ae30bf990
   RCTRequired: 8f3cfc90cc25cf6e420ddb3e7caaaabc57df6043
   RCTTypeSafety: 16a4144ca3f959583ab019b57d5633df10b5e97c
@@ -2790,6 +2801,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 7d4593f7591f002d137fe40cef3f6c11f13c88cc
   ReactCommon: 08810150b1206cc44aecf5f6ae19af32f29151a8
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
+  RNAppleHealthKit: 86ef7ab70f762b802f5c5289372de360cca701f9
   RNCAsyncStorage: 7a5a6094f9f6b9158e72f1855cd86e769413d851
   RNCPicker: c8a3584b74133464ee926224463fcc54dfdaebca
   RNGestureHandler: 723f29dac55e25f109d263ed65cecc4b9c4bd46a
@@ -2808,6 +2820,6 @@ SPEC CHECKSUMS:
   StripeUICore: 879bbf5889265db13f52fac8aad7a176ba62481f
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
-PODFILE CHECKSUM: 539cf2502cf8082e7de7defbd3cbd5185bbe27c6
+PODFILE CHECKSUM: dbc81064887d1c96fa54ebdaad49121f5a0f8e58
 
 COCOAPODS: 1.16.2

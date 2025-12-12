@@ -1479,7 +1479,7 @@ To test notifications:
 
 #### 4.4.7 Session Quality Recap
 
-**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+**Priority**: MEDIUM | **Effort**: 3-4 days | **Impact**: MEDIUM | **Status**: ✅ IMPLEMENTED
 
 **Goal**: Give users a lightweight timeline of their best sessions and gentle nudges when quality dips to drive re-engagement.
 
@@ -1505,7 +1505,7 @@ To test notifications:
 
 #### 4.4.8 Apple Health Sync (iOS)
 
-**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: HIGH | **Status**: ✅ IMPLEMENTED
 
 **Goal**: Pull Apple Health workout + activity data into the app to enrich analytics, streak accuracy, and recovery signals.
 
@@ -1522,6 +1522,7 @@ To test notifications:
 - Normalize imported sessions to existing workout schema; dedupe against manually logged sessions by timestamp + duration
 - Add user-level setting to disable/clear Apple Health imports
 - Add migration to store `source` on workouts (`manual`, `ai`, `apple_health`)
+- Option in settings to enable/disable
 
 **Files to Create/Modify**:
 
@@ -1584,6 +1585,36 @@ To test notifications:
 - `/server/src/jobs/exportData.ts` - Export generator + storage upload
 - `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
 - `/mobile/src/api/account.ts` - Export API client
+
+---
+
+#### 4.4.11 Apple Watch Companion (Sync + Mini UI)
+
+**Priority**: HIGH | **Effort**: 6-8 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance progress and quick actions.
+
+**Experience**:
+
+- When a workout starts on iPhone, watch shows current exercise, set/rep/weight target, and rest timer
+- Simple controls: log set (complete/skip), start/pause rest, next/prev exercise
+- Offline-safe: queue watch actions and reconcile with phone session when reconnected
+
+**Implementation**:
+
+- Add watchOS companion app (SwiftUI) in Xcode; use Watch Connectivity to sync active session payloads from React Native bridge
+- Expose a native module on iOS to publish workout updates to the watch and receive queued actions (log set, advance exercise)
+- Keep phone as source of truth; watch sends intents, phone persists to API and echoes updates back
+- Optional complication: show session status + rest countdown
+- Requires custom dev client / bare workflow step for watch target; document build steps
+
+**Files to Create/Modify**:
+
+- `/mobile/ios/WatchCompanion/` - SwiftUI watch app + connectivity session manager
+- `/mobile/ios/WatchConnectivityModule.swift` - Native bridge for session sync and action handling
+- `/mobile/src/services/watchSync.ts` - JS wrapper to publish workout updates and process watch intents
+- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Emit sync payloads on session start/set logged/next exercise
+- `/mobile/docs/APPLE_WATCH_SETUP.md` - Build/setup guide (dev client, provisioning, pairing)
 
 ---
 
@@ -1776,5 +1807,7 @@ To test notifications:
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
 - **v1.5**: Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
-- **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, health sync, data export pending)
+- **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, data export pending)
+- **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
+- **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

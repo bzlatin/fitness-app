@@ -63,8 +63,15 @@ export interface WorkoutSession {
   id: string;
   templateId?: string;
   templateName?: string;
+  source?: "manual" | "ai" | "apple_health";
   startedAt: string;
   finishedAt?: string;
+  endedReason?: string;
+  autoEndedAt?: string;
+  durationSeconds?: number;
+  totalEnergyBurned?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
   sets: WorkoutSet[];
 }
 
@@ -73,8 +80,13 @@ export interface WorkoutHistorySession {
   startedAt: string;
   finishedAt?: string;
   templateName?: string;
+  source?: "manual" | "ai" | "apple_health";
+  durationSeconds?: number;
   totalVolumeLbs: number;
   estimatedCalories: number;
+  totalEnergyBurned?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
   exercises: {
     exerciseId: string;
     name: string;
@@ -100,6 +112,11 @@ export interface WorkoutHistoryStats {
 export interface WorkoutHistoryResponse {
   days: WorkoutHistoryDay[];
   stats: WorkoutHistoryStats;
+}
+
+export interface ActiveSessionResponse {
+  session: WorkoutSession | null;
+  autoEndedSession?: WorkoutSession | null;
 }
 
 export interface Exercise {

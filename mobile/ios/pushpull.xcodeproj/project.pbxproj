@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -21,7 +21,6 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		CBABC636C09442435DB78B5B /* WidgetSyncModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 810D8614D501CDA368955111 /* WidgetSyncModule.m */; };
 		D07AD122EAAD364FD5203F77 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 607A486BFB7CA6AF73D80804 /* PrivacyInfo.xcprivacy */; };
-		D8816D949162EB0E258D391B /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35D651EA5BCB745D00F284D /* WorkoutActivityAttributes.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F14C7D1569B37E3D4F6577B8 /* LiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C634B0C1A8358C28F8029FEB /* LiveActivityModule.swift */; };
 /* End PBXBuildFile section */
@@ -65,6 +64,7 @@
 		B5125A9E2EE616AE00D1E37F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		B5125AC02EE61A0000D1E37F /* WidgetsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WidgetsExtension.entitlements; sourceTree = "<group>"; };
 		B5125AC72EE6226600D1E37F /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		B5571FE02EEA7C960018D209 /* pushpull.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = pushpull.entitlements; path = pushpull/pushpull.entitlements; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		C634B0C1A8358C28F8029FEB /* LiveActivityModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LiveActivityModule.swift; path = pushpull/LiveActivityModule.swift; sourceTree = "<group>"; };
 		E35D651EA5BCB745D00F284D /* WorkoutActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutActivityAttributes.swift; path = Widgets/WorkoutActivityAttributes.swift; sourceTree = "<group>"; };
@@ -126,6 +126,7 @@
 		13B07FAE1A68108700A75B9A /* pushpull */ = {
 			isa = PBXGroup;
 			children = (
+				B5571FE02EEA7C960018D209 /* pushpull.entitlements */,
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				810D8614D501CDA368955111 /* WidgetSyncModule.m */,
 				59D403E525B93A979C79E33A /* WidgetSyncModule.swift */,
@@ -378,6 +379,7 @@
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/pushpull/pushpull.entitlements",
 				"$(SRCROOT)/Pods/Target Support Files/Pods-pushpull/expo-configure-project.sh",
 			);
 			name = "[Expo] Configure project";
@@ -489,7 +491,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D8816D949162EB0E258D391B /* WorkoutActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -510,6 +511,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = pushpull/pushpull.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -548,6 +550,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = pushpull/pushpull.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -730,6 +733,7 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.pushpull.app.Widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -780,6 +784,7 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.pushpull.app.Widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

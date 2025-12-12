@@ -1,0 +1,27 @@
+Selected xcframework slice ios-arm64
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" "/Users/ben/coding_projects/fitness-app/mobile/ios/Pods/React-Core-prebuilt/React.xcframework/ios-arm64/*" "/Users/ben/Library/Developer/Xcode/DerivedData/pushpull-fsrgikcjfsivncharebamnjebdts/Build/Products/Debug-iphoneos/XCFrameworkIntermediates/React-Core-prebuilt"
+Transfer starting: 1092 files
+deleting React.framework/Headers/React_RCTImage/.RCTImageLoaderWithAttributionProtocol.h.xMDH6gTjNs
+React.framework/
+React.framework/Headers/
+React.framework/Headers/FBLazyVector/
+React.framework/Headers/FBReactNativeSpec/
+React.framework/Headers/RCTDeprecation/
+React.framework/Headers/RCTRequired/
+React.framework/Headers/RCTTypeSafety/
+React.framework/Headers/ReactCommon/
+React.framework/Headers/React_Core/
+React.framework/Headers/React_CoreModules/
+React.framework/Headers/React_Fabric/
+React.framework/Headers/React_FabricComponents/
+React.framework/Headers/React_FabricImage/
+React.framework/Headers/React_ImageManager/
+React.framework/Headers/React_Mapbuffer/
+React.framework/Headers/React_NativeModulesApple/
+React.framework/Headers/React_RCTAnimation/
+React.framework/Headers/React_RCTAppDelegate/
+React.framework/Headers/React_RCTBlob/
+React.framework/Headers/React_RCTFabric/
+React.framework/Headers/React_RCTImage/
+React.framework/Headers/React_RCTImage/RCTImageLoaderWithAttributionProtocol.h
+React.framework/Headers/React_RCTImage/RCTImagePlugins.h

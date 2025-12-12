@@ -21,6 +21,7 @@ import AuthGate from "./src/components/auth/AuthGate";
 import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
 import { useWidgetSync } from "./src/hooks/useWidgetSync";
+import { useAppleHealthSync } from "./src/hooks/useAppleHealthSync";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import { RootStackParamList } from "./src/navigation/types";
 import { bootstrapPayments } from "./src/services/payments";
@@ -247,6 +248,8 @@ const OnboardingGate = ({ children }: { children: ReactNode }) => {
 
   // Sync widget data automatically (iOS only)
   useWidgetSync();
+  // Keep Apple Health imports fresh once per day (iOS only)
+  useAppleHealthSync();
 
   // Only block the UI while we haven't loaded a user yet.
   if (isLoading && !user) {

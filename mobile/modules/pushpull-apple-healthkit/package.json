@@ -1,0 +1,14 @@
+{
+  "name": "pushpull-apple-healthkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Expo module providing Apple HealthKit access for Push/Pull.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": [
+    "expo-module",
+    "healthkit",
+    "ios"
+  ]
+}
+

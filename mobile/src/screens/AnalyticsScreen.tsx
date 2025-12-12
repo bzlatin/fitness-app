@@ -13,16 +13,17 @@ import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import VolumeChart from "../components/VolumeChart";
-import { fetchAdvancedAnalytics } from "../api/analytics";
+import { fetchAdvancedAnalytics, fetchRecap } from "../api/analytics";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { formatMuscleGroup } from "../utils/muscleGroupCalculations";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { RootNavigation } from "../navigation/RootNavigator";
-import type { AdvancedAnalytics } from "../types/analytics";
+import type { AdvancedAnalytics, RecapSlice } from "../types/analytics";
 import type { ApiClientError } from "../api/client";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import RecapCard from "../components/RecapCard";
 
 const AnalyticsScreen = () => {
   const navigation = useNavigation<RootNavigation>();
@@ -52,6 +53,31 @@ const AnalyticsScreen = () => {
       }
     },
   });
+
+  const {
+    data: recap,
+    isLoading: recapLoading,
+    isRefetching: recapRefetching,
+    refetch: refetchRecap,
+    isError: recapError,
+  } = useQuery<RecapSlice, ApiClientError>({
+    queryKey: ["recap"],
+    queryFn: () => fetchRecap(),
+    enabled: isPro,
+    retry: false,
+    onError: (err: any) => {
+      if (err?.status === 403 || err?.requiresUpgrade) {
+        setShowPaywallModal(true);
+      }
+    },
+  });
+
+  const handleRefresh = () => {
+    refetch();
+    refetchRecap();
+  };
+
+  const isRefreshing = isRefetching || recapRefetching;
 
   const handleMuscleToggle = (muscle: string) => {
     setSelectedMuscles((prev) => {
@@ -139,7 +165,7 @@ const AnalyticsScreen = () => {
           style={styles.container}
           contentContainerStyle={styles.errorContainer}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
           }
         >
           <Ionicons
@@ -200,14 +226,14 @@ const AnalyticsScreen = () => {
         showGradient
         showTopGradient
         paddingTop={20}
-        includeTopInset={false}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
-        }
-      >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Advanced Analytics</Text>
-          <Text style={styles.headerSubtitle}>
+      includeTopInset={false}
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+      }
+    >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Advanced Analytics</Text>
+        <Text style={styles.headerSubtitle}>
             Track your volume, balance, and progress
           </Text>
         </View>
@@ -235,7 +261,7 @@ const AnalyticsScreen = () => {
       paddingTop={20}
       includeTopInset={false}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
       }
     >
       {/* Header */}
@@ -244,6 +270,17 @@ const AnalyticsScreen = () => {
         <Text style={styles.headerSubtitle}>
           Track your volume, balance, and progress
         </Text>
+      </View>
+
+      {/* Recap timeline */}
+      <View style={styles.section}>
+        <RecapCard
+          data={recap}
+          loading={recapLoading}
+          error={recapError}
+          onRetry={handleRefresh}
+          variant='expanded'
+        />
       </View>
 
       {/* Time Range Selector */}

@@ -3,6 +3,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  ScrollView,
   Share,
   Text,
   TextInput,
@@ -179,6 +180,40 @@ const HistoryScreen = () => {
   );
 
   const stats: WorkoutHistoryStats | undefined = data?.stats;
+  const sessionsForSelectedDay = selectedDay
+    ? dayMap.get(formatDateKey(selectedDay))?.sessions ?? []
+    : [];
+
+  const buildSessionMetrics = (session?: WorkoutHistorySession | null) => {
+    if (!session) return null;
+    const startDate = new Date(session.startedAt);
+    const durationSeconds =
+      session.durationSeconds ??
+      (session.finishedAt
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(session.finishedAt).getTime() - startDate.getTime()) / 1000
+            )
+          )
+        : null);
+
+    return {
+      durationMinutes:
+        durationSeconds !== null && durationSeconds !== undefined
+          ? Math.max(1, Math.round(durationSeconds / 60))
+          : null,
+      caloriesValue:
+        session.totalEnergyBurned !== undefined
+          ? `${Math.round(session.totalEnergyBurned)} kcal`
+          : `${session.estimatedCalories}`,
+      avgHr: session.avgHeartRate ? Math.round(session.avgHeartRate) : null,
+      maxHr: session.maxHeartRate ? Math.round(session.maxHeartRate) : null,
+      isImported: session.source === "apple_health",
+    };
+  };
+
+  const selectedMetrics = buildSessionMetrics(selectedSession);
 
   // Reset month cursor to current month when opening
   const handleToggleMonth = () => {
@@ -482,14 +517,27 @@ const HistoryScreen = () => {
 
   const renderSessionCard = (session: WorkoutHistorySession) => {
     const startDate = new Date(session.startedAt);
-    const duration = session.finishedAt
-      ? Math.max(
-          10,
-          Math.round(
-            (new Date(session.finishedAt).getTime() - startDate.getTime()) / 60000
+    const durationSeconds =
+      session.durationSeconds ??
+      (session.finishedAt
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(session.finishedAt).getTime() - startDate.getTime()) / 1000
+            )
           )
-        )
-      : null;
+        : null);
+    const durationMinutes =
+      durationSeconds !== null && durationSeconds !== undefined
+        ? Math.max(1, Math.round(durationSeconds / 60))
+        : null;
+    const caloriesValue =
+      session.totalEnergyBurned !== undefined
+        ? `${Math.round(session.totalEnergyBurned)} kcal`
+        : `${session.estimatedCalories}`;
+    const isImported = session.source === "apple_health";
+    const avgHr = session.avgHeartRate ? Math.round(session.avgHeartRate) : null;
+    const maxHr = session.maxHeartRate ? Math.round(session.maxHeartRate) : null;
 
     return (
       <Pressable
@@ -510,12 +558,34 @@ const HistoryScreen = () => {
             <Text style={{ ...typography.title, color: colors.textPrimary }}>
               {session.templateName || "Logged workout"}
             </Text>
+            {isImported ? (
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  marginTop: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                  backgroundColor: colors.primary + "22",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 11,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Imported from Apple Health
+                </Text>
+              </View>
+            ) : null}
             <Text style={{ color: colors.textSecondary }}>
               {formatDateMedium(startDate)}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
               {formatTime(startDate)} · {session.exercises.length} exercises
-              {duration ? ` · ${duration} min` : ""}
+              {durationMinutes ? ` · ${durationMinutes} min` : ""}
             </Text>
           </View>
         <Pressable
@@ -535,25 +605,20 @@ const HistoryScreen = () => {
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
         <MetricPill
           label='Volume'
           value={`${Math.round(session.totalVolumeLbs)} lbs`}
         />
-        <MetricPill label='Calories' value={`${session.estimatedCalories}`} />
-        {session.finishedAt ? (
+        <MetricPill label='Calories' value={caloriesValue} />
+        {durationMinutes ? (
           <MetricPill
             label='Duration'
-            value={`${Math.max(
-              10,
-              Math.round(
-                (new Date(session.finishedAt).getTime() -
-                  new Date(session.startedAt).getTime()) /
-                  60000
-              )
-            )} min`}
+            value={`${durationMinutes} min`}
           />
         ) : null}
+        {avgHr ? <MetricPill label='Avg HR' value={`${avgHr} bpm`} /> : null}
+        {maxHr ? <MetricPill label='Max HR' value={`${maxHr} bpm`} /> : null}
       </View>
 
       <View style={{ gap: 6 }}>
@@ -1258,47 +1323,48 @@ const HistoryScreen = () => {
                       {formatDateLong(selectedDay)}
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      {dayMap.get(formatDateKey(selectedDay))?.sessions.length ||
-                        0}{" "}
-                      workout(s)
+                      {sessionsForSelectedDay.length} workout(s)
                     </Text>
-                    <View style={{ gap: 10 }}>
-                      {dayMap
-                        .get(formatDateKey(selectedDay))
-                        ?.sessions.map((session) => (
-                          <Pressable
-                            key={session.id}
-                            onPress={() => {
-                              setSelectedDay(null);
-                              handleSessionClick(session);
+                    <ScrollView
+                      style={{ maxHeight: 360 }}
+                      contentContainerStyle={{ gap: 10, paddingVertical: 2 }}
+                      showsVerticalScrollIndicator
+                      nestedScrollEnabled
+                    >
+                      {sessionsForSelectedDay.map((session) => (
+                        <Pressable
+                          key={session.id}
+                          onPress={() => {
+                            setSelectedDay(null);
+                            handleSessionClick(session);
+                          }}
+                          style={({ pressed }) => ({
+                            backgroundColor: pressed
+                              ? colors.surfaceMuted
+                              : colors.surface,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            padding: 12,
+                            gap: 8,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textPrimary,
+                              fontFamily: fontFamilies.semibold,
                             }}
-                            style={({ pressed }) => ({
-                              backgroundColor: pressed
-                                ? colors.surfaceMuted
-                                : colors.surface,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              padding: 12,
-                              gap: 8,
-                            })}
                           >
-                            <Text
-                              style={{
-                                color: colors.textPrimary,
-                                fontFamily: fontFamilies.semibold,
-                              }}
-                            >
-                              {session.templateName || "Logged workout"}
-                            </Text>
-                            <Text style={{ color: colors.textSecondary }}>
-                              {formatTime(new Date(session.startedAt))}{" "}
-                              · {session.exercises.length} exercises ·{" "}
-                              {Math.round(session.totalVolumeLbs)} lbs
-                            </Text>
-                          </Pressable>
-                        ))}
-                    </View>
+                            {session.templateName || "Logged workout"}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary }}>
+                            {formatTime(new Date(session.startedAt))} ·{" "}
+                            {session.exercises.length} exercises ·{" "}
+                            {Math.round(session.totalVolumeLbs)} lbs
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
                     <Pressable
                       onPress={() => setSelectedDay(null)}
                       style={({ pressed }) => ({
@@ -1333,56 +1399,101 @@ const HistoryScreen = () => {
               justifyContent: "center",
               padding: 16,
             }}
+      >
+        <TouchableWithoutFeedback>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 18,
+              padding: 18,
+              gap: 14,
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxHeight: "80%",
+              position: "relative",
+            }}
           >
-            <TouchableWithoutFeedback>
-              <View
-                style={{
-                  backgroundColor: colors.surface,
-                  borderRadius: 18,
-                  padding: 18,
-                  gap: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  maxHeight: "80%",
-                }}
-              >
-                {selectedSession && (
-                  <>
+            {selectedSession && (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => setSelectedSession(null)}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      padding: 6,
+                      borderRadius: 10,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    })}
+                  >
+                    <Ionicons name='close' size={18} color={colors.textPrimary} />
+                  </Pressable>
+                  <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       style={{ ...typography.title, color: colors.textPrimary }}
                     >
                       {selectedSession.templateName || "Logged workout"}
                     </Text>
+                    {selectedMetrics?.isImported ? (
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          marginTop: 2,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 10,
+                          backgroundColor: colors.primary + "22",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          Imported from Apple Health
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={{ color: colors.textSecondary }}>
                       {formatDateTimeShort(new Date(selectedSession.startedAt))}
                     </Text>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      <MetricPill
-                        label='Volume'
-                        value={`${Math.round(
-                          selectedSession.totalVolumeLbs
-                        )} lbs`}
-                      />
-                      <MetricPill
-                        label='Calories'
-                        value={`${selectedSession.estimatedCalories}`}
-                      />
-                      {selectedSession.finishedAt && (
-                        <MetricPill
-                          label='Duration'
-                          value={`${Math.max(
-                            10,
-                            Math.round(
-                              (new Date(selectedSession.finishedAt).getTime() -
-                                new Date(
-                                  selectedSession.startedAt
-                                ).getTime()) /
-                                60000
-                            )
-                          )} min`}
-                        />
-                      )}
-                    </View>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                  <MetricPill
+                    label='Volume'
+                    value={`${Math.round(selectedSession.totalVolumeLbs)} lbs`}
+                  />
+                  <MetricPill
+                    label='Calories'
+                    value={
+                      selectedMetrics?.caloriesValue ?? `${selectedSession.estimatedCalories}`
+                    }
+                  />
+                  {selectedMetrics?.durationMinutes ? (
+                    <MetricPill
+                      label='Duration'
+                      value={`${selectedMetrics.durationMinutes} min`}
+                    />
+                  ) : null}
+                  {selectedMetrics?.avgHr ? (
+                    <MetricPill label='Avg HR' value={`${selectedMetrics.avgHr} bpm`} />
+                  ) : null}
+                  {selectedMetrics?.maxHr ? (
+                    <MetricPill label='Max HR' value={`${selectedMetrics.maxHr} bpm`} />
+                  ) : null}
+                </View>
                     <View
                       style={{
                         borderTopWidth: 1,
@@ -1547,20 +1658,6 @@ const HistoryScreen = () => {
                         </Text>
                       </Pressable>
                     </View>
-
-                    <Pressable
-                      onPress={() => setSelectedSession(null)}
-                      style={({ pressed }) => ({
-                        paddingVertical: 12,
-                        alignItems: "center",
-                        borderRadius: 12,
-                        backgroundColor: "transparent",
-                        opacity: pressed ? 0.7 : 1,
-                        marginTop: 4,
-                      })}
-                    >
-                      <Text style={{ color: colors.textSecondary }}>Close</Text>
-                    </Pressable>
                   </>
                 )}
               </View>

@@ -19,6 +19,8 @@ export type EquipmentType =
   | "kettlebell"
   | "other";
 
+export type WorkoutSource = "manual" | "ai" | "apple_health";
+
 export interface Exercise {
   id: string;
   name: string;
@@ -90,8 +92,16 @@ export interface WorkoutSession {
   userId: string;
   templateId?: string;
   templateName?: string;
+  source?: WorkoutSource;
   startedAt: string;
   finishedAt?: string;
+  endedReason?: string;
+  autoEndedAt?: string;
+  durationSeconds?: number;
+  totalEnergyBurned?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+  importMetadata?: Record<string, unknown>;
   sets: WorkoutSet[];
 }
 

@@ -18,6 +18,7 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -48,6 +49,14 @@ import {
   NotificationPreferences,
 } from "../services/notifications";
 import { useNewShippedCount } from "../api/feedback";
+import {
+  clearAppleHealthData,
+  getLastAppleHealthSync,
+  getAppleHealthAvailability,
+  requestAppleHealthPermissions,
+  syncAppleHealthWorkouts,
+} from "../services/appleHealth";
+import { AppleHealthPermissions } from "../types/health";
 
 const initialsForName = (name?: string | null) => {
   if (!name) return "?";
@@ -102,6 +111,15 @@ const SettingsScreen = () => {
   const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] =
     useState(false);
   const isLoadingNotificationPrefsRef = useRef(false);
+  const [healthPermissions, setHealthPermissions] =
+    useState<AppleHealthPermissions>({
+      workouts: true,
+      activeEnergy: true,
+      heartRate: false,
+    });
+  const [isSyncingHealth, setIsSyncingHealth] = useState(false);
+  const [lastHealthSync, setLastHealthSync] = useState<Date | null>(null);
+  const [appleHealthEnabledUi, setAppleHealthEnabledUi] = useState<boolean | null>(null);
   const lastHandleChange = user?.handleLastChangedAt
     ? new Date(user.handleLastChangedAt)
     : null;
@@ -133,6 +151,8 @@ const SettingsScreen = () => {
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
   const isIOS = Platform.OS === "ios";
+  const appleHealthEnabledFromProfile = user?.appleHealthEnabled ?? false;
+  const appleHealthEnabled = appleHealthEnabledUi ?? appleHealthEnabledFromProfile;
   const isAppleSubscription =
     subscriptionStatus?.subscriptionPlatform === "apple" ||
     !!subscriptionStatus?.appleOriginalTransactionId;
@@ -164,6 +184,22 @@ const SettingsScreen = () => {
       )
     : undefined;
   const trialEnds = formatDate(subscriptionAccess.trialEndsAt ?? undefined);
+  const healthSyncDisplay =
+    (
+      lastHealthSync ??
+      (user?.appleHealthLastSyncAt ? new Date(user.appleHealthLastSyncAt) : null)
+    )?.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }) ?? "Not synced yet";
+
+  useEffect(() => {
+    if (appleHealthEnabledUi !== null && appleHealthEnabledUi === appleHealthEnabledFromProfile) {
+      setAppleHealthEnabledUi(null);
+    }
+  }, [appleHealthEnabledFromProfile, appleHealthEnabledUi]);
 
   useEffect(() => {
     if (user) {
@@ -175,6 +211,14 @@ const SettingsScreen = () => {
       setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
       setShowGym((user.gymVisibility ?? "hidden") === "shown");
       setAvatarUri(user.avatarUrl ?? undefined);
+      setHealthPermissions({
+        workouts: user.appleHealthPermissions?.workouts ?? true,
+        activeEnergy: user.appleHealthPermissions?.activeEnergy ?? true,
+        heartRate: user.appleHealthPermissions?.heartRate ?? false,
+      });
+      setLastHealthSync(
+        user.appleHealthLastSyncAt ? new Date(user.appleHealthLastSyncAt) : null
+      );
       setIsEditing(false);
     }
   }, [
@@ -187,6 +231,8 @@ const SettingsScreen = () => {
     user?.gymVisibility,
     user?.avatarUrl,
     user?.weeklyGoal,
+    user?.appleHealthPermissions,
+    user?.appleHealthLastSyncAt,
   ]);
 
   useEffect(() => {
@@ -195,6 +241,18 @@ const SettingsScreen = () => {
       setShowConnectionsModal(true);
     }
   }, [route.params?.openConnections]);
+
+  useEffect(() => {
+    const loadLocalHealthSync = async () => {
+      if (user?.appleHealthLastSyncAt) return;
+      const local = await getLastAppleHealthSync();
+      if (local) {
+        setLastHealthSync(local);
+      }
+    };
+
+    void loadLocalHealthSync();
+  }, [user?.appleHealthLastSyncAt]);
 
   useEffect(() => {
     if (showConnectionsModal) {
@@ -281,6 +339,206 @@ const SettingsScreen = () => {
       console.error("[Settings] Error updating notification preference:", error);
       Alert.alert("Error", "Failed to update notification settings.");
     }
+  };
+
+  const handleAppleHealthToggle = async (enabled: boolean) => {
+    const previousEnabled = appleHealthEnabledFromProfile;
+    const previousPermissions = { ...healthPermissions };
+    setAppleHealthEnabledUi(enabled);
+
+    if (enabled) {
+      const availability = getAppleHealthAvailability();
+      if (!availability.available) {
+        setAppleHealthEnabledUi(previousEnabled);
+        Alert.alert(
+          "Apple Health unavailable",
+          availability.reason ?? "Apple Health sync is unavailable on this device."
+        );
+        return;
+      }
+    }
+
+    setIsSyncingHealth(true);
+    try {
+      if (enabled) {
+        const permissionsToUse = { workouts: true, activeEnergy: true, heartRate: true };
+        setHealthPermissions(permissionsToUse);
+        const granted = await requestAppleHealthPermissions(permissionsToUse);
+        if (!granted) {
+          setAppleHealthEnabledUi(previousEnabled);
+          Alert.alert(
+            "Permission needed",
+            "Please allow Apple Health access in the system prompt or Settings > Health > Apps."
+          );
+          return;
+        }
+
+        const result = await syncAppleHealthWorkouts({
+          permissions: permissionsToUse,
+          force: true,
+          respectThrottle: false,
+        });
+        const now = new Date();
+        await updateProfile({
+          appleHealthEnabled: true,
+          appleHealthPermissions: permissionsToUse,
+          appleHealthLastSyncAt: result.status === "synced" ? now.toISOString() : user?.appleHealthLastSyncAt,
+        });
+        if (result.status === "synced") {
+          setLastHealthSync(now);
+        }
+        Alert.alert(
+          "Apple Health synced",
+          `Imported ${result.importedCount ?? 0} workouts${result.skippedCount ? ` · ${result.skippedCount} skipped` : ""}`
+        );
+      } else {
+        const disabledPermissions: AppleHealthPermissions = {
+          workouts: false,
+          activeEnergy: false,
+          heartRate: false,
+        };
+        setHealthPermissions(disabledPermissions);
+        await updateProfile({
+          appleHealthEnabled: false,
+          appleHealthPermissions: disabledPermissions,
+          appleHealthLastSyncAt: null,
+        });
+        setLastHealthSync(null);
+        try {
+          await clearAppleHealthData();
+        } catch (err) {
+          console.error("[Settings] Failed to clear Apple Health imports", err);
+          Alert.alert(
+            "Apple Health",
+            "Sync was turned off, but we couldn't clear imported workouts yet."
+          );
+        }
+      }
+    } catch (err) {
+      setAppleHealthEnabledUi(previousEnabled);
+      setHealthPermissions(previousPermissions);
+      console.error("[Settings] Apple Health toggle failed", err);
+      Alert.alert("Apple Health", "Could not update Apple Health sync. Please try again.");
+    } finally {
+      setIsSyncingHealth(false);
+    }
+  };
+
+  const handleHealthPermissionToggle = async (
+    key: keyof AppleHealthPermissions,
+    value: boolean
+  ) => {
+    const next = { ...healthPermissions, [key]: value };
+    setHealthPermissions(next);
+
+    if (key === "workouts" && !value) {
+      await handleAppleHealthToggle(false);
+      return;
+    }
+
+    try {
+      if (appleHealthEnabled && isIOS) {
+        await requestAppleHealthPermissions(next);
+      }
+      await updateProfile({
+        appleHealthPermissions: next,
+        appleHealthEnabled: appleHealthEnabled || (key === "workouts" && value),
+      });
+    } catch (err) {
+      console.error("[Settings] Failed to update Apple Health permissions", err);
+      Alert.alert("Apple Health", "Could not update permissions. Please try again.");
+    }
+  };
+
+  const handleSyncAppleHealthNow = async () => {
+    const availability = getAppleHealthAvailability();
+    if (!availability.available) {
+      Alert.alert("Apple Health unavailable", availability.reason ?? "Apple Health sync is unavailable on this device.");
+      return;
+    }
+    setIsSyncingHealth(true);
+    try {
+      const result = await syncAppleHealthWorkouts({
+        permissions: { ...healthPermissions, workouts: true },
+        force: true,
+        respectThrottle: false,
+      });
+      if (result.status === "denied") {
+        Alert.alert(
+          "Permission needed",
+          "Please allow Apple Health access to import workouts and activity."
+        );
+        return;
+      }
+      const now = new Date();
+      await updateProfile({
+        appleHealthEnabled: true,
+        appleHealthPermissions: healthPermissions,
+        appleHealthLastSyncAt: now.toISOString(),
+      });
+      setLastHealthSync(now);
+      Alert.alert(
+        "Apple Health synced",
+        `Imported ${result.importedCount ?? 0} workouts${result.skippedCount ? ` · ${result.skippedCount} skipped` : ""}`
+      );
+    } catch (err) {
+      console.error("[Settings] Manual Apple Health sync failed", err);
+      Alert.alert("Apple Health", "Could not sync Apple Health data. Please try again.");
+    } finally {
+      setIsSyncingHealth(false);
+    }
+  };
+
+  const handleClearAppleHealthImports = () => {
+    Alert.alert(
+      "Clear imported workouts?",
+      "This removes Apple Health sessions from your history and turns off syncing.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            const disabledPermissions: AppleHealthPermissions = {
+              workouts: false,
+              activeEnergy: false,
+              heartRate: false,
+            };
+            const previousPermissions = { ...healthPermissions };
+            const previousLastSync = lastHealthSync;
+            const previousEnabled = appleHealthEnabledFromProfile;
+            setAppleHealthEnabledUi(false);
+            setHealthPermissions(disabledPermissions);
+            setLastHealthSync(null);
+            setIsSyncingHealth(true);
+            try {
+              await updateProfile({
+                appleHealthEnabled: false,
+                appleHealthPermissions: disabledPermissions,
+                appleHealthLastSyncAt: null,
+              });
+              try {
+                await clearAppleHealthData();
+              } catch (err) {
+                console.error("[Settings] Failed to clear Apple Health imports", err);
+                Alert.alert(
+                  "Apple Health",
+                  "Sync was turned off, but we couldn't clear imported workouts yet."
+                );
+              }
+            } catch (err) {
+              setAppleHealthEnabledUi(previousEnabled);
+              setHealthPermissions(previousPermissions);
+              setLastHealthSync(previousLastSync);
+              console.error("[Settings] Failed to clear Apple Health imports", err);
+              Alert.alert("Apple Health", "Could not clear imported workouts right now.");
+            } finally {
+              setIsSyncingHealth(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const restorePurchasesMutation = useMutation({
@@ -1387,6 +1645,225 @@ const SettingsScreen = () => {
             </View>
           )}
         </Pressable>
+
+        <View
+          style={{
+            gap: 10,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 15,
+                }}
+              >
+                Apple Health Sync
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Import Apple Health workouts, calories, and heart rate into your history.
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                {healthSyncDisplay}
+              </Text>
+            </View>
+            <Switch
+              value={appleHealthEnabled}
+              disabled={!isIOS || isSyncingHealth}
+              onValueChange={handleAppleHealthToggle}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={appleHealthEnabled ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+          {!isIOS ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Apple Health is available on iOS devices.
+            </Text>
+          ) : (
+            <>
+              <View
+                style={{
+                  gap: 10,
+                  paddingVertical: 4,
+                  opacity: appleHealthEnabled ? 1 : 0.7,
+                }}
+              >
+                <Pressable
+                  onPress={() => handleHealthPermissionToggle("workouts", !healthPermissions.workouts)}
+                  disabled={isSyncingHealth}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: 10,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  })}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Workouts
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      Required to import completed Apple Health workouts.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={healthPermissions.workouts ?? true}
+                    onValueChange={(value) => handleHealthPermissionToggle("workouts", value)}
+                    disabled={isSyncingHealth}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={healthPermissions.workouts ? "#fff" : "#f4f3f4"}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    handleHealthPermissionToggle("activeEnergy", !healthPermissions.activeEnergy)
+                  }
+                  disabled={isSyncingHealth || !appleHealthEnabled}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: 10,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    opacity: appleHealthEnabled ? 1 : 0.7,
+                  })}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Active energy
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      Use Apple-calculated calories instead of estimates.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={healthPermissions.activeEnergy ?? false}
+                    onValueChange={(value) =>
+                      handleHealthPermissionToggle("activeEnergy", value)
+                    }
+                    disabled={isSyncingHealth || !appleHealthEnabled}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={healthPermissions.activeEnergy ? "#fff" : "#f4f3f4"}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    handleHealthPermissionToggle("heartRate", !healthPermissions.heartRate)
+                  }
+                  disabled={isSyncingHealth || !appleHealthEnabled}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: 10,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    opacity: appleHealthEnabled ? 1 : 0.7,
+                  })}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Heart rate
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      Overlay Apple Health avg/max HR on summaries.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={healthPermissions.heartRate ?? false}
+                    onValueChange={(value) => handleHealthPermissionToggle("heartRate", value)}
+                    disabled={isSyncingHealth || !appleHealthEnabled}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={healthPermissions.heartRate ? "#fff" : "#f4f3f4"}
+                  />
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={handleSyncAppleHealthNow}
+                  disabled={isSyncingHealth || !appleHealthEnabled}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: colors.primary,
+                    opacity: pressed || isSyncingHealth || !appleHealthEnabled ? 0.85 : 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 6,
+                  })}
+                >
+                  {isSyncingHealth ? (
+                    <ActivityIndicator color={colors.surface} size='small' />
+                  ) : (
+                    <Ionicons name='cloud-download-outline' size={18} color={colors.surface} />
+                  )}
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 14,
+                    }}
+                  >
+                    Sync now
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleClearAppleHealthImports}
+                  disabled={isSyncingHealth}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                    opacity: pressed || isSyncingHealth ? 0.85 : 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 6,
+                  })}
+                >
+                  <Ionicons name='trash-outline' size={18} color={colors.textPrimary} />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                      fontSize: 14,
+                    }}
+                  >
+                    Clear imports
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </View>
 
         <Pressable
           onPress={() => {
