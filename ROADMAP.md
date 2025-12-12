@@ -1531,35 +1531,50 @@ To test notifications:
 - `/server/src/routes/analytics.ts` - Endpoint to ingest/import synced sessions
 - `/server/src/db.ts` - Add `source` + import metadata fields to workout tables
 
-#### 4.4.9 Pro Social Video Workout Import + Custom Exercises
+### 🚀 MVP Launch Readiness
+
+**Pre-Launch Checklist**:
+
+- [ ] Clean up server/mobile logs and strip debug/PII before release
+- [ ] Harden security (input validation, SQL injection prevention, authz checks, dependency audit)
+- [ ] Enforce API rate limiting across login, AI, and payment endpoints
+- [ ] Remove mock/beta users and test data from the production database
+- [ ] Verify database migrations/schemas are production-ready and indexed correctly
+- [ ] Run auth/token + permissions smoke tests to ensure no unauthorized access paths
+- [ ] Landing page live with current download badges and legal pages (see 5.1)
+
+**Remaining MVP Scope (Pre-Launch)**:
+
+- 4.4.9 Custom Exercises (Pro/All)
+- 4.4.10 Data Export (Settings)
+- 5.1 Landing Page & App Store Presence (must be live before launch)
+
+#### 4.4.9 Custom Exercises (Pro/All)
 
 **Priority**: HIGH | **Effort**: 7-10 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
 
-**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout and add missing exercises (with their own media) when our library lacks them.
+**Goal**: Allow users to add missing exercises (with their own media) when our library lacks them.
 
 **Experience**:
 
-- “Import from TikTok/Instagram” entry in AI workout generator; paste link → fetch transcript/captions → preview suggested workout
-- Review + edit generated exercises/sets before saving as a template; flag Pro-only
 - “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator
-- Content safety check to block non-fitness or inappropriate videos
+- Show custom exercises in search with a “Custom” badge; allow editing/deleting by the creator
+- Optionally share to squad (if enabled) while keeping default scope personal
 
 **Implementation**:
 
-- Backend ingestion to download captions/transcripts from shared URL; fallback to lightweight on-device transcription if needed
-- LLM prompt to extract exercises + structure a workout; gate behind Pro checks and usage limits
 - New `user_exercises` table scoped to user (or squad) with optional image upload (S3/Cloudinary)
-- Store provenance on generated templates (`source: "social_video"`, original URL) for auditability
-- Add caching of transcripts to avoid repeated fetches for the same URL
+- Allow attaching custom exercise to templates and workouts with provenance (`source: "user_custom"`)
+- Image/content safety checks and size limits for uploads
+- Pro-gate higher storage limits; free users get a small quota
 
 **Files to Create/Modify**:
 
-- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
-- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
+- `/server/src/routes/ai.ts` - Custom exercise CRUD endpoints with Pro gating for higher limits
 - `/server/src/db.ts` - Add `user_exercises` table + template provenance fields
-- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
 - `/mobile/src/screens/ExerciseLibraryScreen.tsx` - Surface custom exercises + upload flow
-- `/mobile/src/components/premium/UpgradePrompt.tsx` - Reuse for Pro gating
+- `/mobile/src/screens/WorkoutTemplateBuilderScreen.tsx` - Allow adding custom exercises to templates
+- `/mobile/src/components/premium/UpgradePrompt.tsx` - Reuse for Pro gating where needed
 
 #### 4.4.10 Data Export (Settings)
 
@@ -1588,9 +1603,25 @@ To test notifications:
 
 ---
 
-#### 4.4.11 Apple Watch Companion (Sync + Mini UI)
+### ⏭️ Todo After Launch
 
-**Priority**: HIGH | **Effort**: 6-8 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+#### Social Video Workout Import (TikTok/Instagram) — Post-Launch
+
+**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout (transcript/caption driven).
+
+**Notes**:
+
+- Requires safe ingestion of third-party content plus transcript parsing and caching
+- Keep Pro gating + usage limits; respect content safety filters
+- Reuse `user_exercises` table to tag generated templates with provenance (`source: "social_video"`, original URL)
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
+- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
+- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
+
+#### Apple Watch Companion (Sync + Mini UI) — Post-Launch
 
 **Goal**: Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance progress and quick actions.
 
@@ -1616,11 +1647,9 @@ To test notifications:
 - `/mobile/src/screens/WorkoutSessionScreen.tsx` - Emit sync payloads on session start/set logged/next exercise
 - `/mobile/docs/APPLE_WATCH_SETUP.md` - Build/setup guide (dev client, provisioning, pairing)
 
----
-
 ### 🌐 Phase 5: Marketing & Growth (Post-Launch)
 
-#### 5.1 Landing Page & App Store Presence
+#### 5.1 Landing Page & App Store Presence (Pre-Launch Requirement)
 
 **Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH
 

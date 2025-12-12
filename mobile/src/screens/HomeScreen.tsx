@@ -54,8 +54,9 @@ const HomeScreen = () => {
 
   // Check for active (uncompleted) workout session
   const { data: activeSessionData } = useActiveSession();
-  const activeSession = activeSessionData?.session ?? null;
+  const rawActiveSession = activeSessionData?.session ?? null;
   const serverAutoEndedSession = activeSessionData?.autoEndedSession ?? null;
+  const activeSession = rawActiveSession && !rawActiveSession.endedReason ? rawActiveSession : null;
 
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
@@ -182,6 +183,7 @@ const HomeScreen = () => {
   }, [activeSession, dismissedSession]);
 
   const shouldShowResumeBanner = useMemo(() => {
+    // Never show resume banner for sessions that the server has marked as ended
     if (!activeSession) return false;
     if (!dismissedSession) return true;
 

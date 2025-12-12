@@ -30,6 +30,7 @@ import {
   completeSession,
   fetchSession,
   startSessionFromTemplate,
+  updateSession,
 } from "../api/sessions";
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
@@ -1418,10 +1419,39 @@ const WorkoutSessionScreen = () => {
     visibilityOptions.find((o) => o.value === visibility)?.label ?? "Private";
   const hasWorkoutProgress = loggedSetIds.size > 0 || elapsedSeconds > 0;
 
-  const handleExitSession = () => {
-    if (!hasWorkoutProgress) {
+  const handleConfirmLeaveSession = async () => {
+    if (!sessionId) {
       endActiveStatus();
       navigation.goBack();
+      return;
+    }
+
+    try {
+      await updateSession(sessionId, {
+        endedReason: "user_exit",
+      });
+
+      // Optimistically clear any active session on the client
+      queryClient.setQueryData(["activeSession"], {
+        session: null,
+        autoEndedSession: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
+    } catch (err) {
+      Alert.alert(
+        "Could not leave workout",
+        "We couldn't end your current workout. Please try again."
+      );
+      return;
+    }
+
+    endActiveStatus();
+    navigation.goBack();
+  };
+
+  const handleExitSession = () => {
+    if (!hasWorkoutProgress) {
+      void handleConfirmLeaveSession();
       return;
     }
 
@@ -1435,10 +1465,7 @@ const WorkoutSessionScreen = () => {
           style: "destructive",
           onPress: () => {
             pauseTimer();
-            endActiveStatus();
-            // Invalidate active session query so the "Resume Workout" banner appears
-            queryClient.invalidateQueries({ queryKey: ["activeSession"] });
-            navigation.goBack();
+            void handleConfirmLeaveSession();
           },
         },
       ]
