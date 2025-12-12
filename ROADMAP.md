@@ -1541,7 +1541,7 @@ To test notifications:
 
 - “Import from TikTok/Instagram” entry in AI workout generator; paste link → fetch transcript/captions → preview suggested workout
 - Review + edit generated exercises/sets before saving as a template; flag Pro-only
-- “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator unless shared to squad (future)
+- “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator
 - Content safety check to block non-fitness or inappropriate videos
 
 **Implementation**:
