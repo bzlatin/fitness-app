@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   Alert,
   Image,
@@ -17,10 +17,12 @@ import {
   NativeModules,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
@@ -221,19 +223,32 @@ const formatExerciseName = (id: string) =>
     .trim();
 
 // Helper to identify cardio exercises
-const isCardioExercise = (exerciseId: string, exerciseName?: string): boolean => {
+const isCardioExercise = (
+  exerciseId: string,
+  exerciseName?: string
+): boolean => {
   const name = (exerciseName || exerciseId).toLowerCase();
   const cardioKeywords = [
-    'treadmill', 'running', 'jogging', 'walking',
-    'bike', 'cycling', 'bicycle', 'biking',
-    'rowing', 'rower',
-    'elliptical',
-    'stair', 'stepper',
-    'swimming', 'swim',
-    'jumping rope', 'jump rope',
-    'air bike'
+    "treadmill",
+    "running",
+    "jogging",
+    "walking",
+    "bike",
+    "cycling",
+    "bicycle",
+    "biking",
+    "rowing",
+    "rower",
+    "elliptical",
+    "stair",
+    "stepper",
+    "swimming",
+    "swim",
+    "jumping rope",
+    "jump rope",
+    "air bike",
   ];
-  return cardioKeywords.some(keyword => name.includes(keyword));
+  return cardioKeywords.some((keyword) => name.includes(keyword));
 };
 
 const resolveExerciseImageUri = (uri?: string) => {
@@ -290,7 +305,9 @@ const groupSetsByExercise = (
 const WorkoutSessionScreen = () => {
   const route = useRoute<RootRoute<"WorkoutSession">>();
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const [sessionId, setSessionId] = useState(route.params.sessionId);
+  const [hasHydratedSession, setHasHydratedSession] = useState(false);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [startTime, setStartTime] = useState<string | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -382,6 +399,61 @@ const WorkoutSessionScreen = () => {
 
   const queryClient = useQueryClient();
 
+  const getLoggedSetIdsKey = useCallback(
+    (activeSessionId: string) => `workout_logged_set_ids:${activeSessionId}`,
+    []
+  );
+
+  const loadPersistedLoggedSetIds = useCallback(
+    async (activeSessionId: string) => {
+      try {
+        const raw = await AsyncStorage.getItem(
+          getLoggedSetIdsKey(activeSessionId)
+        );
+        if (!raw) return new Set<string>();
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return new Set<string>();
+        return new Set<string>(parsed.filter((v) => typeof v === "string"));
+      } catch {
+        return new Set<string>();
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  const persistLoggedSetIds = useCallback(
+    async (activeSessionId: string, ids: Set<string>) => {
+      try {
+        await AsyncStorage.setItem(
+          getLoggedSetIdsKey(activeSessionId),
+          JSON.stringify(Array.from(ids))
+        );
+      } catch {
+        // Ignore persistence failures; logging still works in-memory.
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  const clearPersistedLoggedSetIds = useCallback(
+    async (activeSessionId: string) => {
+      try {
+        await AsyncStorage.removeItem(getLoggedSetIdsKey(activeSessionId));
+      } catch {
+        // ignore
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const timeout = setTimeout(() => {
+      void persistLoggedSetIds(sessionId, loggedSetIdsRef.current);
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [sessionId, loggedSetIds, persistLoggedSetIds]);
+
   const initializeTimer = (startedAt: string, autoStart = true) => {
     const base = Math.max(
       0,
@@ -424,11 +496,9 @@ const WorkoutSessionScreen = () => {
     queryKey: ["session", sessionId],
     enabled: Boolean(sessionId),
     queryFn: () => fetchSession(sessionId!),
-    onSuccess: (data) => {
-      setDefaultsApplied(false);
-      setSets(data.sets);
-      initializeTimer(data.startedAt);
-      queryClient.setQueryData(["activeSession"], { session: data, autoEndedSession: null });
+    onError: () => {
+      Alert.alert("Could not load workout", "Please try again.");
+      navigation.goBack();
     },
   });
 
@@ -439,9 +509,15 @@ const WorkoutSessionScreen = () => {
       setSessionId(session.id);
       setSets(session.sets);
       initializeTimer(session.startedAt);
-      queryClient.setQueryData(["activeSession"], { session, autoEndedSession: null });
+      queryClient.setQueryData(["activeSession"], {
+        session,
+        autoEndedSession: null,
+      });
     },
-    onError: () => Alert.alert("Could not start session", "Please try again."),
+    onError: () => {
+      Alert.alert("Could not start session", "Please try again.");
+      navigation.goBack();
+    },
   });
 
   const applyProgressionMutation = useMutation({
@@ -472,6 +548,49 @@ const WorkoutSessionScreen = () => {
       startMutation.mutate();
     }
   }, []);
+
+  useEffect(() => {
+    if (!sessionId || !sessionQuery.data || hasHydratedSession) return;
+    const data = sessionQuery.data;
+    let cancelled = false;
+
+    void (async () => {
+      setDefaultsApplied(false);
+      setSets(data.sets);
+      initializeTimer(data.startedAt);
+      queryClient.setQueryData(["activeSession"], {
+        session: data,
+        autoEndedSession: null,
+      });
+
+      const validSetIds = new Set(data.sets.map((set) => set.id));
+      const persisted = await loadPersistedLoggedSetIds(sessionId);
+      if (cancelled) return;
+
+      const filtered = new Set<string>();
+      persisted.forEach((id) => {
+        if (validSetIds.has(id)) filtered.add(id);
+      });
+
+      loggedSetIdsRef.current = filtered;
+      setLoggedSetIds(filtered);
+      setHasHydratedSession(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionId,
+    sessionQuery.data,
+    hasHydratedSession,
+    queryClient,
+    loadPersistedLoggedSetIds,
+  ]);
+
+  const isBootstrappingSession = route.params.sessionId
+    ? !hasHydratedSession
+    : startMutation.isPending || !sessionId;
 
   useEffect(() => {
     if (!timerActive || timerAnchor === null) {
@@ -598,6 +717,7 @@ const WorkoutSessionScreen = () => {
     },
     onSuccess: (session) => {
       endActiveStatus();
+      void clearPersistedLoggedSetIds(sessionId!);
       // Clear widget data when workout completes
       void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
@@ -1018,7 +1138,7 @@ const WorkoutSessionScreen = () => {
       restEndsAtTimestamp && restEndsAtTimestamp > 0
         ? new Date(restEndsAtTimestamp).toISOString()
         : actualRestDuration === 0
-        ? null
+        ? undefined
         : undefined;
 
     // Sync to home screen widget
@@ -1085,6 +1205,9 @@ const WorkoutSessionScreen = () => {
     applySetUpdates([updated]);
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId(setId);
+    if (sessionId) {
+      void persistLoggedSetIds(sessionId, updatedLoggedSetIds);
+    }
 
     if (!startTime) {
       initializeTimer(new Date().toISOString());
@@ -1201,6 +1324,9 @@ const WorkoutSessionScreen = () => {
 
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId((prev) => (prev === setId ? null : prev));
+    if (sessionId) {
+      void persistLoggedSetIds(sessionId, updatedLoggedSetIds);
+    }
     if (restEndsAt && lastLoggedSetId === setId) {
       setRestRemaining(null);
       setRestEndsAt(null);
@@ -1419,6 +1545,32 @@ const WorkoutSessionScreen = () => {
     visibilityOptions.find((o) => o.value === visibility)?.label ?? "Private";
   const hasWorkoutProgress = loggedSetIds.size > 0 || elapsedSeconds > 0;
 
+  if (isBootstrappingSession) {
+    return (
+      <ScreenContainer>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <ActivityIndicator size='large' color={colors.primary} />
+          <Text
+            style={{
+              marginTop: 12,
+              color: colors.textSecondary,
+              fontSize: 14,
+            }}
+          >
+            Loading your workout...
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
   const handleConfirmLeaveSession = async () => {
     if (!sessionId) {
       endActiveStatus();
@@ -1430,6 +1582,7 @@ const WorkoutSessionScreen = () => {
       await updateSession(sessionId, {
         endedReason: "user_exit",
       });
+      void clearPersistedLoggedSetIds(sessionId);
 
       // Optimistically clear any active session on the client
       queryClient.setQueryData(["activeSession"], {
@@ -1484,7 +1637,7 @@ const WorkoutSessionScreen = () => {
     const contentHeight = contentSize.height;
 
     // Show top gradient when scrolled down
-    setShowTopGradient(scrollY > 20);
+    setShowTopGradient(scrollY > 5);
 
     // Show bottom gradient when not at the bottom
     const isNearBottom = scrollY + scrollViewHeight >= contentHeight - 20;
@@ -1791,7 +1944,7 @@ const WorkoutSessionScreen = () => {
   );
 
   return (
-    <ScreenContainer>
+    <ScreenContainer paddingTop={0} includeTopInset={false}>
       <VisibilityModal
         visible={showVisibilityModal}
         value={visibility}
@@ -1896,94 +2049,131 @@ const WorkoutSessionScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
-      <View style={{ flex: 1 }}>
-        <DraggableFlatList
-          data={groupedSets}
-          keyExtractor={(item) => item.key}
-          onDragEnd={({ data }) => handleReorderExercises(data)}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 16 }}
-          showsVerticalScrollIndicator={false}
-          renderItem={({
-            item: group,
-            drag,
-            isActive,
-          }: RenderItemParams<ExerciseGroup>) => (
-            <ScaleDecorator>
-              <ExerciseCard
-                group={group}
-                expanded={group.key === activeExerciseKey}
-                onToggle={() => {
-                  setAutoFocusEnabled(false);
-                  setActiveExerciseKey((prev) => {
-                    const next = prev === group.key ? null : group.key;
-                    if (next === group.key) {
-                      setActiveSetId(group.sets[0]?.id ?? null);
-                      // Sync newly expanded exercise to widget
-                      const firstUnloggedSet = group.sets.find(
-                        (s) => !loggedSetIds.has(s.id)
-                      );
-                      if (firstUnloggedSet) {
-                        const setIndex = group.sets.findIndex(
-                          (s) => s.id === firstUnloggedSet.id
+      {/* Full-bleed container so gradients span full width */}
+      <View style={{ flex: 1, marginHorizontal: -18 }}>
+        <View style={{ flex: 1, paddingTop: insets.top }}>
+          <DraggableFlatList
+            data={groupedSets}
+            keyExtractor={(item) => item.key}
+            onDragEnd={({ data }) => handleReorderExercises(data)}
+            onScroll={handleScroll}
+            onScrollOffsetChange={(offset) => {
+              setShowTopGradient(offset > 5);
+            }}
+            scrollEventThrottle={16}
+            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderFooter}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 16,
+              paddingBottom: 24 + insets.bottom,
+            }}
+            showsVerticalScrollIndicator={false}
+            renderItem={({
+              item: group,
+              drag,
+              isActive,
+            }: RenderItemParams<ExerciseGroup>) => (
+              <ScaleDecorator>
+                <ExerciseCard
+                  group={group}
+                  expanded={group.key === activeExerciseKey}
+                  onToggle={() => {
+                    setAutoFocusEnabled(false);
+                    setActiveExerciseKey((prev) => {
+                      const next = prev === group.key ? null : group.key;
+                      if (next === group.key) {
+                        setActiveSetId(group.sets[0]?.id ?? null);
+                        // Sync newly expanded exercise to widget
+                        const firstUnloggedSet = group.sets.find(
+                          (s) => !loggedSetIds.has(s.id)
                         );
-                        syncCurrentExerciseToWidget(group.key, setIndex);
+                        if (firstUnloggedSet) {
+                          const setIndex = group.sets.findIndex(
+                            (s) => s.id === firstUnloggedSet.id
+                          );
+                          syncCurrentExerciseToWidget(group.key, setIndex);
+                        }
                       }
-                    }
-                    return next;
-                  });
-                }}
-                onChangeSet={updateSet}
-                onLogSet={logSet}
-                activeSetId={activeSetId}
-                onSelectSet={setActiveSetId}
-                autoRestTimer={autoRestTimer}
-                loggedSetIds={loggedSetIds}
-                restRemaining={restRemaining}
-                lastLoggedSetId={lastLoggedSetId}
-                onUndo={undoSet}
-                onSwap={() => setSwapExerciseKey(group.key)}
-                onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
-                onDrag={drag}
-                isDragging={isActive}
-                onAddSet={() => handleAddSet(group.key)}
-                onRemoveSet={handleRemoveSet}
-                onDeleteExercise={() => handleDeleteExercise(group.key)}
-                onImagePress={() =>
-                  group.imageUrl && setImagePreviewUrl(group.imageUrl)
-                }
-              />
-            </ScaleDecorator>
-          )}
-        />
-        {/* Top gradient fade */}
+                      return next;
+                    });
+                  }}
+                  onChangeSet={updateSet}
+                  onLogSet={logSet}
+                  activeSetId={activeSetId}
+                  onSelectSet={setActiveSetId}
+                  autoRestTimer={autoRestTimer}
+                  loggedSetIds={loggedSetIds}
+                  restRemaining={restRemaining}
+                  lastLoggedSetId={lastLoggedSetId}
+                  onUndo={undoSet}
+                  onSwap={() => setSwapExerciseKey(group.key)}
+                  onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
+                  onDrag={drag}
+                  isDragging={isActive}
+                  onAddSet={() => handleAddSet(group.key)}
+                  onRemoveSet={handleRemoveSet}
+                  onDeleteExercise={() => handleDeleteExercise(group.key)}
+                  onImagePress={() =>
+                    group.imageUrl && setImagePreviewUrl(group.imageUrl)
+                  }
+                />
+              </ScaleDecorator>
+            )}
+          />
+        </View>
+
+        {/* Scroll fade gradients */}
         {showTopGradient && (
           <LinearGradient
-            colors={[colors.background, "transparent"]}
+            colors={[
+              colors.background,
+              `${colors.background}F5`,
+              `${colors.background}E8`,
+              `${colors.background}D0`,
+              `${colors.background}B0`,
+              `${colors.background}88`,
+              `${colors.background}60`,
+              `${colors.background}38`,
+              `${colors.background}18`,
+              `${colors.background}08`,
+              "transparent",
+            ]}
+            locations={[0, 0.08, 0.15, 0.25, 0.35, 0.45, 0.55, 0.68, 0.82, 0.92, 1]}
             style={{
               position: "absolute",
               top: 0,
               left: 0,
               right: 0,
-              height: 60,
+              height: 140 + insets.top,
               pointerEvents: "none",
+              zIndex: 20,
+              elevation: 20,
             }}
           />
         )}
-        {/* Bottom gradient fade */}
         {showBottomGradient && (
           <LinearGradient
-            colors={["transparent", colors.background]}
+            colors={[
+              "transparent",
+              `${colors.background}10`,
+              `${colors.background}30`,
+              `${colors.background}60`,
+              `${colors.background}90`,
+              `${colors.background}C0`,
+              `${colors.background}E0`,
+              colors.background,
+            ]}
+            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
             style={{
               position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              height: 80,
+              height: 60 + insets.bottom,
               pointerEvents: "none",
+              zIndex: 20,
+              elevation: 20,
             }}
           />
         )}
@@ -2023,9 +2213,15 @@ const SetInputRow = ({
 
   const targetLine = isCardio
     ? [
-        set.targetDistance !== undefined ? `${set.targetDistance} mi` : undefined,
-        set.targetIncline !== undefined ? `${set.targetIncline}% incline` : undefined,
-        set.targetDurationMinutes !== undefined ? `${set.targetDurationMinutes} min` : undefined,
+        set.targetDistance !== undefined
+          ? `${set.targetDistance} mi`
+          : undefined,
+        set.targetIncline !== undefined
+          ? `${set.targetIncline}% incline`
+          : undefined,
+        set.targetDurationMinutes !== undefined
+          ? `${set.targetDurationMinutes} min`
+          : undefined,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -2216,7 +2412,9 @@ const SetInputRow = ({
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
                 value={set.actualDurationMinutes?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualDurationMinutes", text)}
+                onChangeText={(text) =>
+                  updateField("actualDurationMinutes", text)
+                }
               />
             </View>
             <View style={{ flex: 1 }} />
@@ -2332,7 +2530,9 @@ const ExerciseCard = ({
   onDeleteExercise,
   onImagePress,
 }: ExerciseCardProps) => {
-  const loggedSetsCount = group.sets.filter((s) => loggedSetIds.has(s.id)).length;
+  const loggedSetsCount = group.sets.filter((s) =>
+    loggedSetIds.has(s.id)
+  ).length;
   const allSetsLogged = loggedSetsCount === group.sets.length;
 
   const summaryLine = `${group.sets.length} sets · ${
@@ -2346,8 +2546,13 @@ const ExerciseCard = ({
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: isDragging ? colors.primary : allSetsLogged && !expanded ? colors.primary : colors.border,
-        backgroundColor: allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
+        borderColor: isDragging
+          ? colors.primary
+          : allSetsLogged && !expanded
+          ? colors.primary
+          : colors.border,
+        backgroundColor:
+          allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
         marginBottom: 12,
         opacity: isDragging ? 0.7 : 1,
       }}

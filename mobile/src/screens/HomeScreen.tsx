@@ -14,6 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -155,6 +156,7 @@ const HomeScreen = () => {
               id: sessionId,
               dismissedAt: Date.now(),
             });
+            void AsyncStorage.removeItem(`workout_logged_set_ids:${sessionId}`);
             // Optimistically drop the banner so it doesn't flash back
             queryClient.setQueryData(["activeSession"], {
               session: null,
