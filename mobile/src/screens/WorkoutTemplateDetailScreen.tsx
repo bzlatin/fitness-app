@@ -18,6 +18,7 @@ import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
+import ShareTemplateButton from "../components/workout/ShareTemplateButton";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -199,6 +200,11 @@ const WorkoutTemplateDetailScreen = () => {
                     color={colors.textSecondary}
                   />
                 </Pressable>
+                <ShareTemplateButton
+                  templateId={template.id}
+                  templateName={template.name}
+                  sharingDisabled={template.sharingDisabled}
+                />
               </>
             )}
           </View>

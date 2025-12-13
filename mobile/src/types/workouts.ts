@@ -30,6 +30,7 @@ export interface WorkoutTemplate {
   description?: string;
   splitType?: SplitType;
   isFavorite: boolean;
+  sharingDisabled?: boolean;
   exercises: WorkoutTemplateExercise[];
   createdAt: string;
   updatedAt: string;

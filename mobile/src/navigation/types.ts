@@ -4,6 +4,7 @@ export type RootStackParamList = {
   RootTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Main: NavigatorScreenParams<RootTabParamList> | undefined;
   WorkoutTemplateDetail: { templateId: string };
+  WorkoutTemplatePreview: { code: string };
   WorkoutTemplateBuilder: { templateId?: string };
   WorkoutGenerator: undefined;
   WorkoutSession: { templateId: string; sessionId?: string; initialVisibility?: Visibility };

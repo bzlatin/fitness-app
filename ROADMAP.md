@@ -1545,7 +1545,7 @@ To test notifications:
 **Remaining MVP Scope (Pre-Launch)**:
 
 - ✅ 4.4.9 Custom Exercises (Pro/All) - COMPLETE
-- 4.4.10 Share Workout Template Links (Viral Growth)
+- ✅ 4.4.10 Share Workout Template Links (Viral Growth) - COMPLETE
 - 5.1 Landing Page & App Store Presence (must be live before launch)
 
 #### 4.4.9 Custom Exercises (Pro/All) ✅ COMPLETE
@@ -1702,7 +1702,7 @@ CLOUDINARY_API_SECRET=your_api_secret
 
 #### 4.4.10 Share Workout Template Links (Viral Growth)
 
-**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: VERY HIGH | **Status**: ✅ Complete (2025-12-13)
 
 **Goal**: Allow users to share workout templates with friends via link, driving viral growth and making it easy to follow friends' programs.
 
@@ -1724,12 +1724,12 @@ CLOUDINARY_API_SECRET=your_api_secret
 
 **Implementation**:
 
-- Create `template_shares` table with unique share codes, expiration support, and usage tracking
-- Generate share code when user taps "Share" (one code per template, reuse if exists)
-- Deep link handler for `workout/share/:code` route
-- WorkoutTemplatePreviewScreen shows full template preview with "Add to My Workouts" CTA
-- API endpoint to copy template to authenticated user's library
-- Track metrics: shares created, link clicks, templates copied, signups from shares
+- [x] Create `template_shares` table with unique share codes, expiration support, and usage tracking
+- [x] Generate share code when user taps "Share" (one code per template, reuse if exists)
+- [x] Deep link handler for `workout/share/:code` route + web redirect for `https://push-pull.app/workout/{shareCode}`
+- [x] WorkoutTemplatePreviewScreen shows full template preview with "Add to My Workouts" CTA
+- [x] API endpoint to copy template to authenticated user's library
+- [x] Track metrics: shares created, link clicks, templates copied, signups from shares
 
 **Database Schema**:
 
@@ -2023,4 +2023,5 @@ These features are planned for implementation after the initial app launch and w
 - **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, data export pending)
 - **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
 - **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
+- **v1.6.3**: Workout template share links (native share sheet + clipboard, shared template preview, one-tap copy, creator analytics + signup attribution)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

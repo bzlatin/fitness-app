@@ -11,12 +11,19 @@ let authTokenProvider: TokenProvider | null = null;
 type AuthErrorHandler = () => void;
 let authErrorHandler: AuthErrorHandler | null = null;
 
+type TemplateShareCodeProvider = () => string | null | undefined;
+let templateShareCodeProvider: TemplateShareCodeProvider | null = null;
+
 export const setAuthTokenProvider = (provider: TokenProvider | null) => {
   authTokenProvider = provider;
 };
 
 export const setAuthErrorHandler = (handler: AuthErrorHandler | null) => {
   authErrorHandler = handler;
+};
+
+export const setTemplateShareCodeProvider = (provider: TemplateShareCodeProvider | null) => {
+  templateShareCodeProvider = provider;
 };
 
 const resolveApiBaseUrl = () => {
@@ -104,6 +111,11 @@ const request = async <T>(
     // Helpful debug to confirm auth header is being set on profile fetches.
     // eslint-disable-next-line no-console
     console.warn("No auth token set for /social/me request");
+  }
+
+  const shareCode = templateShareCodeProvider?.();
+  if (shareCode && !headers["X-Template-Share-Code"]) {
+    headers["X-Template-Share-Code"] = shareCode;
   }
 
   const controller = new AbortController();

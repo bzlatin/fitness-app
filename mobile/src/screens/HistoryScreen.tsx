@@ -4,7 +4,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -31,8 +30,9 @@ import {
 } from "../types/workouts";
 import { RootStackParamList } from "../navigation/types";
 import { fetchSession } from "../api/sessions";
-import { createTemplate } from "../api/templates";
+import { createTemplate, fetchTemplate } from "../api/templates";
 import { useQueryClient } from "@tanstack/react-query";
+import ShareTemplateLinkSheet from "../components/workout/ShareTemplateLinkSheet";
 
 const startOfMonth = (date: Date) => {
   const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -118,6 +118,16 @@ const HistoryScreen = () => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [selectedSession, setSelectedSession] =
     useState<WorkoutHistorySession | null>(null);
+  const [shareLinkTemplate, setShareLinkTemplate] = useState<{
+    templateId: string;
+    templateName: string;
+    sharingDisabled?: boolean;
+  } | null>(null);
+  const [shareLinkSheetVisible, setShareLinkSheetVisible] = useState(false);
+  const [shareNeedsTemplate, setShareNeedsTemplate] =
+    useState<WorkoutHistorySession | null>(null);
+  const [postSaveAction, setPostSaveAction] = useState<null | "shareLink">(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [saveTemplateSessionId, setSaveTemplateSessionId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
@@ -365,13 +375,26 @@ const HistoryScreen = () => {
     return `${formattedHours}:${formattedMinutes} ${ampm}`;
   };
 
-  const handleShare = async (session: WorkoutHistorySession) => {
-    const title = session.templateName ?? "Workout";
-    const volume = Math.round(session.totalVolumeLbs);
-    await Share.share({
-      title,
-      message: `${title} · ${volume} lbs moved · ${session.exercises.length} exercises`,
-    });
+  const openTemplateShareFromHistory = async (session: WorkoutHistorySession) => {
+    setShareLinkLoading(true);
+    try {
+      const full = await fetchSession(session.id);
+      if (!full.templateId) {
+        setShareNeedsTemplate(session);
+        return;
+      }
+      const template = await fetchTemplate(full.templateId).catch(() => null);
+      setShareLinkTemplate({
+        templateId: full.templateId,
+        templateName: template?.name ?? session.templateName ?? "Workout",
+        sharingDisabled: template?.sharingDisabled,
+      });
+      setShareLinkSheetVisible(true);
+    } catch (error) {
+      Alert.alert("Error", "Failed to prepare a share link");
+    } finally {
+      setShareLinkLoading(false);
+    }
   };
 
   const applyDuration = async () => {
@@ -535,7 +558,7 @@ const HistoryScreen = () => {
         };
       });
 
-      await createTemplate({
+      const created = await createTemplate({
         name: templateName.trim(),
         description: `Saved from workout on ${formatDateTimeShort(new Date(session.startedAt))}`,
         exercises,
@@ -544,7 +567,17 @@ const HistoryScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       setSaveTemplateOpen(false);
       setSaveTemplateSessionId(null);
-      Alert.alert("Success", "Workout saved as a new template!");
+      if (postSaveAction === "shareLink") {
+        setPostSaveAction(null);
+        setShareLinkTemplate({
+          templateId: created.id,
+          templateName: created.name,
+          sharingDisabled: created.sharingDisabled,
+        });
+        setShareLinkSheetVisible(true);
+      } else {
+        Alert.alert("Success", "Workout saved as a new template!");
+      }
     } catch (error) {
       Alert.alert("Error", "Failed to save workout as template");
     }
@@ -876,6 +909,7 @@ const HistoryScreen = () => {
       </View>
 
       {(isLoading ||
+        shareLinkLoading ||
         createManual.isPending ||
         duplicate.isPending ||
         deleteSession.isPending) && (
@@ -947,7 +981,7 @@ const HistoryScreen = () => {
                   icon='share-social'
                   label='Share workout'
                   onPress={() => {
-                    if (menuSession) handleShare(menuSession);
+                    if (menuSession) void openTemplateShareFromHistory(menuSession);
                     setMenuSession(null);
                   }}
                 />
@@ -1767,6 +1801,7 @@ const HistoryScreen = () => {
         onRequestClose={() => {
           setSaveTemplateOpen(false);
           setSaveTemplateSessionId(null);
+          setPostSaveAction(null);
         }}
       >
         <View
@@ -1836,6 +1871,7 @@ const HistoryScreen = () => {
               onPress={() => {
                 setSaveTemplateOpen(false);
                 setSaveTemplateSessionId(null);
+                setPostSaveAction(null);
               }}
               style={{
                 paddingVertical: 12,
@@ -1850,6 +1886,93 @@ const HistoryScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        transparent
+        animationType='fade'
+        visible={!!shareNeedsTemplate}
+        onRequestClose={() => setShareNeedsTemplate(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShareNeedsTemplate(null)}>
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              backgroundColor: "rgba(0,0,0,0.55)",
+              paddingHorizontal: 16,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 18,
+                  padding: 18,
+                  gap: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                  Share a link
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  This workout doesn’t have a template yet. Create a template from it to generate a share link.
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    if (!shareNeedsTemplate) return;
+                    const defaultName = shareNeedsTemplate.templateName || "Workout";
+                    setTemplateName(defaultName);
+                    setSaveTemplateSessionId(shareNeedsTemplate.id);
+                    setPostSaveAction("shareLink");
+                    setShareNeedsTemplate(null);
+                    setSaveTemplateOpen(true);
+                  }}
+                  style={({ pressed }) => ({
+                    backgroundColor: colors.primary,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    borderRadius: 14,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={{ color: "#0B1220", fontFamily: fontFamilies.bold }}>
+                    Create template & share
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setShareNeedsTemplate(null)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+                </Pressable>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {shareLinkTemplate ? (
+        <ShareTemplateLinkSheet
+          visible={shareLinkSheetVisible}
+          onClose={() => {
+            setShareLinkSheetVisible(false);
+            setShareLinkTemplate(null);
+          }}
+          templateId={shareLinkTemplate.templateId}
+          templateName={shareLinkTemplate.templateName}
+          sharingDisabled={shareLinkTemplate.sharingDisabled}
+        />
+      ) : null}
     </ScreenContainer>
   );
 };
