@@ -19,8 +19,9 @@ const apiHost = (() => {
 })();
 
 export default function WorkoutSharePage({ params }: WorkoutSharePageProps) {
-  const code = (params.code ?? '').trim();
-  const normalizedCode = code.toLowerCase();
+  const rawCode = (params.code ?? '').trim();
+  const extracted = rawCode.match(/[0-9a-z]{8}/i)?.[0] ?? '';
+  const normalizedCode = extracted.toLowerCase();
   const valid = isValidCode(normalizedCode);
 
   const deepLink = useMemo(() => `push-pull://workout/share/${normalizedCode}`, [normalizedCode]);
