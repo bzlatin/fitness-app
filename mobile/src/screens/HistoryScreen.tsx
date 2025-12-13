@@ -23,6 +23,7 @@ import {
   useUpdateSession,
   useWorkoutHistory,
 } from "../hooks/useWorkoutHistory";
+import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import {
   WorkoutHistoryDay,
   WorkoutHistorySession,
@@ -123,10 +124,9 @@ const HistoryScreen = () => {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({
     date: formatDateKey(today),
+    templateId: "manual" as string | "manual",
     templateName: "Logged workout",
     exerciseName: "Bench Press / Chest",
-    weight: "135",
-    reps: "8",
     duration: "45",
   });
 
@@ -147,6 +147,7 @@ const HistoryScreen = () => {
   );
 
   const { data, isLoading, refetch } = useWorkoutHistory(rangeStart, rangeEnd);
+  const { data: templates } = useWorkoutTemplates();
   const createManual = useCreateManualSession(rangeStart, rangeEnd);
   const duplicate = useDuplicateSession(rangeStart, rangeEnd);
   const deleteSession = useDeleteSession(rangeStart, rangeEnd);
@@ -408,20 +409,54 @@ const HistoryScreen = () => {
     }
     const duration = Number(manualForm.duration) || 45;
     const finish = new Date(start.getTime() + duration * 60 * 1000);
-    await createManual.mutateAsync({
-      startedAt: start.toISOString(),
-      finishedAt: finish.toISOString(),
-      templateName: manualForm.templateName.trim() || "Logged workout",
-      sets: [
-        {
-          exerciseId: manualForm.exerciseName.trim() || "custom-exercise",
-          actualReps: Number(manualForm.reps) || undefined,
-          actualWeight: Number(manualForm.weight) || undefined,
-          setIndex: 0,
-        },
-      ],
-    });
-    setManualOpen(false);
+
+    try {
+      if (manualForm.templateId === "manual") {
+        // Manual entry - simple workout log
+        await createManual.mutateAsync({
+          startedAt: start.toISOString(),
+          finishedAt: finish.toISOString(),
+          templateName: manualForm.templateName.trim() || "Logged workout",
+          sets: [
+            {
+              exerciseId: manualForm.exerciseName.trim() || "custom-exercise",
+              setIndex: 0,
+            },
+          ],
+        });
+      } else {
+        // Template-based workout - fetch template and create sets from exercises
+        const selectedTemplate = templates?.find(t => t.id === manualForm.templateId);
+        if (!selectedTemplate) {
+          Alert.alert("Error", "Template not found");
+          return;
+        }
+
+        // Create sets from template exercises
+        const sets = selectedTemplate.exercises.flatMap((exercise, exerciseIndex) => {
+          return Array.from({ length: exercise.defaultSets }, (_, setIndex) => ({
+            exerciseId: exercise.exerciseId,
+            targetReps: exercise.defaultReps,
+            targetWeight: exercise.defaultWeight,
+            actualReps: exercise.defaultReps,
+            actualWeight: exercise.defaultWeight,
+            setIndex: setIndex,
+            templateExerciseId: exercise.id,
+          }));
+        });
+
+        await createManual.mutateAsync({
+          startedAt: start.toISOString(),
+          finishedAt: finish.toISOString(),
+          templateName: selectedTemplate.name,
+          sets,
+        });
+      }
+
+      setManualOpen(false);
+    } catch (error) {
+      Alert.alert("Error", "Failed to create workout");
+    }
   };
 
   const handleStartWorkout = async () => {
@@ -1212,38 +1247,97 @@ const HistoryScreen = () => {
                 setManualForm((prev) => ({ ...prev, date: text }))
               }
             />
-            <Field
-              label='Title'
-              value={manualForm.templateName}
-              onChangeText={(text) =>
-                setManualForm((prev) => ({ ...prev, templateName: text }))
-              }
-            />
-            <Field
-              label='Primary Muscles / Exercise'
-              value={manualForm.exerciseName}
-              onChangeText={(text) =>
-                setManualForm((prev) => ({ ...prev, exerciseName: text }))
-              }
-            />
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Field
-                label='Weight (lbs)'
-                value={manualForm.weight}
-                keyboardType='numeric'
-                onChangeText={(text) =>
-                  setManualForm((prev) => ({ ...prev, weight: text }))
-                }
-              />
-              <Field
-                label='Reps'
-                value={manualForm.reps}
-                keyboardType='numeric'
-                onChangeText={(text) =>
-                  setManualForm((prev) => ({ ...prev, reps: text }))
-                }
-              />
+
+            <View>
+              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
+                Workout Template
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+              >
+                <Pressable
+                  onPress={() => setManualForm((prev) => ({
+                    ...prev,
+                    templateId: "manual",
+                    templateName: "Logged workout"
+                  }))}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: manualForm.templateId === "manual" ? colors.primary : colors.border,
+                    backgroundColor: manualForm.templateId === "manual"
+                      ? colors.primary + "22"
+                      : pressed
+                      ? colors.surfaceMuted
+                      : colors.surface,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: manualForm.templateId === "manual" ? colors.primary : colors.textPrimary,
+                      fontFamily: manualForm.templateId === "manual" ? fontFamilies.semibold : fontFamilies.medium,
+                    }}
+                  >
+                    Enter manually
+                  </Text>
+                </Pressable>
+                {(templates ?? []).map((template) => (
+                  <Pressable
+                    key={template.id}
+                    onPress={() => setManualForm((prev) => ({
+                      ...prev,
+                      templateId: template.id,
+                      templateName: template.name
+                    }))}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: manualForm.templateId === template.id ? colors.primary : colors.border,
+                      backgroundColor: manualForm.templateId === template.id
+                        ? colors.primary + "22"
+                        : pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        color: manualForm.templateId === template.id ? colors.primary : colors.textPrimary,
+                        fontFamily: manualForm.templateId === template.id ? fontFamilies.semibold : fontFamilies.medium,
+                      }}
+                    >
+                      {template.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
+
+            {manualForm.templateId === "manual" && (
+              <>
+                <Field
+                  label='Title'
+                  value={manualForm.templateName}
+                  onChangeText={(text) =>
+                    setManualForm((prev) => ({ ...prev, templateName: text }))
+                  }
+                />
+                <Field
+                  label='Primary Muscles / Exercise'
+                  value={manualForm.exerciseName}
+                  onChangeText={(text) =>
+                    setManualForm((prev) => ({ ...prev, exerciseName: text }))
+                  }
+                />
+              </>
+            )}
+
             <Field
               label='Duration (min)'
               value={manualForm.duration}

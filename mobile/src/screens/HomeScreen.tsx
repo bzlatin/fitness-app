@@ -33,6 +33,7 @@ import { fetchRecap } from "../api/analytics";
 import { useFatigue } from "../hooks/useFatigue";
 import { endWorkoutLiveActivity } from "../services/liveActivity";
 import { syncActiveSessionToWidget } from "../services/widgetSync";
+import { cancelScheduledRestTimerFinishSound } from "../utils/timerSound";
 import {
   TRAINING_SPLIT_LABELS,
   EXPERIENCE_LEVEL_LABELS,
@@ -190,6 +191,9 @@ const HomeScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: () => {
+            void cancelScheduledRestTimerFinishSound();
+            void endWorkoutLiveActivity();
+            void syncActiveSessionToWidget(null);
             setDismissedSession({
               id: sessionId,
               dismissedAt: Date.now(),

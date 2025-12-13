@@ -411,6 +411,8 @@ const WorkoutSessionScreen = () => {
   );
   const autosaveRetryAttemptsRef = useRef<number>(0);
   const timerLockedRef = useRef<boolean>(false);
+  const previousRestEndsAtRef = useRef<number | null>(null);
+  const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1085,6 +1087,30 @@ const WorkoutSessionScreen = () => {
       autoClearOnUnmount: false,
     });
 
+  const cancelRestTimerSounds = useCallback(() => {
+    void cancelScheduledRestTimerFinishSound();
+    nativeScheduledRestEndsAtRef.current = null;
+  }, []);
+
+  const rescheduleRestTimerSoundsIfNeeded = useCallback(() => {
+    const soundEnabled = user?.restTimerSoundEnabled !== false;
+    if (!soundEnabled) return;
+    if (!sessionId) return;
+    if (!restEndsAt || restEndsAt <= Date.now()) return;
+    if (isEndingSessionRef.current) return;
+    if (sessionQuery.data?.endedReason) return;
+
+    void (async () => {
+      const scheduled = await scheduleRestTimerFinishSound(sessionId, restEndsAt);
+      nativeScheduledRestEndsAtRef.current = scheduled ? restEndsAt : null;
+    })();
+  }, [
+    restEndsAt,
+    sessionId,
+    sessionQuery.data?.endedReason,
+    user?.restTimerSoundEnabled,
+  ]);
+
   const finishMutation = useMutation({
     mutationFn: () => {
       // Pause timer before finishing
@@ -1093,6 +1119,7 @@ const WorkoutSessionScreen = () => {
     },
     onMutate: () => {
       isEndingSessionRef.current = true;
+      cancelRestTimerSounds();
     },
     onSuccess: (session) => {
       endActiveStatus();
@@ -1133,6 +1160,7 @@ const WorkoutSessionScreen = () => {
     },
     onError: () => {
       isEndingSessionRef.current = false;
+      rescheduleRestTimerSoundsIfNeeded();
       Alert.alert("Could not finish workout");
     },
   });
@@ -1268,16 +1296,19 @@ const WorkoutSessionScreen = () => {
     }
   }, [sessionId, startTime, groupedSets.length, timerLocked, sessionQuery.data?.endedReason]);
 
-  const previousRestEndsAtRef = useRef<number | null>(null);
-  const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
-
   useEffect(() => {
     const prev = previousRestEndsAtRef.current;
     previousRestEndsAtRef.current = restEndsAt;
 
     const soundEnabled = user?.restTimerSoundEnabled !== false;
 
-    if (restEndsAt && soundEnabled && sessionId) {
+    if (
+      restEndsAt &&
+      soundEnabled &&
+      sessionId &&
+      !isEndingSessionRef.current &&
+      !sessionQuery.data?.endedReason
+    ) {
       void (async () => {
         const scheduled = await scheduleRestTimerFinishSound(sessionId, restEndsAt);
         nativeScheduledRestEndsAtRef.current = scheduled ? restEndsAt : null;
@@ -1295,7 +1326,14 @@ const WorkoutSessionScreen = () => {
     if (!restEndsAt) {
       nativeScheduledRestEndsAtRef.current = null;
     }
-  }, [restEndsAt, user?.restTimerSoundEnabled]);
+  }, [restEndsAt, sessionId, sessionQuery.data?.endedReason, user?.restTimerSoundEnabled]);
+
+  useEffect(() => {
+    if (!sessionQuery.data?.endedReason) return;
+    cancelRestTimerSounds();
+    setRestRemaining(null);
+    setRestEndsAt(null);
+  }, [cancelRestTimerSounds, sessionQuery.data?.endedReason]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -1311,7 +1349,12 @@ const WorkoutSessionScreen = () => {
         setTimeout(() => setRestRemaining(null), 400);
 
         // Play sound when timer completes (if enabled)
-        if (!hasPlayedSound && user?.restTimerSoundEnabled !== false) {
+        if (
+          !hasPlayedSound &&
+          user?.restTimerSoundEnabled !== false &&
+          !isEndingSessionRef.current &&
+          !sessionQuery.data?.endedReason
+        ) {
           hasPlayedSound = true;
           const nativeScheduledForThisTimer =
             nativeScheduledRestEndsAtRef.current === restEndsAt;
@@ -1336,7 +1379,7 @@ const WorkoutSessionScreen = () => {
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [restEndsAt, user?.restTimerSoundEnabled]);
+  }, [restEndsAt, sessionQuery.data?.endedReason, user?.restTimerSoundEnabled]);
 
   // Listen for "Log Set" button from Live Activity (via App Group shared storage)
   useEffect(() => {
@@ -2008,6 +2051,7 @@ const WorkoutSessionScreen = () => {
     }
 
     isEndingSessionRef.current = true;
+    cancelRestTimerSounds();
     try {
       await updateSession(sessionId, {
         endedReason: "user_exit",
@@ -2025,6 +2069,7 @@ const WorkoutSessionScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["activeSession"] });
     } catch (err) {
       isEndingSessionRef.current = false;
+      rescheduleRestTimerSoundsIfNeeded();
       Alert.alert(
         "Could not leave workout",
         "We couldn't end your current workout. Please try again."

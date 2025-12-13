@@ -1558,6 +1558,7 @@ To test notifications:
 
 - 4.4.9 Custom Exercises (Pro/All)
 - 4.4.10 Data Export (Settings)
+- 4.4.11 Share Workout Template Links (Viral Growth)
 - 5.1 Landing Page & App Store Presence (must be live before launch)
 
 #### 4.4.9 Custom Exercises (Pro/All)
@@ -1611,6 +1612,109 @@ To test notifications:
 - `/server/src/jobs/exportData.ts` - Export generator + storage upload
 - `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
 - `/mobile/src/api/account.ts` - Export API client
+
+#### 4.4.11 Share Workout Template Links (Viral Growth)
+
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+
+**Goal**: Allow users to share workout templates with friends via link, driving viral growth and making it easy to follow friends' programs.
+
+**Experience**:
+
+- "Share" button on WorkoutTemplateDetailScreen → generates shareable link
+- Copy link to clipboard or open native share sheet (text/iMessage/social media)
+- When recipient opens link → lands on WorkoutTemplatePreviewScreen showing:
+  - Template name, creator handle, exercises, sets/reps, muscle breakdown
+  - "Add to My Workouts" button to save a copy to their library
+  - Login/signup prompt if not authenticated
+- Track attribution: which templates generate the most saves/signups
+
+**Link Format**:
+
+- Web URL: `https://push-pull.app/workout/{shareCode}` (redirects to deep link if app installed)
+- Deep link: `pushpull://workout/share/{shareCode}`
+- Share code: 8-character unique ID (nanoid)
+
+**Implementation**:
+
+- Create `template_shares` table with unique share codes, expiration support, and usage tracking
+- Generate share code when user taps "Share" (one code per template, reuse if exists)
+- Deep link handler for `workout/share/:code` route
+- WorkoutTemplatePreviewScreen shows full template preview with "Add to My Workouts" CTA
+- API endpoint to copy template to authenticated user's library
+- Track metrics: shares created, link clicks, templates copied, signups from shares
+
+**Database Schema**:
+
+```sql
+CREATE TABLE template_shares (
+  id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
+  share_code TEXT UNIQUE NOT NULL,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ, -- NULL = never expires
+  is_revoked BOOLEAN DEFAULT FALSE,
+  views_count INTEGER DEFAULT 0,
+  copies_count INTEGER DEFAULT 0
+);
+
+CREATE INDEX template_shares_code_idx ON template_shares(share_code);
+CREATE INDEX template_shares_template_idx ON template_shares(template_id);
+CREATE INDEX template_shares_creator_idx ON template_shares(created_by);
+```
+
+**API Endpoints**:
+
+- `POST /api/templates/:templateId/share` - Create/retrieve share link (authenticated)
+- `GET /api/templates/share/:code` - Get template preview by share code (public)
+- `POST /api/templates/share/:code/copy` - Copy template to user's library (authenticated)
+- `DELETE /api/templates/:templateId/share` - Revoke share link (creator only)
+- `GET /api/templates/:templateId/share/stats` - Get share analytics (creator only)
+
+**Files to Create**:
+
+- `/mobile/src/screens/WorkoutTemplatePreviewScreen.tsx` - Template preview for shared links
+- `/mobile/src/components/workout/ShareTemplateButton.tsx` - Share button component with sheet
+
+**Files to Modify**:
+
+- `/server/src/routes/templates.ts` - Add share endpoints
+- `/server/src/db.ts` - Add template_shares table
+- `/mobile/src/screens/WorkoutTemplateDetailScreen.tsx` - Add share button to header
+- `/mobile/src/navigation/RootNavigator.tsx` - Register WorkoutTemplatePreview screen
+- `/mobile/src/navigation/types.ts` - Add WorkoutTemplatePreview route
+- `/mobile/App.tsx` - Add deep link handler for `workout/share/:code`
+- `/mobile/src/api/templates.ts` - Add share API client functions
+
+**Viral Growth Mechanics**:
+
+- Share link shows creator's handle → drives profile discovery
+- "Created by @handle" attribution encourages credit-giving and follows
+- Preview shows full template → demonstrates value before signup
+- One-tap copy to library → low friction adoption
+- Track conversion funnel: link view → signup → template copy → first workout
+
+**Privacy Considerations**:
+
+- Only show public templates in share preview
+- Private templates require authentication + permission check
+- Creator can revoke share link at any time
+- Option to disable sharing per template in settings
+
+**Analytics Tracking**:
+
+- Most shared templates (leaderboard for creators)
+- Conversion rate: views → copies → workouts logged
+- Attribution: signups from template shares (UTM source)
+- Viral coefficient: shares per user, copies per share
+
+**Future Enhancements** (Post-Launch):
+
+- [ ] Social preview cards (Open Graph) for better link sharing on social media
+- [ ] Template comments/ratings from users who copied it
+- [ ] "Trending Templates" feed based on share metrics
+- [ ] Referral rewards (Pro credits for viral templates)
 
 ---
 
