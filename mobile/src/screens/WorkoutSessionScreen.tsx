@@ -384,6 +384,9 @@ const WorkoutSessionScreen = () => {
   const [progressionModalAcknowledged, setProgressionModalAcknowledged] =
     useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallTrigger, setPaywallTrigger] = useState<
+    "progression" | "analytics"
+  >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
@@ -2110,6 +2113,98 @@ const WorkoutSessionScreen = () => {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => {
+            if (isPro) {
+              navigation.navigate("Analytics");
+              return;
+            }
+            setPaywallTrigger("analytics");
+            setShowPaywallModal(true);
+          }}
+          style={({ pressed }) => ({
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          })}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                backgroundColor: `${colors.primary}15`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}25`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name='bar-chart' size={18} color={colors.primary} />
+            </View>
+            <View style={{ gap: 2 }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                Advanced analytics
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Trends, balance, and insights from your training
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            {!isPro && (
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: `${colors.primary}15`,
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}25`,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name='lock-closed'
+                  size={12}
+                  color={colors.primary}
+                />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  Pro
+                </Text>
+              </View>
+            )}
+            <Ionicons
+              name='chevron-forward'
+              size={18}
+              color={colors.textSecondary}
+            />
+          </View>
+        </Pressable>
       </View>
 
       <View
@@ -2295,13 +2390,14 @@ const WorkoutSessionScreen = () => {
         isPro={isPro}
         onUpgrade={() => {
           setShowProgressionModal(false);
+          setPaywallTrigger("progression");
           setShowPaywallModal(true);
         }}
       />
       <PaywallComparisonModal
         visible={showPaywallModal}
         onClose={() => setShowPaywallModal(false)}
-        triggeredBy='progression'
+        triggeredBy={paywallTrigger}
       />
       <Modal
         visible={!!imagePreviewUrl}

@@ -115,15 +115,21 @@ Build a social-first fitness app that combines intelligent workout programming w
 
 **Problem**: Current onboarding is single-step and doesn't capture data needed for AI workout generation.
 
-**New Onboarding Steps**:
+**New Onboarding Steps (Conversion-first)**:
 
-1. **Welcome** - Name, handle (optional)
+**Before sign-in (skippable, no account/handle copy)**:
+
+1. **Intro** - One-minute personalization (with clear “Skip”)
 2. **Goals** - Build muscle, lose weight, strength, endurance, general fitness (multi-select)
 3. **Experience** - Beginner (<6 months), intermediate (6-24 months), advanced (2+ years)
 4. **Equipment** - Gym (full), home (limited), bodyweight only, specific equipment list
 5. **Schedule** - Weekly workout goal (3-7 days), preferred session length (30/45/60/90 min)
-6. **Limitations** - Injury history (free text), movements to avoid (optional)
-7. **Training Style** - Push/pull/legs, upper/lower, full body, custom
+6. **Training Style** - Push/pull/legs, upper/lower, full body, custom
+
+**After account creation / sign-in (required to finish setup)**:
+
+1. **Profile** - Name + unique handle (+ optional avatar)
+2. **Plan selection** - Continue Free or start Pro trial
 
 **Database Changes**:
 
@@ -149,17 +155,22 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 - [x] Update OnboardingScreen to multi-step flow
 - [x] Store structured JSON in database
 - [x] Add ability to re-take onboarding from settings
+- [x] Move preference onboarding before sign-in (clear “Skip”, no account copy)
+- [x] Store pre-auth onboarding locally and apply during post-auth setup
+- [x] Move plan selection to post-auth setup (after account creation)
 
 **Files to Create/Modify**:
 
 - ✅ `/mobile/src/screens/OnboardingScreen.tsx` - Multi-step wizard + progress
+- ✅ `/mobile/src/screens/PreAuthOnboardingScreen.tsx` - Pre-auth preferences onboarding (skippable)
+- ✅ `/mobile/src/screens/AccountSetupScreen.tsx` - Post-auth setup (handle + plan selection)
 - ✅ `/mobile/src/components/onboarding/` (new directory)
   - `WelcomeStep.tsx`
   - `GoalsStep.tsx`
   - `ExperienceStep.tsx` / `ExperienceLevelStep.tsx`
   - `EquipmentStep.tsx`
   - `ScheduleStep.tsx`
-  - `LimitationsStep.tsx`
+  - `LimitationsStep.tsx` (optional / in-app retake)
   - `TrainingSplitStep.tsx` / `TrainingStyleStep.tsx`
 - ✅ `/server/src/routes/social.ts` - Profile update supports onboarding data + retake flow
 - ✅ `/server/src/db.ts` - Added `onboarding_data` column to users
@@ -1801,6 +1812,7 @@ These features are planned for implementation after the initial app launch and w
 
 - **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
+- **v1.1.1**: Conversion-first onboarding (pre-auth preferences + Skip; post-auth account setup + paywall)
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)

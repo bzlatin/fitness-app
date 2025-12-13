@@ -22,10 +22,19 @@ import { UserProfileProvider } from "./src/context/UserProfileContext";
 import { useCurrentUser } from "./src/hooks/useCurrentUser";
 import { useWidgetSync } from "./src/hooks/useWidgetSync";
 import { useAppleHealthSync } from "./src/hooks/useAppleHealthSync";
-import OnboardingScreen from "./src/screens/OnboardingScreen";
+import PreAuthOnboardingScreen from "./src/screens/PreAuthOnboardingScreen";
+import AccountSetupScreen from "./src/screens/AccountSetupScreen";
 import { RootStackParamList } from "./src/navigation/types";
 import { bootstrapPayments } from "./src/services/payments";
 import ErrorBoundary from "./src/components/ErrorBoundary";
+import { useAuth } from "./src/context/AuthContext";
+import {
+  isPreAuthOnboardingFinished,
+  clearPreAuthOnboarding,
+  loadPreAuthOnboarding,
+  skipPreAuthOnboarding,
+} from "./src/services/preAuthOnboarding";
+import { PreAuthOnboardingProvider } from "./src/context/PreAuthOnboardingContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -195,13 +204,15 @@ const App = () => {
           <QueryClientProvider client={queryClient}>
             <UserProfileProvider>
               <StatusBar style='light' />
-              <AuthGate>
-                <OnboardingGate>
-                  <NavigationContainer theme={navTheme} linking={linking}>
-                    <RootNavigator />
-                  </NavigationContainer>
-                </OnboardingGate>
-              </AuthGate>
+              <PreAuthOnboardingGate>
+                <AuthGate>
+                  <AccountSetupGate>
+                    <NavigationContainer theme={navTheme} linking={linking}>
+                      <RootNavigator />
+                    </NavigationContainer>
+                  </AccountSetupGate>
+                </AuthGate>
+              </PreAuthOnboardingGate>
             </UserProfileProvider>
           </QueryClientProvider>
         </AuthProvider>
@@ -243,13 +254,84 @@ const App = () => {
 
 export default App;
 
-const OnboardingGate = ({ children }: { children: ReactNode }) => {
+const PreAuthOnboardingGate = ({ children }: { children: ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [isBootstrapping, setIsBootstrapping] = React.useState(true);
+  const [isFinished, setIsFinished] = React.useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const bootstrap = async () => {
+      try {
+        if (!mounted) return;
+        if (isAuthenticated) {
+          setIsFinished(true);
+          return;
+        }
+        const existing = await loadPreAuthOnboarding();
+        setIsFinished(isPreAuthOnboardingFinished(existing));
+      } finally {
+        if (mounted) setIsBootstrapping(false);
+      }
+    };
+    if (!isLoading) {
+      void bootstrap();
+    }
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, isLoading]);
+
+  if (isLoading || isBootstrapping) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated && !isFinished) {
+    return <PreAuthOnboardingScreen onFinished={() => setIsFinished(true)} />;
+  }
+
+  return (
+    <PreAuthOnboardingProvider
+      restart={() => {
+        setIsFinished(false);
+        setIsBootstrapping(false);
+        void clearPreAuthOnboarding();
+      }}
+    >
+      {children}
+    </PreAuthOnboardingProvider>
+  );
+};
+
+const AccountSetupGate = ({ children }: { children: ReactNode }) => {
   const { isOnboarded, isLoading, user } = useCurrentUser();
 
   // Sync widget data automatically (iOS only)
   useWidgetSync();
   // Keep Apple Health imports fresh once per day (iOS only)
   useAppleHealthSync();
+
+  useEffect(() => {
+    const markSeen = async () => {
+      if (!isOnboarded) return;
+      const existing = await loadPreAuthOnboarding();
+      if (!isPreAuthOnboardingFinished(existing)) {
+        await skipPreAuthOnboarding();
+      }
+    };
+    void markSeen();
+  }, [isOnboarded]);
 
   // Only block the UI while we haven't loaded a user yet.
   if (isLoading && !user) {
@@ -268,7 +350,7 @@ const OnboardingGate = ({ children }: { children: ReactNode }) => {
   }
 
   if (!isOnboarded) {
-    return <OnboardingScreen />;
+    return <AccountSetupScreen onFinished={() => {}} />;
   }
   return <>{children}</>;
 };
