@@ -126,6 +126,44 @@ export interface Exercise {
   equipment: string;
   category?: string;
   gifUrl?: string;
+  isCustom?: boolean;
+  createdBy?: string;
+}
+
+export interface CustomExercise {
+  id: string;
+  userId: string;
+  name: string;
+  primaryMuscleGroup: string;
+  secondaryMuscleGroups?: string[];
+  equipment?: string;
+  notes?: string;
+  imageUrl?: string;
+  scope: 'personal' | 'squad';
+  squadId?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface CreateCustomExerciseInput {
+  name: string;
+  primaryMuscleGroup: string;
+  secondaryMuscleGroups?: string[];
+  equipment?: string;
+  notes?: string;
+  imageUrl?: string;
+  scope?: 'personal' | 'squad';
+  squadId?: string;
+}
+
+export interface UpdateCustomExerciseInput {
+  name?: string;
+  primaryMuscleGroup?: string;
+  secondaryMuscleGroups?: string[];
+  equipment?: string;
+  notes?: string;
+  imageUrl?: string;
 }
 
 export type TemplateExerciseForm = {

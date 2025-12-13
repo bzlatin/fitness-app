@@ -48,6 +48,10 @@ type RequestConfig = {
   timeoutMs?: number;
 };
 
+const isFormDataBody = (body: unknown): body is FormData => {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+};
+
 const buildUrl = (path: string, params?: RequestConfig["params"]) => {
   const base = API_BASE_URL.endsWith("/") ? API_BASE_URL : `${API_BASE_URL}/`;
   const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
@@ -86,10 +90,12 @@ const request = async <T>(
   expectJson = true
 ) => {
   const url = buildUrl(path, config?.params);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(config?.headers ?? {}),
-  };
+  const headers: Record<string, string> = { ...(config?.headers ?? {}) };
+  const shouldSetJsonContentType =
+    init.body !== undefined && init.body !== null && !isFormDataBody(init.body);
+  if (shouldSetJsonContentType && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = authTokenProvider?.();
   if (token) {
@@ -167,19 +173,43 @@ export const apiClient = {
   post: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "POST", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "POST",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   put: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "PUT", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "PUT",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   patch: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "PATCH", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "PATCH",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   delete: <T>(path: string, config?: RequestConfig) =>

@@ -10,10 +10,78 @@
 
 ## Table of Contents
 
-1. [Gift Pass Feature](#gift-pass-feature)
-2. [Gym Equipment Preferences & Settings](#gym-equipment-preferences--settings)
-3. [Social Video Workout Import](#social-video-workout-import)
-4. [Apple Watch Companion App](#apple-watch-companion-app)
+1. [Data Export](#data-export)
+2. [Gift Pass Feature](#gift-pass-feature)
+3. [Gym Equipment Preferences & Settings](#gym-equipment-preferences--settings)
+4. [Social Video Workout Import](#social-video-workout-import)
+5. [Apple Watch Companion App](#apple-watch-companion-app)
+
+---
+
+## Data Export
+
+**Priority**: MEDIUM | **Effort**: 2-3 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
+
+### Goal
+
+Provide a user-controlled export of workout history for portability/compliance.
+
+### User Experience
+
+- Settings action: "Export my data" → choose CSV or JSON → email/share sheet with download link (time-limited)
+- Export includes workouts, sets, templates, AI generations, and streak history; excludes PII beyond profile basics
+- Show export status (queued → ready) and ability to regenerate
+
+### Implementation Details
+
+**Features**:
+
+- Server job to compile export into CSV/JSON, store in object storage with signed URL (24h expiration)
+- Rate limit to one export per user per 24h; log audit trail for compliance
+- Client polling or web socket to update export status; uses share sheet for delivery if on device
+
+**API Endpoints**:
+
+- `POST /api/account/export` - Request data export
+- `GET /api/account/export/status` - Check export status
+- `GET /api/account/export/download/:exportId` - Download export file (signed URL)
+
+**Files to Create/Modify**:
+
+- `/server/src/routes/account.ts` - Data export request + status endpoints
+- `/server/src/jobs/exportData.ts` - Export generator + storage upload
+- `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
+- `/mobile/src/api/account.ts` - Export API client
+
+**Export Format (CSV)**:
+
+Multiple CSV files in a ZIP archive:
+- `workouts.csv` - All workout sessions with dates and duration
+- `sets.csv` - All logged sets with exercise, weight, reps
+- `templates.csv` - All workout templates
+- `exercises.csv` - Exercise library snapshot
+- `analytics.csv` - Volume, fatigue, progression data
+
+**Export Format (JSON)**:
+
+Single JSON file with nested structure:
+```json
+{
+  "user": { "handle": "@exhibited", "created_at": "..." },
+  "workouts": [...],
+  "templates": [...],
+  "ai_generations": [...],
+  "streaks": {...}
+}
+```
+
+**Privacy & Compliance**:
+
+- Export excludes sensitive data (password hash, payment info, email)
+- Includes only user's own data (no squad member data)
+- Audit log tracks all export requests
+- Signed URLs expire after 24 hours
+- GDPR/CCPA compliant data portability
 
 ---
 

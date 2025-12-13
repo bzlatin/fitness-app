@@ -738,5 +738,33 @@ const initDb = async () => {
     SELECT id FROM users WHERE handle = '@exhibited'
     ON CONFLICT (user_id) DO NOTHING
   `);
+    // Custom exercises table
+    await (0, exports.query)(`
+    CREATE TABLE IF NOT EXISTS user_exercises (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      primary_muscle_group TEXT NOT NULL,
+      secondary_muscle_groups TEXT[],
+      equipment TEXT,
+      notes TEXT,
+      image_url TEXT,
+      scope TEXT NOT NULL DEFAULT 'personal' CHECK (scope IN ('personal', 'squad')),
+      squad_id TEXT REFERENCES squads(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS user_exercises_user_id_idx ON user_exercises(user_id)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS user_exercises_deleted_at_idx ON user_exercises(deleted_at)
+  `);
+    await (0, exports.query)(`
+    CREATE INDEX IF NOT EXISTS user_exercises_squad_id_idx ON user_exercises(squad_id)
+    WHERE squad_id IS NOT NULL
+  `);
 };
 exports.initDb = initDb;

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkTemplateLimit = exports.requireProPlan = void 0;
+exports.checkCustomExerciseLimit = exports.checkTemplateLimit = exports.requireProPlan = void 0;
 const db_1 = require("../db");
 /**
  * Middleware to enforce Pro plan requirement
@@ -82,3 +82,43 @@ const checkTemplateLimit = async (req, res, next) => {
     }
 };
 exports.checkTemplateLimit = checkTemplateLimit;
+/**
+ * Check if user can create another custom exercise
+ * Free tier: 3 custom exercises max
+ * Pro tier: unlimited
+ */
+const checkCustomExerciseLimit = async (req, res, next) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const userResult = await (0, db_1.query)(`SELECT plan FROM users WHERE id = $1`, [userId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        const user = userResult.rows[0];
+        // Pro and lifetime users have no limit
+        if (user.plan === "pro" || user.plan === "lifetime") {
+            return next();
+        }
+        // Free users: check custom exercise count (exclude soft-deleted)
+        const countResult = await (0, db_1.query)(`SELECT COUNT(*) as count FROM user_exercises
+       WHERE user_id = $1 AND deleted_at IS NULL`, [userId]);
+        const exerciseCount = parseInt(countResult.rows[0]?.count || "0");
+        const FREE_TIER_LIMIT = 3;
+        if (exerciseCount >= FREE_TIER_LIMIT) {
+            return res.status(403).json({
+                error: "Custom exercise limit reached",
+                message: `You've reached the free tier limit of ${FREE_TIER_LIMIT} custom exercises. Upgrade to Pro for unlimited custom exercises.`,
+                requiresUpgrade: true,
+            });
+        }
+        return next();
+    }
+    catch (error) {
+        console.error("[PlanLimits] Error checking custom exercise limit:", error);
+        return res.status(500).json({ error: "Failed to verify custom exercise limit" });
+    }
+};
+exports.checkCustomExerciseLimit = checkCustomExerciseLimit;

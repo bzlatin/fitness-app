@@ -1,8 +1,9 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -11,13 +12,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { searchExercises } from "../../api/exercises";
+import { deleteCustomExercise, getCustomExercises, searchAllExercises } from "../../api/exercises";
 import { API_BASE_URL } from "../../api/client";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
-import { Exercise, TemplateExerciseForm } from "../../types/workouts";
+import { CustomExercise, Exercise, TemplateExerciseForm } from "../../types/workouts";
 import { isCardioExercise } from "../../utils/exercises";
+import EditCustomExerciseModal from "./EditCustomExerciseModal";
 
 type Props = {
   visible: boolean;
@@ -25,6 +27,7 @@ type Props = {
   selected: TemplateExerciseForm[];
   onAdd: (exerciseForm: Omit<TemplateExerciseForm, "formId">) => void;
   onRemove: (exerciseId: string) => void;
+  onCreateCustomExercise?: (suggestedName?: string) => void;
 };
 
 const muscleGroups = [
@@ -37,12 +40,14 @@ const muscleGroups = [
   "legs",
   "glutes",
   "core",
+  "custom",
 ];
 
-const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) => {
+const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateCustomExercise }: Props) => {
   const [query, setQuery] = useState("");
   const [muscleGroup, setMuscleGroup] = useState("all");
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
+  const [editingCustomExercise, setEditingCustomExercise] = useState<CustomExercise | null>(null);
   const [sets, setSets] = useState("3");
   const [reps, setReps] = useState("10");
   const [restSeconds, setRestSeconds] = useState("90");
@@ -58,16 +63,65 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
     }
   }, [visible]);
 
+  const queryClient = useQueryClient();
+  const isCustomCategory = muscleGroup === "custom";
+
   const exercisesQuery = useQuery({
-    queryKey: ["exercises", debouncedQuery, muscleGroup],
+    queryKey: ["exercises-all", debouncedQuery, muscleGroup],
     queryFn: () =>
-      searchExercises({
+      searchAllExercises({
         query: debouncedQuery || undefined,
         muscleGroup: muscleGroup === "all" ? undefined : muscleGroup,
       }),
     staleTime: 1000 * 60 * 5,
-    enabled: visible,
+    enabled: visible && !isCustomCategory,
   });
+
+  const customExercisesQuery = useQuery({
+    queryKey: ["custom-exercises"],
+    queryFn: getCustomExercises,
+    staleTime: 1000 * 60 * 5,
+    enabled: visible && isCustomCategory,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCustomExercise,
+    onSuccess: (_, deletedId) => {
+      if (activeExercise?.id === deletedId) {
+        setActiveExercise(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["custom-exercises"] });
+      queryClient.invalidateQueries({ queryKey: ["exercises-all"] });
+    },
+    onError: (error: any) => {
+      Alert.alert(
+        "Error",
+        error?.response?.data?.error || "Failed to delete custom exercise. Please try again."
+      );
+    },
+  });
+
+  const customExercisesById = new Map(
+    (customExercisesQuery.data ?? []).map((exercise) => [exercise.id, exercise])
+  );
+
+  const customExercisesFiltered = (customExercisesQuery.data ?? []).filter((exercise) =>
+    debouncedQuery ? exercise.name.toLowerCase().includes(debouncedQuery.toLowerCase()) : true
+  );
+
+  const customExercisesAsExercises: Exercise[] = customExercisesFiltered.map((exercise) => ({
+    id: exercise.id,
+    name: exercise.name,
+    primaryMuscleGroup: exercise.primaryMuscleGroup,
+    equipment: exercise.equipment || "bodyweight",
+    gifUrl: exercise.imageUrl || undefined,
+    isCustom: true,
+    createdBy: exercise.userId,
+  }));
+
+  const allExercises = isCustomCategory
+    ? customExercisesAsExercises
+    : [...(exercisesQuery.data?.library ?? []), ...(exercisesQuery.data?.custom ?? [])];
 
   const handleSelect = (exercise: Exercise) => {
     const existing = selected.find((item) => item.exercise.id === exercise.id);
@@ -112,6 +166,41 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
   };
 
   const apiHost = API_BASE_URL.replace(/\/api$/, "");
+
+  const handleCreateCustom = () => {
+    onCreateCustomExercise?.(debouncedQuery || undefined);
+  };
+
+  const openCustomExerciseActions = (exerciseId: string) => {
+    const customExercise = customExercisesById.get(exerciseId);
+    if (!customExercise) return;
+
+    Alert.alert(customExercise.name, undefined, [
+      {
+        text: "Edit",
+        onPress: () => setEditingCustomExercise(customExercise),
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert(
+            "Delete exercise?",
+            `Delete "${customExercise.name}"? This can't be undone.`,
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => deleteMutation.mutate(customExercise.id),
+              },
+            ]
+          );
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   const renderExercise = ({ item }: { item: Exercise }) => {
     const isAdded = selected.some((ex) => ex.exercise.id === item.id);
@@ -160,15 +249,42 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
               <Ionicons name="fitness-outline" color={colors.textSecondary} size={28} />
             </View>
           )}
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                ...typography.title,
-                color: colors.textPrimary,
-              }}
-            >
-              {item.name}
-            </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <Text
+                style={{
+                  ...typography.title,
+                  color: colors.textPrimary,
+                  flexShrink: 1,
+                }}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+              {item.isCustom && (
+                <View
+                  style={{
+                    backgroundColor: "rgba(34,197,94,0.15)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontFamily: fontFamilies.semibold,
+                      color: colors.primary,
+                    }}
+                  >
+                    CUSTOM
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text
               style={{
                 ...typography.caption,
@@ -179,9 +295,26 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
               {item.primaryMuscleGroup} • {item.equipment || "Bodyweight"}
             </Text>
           </View>
+          {isCustomCategory && item.isCustom ? (
+            <Pressable
+              onPress={() => openCustomExerciseActions(item.id)}
+              hitSlop={8}
+              disabled={deleteMutation.isPending}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                borderRadius: 12,
+                backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+                opacity: deleteMutation.isPending ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => handleSelect(item)}
             style={({ pressed }) => ({
+              marginLeft: 6,
               paddingVertical: 8,
               paddingHorizontal: 12,
               borderRadius: 12,
@@ -277,13 +410,17 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
     );
   };
 
+  const showCreateCta = Boolean(onCreateCustomExercise && debouncedQuery);
+  const isFetching = exercisesQuery.isFetching || customExercisesQuery.isFetching;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={onClose}
+      >
       <View
         style={{
           flex: 1,
@@ -385,7 +522,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
         </View>
 
         <FlatList
-          data={exercisesQuery.data ?? []}
+          data={allExercises}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{
             paddingHorizontal: 16,
@@ -395,25 +532,71 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
           renderItem={renderExercise}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
-            exercisesQuery.isFetching ? (
+            isFetching ? (
               <View style={{ paddingVertical: 8 }}>
                 <ActivityIndicator color={colors.secondary} />
               </View>
             ) : null
           }
+          ListFooterComponent={
+            showCreateCta ? (
+              <View style={{ paddingTop: 10 }}>
+                <Pressable
+                  onPress={handleCreateCustom}
+                  style={({ pressed }) => ({
+                    backgroundColor: colors.surface,
+                    borderRadius: 14,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.92 : 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: `${colors.primary}18`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="add" size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...typography.body, color: colors.textPrimary }}>
+                      Create custom exercise
+                    </Text>
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                      {debouncedQuery ? `Add "${debouncedQuery}" to your library` : "Create a new exercise"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ height: 8 }} />
+            )
+          }
           ListEmptyComponent={
-            !exercisesQuery.isFetching ? (
+            !isFetching ? (
               <View
                 style={{
                   padding: 20,
                   alignItems: "center",
-                  gap: 6,
+                  gap: 12,
                 }}
               >
+                <Ionicons name="fitness-outline" size={48} color={colors.textSecondary} />
                 <Text
                   style={{
                     ...typography.title,
                     color: colors.textPrimary,
+                    textAlign: "center",
                   }}
                 >
                   No exercises found
@@ -422,16 +605,52 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove }: Props) 
                   style={{
                     ...typography.caption,
                     color: colors.textSecondary,
+                    textAlign: "center",
                   }}
                 >
-                  Try another muscle or a simpler search.
+                  {debouncedQuery
+                    ? "Can't find what you're looking for?"
+                    : "Try searching for an exercise"}
                 </Text>
+                {debouncedQuery && onCreateCustomExercise && (
+                  <Pressable
+                    onPress={handleCreateCustom}
+                    style={({ pressed }) => ({
+                      marginTop: 8,
+                      backgroundColor: colors.primary,
+                      paddingVertical: 12,
+                      paddingHorizontal: 20,
+                      borderRadius: 12,
+                      opacity: pressed ? 0.92 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: fontFamilies.semibold,
+                        color: colors.surface,
+                      }}
+                    >
+                      Create custom exercise
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             ) : null
           }
         />
       </View>
-    </Modal>
+      </Modal>
+
+      {editingCustomExercise ? (
+        <EditCustomExerciseModal
+          visible={!!editingCustomExercise}
+          onClose={() => setEditingCustomExercise(null)}
+          onUpdated={() => setEditingCustomExercise(null)}
+          onDeleted={() => setEditingCustomExercise(null)}
+          exercise={editingCustomExercise}
+        />
+      ) : null}
+    </>
   );
 };
 
