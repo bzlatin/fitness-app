@@ -146,7 +146,12 @@ const RootNavigator = () => (
     <Stack.Screen
       name='WorkoutSession'
       component={WorkoutSessionScreen}
-      options={{ title: "Workout Session", headerShown: false }}
+      options={{
+        title: "Workout Session",
+        headerShown: false,
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      }}
     />
     <Stack.Screen
       name='UserProfile'

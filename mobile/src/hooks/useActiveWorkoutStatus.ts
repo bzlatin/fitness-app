@@ -11,6 +11,7 @@ type Options = {
   templateId?: string;
   templateName?: string;
   initialVisibility?: Visibility;
+  autoClearOnUnmount?: boolean;
 };
 
 export const useActiveWorkoutStatus = ({
@@ -18,6 +19,7 @@ export const useActiveWorkoutStatus = ({
   templateId,
   templateName,
   initialVisibility,
+  autoClearOnUnmount = true,
 }: Options) => {
   const [visibility, setVisibilityState] = useState<Visibility>(
     initialVisibility ?? "private"
@@ -94,11 +96,11 @@ export const useActiveWorkoutStatus = ({
 
   useEffect(
     () => () => {
-      if (sessionId) {
+      if (autoClearOnUnmount && sessionId) {
         clearStatus(sessionId);
       }
     },
-    [sessionId, clearStatus]
+    [autoClearOnUnmount, sessionId, clearStatus]
   );
 
   return {

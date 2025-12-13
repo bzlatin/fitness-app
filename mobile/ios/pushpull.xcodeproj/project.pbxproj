@@ -21,6 +21,7 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		CBABC636C09442435DB78B5B /* WidgetSyncModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 810D8614D501CDA368955111 /* WidgetSyncModule.m */; };
 		D07AD122EAAD364FD5203F77 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 607A486BFB7CA6AF73D80804 /* PrivacyInfo.xcprivacy */; };
+		C1D2E3F4A5B60718293A4B5C /* timer-complete.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* timer-complete.mp3 */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F14C7D1569B37E3D4F6577B8 /* LiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C634B0C1A8358C28F8029FEB /* LiveActivityModule.swift */; };
 /* End PBXBuildFile section */
@@ -57,6 +58,7 @@
 		59D403E525B93A979C79E33A /* WidgetSyncModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WidgetSyncModule.swift; path = pushpull/WidgetSyncModule.swift; sourceTree = "<group>"; };
 		5E061F7FC8C355E4584EE74E /* Pods-pushpull.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pushpull.release.xcconfig"; path = "Target Support Files/Pods-pushpull/Pods-pushpull.release.xcconfig"; sourceTree = "<group>"; };
 		607A486BFB7CA6AF73D80804 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = pushpull/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* timer-complete.mp3 */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = audio.mp3; name = "timer-complete.mp3"; path = "../assets/sounds/timer-complete.mp3"; sourceTree = "<group>"; };
 		810D8614D501CDA368955111 /* WidgetSyncModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = WidgetSyncModule.m; path = pushpull/WidgetSyncModule.m; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = pushpull/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B5125A9B2EE616AE00D1E37F /* WidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -136,6 +138,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				607A486BFB7CA6AF73D80804 /* PrivacyInfo.xcprivacy */,
+				A1B2C3D4E5F60718293A4B5C /* timer-complete.mp3 */,
 				C634B0C1A8358C28F8029FEB /* LiveActivityModule.swift */,
 				FEDD83E3C912A34292ED2F60 /* LiveActivityModule.m */,
 				E35D651EA5BCB745D00F284D /* WorkoutActivityAttributes.swift */,
@@ -316,6 +319,7 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				D07AD122EAAD364FD5203F77 /* PrivacyInfo.xcprivacy in Resources */,
+				C1D2E3F4A5B60718293A4B5C /* timer-complete.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1603,49 +1603,18 @@ To test notifications:
 
 ---
 
-### ⏭️ Todo After Launch
+### ⏭️ Post-Launch Features
 
-#### Social Video Workout Import (TikTok/Instagram) — Post-Launch
+**All post-launch features have been moved to a separate document for better organization.**
 
-**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout (transcript/caption driven).
+**See [ROADMAP-POST-LAUNCH.md](ROADMAP-POST-LAUNCH.md) for:**
 
-**Notes**:
+1. **Gift Pass Feature** - Allow users to gift 14-day Pro trial passes
+2. **Gym Equipment Preferences & Settings** - Equipment selection, warm-up sets, cardio recommendations, workout duration
+3. **Social Video Workout Import** - Generate workouts from TikTok/Instagram videos
+4. **Apple Watch Companion App** - Mirror workouts to Apple Watch with quick controls
 
-- Requires safe ingestion of third-party content plus transcript parsing and caching
-- Keep Pro gating + usage limits; respect content safety filters
-- Reuse `user_exercises` table to tag generated templates with provenance (`source: "social_video"`, original URL)
-
-**Files to Create/Modify**:
-
-- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
-- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
-- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
-
-#### Apple Watch Companion (Sync + Mini UI) — Post-Launch
-
-**Goal**: Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance progress and quick actions.
-
-**Experience**:
-
-- When a workout starts on iPhone, watch shows current exercise, set/rep/weight target, and rest timer
-- Simple controls: log set (complete/skip), start/pause rest, next/prev exercise
-- Offline-safe: queue watch actions and reconcile with phone session when reconnected
-
-**Implementation**:
-
-- Add watchOS companion app (SwiftUI) in Xcode; use Watch Connectivity to sync active session payloads from React Native bridge
-- Expose a native module on iOS to publish workout updates to the watch and receive queued actions (log set, advance exercise)
-- Keep phone as source of truth; watch sends intents, phone persists to API and echoes updates back
-- Optional complication: show session status + rest countdown
-- Requires custom dev client / bare workflow step for watch target; document build steps
-
-**Files to Create/Modify**:
-
-- `/mobile/ios/WatchCompanion/` - SwiftUI watch app + connectivity session manager
-- `/mobile/ios/WatchConnectivityModule.swift` - Native bridge for session sync and action handling
-- `/mobile/src/services/watchSync.ts` - JS wrapper to publish workout updates and process watch intents
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Emit sync payloads on session start/set logged/next exercise
-- `/mobile/docs/APPLE_WATCH_SETUP.md` - Build/setup guide (dev client, provisioning, pairing)
+These features are planned for implementation after the initial app launch and will be prioritized based on user feedback and metrics.
 
 ### 🌐 Phase 5: Marketing & Growth (Post-Launch)
 
