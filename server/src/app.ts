@@ -13,6 +13,7 @@ import waitlistRouter from "./routes/waitlist";
 import notificationsRouter from "./routes/notifications";
 import feedbackRouter from "./routes/feedback";
 import engagementRouter from "./routes/engagement";
+import { templateSharesAuthedRouter, templateSharesPublicRouter } from "./routes/templateShares";
 import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
@@ -36,6 +37,8 @@ app.get("/health", (_req, res) => {
 app.use("/api/waitlist", waitlistRouter);
 app.use("/api/exercises", exercisesRouter);
 const authChain = [maybeRequireAuth, attachUser, ensureUser];
+app.use("/api/templates/share", templateSharesPublicRouter);
+app.use("/api/templates/share", ...authChain, templateSharesAuthedRouter);
 app.use("/api/templates", ...authChain, templatesRouter);
 app.use("/api/sessions", ...authChain, sessionsRouter);
 app.use("/api/social", ...authChain, socialRouter);

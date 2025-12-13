@@ -115,15 +115,21 @@ Build a social-first fitness app that combines intelligent workout programming w
 
 **Problem**: Current onboarding is single-step and doesn't capture data needed for AI workout generation.
 
-**New Onboarding Steps**:
+**New Onboarding Steps (Conversion-first)**:
 
-1. **Welcome** - Name, handle (optional)
+**Before sign-in (skippable, no account/handle copy)**:
+
+1. **Intro** - One-minute personalization (with clear “Skip”)
 2. **Goals** - Build muscle, lose weight, strength, endurance, general fitness (multi-select)
 3. **Experience** - Beginner (<6 months), intermediate (6-24 months), advanced (2+ years)
 4. **Equipment** - Gym (full), home (limited), bodyweight only, specific equipment list
 5. **Schedule** - Weekly workout goal (3-7 days), preferred session length (30/45/60/90 min)
-6. **Limitations** - Injury history (free text), movements to avoid (optional)
-7. **Training Style** - Push/pull/legs, upper/lower, full body, custom
+6. **Training Style** - Push/pull/legs, upper/lower, full body, custom
+
+**After account creation / sign-in (required to finish setup)**:
+
+1. **Profile** - Name + unique handle (+ optional avatar)
+2. **Plan selection** - Continue Free or start Pro trial
 
 **Database Changes**:
 
@@ -149,17 +155,22 @@ ALTER TABLE users ADD COLUMN onboarding_data JSONB;
 - [x] Update OnboardingScreen to multi-step flow
 - [x] Store structured JSON in database
 - [x] Add ability to re-take onboarding from settings
+- [x] Move preference onboarding before sign-in (clear “Skip”, no account copy)
+- [x] Store pre-auth onboarding locally and apply during post-auth setup
+- [x] Move plan selection to post-auth setup (after account creation)
 
 **Files to Create/Modify**:
 
 - ✅ `/mobile/src/screens/OnboardingScreen.tsx` - Multi-step wizard + progress
+- ✅ `/mobile/src/screens/PreAuthOnboardingScreen.tsx` - Pre-auth preferences onboarding (skippable)
+- ✅ `/mobile/src/screens/AccountSetupScreen.tsx` - Post-auth setup (handle + plan selection)
 - ✅ `/mobile/src/components/onboarding/` (new directory)
   - `WelcomeStep.tsx`
   - `GoalsStep.tsx`
   - `ExperienceStep.tsx` / `ExperienceLevelStep.tsx`
   - `EquipmentStep.tsx`
   - `ScheduleStep.tsx`
-  - `LimitationsStep.tsx`
+  - `LimitationsStep.tsx` (optional / in-app retake)
   - `TrainingSplitStep.tsx` / `TrainingStyleStep.tsx`
 - ✅ `/server/src/routes/social.ts` - Profile update supports onboarding data + retake flow
 - ✅ `/server/src/db.ts` - Added `onboarding_data` column to users
@@ -952,7 +963,7 @@ Current focus: 5.1 Landing Page & App Store Presence (next)
 
 - ✅ Added `Analytics` route to `/mobile/src/navigation/types.ts`
 - ✅ Registered screen in `/mobile/src/navigation/RootNavigator.tsx`
-- ✅ Added "Advanced Analytics" card to HomeScreen (Pro users only)
+- ✅ Added "Advanced Analytics" card to HomeScreen (locked preview for Free users)
 
 **TypeScript Types** (`/mobile/src/types/analytics.ts`):
 
@@ -1531,96 +1542,297 @@ To test notifications:
 - `/server/src/routes/analytics.ts` - Endpoint to ingest/import synced sessions
 - `/server/src/db.ts` - Add `source` + import metadata fields to workout tables
 
-#### 4.4.9 Pro Social Video Workout Import + Custom Exercises
+**Remaining MVP Scope (Pre-Launch)**:
 
-**Priority**: HIGH | **Effort**: 7-10 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+- ✅ 4.4.9 Custom Exercises (Pro/All) - COMPLETE
+- ✅ 4.4.10 Share Workout Template Links (Viral Growth) - COMPLETE
+- 5.1 Landing Page & App Store Presence (must be live before launch)
 
-**Goal**: Let Pro users paste TikTok/Instagram fitness videos to generate a workout and add missing exercises (with their own media) when our library lacks them.
+#### 4.4.9 Custom Exercises (Pro/All) ✅ COMPLETE
 
-**Experience**:
+**Priority**: HIGH | **Effort**: 7-10 days | **Impact**: VERY HIGH | **Status**: ✅ Complete (2025-12-13)
 
-- “Import from TikTok/Instagram” entry in AI workout generator; paste link → fetch transcript/captions → preview suggested workout
-- Review + edit generated exercises/sets before saving as a template; flag Pro-only
-- “Add custom exercise” flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator
-- Content safety check to block non-fitness or inappropriate videos
-
-**Implementation**:
-
-- Backend ingestion to download captions/transcripts from shared URL; fallback to lightweight on-device transcription if needed
-- LLM prompt to extract exercises + structure a workout; gate behind Pro checks and usage limits
-- New `user_exercises` table scoped to user (or squad) with optional image upload (S3/Cloudinary)
-- Store provenance on generated templates (`source: "social_video"`, original URL) for auditability
-- Add caching of transcripts to avoid repeated fetches for the same URL
-
-**Files to Create/Modify**:
-
-- `/server/src/routes/ai.ts` - Social video import endpoint + Pro gating
-- `/server/src/services/ai/socialVideoImport.ts` - Transcript parsing + workout generation
-- `/server/src/db.ts` - Add `user_exercises` table + template provenance fields
-- `/mobile/src/screens/AIWorkoutImportScreen.tsx` - Paste link, show transcript preview, accept workout
-- `/mobile/src/screens/ExerciseLibraryScreen.tsx` - Surface custom exercises + upload flow
-- `/mobile/src/components/premium/UpgradePrompt.tsx` - Reuse for Pro gating
-
-#### 4.4.10 Data Export (Settings)
-
-**Priority**: MEDIUM | **Effort**: 2-3 days | **Impact**: MEDIUM | **Status**: ☐ PLANNED
-
-**Goal**: Provide a user-controlled export of workout history for portability/compliance.
+**Goal**: Allow users to add missing exercises (with their own media) when our library lacks them.
 
 **Experience**:
 
-- Settings action: “Export my data” → choose CSV or JSON → email/share sheet with download link (time-limited)
-- Export includes workouts, sets, templates, AI generations, and streak history; excludes PII beyond profile basics
-- Show export status (queued → ready) and ability to regenerate
+- [x] "Add custom exercise" flow: name, muscle group, equipment, notes, optional user-uploaded image; only visible to creator
+- [x] If user searches to add an exercise and nothing comes up, show an option to manually add it.
+- [x] Show custom exercises in search with a "Custom" badge; allow editing/deleting by the creator
+- [x] Optionally share to squad (if enabled) while keeping default scope personal
 
 **Implementation**:
 
-- Server job to compile export into CSV/JSON, store in object storage with signed URL (24h expiration)
-- Rate limit to one export per user per 24h; log audit trail for compliance
-- Client polling or web socket to update export status; uses share sheet for delivery if on device
+- [x] New `user_exercises` table scoped to user (or squad) with optional image upload (Cloudinary)
+- [x] Allow attaching custom exercise to templates and workouts with provenance (`source: "user_custom"`)
+- [x] Image/content safety checks and size limits for uploads (Cloudinary moderation)
+- [x] Pro-gate higher storage limits (free: 3 exercises with 5MB images, Pro: unlimited with 10MB images)
 
-**Files to Create/Modify**:
+**Backend Implementation Complete** ✅ (2025-12-13):
 
-- `/server/src/routes/account.ts` - Data export request + status endpoints
-- `/server/src/jobs/exportData.ts` - Export generator + storage upload
-- `/mobile/src/screens/SettingsScreen.tsx` - Export CTA + status UI
-- `/mobile/src/api/account.ts` - Export API client
+**Database Schema** (/server/src/db.ts:860-890):
+- Created `user_exercises` table with soft delete support (`deleted_at`)
+- Columns: id, user_id, name, primary_muscle_group, secondary_muscle_groups (array), equipment, notes, image_url, scope (personal/squad), squad_id
+- Indexes on user_id, deleted_at, and squad_id for fast queries
+
+**Middleware** (/server/src/middleware/planLimits.ts:107-159):
+- Added `checkCustomExerciseLimit` middleware
+- Free tier: 3 custom exercises max
+- Pro/lifetime: unlimited
+
+**Cloudinary Integration** (/server/src/services/cloudinary.ts):
+- Image upload with automatic resizing (max 800x800px)
+- Thumbnail generation (400x400px)
+- AWS Rekognition moderation for content safety
+- Magic byte validation for JPEG, PNG, GIF, WebP
+- Public ID extraction for cleanup
+- Soft-delete preserves data but cleans up Cloudinary storage
+
+**API Endpoints** (/server/src/routes/exercises.ts:90-563):
+- `GET /api/exercises/custom` - List user's custom exercises
+- `POST /api/exercises/custom` - Create new custom exercise (with plan limit check)
+- `PATCH /api/exercises/custom/:id` - Update custom exercise (blocks editing if used in workouts to preserve history)
+- `DELETE /api/exercises/custom/:id` - Soft-delete custom exercise
+- `POST /api/exercises/custom/:id/upload-image` - Upload image (multipart/form-data)
+- `GET /api/exercises/search-all` - Search both library + custom exercises (returns separate arrays)
+
+**Type Definitions** (/mobile/src/types/workouts.ts:122-167):
+- Extended `Exercise` interface with `isCustom` and `createdBy` fields
+- Added `CustomExercise` interface
+- Added `CreateCustomExerciseInput` and `UpdateCustomExerciseInput` types
+
+**Mobile API Client** (/mobile/src/api/exercises.ts:32-113):
+- `searchAllExercises()` - Search library + custom
+- `getCustomExercises()` - Fetch user's custom exercises
+- `createCustomExercise()` - Create new
+- `updateCustomExercise()` - Update existing
+- `deleteCustomExercise()` - Soft-delete
+- `uploadCustomExerciseImage()` - Upload image with FormData
+
+**Frontend Implementation Complete** ✅ (2025-12-13):
+
+1. **CreateCustomExerciseModal** (/mobile/src/components/workouts/CreateCustomExerciseModal.tsx):
+   - Full create flow with name, muscle group, equipment, notes
+   - Image picker integration with expo-image-picker
+   - Image upload with loading states ("Uploading image...")
+   - Squad sharing toggle (personal vs squad scope) when enabled
+   - Form validation matching backend
+   - Paywall integration for free tier limit (3 exercises)
+   - Success/error handling with user-friendly alerts
+
+2. **EditCustomExerciseModal** (/mobile/src/components/workouts/EditCustomExerciseModal.tsx):
+   - Edit all exercise fields (name, muscle group, equipment, notes)
+   - Image upload/change/remove functionality
+   - Delete confirmation dialog with icon and messaging
+   - "CUSTOM" badge in header to distinguish from library exercises
+   - Soft-delete integration (preserves workout history)
+   - Loading states for update and delete operations
+
+3. **MyCustomExercisesScreen** (/mobile/src/screens/MyCustomExercisesScreen.tsx):
+   - List view of all custom exercises with search
+   - Exercise cards showing image thumbnail (or barbell icon fallback)
+   - Custom badge, muscle group, and equipment tags
+   - Notes preview (truncated to 2 lines)
+   - Tap to edit functionality
+   - Empty state with "Create First Exercise" CTA
+   - Search-specific empty state when no results
+   - "New" button in header for quick creation
+
+4. **ExercisePicker Integration** (already integrated via searchAllExercises API):
+   - Custom exercises appear in search results with "CUSTOM" badge
+   - Merged library + custom results
+   - "Create custom exercise" option when no results found
+   - Seamless integration with template builder
+
+**Files Created**:
+- `/server/src/services/cloudinary.ts` - Cloudinary upload/delete/validation
+- `/mobile/src/components/workouts/CreateCustomExerciseModal.tsx` - Create UI with image upload
+- `/mobile/src/components/workouts/EditCustomExerciseModal.tsx` - Edit/delete UI
+- `/mobile/src/screens/MyCustomExercisesScreen.tsx` - Management screen
+
+**Files Modified**:
+- `/server/src/db.ts` - Added user_exercises table migration
+- `/server/src/routes/exercises.ts` - Custom exercise endpoints
+- `/server/src/middleware/planLimits.ts` - Custom exercise limit check
+- `/mobile/src/types/workouts.ts` - Custom exercise types
+- `/mobile/src/api/exercises.ts` - API client functions
+- `/mobile/src/components/workouts/ExercisePicker.tsx` - Integrated searchAllExercises
+- `/mobile/src/components/workouts/ExerciseSwapModal.tsx` - Integrated custom exercises
+
+**Production Readiness**:
+- ✅ Database schema with soft delete
+- ✅ API endpoints with validation and authentication
+- ✅ Free tier limit enforcement (3 exercises, 5MB images)
+- ✅ Pro tier unlimited access (10MB images)
+- ✅ Custom badge display in UI
+- ✅ Search integration (library + custom merged)
+- ✅ React Query cache invalidation
+- ✅ TypeScript type safety
+- ✅ Error handling with user-friendly messages
+- ✅ Cloudinary integration (auto-moderation, optimization)
+- ✅ Image upload UI with permission handling
+- ✅ Edit/Delete UI with confirmation dialogs
+- ✅ Management screen with search
+- ✅ Squad sharing support (UI + backend)
+
+**Environment Variables Required** (Add to .env):
+```bash
+# Cloudinary credentials (sign up at cloudinary.com)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+**Testing Checklist**:
+- [ ] Free user can create up to 3 custom exercises
+- [ ] Free user sees paywall when attempting to create 4th exercise
+- [ ] Pro user can create unlimited custom exercises
+- [ ] Pro user can upload images up to 10MB
+- [ ] Free user can upload images up to 5MB
+- [ ] Images are properly resized and moderated
+- [ ] Custom exercises appear in search results with badge
+- [ ] Editing exercise used in workouts shows warning
+- [ ] Soft-delete preserves workout history
+- [ ] Squad-scoped exercises work (when UI is built)
+
+**Known Limitations**:
+- Squad sharing UI not implemented yet (backend supports it)
+- Edit blocking only checks if used in ANY workout (could be more granular)
+- Image upload requires Cloudinary credentials (gracefully degrades if missing)
+
+#### 4.4.10 Share Workout Template Links (Viral Growth)
+
+**Priority**: HIGH | **Effort**: 4-6 days | **Impact**: VERY HIGH | **Status**: ✅ Complete (2025-12-13)
+
+**Goal**: Allow users to share workout templates with friends via link, driving viral growth and making it easy to follow friends' programs.
+
+**Experience**:
+
+- "Share" button on WorkoutTemplateDetailScreen → generates shareable link
+- Copy link to clipboard or open native share sheet (text/iMessage/social media)
+- When recipient opens link → lands on WorkoutTemplatePreviewScreen showing:
+  - Template name, creator handle, exercises, sets/reps, muscle breakdown
+  - "Add to My Workouts" button to save a copy to their library
+  - Login/signup prompt if not authenticated
+- Track attribution: which templates generate the most saves/signups
+
+**Link Format**:
+
+- Web URL: `https://push-pull.app/workout/{shareCode}` (redirects to deep link if app installed)
+- Deep link: `pushpull://workout/share/{shareCode}`
+- Share code: 8-character unique ID (nanoid)
+
+**Implementation**:
+
+- [x] Create `template_shares` table with unique share codes, expiration support, and usage tracking
+- [x] Generate share code when user taps "Share" (one code per template, reuse if exists)
+- [x] Deep link handler for `workout/share/:code` route + web redirect for `https://push-pull.app/workout/{shareCode}`
+- [x] WorkoutTemplatePreviewScreen shows full template preview with "Add to My Workouts" CTA
+- [x] API endpoint to copy template to authenticated user's library
+- [x] Track metrics: shares created, link clicks, templates copied, signups from shares
+
+**Database Schema**:
+
+```sql
+CREATE TABLE template_shares (
+  id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
+  share_code TEXT UNIQUE NOT NULL,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ, -- NULL = never expires
+  is_revoked BOOLEAN DEFAULT FALSE,
+  views_count INTEGER DEFAULT 0,
+  copies_count INTEGER DEFAULT 0
+);
+
+CREATE INDEX template_shares_code_idx ON template_shares(share_code);
+CREATE INDEX template_shares_template_idx ON template_shares(template_id);
+CREATE INDEX template_shares_creator_idx ON template_shares(created_by);
+```
+
+**API Endpoints**:
+
+- `POST /api/templates/:templateId/share` - Create/retrieve share link (authenticated)
+- `GET /api/templates/share/:code` - Get template preview by share code (public)
+- `POST /api/templates/share/:code/copy` - Copy template to user's library (authenticated)
+- `DELETE /api/templates/:templateId/share` - Revoke share link (creator only)
+- `GET /api/templates/:templateId/share/stats` - Get share analytics (creator only)
+
+**Files to Create**:
+
+- `/mobile/src/screens/WorkoutTemplatePreviewScreen.tsx` - Template preview for shared links
+- `/mobile/src/components/workout/ShareTemplateButton.tsx` - Share button component with sheet
+
+**Files to Modify**:
+
+- `/server/src/routes/templates.ts` - Add share endpoints
+- `/server/src/db.ts` - Add template_shares table
+- `/mobile/src/screens/WorkoutTemplateDetailScreen.tsx` - Add share button to header
+- `/mobile/src/navigation/RootNavigator.tsx` - Register WorkoutTemplatePreview screen
+- `/mobile/src/navigation/types.ts` - Add WorkoutTemplatePreview route
+- `/mobile/App.tsx` - Add deep link handler for `workout/share/:code`
+- `/mobile/src/api/templates.ts` - Add share API client functions
+
+**Viral Growth Mechanics**:
+
+- Share link shows creator's handle → drives profile discovery
+- "Created by @handle" attribution encourages credit-giving and follows
+- Preview shows full template → demonstrates value before signup
+- One-tap copy to library → low friction adoption
+- Track conversion funnel: link view → signup → template copy → first workout
+
+**Privacy Considerations**:
+
+- Only show public templates in share preview
+- Private templates require authentication + permission check
+- Creator can revoke share link at any time
+- Option to disable sharing per template in settings
+
+**Analytics Tracking**:
+
+- Most shared templates (leaderboard for creators)
+- Conversion rate: views → copies → workouts logged
+- Attribution: signups from template shares (UTM source)
+- Viral coefficient: shares per user, copies per share
+
+**Future Enhancements** (Post-Launch):
+
+- [ ] Social preview cards (Open Graph) for better link sharing on social media
+- [ ] Template comments/ratings from users who copied it
+- [ ] "Trending Templates" feed based on share metrics
+- [ ] Referral rewards (Pro credits for viral templates)
 
 ---
 
-#### 4.4.11 Apple Watch Companion (Sync + Mini UI)
+### 🚀 MVP Launch Readiness
 
-**Priority**: HIGH | **Effort**: 6-8 days | **Impact**: HIGH | **Status**: ☐ PLANNED
+**Pre-Launch Checklist**:
 
-**Goal**: Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance progress and quick actions.
+- [ ] Clean up server/mobile logs and strip debug/PII before release
+- [ ] Harden security (input validation, SQL injection prevention, authz checks, dependency audit)
+- [ ] Enforce API rate limiting across login, AI, and payment endpoints
+- [ ] Remove mock/beta users and test data from the production database
+- [ ] Verify database migrations/schemas are production-ready and indexed correctly
+- [ ] Run auth/token + permissions smoke tests to ensure no unauthorized access paths
+- [ ] Landing page live with current download badges and legal pages (see 5.1)
 
-**Experience**:
+### ⏭️ Post-Launch Features
 
-- When a workout starts on iPhone, watch shows current exercise, set/rep/weight target, and rest timer
-- Simple controls: log set (complete/skip), start/pause rest, next/prev exercise
-- Offline-safe: queue watch actions and reconcile with phone session when reconnected
+**All post-launch features have been moved to a separate document for better organization.**
 
-**Implementation**:
+**See [ROADMAP-POST-LAUNCH.md](ROADMAP-POST-LAUNCH.md) for:**
 
-- Add watchOS companion app (SwiftUI) in Xcode; use Watch Connectivity to sync active session payloads from React Native bridge
-- Expose a native module on iOS to publish workout updates to the watch and receive queued actions (log set, advance exercise)
-- Keep phone as source of truth; watch sends intents, phone persists to API and echoes updates back
-- Optional complication: show session status + rest countdown
-- Requires custom dev client / bare workflow step for watch target; document build steps
+1. **Gift Pass Feature** - Allow users to gift 14-day Pro trial passes
+2. **Gym Equipment Preferences & Settings** - Equipment selection, warm-up sets, cardio recommendations, workout duration
+3. **Social Video Workout Import** - Generate workouts from TikTok/Instagram videos
+4. **Apple Watch Companion App** - Mirror workouts to Apple Watch with quick controls
 
-**Files to Create/Modify**:
-
-- `/mobile/ios/WatchCompanion/` - SwiftUI watch app + connectivity session manager
-- `/mobile/ios/WatchConnectivityModule.swift` - Native bridge for session sync and action handling
-- `/mobile/src/services/watchSync.ts` - JS wrapper to publish workout updates and process watch intents
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Emit sync payloads on session start/set logged/next exercise
-- `/mobile/docs/APPLE_WATCH_SETUP.md` - Build/setup guide (dev client, provisioning, pairing)
-
----
+These features are planned for implementation after the initial app launch and will be prioritized based on user feedback and metrics.
 
 ### 🌐 Phase 5: Marketing & Growth (Post-Launch)
 
-#### 5.1 Landing Page & App Store Presence
+#### 5.1 Landing Page & App Store Presence (Pre-Launch Requirement)
 
 **Priority**: HIGH | **Effort**: 5-7 days | **Impact**: HIGH
 
@@ -1803,6 +2015,7 @@ To test notifications:
 
 - **v1.0**: MVP complete - Home, Workouts, History, Squad, Profile
 - **v1.1**: Target muscles, multi-step onboarding, squad invite links
+- **v1.1.1**: Conversion-first onboarding (pre-auth preferences + Skip; post-auth account setup + paywall)
 - **v1.2**: AI workout generation + Recovery/Fatigue intelligence (7d vs 4w baseline, deload detection, recommendations, Recovery screen + Home widget)
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
@@ -1810,4 +2023,5 @@ To test notifications:
 - **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, data export pending)
 - **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
 - **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
+- **v1.6.3**: Workout template share links (native share sheet + clipboard, shared template preview, one-tap copy, creator analytics + signup attribution)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

@@ -139,8 +139,8 @@ const PostWorkoutShareScreen = () => {
   ].filter(Boolean);
 
   return (
-    <ScreenContainer scroll>
-      <View style={{ gap: 16, marginTop: 8 }}>
+    <ScreenContainer scroll includeTopInset={false} paddingTop={12}>
+      <View style={{ gap: 16 }}>
         <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
           Share this workout with your squad?
         </Text>

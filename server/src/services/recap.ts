@@ -159,6 +159,7 @@ const fetchRecentSessions = async (userId: string, lookbackWeeks: number): Promi
       LEFT JOIN workout_templates wt ON wt.id = s.template_id
       WHERE s.user_id = $1
         AND s.finished_at IS NOT NULL
+        AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
         AND s.finished_at >= $2
       GROUP BY s.id, wt.name
       ORDER BY s.finished_at DESC

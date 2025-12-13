@@ -144,6 +144,7 @@ const analyzeExerciseProgression = async (
       WHERE s.user_id = $1
         AND ws.exercise_id = $2
         AND s.finished_at IS NOT NULL
+        AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
         ${templateId ? "AND s.template_id = $3" : ""}
       GROUP BY s.id, ws.exercise_id
       ORDER BY s.finished_at DESC
@@ -296,6 +297,7 @@ export const getProgressionSuggestions = async (
       WHERE s.user_id = $1
         AND s.template_id = $2
         AND s.finished_at IS NOT NULL
+        AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
     `,
     [userId, templateId]
   );

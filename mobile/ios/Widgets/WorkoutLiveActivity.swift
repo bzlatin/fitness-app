@@ -36,8 +36,7 @@ struct WorkoutLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    // Only show timer if it hasn't expired yet
-                    if let restEndTime = context.state.restEndTime, restEndTime > Date() {
+                    if let restEndTime = context.state.restEndTime {
                         RestTimerView(endTime: restEndTime)
                     } else {
                         VStack(alignment: .trailing, spacing: 4) {
@@ -93,8 +92,7 @@ struct WorkoutLiveActivity: Widget {
                     .foregroundColor(.green)
             } compactTrailing: {
                 // Compact trailing (right side of Dynamic Island)
-                // Only show timer if it hasn't expired yet
-                if let restEndTime = context.state.restEndTime, restEndTime > Date() {
+                if let restEndTime = context.state.restEndTime {
                     TimerText(endTime: restEndTime)
                         .font(.caption2)
                         .foregroundColor(.orange)
@@ -136,11 +134,9 @@ struct WorkoutLiveActivity: Widget {
 struct LockScreenLiveActivityView: View {
     let context: ActivityViewContext<WorkoutActivityAttributes>
 
-    private var restActive: Bool {
-        context.state.restEndTime.map { $0 > Date() } ?? false
-    }
-
     var body: some View {
+        let restActive = context.state.restEndTime != nil
+
         VStack(spacing: 12) {
             // Row 1: Exercise name + Resting/Set info
             HStack(alignment: .center) {

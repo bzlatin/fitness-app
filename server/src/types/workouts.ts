@@ -60,6 +60,7 @@ export interface WorkoutTemplate {
     | "full_body"
     | "custom";
   isFavorite: boolean;
+  sharingDisabled?: boolean;
   exercises: WorkoutTemplateExercise[];
   createdAt: string;
   updatedAt: string;

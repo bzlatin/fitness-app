@@ -9,6 +9,9 @@ interface PlanSelectionStepProps {
   onContinueFree: () => void;
   onStartTrial: (planType: "monthly" | "yearly") => void;
   isProcessingPurchase?: boolean;
+  selectedBilling?: "monthly" | "yearly";
+  onBillingChange?: (billing: "monthly" | "yearly") => void;
+  hideCta?: boolean;
 }
 
 interface FeatureItemProps {
@@ -43,8 +46,13 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
   onContinueFree,
   onStartTrial,
   isProcessingPurchase = false,
+  selectedBilling,
+  onBillingChange,
+  hideCta = false,
 }) => {
-  const [selectedProPlan, setSelectedProPlan] = React.useState<"monthly" | "yearly">("yearly");
+  const [internalBilling, setInternalBilling] = React.useState<"monthly" | "yearly">("yearly");
+  const billing = selectedBilling ?? internalBilling;
+  const setBilling = onBillingChange ?? setInternalBilling;
 
   return (
     <View style={styles.container}>
@@ -124,21 +132,21 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
         <View style={{ gap: 12, marginBottom: 20 }}>
           {/* Yearly Plan - Best Value */}
           <Pressable
-            onPress={() => setSelectedProPlan("yearly")}
+            onPress={() => setBilling("yearly")}
             style={{
               backgroundColor:
-                selectedProPlan === "yearly"
+                billing === "yearly"
                   ? colors.primary + "15"
                   : colors.background,
               borderRadius: 12,
               padding: 16,
               borderWidth: 2,
               borderColor:
-                selectedProPlan === "yearly" ? colors.primary : colors.border,
+                billing === "yearly" ? colors.primary : colors.border,
               position: "relative",
             }}
           >
-            {selectedProPlan === "yearly" && (
+            {billing === "yearly" && (
               <View
                 style={{
                   position: "absolute",
@@ -217,20 +225,20 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
 
           {/* Monthly Plan */}
           <Pressable
-            onPress={() => setSelectedProPlan("monthly")}
+            onPress={() => setBilling("monthly")}
             style={{
               backgroundColor:
-                selectedProPlan === "monthly"
+                billing === "monthly"
                   ? colors.primary + "15"
                   : colors.background,
               borderRadius: 12,
               padding: 16,
               borderWidth: 2,
               borderColor:
-                selectedProPlan === "monthly" ? colors.primary : colors.border,
+                billing === "monthly" ? colors.primary : colors.border,
             }}
           >
-            {selectedProPlan === "monthly" && (
+            {billing === "monthly" && (
               <View
                 style={{
                   position: "absolute",
@@ -314,24 +322,26 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
       )}
 
       {/* Action Buttons */}
-      <View style={styles.actions}>
-        <Pressable
-          onPress={() => selectedPlan === "pro" ? onStartTrial(selectedProPlan) : onContinueFree()}
-          disabled={isProcessingPurchase}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            { opacity: pressed || isProcessingPurchase ? 0.7 : 1 },
-          ]}
-        >
-          {isProcessingPurchase ? (
-            <ActivityIndicator color="#0B1220" />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {selectedPlan === "pro" ? "Start 7-Day Trial" : "Continue with Free"}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+      {!hideCta && (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => (selectedPlan === "pro" ? onStartTrial(billing) : onContinueFree())}
+            disabled={isProcessingPurchase}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { opacity: pressed || isProcessingPurchase ? 0.7 : 1 },
+            ]}
+          >
+            {isProcessingPurchase ? (
+              <ActivityIndicator color="#0B1220" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {selectedPlan === "pro" ? "Start 7-Day Trial" : "Continue with Free"}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 };

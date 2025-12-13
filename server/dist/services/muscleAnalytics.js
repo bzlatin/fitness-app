@@ -59,6 +59,7 @@ const getWeeklyVolumeByMuscleGroup = async (userId, weeks = 12) => {
     LEFT JOIN exercises e ON e.id = ws.exercise_id
     WHERE s.user_id = $1
       AND s.finished_at IS NOT NULL
+      AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
       AND s.finished_at >= $2
     GROUP BY DATE_TRUNC('week', s.finished_at), COALESCE(e.primary_muscle_group, 'other')
     ORDER BY week_start DESC, total_volume DESC
@@ -104,6 +105,7 @@ const getMuscleGroupSummaries = async (userId, weeks = 12) => {
     LEFT JOIN exercises e ON e.id = ws.exercise_id
     WHERE s.user_id = $1
       AND s.finished_at IS NOT NULL
+      AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
       AND s.finished_at >= $2
     GROUP BY COALESCE(e.primary_muscle_group, 'other')
     ORDER BY total_volume DESC
@@ -234,6 +236,7 @@ const getFrequencyHeatmap = async (userId, weeks = 12) => {
     LEFT JOIN exercises e ON e.id = ws.exercise_id
     WHERE s.user_id = $1
       AND s.finished_at IS NOT NULL
+      AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
       AND s.finished_at >= $2
     GROUP BY COALESCE(e.primary_muscle_group, 'other'), s.finished_at::date, TO_CHAR(s.finished_at, 'Day')
     ORDER BY training_date DESC

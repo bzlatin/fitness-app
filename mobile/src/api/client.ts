@@ -11,12 +11,19 @@ let authTokenProvider: TokenProvider | null = null;
 type AuthErrorHandler = () => void;
 let authErrorHandler: AuthErrorHandler | null = null;
 
+type TemplateShareCodeProvider = () => string | null | undefined;
+let templateShareCodeProvider: TemplateShareCodeProvider | null = null;
+
 export const setAuthTokenProvider = (provider: TokenProvider | null) => {
   authTokenProvider = provider;
 };
 
 export const setAuthErrorHandler = (handler: AuthErrorHandler | null) => {
   authErrorHandler = handler;
+};
+
+export const setTemplateShareCodeProvider = (provider: TemplateShareCodeProvider | null) => {
+  templateShareCodeProvider = provider;
 };
 
 const resolveApiBaseUrl = () => {
@@ -46,6 +53,10 @@ type RequestConfig = {
   headers?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;
+};
+
+const isFormDataBody = (body: unknown): body is FormData => {
+  return typeof FormData !== "undefined" && body instanceof FormData;
 };
 
 const buildUrl = (path: string, params?: RequestConfig["params"]) => {
@@ -86,10 +97,12 @@ const request = async <T>(
   expectJson = true
 ) => {
   const url = buildUrl(path, config?.params);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(config?.headers ?? {}),
-  };
+  const headers: Record<string, string> = { ...(config?.headers ?? {}) };
+  const shouldSetJsonContentType =
+    init.body !== undefined && init.body !== null && !isFormDataBody(init.body);
+  if (shouldSetJsonContentType && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = authTokenProvider?.();
   if (token) {
@@ -98,6 +111,11 @@ const request = async <T>(
     // Helpful debug to confirm auth header is being set on profile fetches.
     // eslint-disable-next-line no-console
     console.warn("No auth token set for /social/me request");
+  }
+
+  const shareCode = templateShareCodeProvider?.();
+  if (shareCode && !headers["X-Template-Share-Code"]) {
+    headers["X-Template-Share-Code"] = shareCode;
   }
 
   const controller = new AbortController();
@@ -167,19 +185,43 @@ export const apiClient = {
   post: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "POST", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "POST",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   put: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "PUT", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "PUT",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   patch: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>(
       path,
-      { method: "PATCH", body: body ? JSON.stringify(body) : undefined },
+      {
+        method: "PATCH",
+        body:
+          body === undefined || body === null
+            ? undefined
+            : isFormDataBody(body)
+            ? (body as any)
+            : JSON.stringify(body),
+      },
       config
     ),
   delete: <T>(path: string, config?: RequestConfig) =>

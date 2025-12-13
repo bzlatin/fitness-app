@@ -156,6 +156,34 @@ export const endWorkoutLiveActivity = async (): Promise<void> => {
 };
 
 /**
+ * End the Live Activity for a specific session.
+ *
+ * Prefer this over `endWorkoutLiveActivity()` when `sessionId` is known,
+ * so the native layer can end an existing activity even after app restarts.
+ */
+export const endWorkoutLiveActivityForSession = async (
+  sessionId: string
+): Promise<void> => {
+  if (Platform.OS !== "ios") {
+    return;
+  }
+
+  if (!LiveActivityModule) {
+    return;
+  }
+
+  try {
+    if (typeof LiveActivityModule.endWorkoutActivityForSession === "function") {
+      LiveActivityModule.endWorkoutActivityForSession(sessionId);
+      return;
+    }
+    LiveActivityModule.endWorkoutActivity();
+  } catch (error) {
+    console.error("❌ Failed to end Live Activity:", error);
+  }
+};
+
+/**
  * End the Live Activity with a summary
  *
  * Shows completion state for 3 seconds before dismissing.

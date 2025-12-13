@@ -39,6 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "com.apple.developer.healthkit": true,
       "com.apple.developer.healthkit.background-delivery": true,
     },
+    associatedDomains: ["applinks:push-pull.app"],
   };
 
   return {
@@ -61,6 +62,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#050816",
       },
+      intentFilters: [
+        ...(config.android?.intentFilters ?? []),
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "push-pull.app",
+              pathPrefix: "/workout",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
     },
     extra: {
       ...config.extra,

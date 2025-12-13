@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Modal,
   Pressable,
+  Platform,
   Text,
   View,
   ActivityIndicator,
@@ -14,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -29,6 +31,9 @@ import { deleteTemplate } from "../api/templates";
 import { deleteSession, undoAutoEndSession } from "../api/sessions";
 import { fetchRecap } from "../api/analytics";
 import { useFatigue } from "../hooks/useFatigue";
+import { endWorkoutLiveActivity } from "../services/liveActivity";
+import { syncActiveSessionToWidget } from "../services/widgetSync";
+import { cancelScheduledRestTimerFinishSound } from "../utils/timerSound";
 import {
   TRAINING_SPLIT_LABELS,
   EXPERIENCE_LEVEL_LABELS,
@@ -51,11 +56,27 @@ const HomeScreen = () => {
   const subscriptionAccess = useSubscriptionAccess();
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
+  const [paywallTrigger, setPaywallTrigger] = useState<
+    "analytics" | "ai" | "templates" | "recovery" | "progression" | null
+  >(null);
 
   // Check for active (uncompleted) workout session
-  const { data: activeSessionData } = useActiveSession();
-  const activeSession = activeSessionData?.session ?? null;
+  const { data: activeSessionData, status: activeSessionStatus } = useActiveSession();
+  const rawActiveSession = activeSessionData?.session ?? null;
   const serverAutoEndedSession = activeSessionData?.autoEndedSession ?? null;
+  const activeSession = rawActiveSession && !rawActiveSession.endedReason ? rawActiveSession : null;
+  const activeSessionId = activeSession?.id ?? null;
+  const rawActiveSessionId = rawActiveSession?.id ?? null;
+  const autoEndedSessionId = serverAutoEndedSession?.id ?? null;
+
+  // Guardrail: never show Live Activity/widget session state unless there's an active workout.
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    if (activeSessionStatus !== "success") return;
+    if (activeSessionId) return;
+    void syncActiveSessionToWidget(null);
+    void endWorkoutLiveActivity();
+  }, [activeSessionStatus, activeSessionId, rawActiveSessionId, autoEndedSessionId]);
 
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
@@ -106,6 +127,26 @@ const HomeScreen = () => {
       staleTime: 2 * 60 * 1000,
     });
 
+  const openPaywall = (
+    trigger: "analytics" | "ai" | "templates" | "recovery" | "progression"
+  ) => {
+    setPaywallTrigger(trigger);
+    setShowPaywallModal(true);
+  };
+
+  const closePaywall = () => {
+    setShowPaywallModal(false);
+    setPaywallTrigger(null);
+  };
+
+  const handleAnalyticsPress = () => {
+    if (isPro) {
+      navigation.navigate("Analytics");
+      return;
+    }
+    openPaywall("analytics");
+  };
+
   const startWorkout = (template: WorkoutTemplate | null) => {
     if (!template) return;
     navigation.navigate("WorkoutSession", { templateId: template.id });
@@ -150,10 +191,14 @@ const HomeScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: () => {
+            void cancelScheduledRestTimerFinishSound();
+            void endWorkoutLiveActivity();
+            void syncActiveSessionToWidget(null);
             setDismissedSession({
               id: sessionId,
               dismissedAt: Date.now(),
             });
+            void AsyncStorage.removeItem(`workout_logged_set_ids:${sessionId}`);
             // Optimistically drop the banner so it doesn't flash back
             queryClient.setQueryData(["activeSession"], {
               session: null,
@@ -182,6 +227,7 @@ const HomeScreen = () => {
   }, [activeSession, dismissedSession]);
 
   const shouldShowResumeBanner = useMemo(() => {
+    // Never show resume banner for sessions that the server has marked as ended
     if (!activeSession) return false;
     if (!dismissedSession) return true;
 
@@ -881,27 +927,35 @@ const HomeScreen = () => {
           )}
         </View>
 
-        {/* Advanced Analytics (Pro Feature) */}
-        {isPro && (
+        {/* Advanced Analytics (Locked for Free users) */}
+        <Pressable
+          onPress={handleAnalyticsPress}
+          style={({ pressed }) => ({
+            marginTop: 12,
+            padding: 16,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surfaceMuted,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
           <View
             style={{
-              marginTop: 12,
-              padding: 16,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surfaceMuted,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
-              <View style={{ gap: 4 }}>
+            <View style={{ gap: 4 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
                 <Text
                   style={{
                     ...typography.heading2,
@@ -911,48 +965,92 @@ const HomeScreen = () => {
                 >
                   Advanced Analytics
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                  Recap quality + volume trends
-                </Text>
+                {!isPro ? (
+                  <View
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: `${colors.primary}15`,
+                      borderWidth: 1,
+                      borderColor: `${colors.primary}25`,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name='lock-closed'
+                      size={12}
+                      color={colors.primary}
+                    />
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 12,
+                        fontFamily: fontFamilies.semibold,
+                      }}
+                    >
+                      Pro
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-              <Ionicons name='bar-chart' size={24} color={colors.primary} />
-            </View>
-            <RecapCard
-              data={recap}
-              loading={recapLoading}
-              error={recapError}
-              onRetry={refetchRecap}
-              onPress={() => navigation.navigate("Analytics")}
-              ctaLabel='Open recap'
-              variant='compact'
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              }}
-            />
-            <Pressable
-              onPress={() => navigation.navigate("Analytics")}
-              style={({ pressed }) => ({
-                marginTop: 10,
-                paddingVertical: 12,
-                borderRadius: 10,
-                backgroundColor: colors.primary,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 14,
-                  textAlign: "center",
-                }}
-              >
-                View Analytics
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                Recap quality + volume trends
               </Text>
-            </Pressable>
+            </View>
+            <Ionicons name='bar-chart' size={24} color={colors.primary} />
           </View>
-        )}
+          <RecapCard
+            data={recap}
+            loading={isPro ? recapLoading : false}
+            error={isPro ? recapError : false}
+            locked={!isPro}
+            onRetry={isPro ? refetchRecap : undefined}
+            onPress={handleAnalyticsPress}
+            ctaLabel={isPro ? "Open recap" : "Unlock"}
+            variant='compact'
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            }}
+          />
+          <Pressable
+            onPress={handleAnalyticsPress}
+            style={({ pressed }) => ({
+              marginTop: 10,
+              paddingVertical: 12,
+              borderRadius: 10,
+              backgroundColor: isPro ? colors.primary : colors.surface,
+              borderWidth: isPro ? 0 : 1,
+              borderColor: isPro ? colors.primary : colors.border,
+              opacity: pressed ? 0.85 : 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            })}
+          >
+            {!isPro ? (
+              <Ionicons
+                name='lock-closed'
+                size={16}
+                color={colors.textPrimary}
+              />
+            ) : null}
+            <Text
+              style={{
+                color: isPro ? colors.surface : colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 14,
+                textAlign: "center",
+              }}
+            >
+              {isPro ? "View Analytics" : "Unlock Analytics"}
+            </Text>
+          </Pressable>
+        </Pressable>
       </View>
 
       <SwapModal
@@ -971,13 +1069,14 @@ const HomeScreen = () => {
         }}
         showPaywallModal={() => {
           setSwapOpen(false);
-          setShowPaywallModal(true);
+          openPaywall("ai");
         }}
       />
 
       <PaywallComparisonModal
         visible={showPaywallModal}
-        onClose={() => setShowPaywallModal(false)}
+        onClose={closePaywall}
+        triggeredBy={paywallTrigger ?? undefined}
       />
     </ScreenContainer>
   );

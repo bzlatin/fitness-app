@@ -66,6 +66,7 @@ const fetchVolumeByMuscle = async (userId, start, end) => {
       LEFT JOIN exercises e ON e.id = ws.exercise_id
       WHERE s.user_id = $1
         AND s.finished_at IS NOT NULL
+        AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
         AND s.finished_at >= $2
         AND s.finished_at < $3
       GROUP BY COALESCE(e.primary_muscle_group, 'other')
@@ -159,6 +160,7 @@ const getFatigueScores = async (userId) => {
       FROM workout_sessions
       WHERE user_id = $1
         AND finished_at IS NOT NULL
+        AND ended_reason IS DISTINCT FROM 'auto_inactivity'
       ORDER BY finished_at DESC
       LIMIT 1
     `, [userId]);
@@ -275,6 +277,7 @@ const getRecentWorkouts = async (userId, limit = 5) => {
       LEFT JOIN workout_templates wt ON ws.template_id = wt.id
       WHERE ws.user_id = $1
         AND ws.finished_at IS NOT NULL
+        AND ws.ended_reason IS DISTINCT FROM 'auto_inactivity'
       ORDER BY ws.finished_at DESC
       LIMIT $2
     `, [userId, limit]);

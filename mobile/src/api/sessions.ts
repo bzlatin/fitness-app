@@ -27,15 +27,21 @@ export const completeSession = async (id: string, sets: WorkoutSession["sets"]) 
   const res = await apiClient.patch<WorkoutSession>(`/sessions/${id}`, {
     sets,
     finishedAt: new Date().toISOString(),
+    endedReason: "user_finished",
   });
   return res.data;
 };
 
 export const updateSession = async (
   id: string,
-  payload: Partial<WorkoutSession> & { sets?: WorkoutSet[] }
+  payload: Partial<WorkoutSession> & { sets?: WorkoutSet[] },
+  config?: { timeoutMs?: number }
 ) => {
-  const res = await apiClient.patch<WorkoutSession>(`/sessions/${id}`, payload);
+  const res = await apiClient.patch<WorkoutSession>(
+    `/sessions/${id}`,
+    payload,
+    config
+  );
   return res.data;
 };
 

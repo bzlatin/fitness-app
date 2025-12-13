@@ -343,6 +343,64 @@ export const initDb = async () => {
   `);
 
   await query(`
+    ALTER TABLE workout_templates
+      ADD COLUMN IF NOT EXISTS sharing_disabled BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS template_shares (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
+      share_code TEXT UNIQUE NOT NULL,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      is_revoked BOOLEAN DEFAULT FALSE,
+      views_count INTEGER DEFAULT 0,
+      copies_count INTEGER DEFAULT 0
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS template_shares_code_idx ON template_shares(share_code)
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS template_shares_template_idx ON template_shares(template_id)
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS template_shares_creator_idx ON template_shares(created_by)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS template_share_copies (
+      share_id TEXT NOT NULL REFERENCES template_shares(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      new_template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (share_id, user_id)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS template_share_copies_template_idx
+    ON template_share_copies(new_template_id)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS template_share_signups (
+      share_id TEXT NOT NULL REFERENCES template_shares(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (share_id, user_id)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS template_share_signups_user_idx
+    ON template_share_signups(user_id)
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS workout_template_exercises (
       id TEXT PRIMARY KEY,
       template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
@@ -855,5 +913,37 @@ export const initDb = async () => {
     INSERT INTO admin_users (user_id)
     SELECT id FROM users WHERE handle = '@exhibited'
     ON CONFLICT (user_id) DO NOTHING
+  `);
+
+  // Custom exercises table
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_exercises (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      primary_muscle_group TEXT NOT NULL,
+      secondary_muscle_groups TEXT[],
+      equipment TEXT,
+      notes TEXT,
+      image_url TEXT,
+      scope TEXT NOT NULL DEFAULT 'personal' CHECK (scope IN ('personal', 'squad')),
+      squad_id TEXT REFERENCES squads(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS user_exercises_user_id_idx ON user_exercises(user_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS user_exercises_deleted_at_idx ON user_exercises(deleted_at)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS user_exercises_squad_id_idx ON user_exercises(squad_id)
+    WHERE squad_id IS NOT NULL
   `);
 };

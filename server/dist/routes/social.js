@@ -100,6 +100,9 @@ const mapUserRow = (row) => ({
     onboardingData: row.onboarding_data ?? undefined,
     progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
     restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
+    appleHealthEnabled: row.apple_health_enabled ?? false,
+    appleHealthPermissions: row.apple_health_permissions ?? undefined,
+    appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
 });
 const fetchUserSummary = async (userId) => {
     const result = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
@@ -182,7 +185,9 @@ const fetchSharedFriends = async (viewerId, targetUserId, limit = 12) => {
 const fetchWorkoutStats = async (userId) => {
     const sessions = await (0, db_1.query)(`SELECT finished_at
      FROM workout_sessions
-     WHERE user_id = $1 AND finished_at IS NOT NULL
+     WHERE user_id = $1
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'
      ORDER BY finished_at DESC
      LIMIT 90`, [userId]);
     const workoutsCompleted = sessions.rowCount ?? 0;
@@ -235,7 +240,8 @@ const fetchProfile = async (viewerId, targetUserId) => {
      WHERE user_id = $1
      AND started_at >= $2
      AND started_at < $3
-     AND finished_at IS NOT NULL`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
+     AND finished_at IS NOT NULL
+     AND ended_reason IS DISTINCT FROM 'auto_inactivity'`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
     const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
     return {
         ...mapUserRow(user),
@@ -309,7 +315,7 @@ router.put("/me", async (req, res) => {
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, restTimerSoundEnabled, } = req.body;
+    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, restTimerSoundEnabled, appleHealthEnabled, appleHealthPermissions, appleHealthLastSyncAt, } = req.body;
     const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
     const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
     if (name !== undefined && !name.trim()) {
@@ -323,6 +329,9 @@ router.put("/me", async (req, res) => {
     if (progressiveOverloadEnabled !== undefined &&
         typeof progressiveOverloadEnabled !== "boolean") {
         return res.status(400).json({ error: "Invalid progressive overload flag" });
+    }
+    if (appleHealthEnabled !== undefined && typeof appleHealthEnabled !== "boolean") {
+        return res.status(400).json({ error: "Invalid Apple Health enabled flag" });
     }
     const currentUserResult = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
     const currentUser = currentUserResult.rows[0];
@@ -413,6 +422,21 @@ router.put("/me", async (req, res) => {
     if (restTimerSoundEnabled !== undefined) {
         updates.push(`rest_timer_sound_enabled = $${idx}`);
         values.push(restTimerSoundEnabled);
+        idx += 1;
+    }
+    if (appleHealthEnabled !== undefined) {
+        updates.push(`apple_health_enabled = $${idx}`);
+        values.push(appleHealthEnabled);
+        idx += 1;
+    }
+    if (appleHealthPermissions !== undefined) {
+        updates.push(`apple_health_permissions = $${idx}`);
+        values.push(appleHealthPermissions ?? null);
+        idx += 1;
+    }
+    if (appleHealthLastSyncAt !== undefined) {
+        updates.push(`apple_health_last_sync_at = $${idx}`);
+        values.push(appleHealthLastSyncAt ?? null);
         idx += 1;
     }
     if (updates.length === 0) {

@@ -15,9 +15,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { swapExercise } from "../../api/ai";
-import { searchExercises } from "../../api/exercises";
+import { searchAllExercises } from "../../api/exercises";
 import { API_BASE_URL } from "../../api/client";
-import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useSubscriptionAccess } from "../../hooks/useSubscriptionAccess";
 import UpgradePrompt from "../premium/UpgradePrompt";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { Exercise } from "../../types/workouts";
@@ -66,7 +66,7 @@ const ExerciseSwapModal = ({
   exercise,
   onSwap,
 }: ExerciseSwapModalProps) => {
-  const { user } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
   const [swapMode, setSwapMode] = useState<"choose" | "ai" | "manual">("choose");
   const [isSwapping, setIsSwapping] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
@@ -77,7 +77,7 @@ const ExerciseSwapModal = ({
 
   const debouncedQuery = useDebouncedValue(query, 350);
 
-  const isPro = user?.plan === "pro";
+  const isPro = subscriptionAccess.hasProAccess;
 
   // Reset state when modal opens or when switching to manual mode
   useEffect(() => {
@@ -99,15 +99,21 @@ const ExerciseSwapModal = ({
 
   // Query for manual exercise selection
   const manualExercisesQuery = useQuery({
-    queryKey: ["exercises", debouncedQuery, muscleGroup],
+    queryKey: ["exercises-all", debouncedQuery, muscleGroup],
     queryFn: () =>
-      searchExercises({
+      searchAllExercises({
         query: debouncedQuery || undefined,
         muscleGroup: muscleGroup === "all" ? undefined : muscleGroup,
       }),
     enabled: swapMode === "manual",
     staleTime: 1000 * 60 * 5,
   });
+
+  // Combine library and custom exercises
+  const allExercises = [
+    ...(manualExercisesQuery.data?.library ?? []),
+    ...(manualExercisesQuery.data?.custom ?? []),
+  ];
 
   const handleAISwap = async () => {
     if (!isPro) {
@@ -231,15 +237,42 @@ const ExerciseSwapModal = ({
               <Ionicons name="fitness-outline" color={colors.textSecondary} size={28} />
             </View>
           )}
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                ...typography.title,
-                color: colors.textPrimary,
-              }}
-            >
-              {item.name}
-            </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <Text
+                style={{
+                  ...typography.title,
+                  color: colors.textPrimary,
+                  flexShrink: 1,
+                }}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+              {item.isCustom && (
+                <View
+                  style={{
+                    backgroundColor: "rgba(34,197,94,0.15)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontFamily: fontFamilies.semibold,
+                      color: colors.primary,
+                    }}
+                  >
+                    CUSTOM
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text
               style={{
                 ...typography.caption,
@@ -649,9 +682,9 @@ const ExerciseSwapModal = ({
           </View>
 
           <FlatList
-            data={manualExercisesQuery.data?.filter(
+            data={allExercises.filter(
               (ex) => ex.id !== exercise.exerciseId
-            ) ?? []}
+            )}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{
               paddingHorizontal: 16,

@@ -47,13 +47,15 @@ router.get("/widget-data", async (req, res) => {
        WHERE user_id = $1
        AND started_at >= $2
        AND started_at < $3
-       AND finished_at IS NOT NULL`, [userId, weekStart.toISOString(), new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()]);
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'`, [userId, weekStart.toISOString(), new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()]);
         const currentProgress = parseInt(workoutsThisWeekResult.rows[0]?.count || "0", 10);
         // Get last workout date (use finished_at for completed workouts)
         const lastWorkoutResult = await (0, db_1.query)(`SELECT finished_at
        FROM workout_sessions
        WHERE user_id = $1
        AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'
        ORDER BY finished_at DESC
        LIMIT 1`, [userId]);
         const lastWorkoutDate = lastWorkoutResult.rows[0]?.finished_at || null;
@@ -63,6 +65,7 @@ router.get("/widget-data", async (req, res) => {
         FROM workout_sessions
         WHERE user_id = $1
         AND finished_at IS NOT NULL
+        AND ended_reason IS DISTINCT FROM 'auto_inactivity'
         ORDER BY workout_date DESC
       ),
       streaks AS (

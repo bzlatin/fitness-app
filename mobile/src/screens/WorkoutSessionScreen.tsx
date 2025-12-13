@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   Alert,
   Image,
@@ -15,12 +15,15 @@ import {
   Linking,
   AppState,
   NativeModules,
+  PanResponder,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
@@ -30,12 +33,13 @@ import {
   completeSession,
   fetchSession,
   startSessionFromTemplate,
+  updateSession,
 } from "../api/sessions";
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { WorkoutSet } from "../types/workouts";
-import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
@@ -51,13 +55,18 @@ import {
 } from "../api/analytics";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
-import { playTimerSound } from "../utils/timerSound";
+import {
+  cancelScheduledRestTimerFinishSound,
+  playTimerHaptics,
+  playTimerSound,
+  scheduleRestTimerFinishSound,
+} from "../utils/timerSound";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { syncActiveSessionToWidget } from "../services/widgetSync";
 import {
   startWorkoutLiveActivity,
   updateWorkoutLiveActivity,
-  endWorkoutLiveActivity,
+  endWorkoutLiveActivityForSession,
   endWorkoutLiveActivityWithSummary,
   addLogSetListener,
 } from "../services/liveActivity";
@@ -220,19 +229,32 @@ const formatExerciseName = (id: string) =>
     .trim();
 
 // Helper to identify cardio exercises
-const isCardioExercise = (exerciseId: string, exerciseName?: string): boolean => {
+const isCardioExercise = (
+  exerciseId: string,
+  exerciseName?: string
+): boolean => {
   const name = (exerciseName || exerciseId).toLowerCase();
   const cardioKeywords = [
-    'treadmill', 'running', 'jogging', 'walking',
-    'bike', 'cycling', 'bicycle', 'biking',
-    'rowing', 'rower',
-    'elliptical',
-    'stair', 'stepper',
-    'swimming', 'swim',
-    'jumping rope', 'jump rope',
-    'air bike'
+    "treadmill",
+    "running",
+    "jogging",
+    "walking",
+    "bike",
+    "cycling",
+    "bicycle",
+    "biking",
+    "rowing",
+    "rower",
+    "elliptical",
+    "stair",
+    "stepper",
+    "swimming",
+    "swim",
+    "jumping rope",
+    "jump rope",
+    "air bike",
   ];
-  return cardioKeywords.some(keyword => name.includes(keyword));
+  return cardioKeywords.some((keyword) => name.includes(keyword));
 };
 
 const resolveExerciseImageUri = (uri?: string) => {
@@ -286,16 +308,50 @@ const groupSetsByExercise = (
   }));
 };
 
+const trimCardioSetsToSingle = (sessionSets: WorkoutSet[]) => {
+  const grouped = new Map<string, WorkoutSet[]>();
+  sessionSets.forEach((set) => {
+    const key = set.templateExerciseId ?? set.exerciseId;
+    const list = grouped.get(key) ?? [];
+    list.push(set);
+    grouped.set(key, list);
+  });
+
+  const keepIds = new Set<string>();
+  grouped.forEach((groupSets) => {
+    const sorted = [...groupSets].sort((a, b) => a.setIndex - b.setIndex);
+    const representative = sorted[0];
+    if (!representative) return;
+
+    const cardio = isCardioExercise(
+      representative.exerciseId,
+      representative.exerciseName
+    );
+
+    if (cardio) {
+      keepIds.add(representative.id);
+      return;
+    }
+
+    sorted.forEach((set) => keepIds.add(set.id));
+  });
+
+  return sessionSets.filter((set) => keepIds.has(set.id));
+};
+
 const WorkoutSessionScreen = () => {
   const route = useRoute<RootRoute<"WorkoutSession">>();
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const [sessionId, setSessionId] = useState(route.params.sessionId);
+  const [hasHydratedSession, setHasHydratedSession] = useState(false);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [startTime, setStartTime] = useState<string | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [elapsedBaseSeconds, setElapsedBaseSeconds] = useState(0);
   const [timerAnchor, setTimerAnchor] = useState<number | null>(null);
   const [timerActive, setTimerActive] = useState(false);
+  const [timerLocked, setTimerLocked] = useState(false);
   const [activeExerciseKey, setActiveExerciseKey] = useState<string | null>(
     null
   );
@@ -329,6 +385,9 @@ const WorkoutSessionScreen = () => {
   const [progressionModalAcknowledged, setProgressionModalAcknowledged] =
     useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallTrigger, setPaywallTrigger] = useState<
+    "progression" | "analytics"
+  >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
@@ -343,6 +402,17 @@ const WorkoutSessionScreen = () => {
   const isProcessingLogSetRef = useRef<boolean>(false);
   // Track the last processed timestamp to prevent duplicate processing
   const lastProcessedTimestampRef = useRef<number>(0);
+  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosavePromiseRef = useRef<Promise<void> | null>(null);
+  const lastSavedSetsFingerprintRef = useRef<string>("");
+  const isEndingSessionRef = useRef<boolean>(false);
+  const autosaveRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const autosaveRetryAttemptsRef = useRef<number>(0);
+  const timerLockedRef = useRef<boolean>(false);
+  const previousRestEndsAtRef = useRef<number | null>(null);
+  const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -360,6 +430,10 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     loggedSetIdsRef.current = loggedSetIds;
   }, [loggedSetIds]);
+
+  useEffect(() => {
+    timerLockedRef.current = timerLocked;
+  }, [timerLocked]);
 
   // Check if user currently has Pro access (blocks grace/expired)
   const isPro = subscriptionAccess.hasProAccess;
@@ -381,21 +455,287 @@ const WorkoutSessionScreen = () => {
 
   const queryClient = useQueryClient();
 
-  const initializeTimer = (startedAt: string, autoStart = true) => {
-    const base = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
-    );
+  const edgeSwipePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_evt, gestureState) => {
+          if (gestureState.dx <= 0) return false;
+          if (Math.abs(gestureState.dy) > 24) return false;
+          return gestureState.dx > 14;
+        },
+        onPanResponderRelease: (_evt, gestureState) => {
+          if (gestureState.dx > 80 && gestureState.vx > 0.2) {
+            navigation.goBack();
+          }
+        },
+      }),
+    [navigation]
+  );
+
+  const buildSetsFingerprint = useCallback((currentSets: WorkoutSet[]) => {
+    return currentSets
+      .map((set) =>
+        [
+          set.id,
+          set.setIndex,
+          set.actualReps ?? "",
+          set.actualWeight ?? "",
+          set.actualDistance ?? "",
+          set.actualIncline ?? "",
+          set.actualDurationMinutes ?? "",
+          set.rpe ?? "",
+        ].join(":")
+      )
+      .join("|");
+  }, []);
+
+  const persistSessionSets = useCallback(
+    async ({ force }: { force?: boolean } = {}) => {
+      if (!sessionId) return;
+      if (isEndingSessionRef.current) return;
+
+      const currentSets = setsRef.current;
+      const fingerprint = buildSetsFingerprint(currentSets);
+      if (!force && fingerprint === lastSavedSetsFingerprintRef.current) {
+        return;
+      }
+
+      if (autosavePromiseRef.current) {
+        return autosavePromiseRef.current;
+      }
+
+      if (autosaveRetryTimeoutRef.current) {
+        clearTimeout(autosaveRetryTimeoutRef.current);
+        autosaveRetryTimeoutRef.current = null;
+      }
+
+      autosavePromiseRef.current = updateSession(sessionId, {
+        sets: currentSets,
+      }, { timeoutMs: 45000 })
+        .then(() => {
+          autosaveRetryAttemptsRef.current = 0;
+          lastSavedSetsFingerprintRef.current = fingerprint;
+          queryClient.setQueryData(["activeSession"], (prev: any) => {
+            if (!prev?.session) return prev;
+            return {
+              ...prev,
+              session: {
+                ...prev.session,
+                sets: currentSets,
+              },
+            };
+          });
+        })
+        .catch((err) => {
+          console.error("❌ Failed to autosave workout sets:", err);
+
+          const attempts = autosaveRetryAttemptsRef.current;
+          if (attempts < 2) {
+            autosaveRetryAttemptsRef.current = attempts + 1;
+            const delayMs = attempts === 0 ? 3000 : 10000;
+            autosaveRetryTimeoutRef.current = setTimeout(() => {
+              void persistSessionSets({ force: true });
+            }, delayMs);
+          }
+        })
+        .finally(() => {
+          autosavePromiseRef.current = null;
+        });
+
+      return autosavePromiseRef.current;
+    },
+    [buildSetsFingerprint, queryClient, sessionId]
+  );
+
+  const scheduleAutosave = useCallback(() => {
+    if (!sessionId || !hasHydratedSession) return;
+    if (isEndingSessionRef.current) return;
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    autosaveTimeoutRef.current = setTimeout(() => {
+      void persistSessionSets();
+    }, 2500);
+  }, [hasHydratedSession, persistSessionSets, sessionId]);
+
+  const flushAutosave = useCallback(async (): Promise<boolean> => {
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = null;
+    }
+
+    let success = true;
+    try {
+      await persistSessionSets({ force: true });
+    } catch {
+      // Keep workout active; user can resume and retry saving.
+      success = false;
+    }
+
+    if (autosavePromiseRef.current) {
+      try {
+        await autosavePromiseRef.current;
+      } catch {
+        // ignore
+        success = false;
+      }
+    }
+
+    return success;
+  }, [persistSessionSets]);
+
+  useEffect(() => {
+    scheduleAutosave();
+  }, [sets, scheduleAutosave]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        void flushAutosave();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [flushAutosave]);
+
+  useEffect(
+    () => () => {
+      if (!sessionId) return;
+      if (isEndingSessionRef.current) return;
+      void flushAutosave();
+    },
+    [flushAutosave, sessionId]
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("blur", () => {
+      if (!sessionId) return;
+      if (isEndingSessionRef.current) return;
+      void flushAutosave();
+    });
+
+    return unsubscribe;
+  }, [flushAutosave, navigation, sessionId]);
+
+  const getLoggedSetIdsKey = useCallback(
+    (activeSessionId: string) => `workout_logged_set_ids:${activeSessionId}`,
+    []
+  );
+
+  const loadPersistedLoggedSetIds = useCallback(
+    async (activeSessionId: string) => {
+      try {
+        const raw = await AsyncStorage.getItem(
+          getLoggedSetIdsKey(activeSessionId)
+        );
+        if (!raw) return new Set<string>();
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return new Set<string>();
+        return new Set<string>(parsed.filter((v) => typeof v === "string"));
+      } catch {
+        return new Set<string>();
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  const persistLoggedSetIds = useCallback(
+    async (activeSessionId: string, ids: Set<string>) => {
+      try {
+        await AsyncStorage.setItem(
+          getLoggedSetIdsKey(activeSessionId),
+          JSON.stringify(Array.from(ids))
+        );
+      } catch {
+        // Ignore persistence failures; logging still works in-memory.
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  const clearPersistedLoggedSetIds = useCallback(
+    async (activeSessionId: string) => {
+      try {
+        await AsyncStorage.removeItem(getLoggedSetIdsKey(activeSessionId));
+      } catch {
+        // ignore
+      }
+    },
+    [getLoggedSetIdsKey]
+  );
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const timeout = setTimeout(() => {
+      void persistLoggedSetIds(sessionId, loggedSetIdsRef.current);
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [sessionId, loggedSetIds, persistLoggedSetIds]);
+
+  useEffect(() => {
+    lastSavedSetsFingerprintRef.current = "";
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = null;
+    }
+    if (autosaveRetryTimeoutRef.current) {
+      clearTimeout(autosaveRetryTimeoutRef.current);
+      autosaveRetryTimeoutRef.current = null;
+    }
+    autosavePromiseRef.current = null;
+    autosaveRetryAttemptsRef.current = 0;
+  }, [sessionId]);
+
+  const initializeTimer = (
+    {
+      startedAt,
+      finishedAt,
+      durationSeconds,
+    }: {
+      startedAt: string;
+      finishedAt?: string;
+      durationSeconds?: number;
+    },
+    autoStart?: boolean
+  ) => {
+    const startedAtMs = new Date(startedAt).getTime();
+    const finishedAtMs = finishedAt ? new Date(finishedAt).getTime() : null;
+
+    const derivedBaseSeconds =
+      typeof durationSeconds === "number" &&
+      Number.isFinite(durationSeconds) &&
+      durationSeconds >= 0
+        ? Math.floor(durationSeconds)
+        : finishedAtMs !== null &&
+          Number.isFinite(finishedAtMs) &&
+          Number.isFinite(startedAtMs)
+        ? Math.max(0, Math.floor((finishedAtMs - startedAtMs) / 1000))
+        : Number.isFinite(startedAtMs)
+        ? Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000))
+        : 0;
+
+    const shouldAutoStart = autoStart ?? !finishedAt;
+    const nextLocked = Boolean(finishedAt);
+
+    timerLockedRef.current = nextLocked;
+    setTimerLocked(nextLocked);
     setStartTime(startedAt);
-    setElapsedBaseSeconds(base);
-    setElapsedSeconds(base);
-    if (autoStart) {
-      setTimerAnchor(Date.now());
-      setTimerActive(true);
-    } else {
+    setElapsedBaseSeconds(derivedBaseSeconds);
+    setElapsedSeconds(derivedBaseSeconds);
+
+    if (nextLocked || !shouldAutoStart) {
       setTimerAnchor(null);
       setTimerActive(false);
+      return;
     }
+
+    setTimerAnchor(Date.now());
+    setTimerActive(true);
   };
 
   const pauseTimer = () => {
@@ -414,6 +754,7 @@ const WorkoutSessionScreen = () => {
   };
 
   const resumeTimer = () => {
+    if (timerLockedRef.current) return;
     if (timerActive) return;
     setTimerAnchor(Date.now());
     setTimerActive(true);
@@ -423,42 +764,150 @@ const WorkoutSessionScreen = () => {
     queryKey: ["session", sessionId],
     enabled: Boolean(sessionId),
     queryFn: () => fetchSession(sessionId!),
-    onSuccess: (data) => {
-      setDefaultsApplied(false);
-      setSets(data.sets);
-      initializeTimer(data.startedAt);
-      queryClient.setQueryData(["activeSession"], { session: data, autoEndedSession: null });
+    onError: () => {
+      Alert.alert("Could not load workout", "Please try again.");
+      navigation.goBack();
     },
   });
 
   const startMutation = useMutation({
     mutationFn: () => startSessionFromTemplate(route.params.templateId),
     onSuccess: (session) => {
+      const trimmedSets = trimCardioSetsToSingle(session.sets);
       setDefaultsApplied(false);
       setSessionId(session.id);
-      setSets(session.sets);
-      initializeTimer(session.startedAt);
-      queryClient.setQueryData(["activeSession"], { session, autoEndedSession: null });
+      setSets(trimmedSets);
+      initializeTimer({ startedAt: session.startedAt });
+      setHasHydratedSession(true);
+      queryClient.setQueryData(["activeSession"], {
+        session: { ...session, sets: trimmedSets },
+        autoEndedSession: null,
+      });
     },
-    onError: () => Alert.alert("Could not start session", "Please try again."),
+    onError: () => {
+      Alert.alert("Could not start session", "Please try again.");
+      navigation.goBack();
+    },
   });
+
+  const applyProgressionWeightsToSession = useCallback(
+    (
+      exerciseIds?: string[],
+      { persist }: { persist?: boolean } = {}
+    ) => {
+      if (!progressionData) return;
+
+      const suggestions = progressionData.suggestions.filter((suggestion) => {
+        if (suggestion.increment === 0) return false;
+        if (!exerciseIds) return true;
+        return exerciseIds.includes(suggestion.exerciseId);
+      });
+
+      if (suggestions.length === 0) return;
+
+      const suggestedWeightByExerciseId = new Map(
+        suggestions.map((suggestion) => [
+          suggestion.exerciseId,
+          suggestion.suggestedWeight,
+        ])
+      );
+
+      const currentLoggedSetIds = loggedSetIdsRef.current;
+      const currentSets = setsRef.current;
+
+      const updatedSets = currentSets.map((set) => {
+        const suggestedWeight = suggestedWeightByExerciseId.get(set.exerciseId);
+        if (suggestedWeight === undefined) return set;
+        if (currentLoggedSetIds.has(set.id)) return set;
+
+        const previousTargetWeight = set.targetWeight;
+        const shouldUpdateActualWeight =
+          set.actualWeight === undefined || set.actualWeight === previousTargetWeight;
+
+        return {
+          ...set,
+          targetWeight: suggestedWeight,
+          actualWeight: shouldUpdateActualWeight ? suggestedWeight : set.actualWeight,
+        };
+      });
+
+      setsRef.current = updatedSets;
+      setSets(updatedSets);
+
+      queryClient.setQueryData(["activeSession"], (prev: any) => {
+        if (!prev?.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            sets: updatedSets,
+          },
+        };
+      });
+
+      if (sessionId) {
+        queryClient.setQueryData(["session", sessionId], (prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            sets: updatedSets,
+          };
+        });
+      }
+
+      if (persist) {
+        void persistSessionSets({ force: true });
+      }
+    },
+    [persistSessionSets, progressionData, queryClient, sessionId]
+  );
 
   const applyProgressionMutation = useMutation({
     mutationFn: (exerciseIds?: string[]) =>
       applyProgressionSuggestions(route.params.templateId, exerciseIds),
-    onSuccess: (result) => {
+    onMutate: (exerciseIds?: string[]) => {
+      const previousSets = setsRef.current;
+      applyProgressionWeightsToSession(exerciseIds);
+      return { previousSets };
+    },
+    onSuccess: (result, exerciseIds) => {
       setShowProgressionModal(false);
+      applyProgressionWeightsToSession(exerciseIds, { persist: true });
+      queryClient.invalidateQueries({ queryKey: templatesKey });
       Alert.alert(
         "Progression Applied",
         `Updated ${result.updated} exercise${
           result.updated === 1 ? "" : "s"
-        } in your template. The new weights will be used in future workouts.`,
+        } in your template. Your current workout weights were updated too.`,
         [{ text: "Got it" }]
       );
       // Optionally refresh the template
       // refetch templates if needed
     },
-    onError: () => {
+    onError: (_err, _exerciseIds, context) => {
+      if (context?.previousSets) {
+        setsRef.current = context.previousSets;
+        setSets(context.previousSets);
+        queryClient.setQueryData(["activeSession"], (prev: any) => {
+          if (!prev?.session) return prev;
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              sets: context.previousSets,
+            },
+          };
+        });
+        if (sessionId) {
+          queryClient.setQueryData(["session", sessionId], (prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              sets: context.previousSets,
+            };
+          });
+        }
+      }
       Alert.alert(
         "Could not apply progression",
         "Please try again or update weights manually."
@@ -471,6 +920,54 @@ const WorkoutSessionScreen = () => {
       startMutation.mutate();
     }
   }, []);
+
+  useEffect(() => {
+    if (!sessionId || !sessionQuery.data || hasHydratedSession) return;
+    const data = sessionQuery.data;
+    let cancelled = false;
+
+    void (async () => {
+      setDefaultsApplied(false);
+      const trimmedSets = trimCardioSetsToSingle(data.sets);
+      setSets(trimmedSets);
+      initializeTimer({
+        startedAt: data.startedAt,
+        finishedAt: data.finishedAt,
+        durationSeconds: data.durationSeconds,
+      });
+      queryClient.setQueryData(["activeSession"], {
+        session: { ...data, sets: trimmedSets },
+        autoEndedSession: null,
+      });
+
+      const validSetIds = new Set(data.sets.map((set) => set.id));
+      const persisted = await loadPersistedLoggedSetIds(sessionId);
+      if (cancelled) return;
+
+      const filtered = new Set<string>();
+      persisted.forEach((id) => {
+        if (validSetIds.has(id)) filtered.add(id);
+      });
+
+      loggedSetIdsRef.current = filtered;
+      setLoggedSetIds(filtered);
+      setHasHydratedSession(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionId,
+    sessionQuery.data,
+    hasHydratedSession,
+    queryClient,
+    loadPersistedLoggedSetIds,
+  ]);
+
+  const isBootstrappingSession = route.params.sessionId
+    ? !hasHydratedSession
+    : startMutation.isPending || !sessionId;
 
   useEffect(() => {
     if (!timerActive || timerAnchor === null) {
@@ -587,7 +1084,32 @@ const WorkoutSessionScreen = () => {
       templateId: route.params.templateId,
       templateName,
       initialVisibility: route.params.initialVisibility,
+      autoClearOnUnmount: false,
     });
+
+  const cancelRestTimerSounds = useCallback(() => {
+    void cancelScheduledRestTimerFinishSound();
+    nativeScheduledRestEndsAtRef.current = null;
+  }, []);
+
+  const rescheduleRestTimerSoundsIfNeeded = useCallback(() => {
+    const soundEnabled = user?.restTimerSoundEnabled !== false;
+    if (!soundEnabled) return;
+    if (!sessionId) return;
+    if (!restEndsAt || restEndsAt <= Date.now()) return;
+    if (isEndingSessionRef.current) return;
+    if (sessionQuery.data?.endedReason) return;
+
+    void (async () => {
+      const scheduled = await scheduleRestTimerFinishSound(sessionId, restEndsAt);
+      nativeScheduledRestEndsAtRef.current = scheduled ? restEndsAt : null;
+    })();
+  }, [
+    restEndsAt,
+    sessionId,
+    sessionQuery.data?.endedReason,
+    user?.restTimerSoundEnabled,
+  ]);
 
   const finishMutation = useMutation({
     mutationFn: () => {
@@ -595,8 +1117,13 @@ const WorkoutSessionScreen = () => {
       pauseTimer();
       return completeSession(sessionId!, sets);
     },
+    onMutate: () => {
+      isEndingSessionRef.current = true;
+      cancelRestTimerSounds();
+    },
     onSuccess: (session) => {
       endActiveStatus();
+      void clearPersistedLoggedSetIds(sessionId!);
       // Clear widget data when workout completes
       void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
@@ -614,7 +1141,11 @@ const WorkoutSessionScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["fatigue"] });
       queryClient.invalidateQueries({ queryKey: ["training-recommendations"] });
 
-      // Invalidate active session query to remove "Resume Workout" banner
+      // Immediately remove "Resume Workout" banner
+      queryClient.setQueryData(["activeSession"], {
+        session: null,
+        autoEndedSession: null,
+      });
       queryClient.invalidateQueries({ queryKey: ["activeSession"] });
 
       navigation.navigate("PostWorkoutShare", {
@@ -627,19 +1158,12 @@ const WorkoutSessionScreen = () => {
         durationSeconds: elapsedSeconds,
       });
     },
-    onError: () => Alert.alert("Could not finish workout"),
-  });
-
-  useEffect(
-    () => () => {
-      endActiveStatus();
-      // Clear widget when user navigates away from workout
-      void syncActiveSessionToWidget(null);
-      // End Live Activity when user navigates away
-      void endWorkoutLiveActivity();
+    onError: () => {
+      isEndingSessionRef.current = false;
+      rescheduleRestTimerSoundsIfNeeded();
+      Alert.alert("Could not finish workout");
     },
-    [endActiveStatus]
-  );
+  });
 
   const acknowledgeProgressionModal = () => {
     if (!progressionModalAcknowledged) {
@@ -737,6 +1261,8 @@ const WorkoutSessionScreen = () => {
   // Sync initial session state to widget AND start Live Activity when session loads
   useEffect(() => {
     if (!sessionId || !startTime || groupedSets.length === 0) return;
+    if (timerLocked) return;
+    if (sessionQuery.data?.endedReason) return;
 
     // Find the first exercise with unlogged sets
     const firstIncompleteGroup = groupedSets.find((group) =>
@@ -768,7 +1294,46 @@ const WorkoutSessionScreen = () => {
         });
       }
     }
-  }, [sessionId, startTime, groupedSets.length]);
+  }, [sessionId, startTime, groupedSets.length, timerLocked, sessionQuery.data?.endedReason]);
+
+  useEffect(() => {
+    const prev = previousRestEndsAtRef.current;
+    previousRestEndsAtRef.current = restEndsAt;
+
+    const soundEnabled = user?.restTimerSoundEnabled !== false;
+
+    if (
+      restEndsAt &&
+      soundEnabled &&
+      sessionId &&
+      !isEndingSessionRef.current &&
+      !sessionQuery.data?.endedReason
+    ) {
+      void (async () => {
+        const scheduled = await scheduleRestTimerFinishSound(sessionId, restEndsAt);
+        nativeScheduledRestEndsAtRef.current = scheduled ? restEndsAt : null;
+      })();
+      return;
+    }
+
+    // Only cancel scheduled sound if the timer ended early (i.e. it was cleared while still in the future).
+    if ((!restEndsAt || !soundEnabled) && prev && prev > Date.now()) {
+      void cancelScheduledRestTimerFinishSound();
+      nativeScheduledRestEndsAtRef.current = null;
+      return;
+    }
+
+    if (!restEndsAt) {
+      nativeScheduledRestEndsAtRef.current = null;
+    }
+  }, [restEndsAt, sessionId, sessionQuery.data?.endedReason, user?.restTimerSoundEnabled]);
+
+  useEffect(() => {
+    if (!sessionQuery.data?.endedReason) return;
+    cancelRestTimerSounds();
+    setRestRemaining(null);
+    setRestEndsAt(null);
+  }, [cancelRestTimerSounds, sessionQuery.data?.endedReason]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -784,22 +1349,37 @@ const WorkoutSessionScreen = () => {
         setTimeout(() => setRestRemaining(null), 400);
 
         // Play sound when timer completes (if enabled)
-        if (!hasPlayedSound && user?.restTimerSoundEnabled !== false) {
+        if (
+          !hasPlayedSound &&
+          user?.restTimerSoundEnabled !== false &&
+          !isEndingSessionRef.current &&
+          !sessionQuery.data?.endedReason
+        ) {
           hasPlayedSound = true;
-          playTimerSound();
+          const nativeScheduledForThisTimer =
+            nativeScheduledRestEndsAtRef.current === restEndsAt;
+          nativeScheduledRestEndsAtRef.current = null;
+          if (nativeScheduledForThisTimer) {
+            void playTimerHaptics();
+          } else {
+            playTimerSound();
+          }
         }
 
         // Clear Live Activity rest timer so "Log Set" button appears
-        void updateWorkoutLiveActivity({
-          restDuration: 0, // Pass 0 to explicitly clear timer
-          restEndsAt: null,
-        });
+        if (sessionId) {
+          void updateWorkoutLiveActivity({
+            sessionId,
+            restDuration: 0, // Pass 0 to explicitly clear timer
+            restEndsAt: null,
+          });
+        }
       }
     };
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [restEndsAt, user?.restTimerSoundEnabled]);
+  }, [restEndsAt, sessionQuery.data?.endedReason, user?.restTimerSoundEnabled]);
 
   // Listen for "Log Set" button from Live Activity (via App Group shared storage)
   useEffect(() => {
@@ -999,6 +1579,7 @@ const WorkoutSessionScreen = () => {
     restEndsAtTimestamp?: number // Pass the actual restEndsAt timestamp from state
   ) => {
     if (!sessionId || !startTime) return;
+    if (timerLockedRef.current) return;
 
     const group = groupedSets.find((g) => g.key === exerciseKey);
     if (!group) return;
@@ -1017,7 +1598,7 @@ const WorkoutSessionScreen = () => {
       restEndsAtTimestamp && restEndsAtTimestamp > 0
         ? new Date(restEndsAtTimestamp).toISOString()
         : actualRestDuration === 0
-        ? null
+        ? undefined
         : undefined;
 
     // Sync to home screen widget
@@ -1037,6 +1618,7 @@ const WorkoutSessionScreen = () => {
 
     // Sync to Live Activity (Dynamic Island + Lock Screen)
     void updateWorkoutLiveActivity({
+      sessionId,
       exerciseName: group.name,
       currentSet: currentSetIndex + 1,
       totalSets: group.sets.length,
@@ -1084,11 +1666,16 @@ const WorkoutSessionScreen = () => {
     applySetUpdates([updated]);
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId(setId);
+    if (sessionId) {
+      void persistLoggedSetIds(sessionId, updatedLoggedSetIds);
+    }
 
-    if (!startTime) {
-      initializeTimer(new Date().toISOString());
-    } else if (!timerActive) {
-      resumeTimer();
+    if (!timerLockedRef.current) {
+      if (!startTime) {
+        initializeTimer({ startedAt: new Date().toISOString() });
+      } else if (!timerActive) {
+        resumeTimer();
+      }
     }
 
     // Calculate rest duration (needed for both timer and widget sync)
@@ -1200,6 +1787,9 @@ const WorkoutSessionScreen = () => {
 
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId((prev) => (prev === setId ? null : prev));
+    if (sessionId) {
+      void persistLoggedSetIds(sessionId, updatedLoggedSetIds);
+    }
     if (restEndsAt && lastLoggedSetId === setId) {
       setRestRemaining(null);
       setRestEndsAt(null);
@@ -1271,7 +1861,11 @@ const WorkoutSessionScreen = () => {
       sets.length > 0 ? Math.max(...sets.map((s) => s.setIndex)) : -1;
 
     const baseIndex = maxSetIndex + 100;
-    const numSets = exerciseForm.sets || 3;
+    const cardio = isCardioExercise(
+      exerciseForm.exercise.id,
+      exerciseForm.exercise.name
+    );
+    const numSets = cardio ? 1 : exerciseForm.sets || 3;
     const newSets: WorkoutSet[] = [];
 
     for (let i = 0; i < numSets; i++) {
@@ -1347,6 +1941,11 @@ const WorkoutSessionScreen = () => {
     const lastSet = group.sets[group.sets.length - 1];
     if (!lastSet) return;
 
+    if (isCardioExercise(lastSet.exerciseId, lastSet.exerciseName)) {
+      Alert.alert("Cardio is single-log", "Cardio exercises only have one log.");
+      return;
+    }
+
     const newSet: WorkoutSet = {
       id: `${Date.now()}-${Math.random()}`,
       sessionId: sessionId!,
@@ -1418,10 +2017,73 @@ const WorkoutSessionScreen = () => {
     visibilityOptions.find((o) => o.value === visibility)?.label ?? "Private";
   const hasWorkoutProgress = loggedSetIds.size > 0 || elapsedSeconds > 0;
 
-  const handleExitSession = () => {
-    if (!hasWorkoutProgress) {
+  if (isBootstrappingSession) {
+    return (
+      <ScreenContainer>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <ActivityIndicator size='large' color={colors.primary} />
+          <Text
+            style={{
+              marginTop: 12,
+              color: colors.textSecondary,
+              fontSize: 14,
+            }}
+          >
+            Loading your workout...
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const handleConfirmLeaveSession = async () => {
+    if (!sessionId) {
       endActiveStatus();
       navigation.goBack();
+      return;
+    }
+
+    isEndingSessionRef.current = true;
+    cancelRestTimerSounds();
+    try {
+      await updateSession(sessionId, {
+        endedReason: "user_exit",
+      });
+      void clearPersistedLoggedSetIds(sessionId);
+      // Clear widget + Live Activity when workout is explicitly ended
+      void syncActiveSessionToWidget(null);
+      void endWorkoutLiveActivityForSession(sessionId);
+
+      // Optimistically clear any active session on the client
+      queryClient.setQueryData(["activeSession"], {
+        session: null,
+        autoEndedSession: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ["activeSession"] });
+    } catch (err) {
+      isEndingSessionRef.current = false;
+      rescheduleRestTimerSoundsIfNeeded();
+      Alert.alert(
+        "Could not leave workout",
+        "We couldn't end your current workout. Please try again."
+      );
+      return;
+    }
+
+    endActiveStatus();
+    navigation.goBack();
+  };
+
+  const handleExitSession = () => {
+    if (!hasWorkoutProgress) {
+      void handleConfirmLeaveSession();
       return;
     }
 
@@ -1435,10 +2097,7 @@ const WorkoutSessionScreen = () => {
           style: "destructive",
           onPress: () => {
             pauseTimer();
-            endActiveStatus();
-            // Invalidate active session query so the "Resume Workout" banner appears
-            queryClient.invalidateQueries({ queryKey: ["activeSession"] });
-            navigation.goBack();
+            void handleConfirmLeaveSession();
           },
         },
       ]
@@ -1457,7 +2116,7 @@ const WorkoutSessionScreen = () => {
     const contentHeight = contentSize.height;
 
     // Show top gradient when scrolled down
-    setShowTopGradient(scrollY > 20);
+    setShowTopGradient(scrollY > 5);
 
     // Show bottom gradient when not at the bottom
     const isNearBottom = scrollY + scrollViewHeight >= contentHeight - 20;
@@ -1647,6 +2306,106 @@ const WorkoutSessionScreen = () => {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => {
+            if (isPro) {
+              navigation.navigate("Analytics");
+              return;
+            }
+            setPaywallTrigger("analytics");
+            setShowPaywallModal(true);
+          }}
+          style={({ pressed }) => ({
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.9 : 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          })}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                backgroundColor: `${colors.primary}15`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}25`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name='bar-chart' size={18} color={colors.primary} />
+            </View>
+            <View style={{ gap: 2, flex: 1 }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                Advanced analytics
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
+                View trends and training insights
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+            }}
+          >
+            {!isPro && (
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: `${colors.primary}15`,
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}25`,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name='lock-closed'
+                  size={12}
+                  color={colors.primary}
+                />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  Pro
+                </Text>
+              </View>
+            )}
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name='chevron-forward'
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
+          </View>
+        </Pressable>
       </View>
 
       <View
@@ -1764,7 +2523,19 @@ const WorkoutSessionScreen = () => {
   );
 
   return (
-    <ScreenContainer>
+    <ScreenContainer paddingTop={0} includeTopInset={false}>
+      <View
+        pointerEvents='box-only'
+        style={{
+          position: "absolute",
+          left: -16,
+          top: 0,
+          bottom: 0,
+          width: 44,
+          zIndex: 1000,
+        }}
+        {...edgeSwipePanResponder.panHandlers}
+      />
       <VisibilityModal
         visible={showVisibilityModal}
         value={visibility}
@@ -1820,13 +2591,14 @@ const WorkoutSessionScreen = () => {
         isPro={isPro}
         onUpgrade={() => {
           setShowProgressionModal(false);
+          setPaywallTrigger("progression");
           setShowPaywallModal(true);
         }}
       />
       <PaywallComparisonModal
         visible={showPaywallModal}
         onClose={() => setShowPaywallModal(false)}
-        triggeredBy='progression'
+        triggeredBy={paywallTrigger}
       />
       <Modal
         visible={!!imagePreviewUrl}
@@ -1869,94 +2641,131 @@ const WorkoutSessionScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
-      <View style={{ flex: 1 }}>
-        <DraggableFlatList
-          data={groupedSets}
-          keyExtractor={(item) => item.key}
-          onDragEnd={({ data }) => handleReorderExercises(data)}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 16 }}
-          showsVerticalScrollIndicator={false}
-          renderItem={({
-            item: group,
-            drag,
-            isActive,
-          }: RenderItemParams<ExerciseGroup>) => (
-            <ScaleDecorator>
-              <ExerciseCard
-                group={group}
-                expanded={group.key === activeExerciseKey}
-                onToggle={() => {
-                  setAutoFocusEnabled(false);
-                  setActiveExerciseKey((prev) => {
-                    const next = prev === group.key ? null : group.key;
-                    if (next === group.key) {
-                      setActiveSetId(group.sets[0]?.id ?? null);
-                      // Sync newly expanded exercise to widget
-                      const firstUnloggedSet = group.sets.find(
-                        (s) => !loggedSetIds.has(s.id)
-                      );
-                      if (firstUnloggedSet) {
-                        const setIndex = group.sets.findIndex(
-                          (s) => s.id === firstUnloggedSet.id
+      {/* Full-bleed container so gradients span full width */}
+      <View style={{ flex: 1, marginHorizontal: -18 }}>
+        <View style={{ flex: 1, paddingTop: insets.top }}>
+          <DraggableFlatList
+            data={groupedSets}
+            keyExtractor={(item) => item.key}
+            onDragEnd={({ data }) => handleReorderExercises(data)}
+            onScroll={handleScroll}
+            onScrollOffsetChange={(offset) => {
+              setShowTopGradient(offset > 5);
+            }}
+            scrollEventThrottle={16}
+            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderFooter}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 16,
+              paddingBottom: 24 + insets.bottom,
+            }}
+            showsVerticalScrollIndicator={false}
+            renderItem={({
+              item: group,
+              drag,
+              isActive,
+            }: RenderItemParams<ExerciseGroup>) => (
+              <ScaleDecorator>
+                <ExerciseCard
+                  group={group}
+                  expanded={group.key === activeExerciseKey}
+                  onToggle={() => {
+                    setAutoFocusEnabled(false);
+                    setActiveExerciseKey((prev) => {
+                      const next = prev === group.key ? null : group.key;
+                      if (next === group.key) {
+                        setActiveSetId(group.sets[0]?.id ?? null);
+                        // Sync newly expanded exercise to widget
+                        const firstUnloggedSet = group.sets.find(
+                          (s) => !loggedSetIds.has(s.id)
                         );
-                        syncCurrentExerciseToWidget(group.key, setIndex);
+                        if (firstUnloggedSet) {
+                          const setIndex = group.sets.findIndex(
+                            (s) => s.id === firstUnloggedSet.id
+                          );
+                          syncCurrentExerciseToWidget(group.key, setIndex);
+                        }
                       }
-                    }
-                    return next;
-                  });
-                }}
-                onChangeSet={updateSet}
-                onLogSet={logSet}
-                activeSetId={activeSetId}
-                onSelectSet={setActiveSetId}
-                autoRestTimer={autoRestTimer}
-                loggedSetIds={loggedSetIds}
-                restRemaining={restRemaining}
-                lastLoggedSetId={lastLoggedSetId}
-                onUndo={undoSet}
-                onSwap={() => setSwapExerciseKey(group.key)}
-                onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
-                onDrag={drag}
-                isDragging={isActive}
-                onAddSet={() => handleAddSet(group.key)}
-                onRemoveSet={handleRemoveSet}
-                onDeleteExercise={() => handleDeleteExercise(group.key)}
-                onImagePress={() =>
-                  group.imageUrl && setImagePreviewUrl(group.imageUrl)
-                }
-              />
-            </ScaleDecorator>
-          )}
-        />
-        {/* Top gradient fade */}
+                      return next;
+                    });
+                  }}
+                  onChangeSet={updateSet}
+                  onLogSet={logSet}
+                  activeSetId={activeSetId}
+                  onSelectSet={setActiveSetId}
+                  autoRestTimer={autoRestTimer}
+                  loggedSetIds={loggedSetIds}
+                  restRemaining={restRemaining}
+                  lastLoggedSetId={lastLoggedSetId}
+                  onUndo={undoSet}
+                  onSwap={() => setSwapExerciseKey(group.key)}
+                  onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
+                  onDrag={drag}
+                  isDragging={isActive}
+                  onAddSet={() => handleAddSet(group.key)}
+                  onRemoveSet={handleRemoveSet}
+                  onDeleteExercise={() => handleDeleteExercise(group.key)}
+                  onImagePress={() =>
+                    group.imageUrl && setImagePreviewUrl(group.imageUrl)
+                  }
+                />
+              </ScaleDecorator>
+            )}
+          />
+        </View>
+
+        {/* Scroll fade gradients */}
         {showTopGradient && (
           <LinearGradient
-            colors={[colors.background, "transparent"]}
+            colors={[
+              colors.background,
+              `${colors.background}F5`,
+              `${colors.background}E8`,
+              `${colors.background}D0`,
+              `${colors.background}B0`,
+              `${colors.background}88`,
+              `${colors.background}60`,
+              `${colors.background}38`,
+              `${colors.background}18`,
+              `${colors.background}08`,
+              "transparent",
+            ]}
+            locations={[0, 0.08, 0.15, 0.25, 0.35, 0.45, 0.55, 0.68, 0.82, 0.92, 1]}
             style={{
               position: "absolute",
               top: 0,
               left: 0,
               right: 0,
-              height: 60,
+              height: 140 + insets.top,
               pointerEvents: "none",
+              zIndex: 20,
+              elevation: 20,
             }}
           />
         )}
-        {/* Bottom gradient fade */}
         {showBottomGradient && (
           <LinearGradient
-            colors={["transparent", colors.background]}
+            colors={[
+              "transparent",
+              `${colors.background}10`,
+              `${colors.background}30`,
+              `${colors.background}60`,
+              `${colors.background}90`,
+              `${colors.background}C0`,
+              `${colors.background}E0`,
+              colors.background,
+            ]}
+            locations={[0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]}
             style={{
               position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              height: 80,
+              height: 60 + insets.bottom,
               pointerEvents: "none",
+              zIndex: 20,
+              elevation: 20,
             }}
           />
         )}
@@ -1993,12 +2802,25 @@ const SetInputRow = ({
   canRemove,
 }: SetInputRowProps) => {
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
+  const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
+  const [isEditingWeight, setIsEditingWeight] = useState(false);
+
+  useEffect(() => {
+    if (isEditingWeight) return;
+    setWeightText(set.actualWeight?.toString() ?? "");
+  }, [isEditingWeight, set.actualWeight, set.id]);
 
   const targetLine = isCardio
     ? [
-        set.targetDistance !== undefined ? `${set.targetDistance} mi` : undefined,
-        set.targetIncline !== undefined ? `${set.targetIncline}% incline` : undefined,
-        set.targetDurationMinutes !== undefined ? `${set.targetDurationMinutes} min` : undefined,
+        set.targetDistance !== undefined
+          ? `${set.targetDistance} mi`
+          : undefined,
+        set.targetIncline !== undefined
+          ? `${set.targetIncline}% incline`
+          : undefined,
+        set.targetDurationMinutes !== undefined
+          ? `${set.targetDurationMinutes} min`
+          : undefined,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -2189,7 +3011,9 @@ const SetInputRow = ({
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
                 value={set.actualDurationMinutes?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualDurationMinutes", text)}
+                onChangeText={(text) =>
+                  updateField("actualDurationMinutes", text)
+                }
               />
             </View>
             <View style={{ flex: 1 }} />
@@ -2214,8 +3038,22 @@ const SetInputRow = ({
               keyboardType='decimal-pad'
               placeholder='--'
               placeholderTextColor={colors.textSecondary}
-              value={set.actualWeight?.toString() ?? ""}
-              onChangeText={(text) => updateField("actualWeight", text)}
+              value={weightText}
+              onFocus={() => setIsEditingWeight(true)}
+              onBlur={() => {
+                setIsEditingWeight(false);
+                setWeightText(set.actualWeight?.toString() ?? "");
+              }}
+              onChangeText={(text) => {
+                const next = text.replace(/[^0-9.]/g, "");
+                const parts = next.split(".");
+                const normalized =
+                  parts.length <= 2
+                    ? next
+                    : `${parts[0]}.${parts.slice(1).join("")}`;
+                setWeightText(normalized);
+                updateField("actualWeight", normalized);
+              }}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -2305,8 +3143,11 @@ const ExerciseCard = ({
   onDeleteExercise,
   onImagePress,
 }: ExerciseCardProps) => {
-  const loggedSetsCount = group.sets.filter((s) => loggedSetIds.has(s.id)).length;
+  const loggedSetsCount = group.sets.filter((s) =>
+    loggedSetIds.has(s.id)
+  ).length;
   const allSetsLogged = loggedSetsCount === group.sets.length;
+  const isCardioGroup = isCardioExercise(group.exerciseId, group.name);
 
   const summaryLine = `${group.sets.length} sets · ${
     group.sets[0]?.targetReps
@@ -2319,8 +3160,13 @@ const ExerciseCard = ({
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: isDragging ? colors.primary : allSetsLogged && !expanded ? colors.primary : colors.border,
-        backgroundColor: allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
+        borderColor: isDragging
+          ? colors.primary
+          : allSetsLogged && !expanded
+          ? colors.primary
+          : colors.border,
+        backgroundColor:
+          allSetsLogged && !expanded ? "rgba(34,197,94,0.08)" : colors.surface,
         marginBottom: 12,
         opacity: isDragging ? 0.7 : 1,
       }}
@@ -2560,38 +3406,40 @@ const ExerciseCard = ({
             </View>
           ))}
 
-          {/* Add Set button */}
-          <Pressable
-            onPress={onAddSet}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Ionicons
-              name='add-circle-outline'
-              size={16}
-              color={colors.primary}
-            />
-            <Text
-              style={{
-                color: colors.primary,
-                fontSize: 13,
-                fontWeight: "600",
-              }}
+          {/* Add Set button (disabled for cardio) */}
+          {!isCardioGroup ? (
+            <Pressable
+              onPress={onAddSet}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
             >
-              Add Set
-            </Text>
-          </Pressable>
+              <Ionicons
+                name='add-circle-outline'
+                size={16}
+                color={colors.primary}
+              />
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                Add Set
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>

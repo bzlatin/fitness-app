@@ -4,7 +4,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -23,6 +22,7 @@ import {
   useUpdateSession,
   useWorkoutHistory,
 } from "../hooks/useWorkoutHistory";
+import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import {
   WorkoutHistoryDay,
   WorkoutHistorySession,
@@ -30,8 +30,9 @@ import {
 } from "../types/workouts";
 import { RootStackParamList } from "../navigation/types";
 import { fetchSession } from "../api/sessions";
-import { createTemplate } from "../api/templates";
+import { createTemplate, fetchTemplate } from "../api/templates";
 import { useQueryClient } from "@tanstack/react-query";
+import ShareTemplateLinkSheet from "../components/workout/ShareTemplateLinkSheet";
 
 const startOfMonth = (date: Date) => {
   const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -117,16 +118,25 @@ const HistoryScreen = () => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [selectedSession, setSelectedSession] =
     useState<WorkoutHistorySession | null>(null);
+  const [shareLinkTemplate, setShareLinkTemplate] = useState<{
+    templateId: string;
+    templateName: string;
+    sharingDisabled?: boolean;
+  } | null>(null);
+  const [shareLinkSheetVisible, setShareLinkSheetVisible] = useState(false);
+  const [shareNeedsTemplate, setShareNeedsTemplate] =
+    useState<WorkoutHistorySession | null>(null);
+  const [postSaveAction, setPostSaveAction] = useState<null | "shareLink">(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [saveTemplateSessionId, setSaveTemplateSessionId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({
     date: formatDateKey(today),
+    templateId: "manual" as string | "manual",
     templateName: "Logged workout",
     exerciseName: "Bench Press / Chest",
-    weight: "135",
-    reps: "8",
     duration: "45",
   });
 
@@ -147,6 +157,7 @@ const HistoryScreen = () => {
   );
 
   const { data, isLoading, refetch } = useWorkoutHistory(rangeStart, rangeEnd);
+  const { data: templates } = useWorkoutTemplates();
   const createManual = useCreateManualSession(rangeStart, rangeEnd);
   const duplicate = useDuplicateSession(rangeStart, rangeEnd);
   const deleteSession = useDeleteSession(rangeStart, rangeEnd);
@@ -325,8 +336,8 @@ const HistoryScreen = () => {
     const weekday = weekdayNames[date.getUTCDay()];
     const month = monthNames[date.getUTCMonth()];
     const day = date.getUTCDate();
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
     const formattedHours = hours % 12 || 12;
     const ampm = hours >= 12 ? "PM" : "AM";
     const formattedMinutes = minutes.toString().padStart(2, "0");
@@ -356,21 +367,34 @@ const HistoryScreen = () => {
   };
 
   const formatTime = (date: Date) => {
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
     const formattedHours = hours % 12 || 12;
     const ampm = hours >= 12 ? "PM" : "AM";
     const formattedMinutes = minutes.toString().padStart(2, "0");
     return `${formattedHours}:${formattedMinutes} ${ampm}`;
   };
 
-  const handleShare = async (session: WorkoutHistorySession) => {
-    const title = session.templateName ?? "Workout";
-    const volume = Math.round(session.totalVolumeLbs);
-    await Share.share({
-      title,
-      message: `${title} · ${volume} lbs moved · ${session.exercises.length} exercises`,
-    });
+  const openTemplateShareFromHistory = async (session: WorkoutHistorySession) => {
+    setShareLinkLoading(true);
+    try {
+      const full = await fetchSession(session.id);
+      if (!full.templateId) {
+        setShareNeedsTemplate(session);
+        return;
+      }
+      const template = await fetchTemplate(full.templateId).catch(() => null);
+      setShareLinkTemplate({
+        templateId: full.templateId,
+        templateName: template?.name ?? session.templateName ?? "Workout",
+        sharingDisabled: template?.sharingDisabled,
+      });
+      setShareLinkSheetVisible(true);
+    } catch (error) {
+      Alert.alert("Error", "Failed to prepare a share link");
+    } finally {
+      setShareLinkLoading(false);
+    }
   };
 
   const applyDuration = async () => {
@@ -408,20 +432,54 @@ const HistoryScreen = () => {
     }
     const duration = Number(manualForm.duration) || 45;
     const finish = new Date(start.getTime() + duration * 60 * 1000);
-    await createManual.mutateAsync({
-      startedAt: start.toISOString(),
-      finishedAt: finish.toISOString(),
-      templateName: manualForm.templateName.trim() || "Logged workout",
-      sets: [
-        {
-          exerciseId: manualForm.exerciseName.trim() || "custom-exercise",
-          actualReps: Number(manualForm.reps) || undefined,
-          actualWeight: Number(manualForm.weight) || undefined,
-          setIndex: 0,
-        },
-      ],
-    });
-    setManualOpen(false);
+
+    try {
+      if (manualForm.templateId === "manual") {
+        // Manual entry - simple workout log
+        await createManual.mutateAsync({
+          startedAt: start.toISOString(),
+          finishedAt: finish.toISOString(),
+          templateName: manualForm.templateName.trim() || "Logged workout",
+          sets: [
+            {
+              exerciseId: manualForm.exerciseName.trim() || "custom-exercise",
+              setIndex: 0,
+            },
+          ],
+        });
+      } else {
+        // Template-based workout - fetch template and create sets from exercises
+        const selectedTemplate = templates?.find(t => t.id === manualForm.templateId);
+        if (!selectedTemplate) {
+          Alert.alert("Error", "Template not found");
+          return;
+        }
+
+        // Create sets from template exercises
+        const sets = selectedTemplate.exercises.flatMap((exercise, exerciseIndex) => {
+          return Array.from({ length: exercise.defaultSets }, (_, setIndex) => ({
+            exerciseId: exercise.exerciseId,
+            targetReps: exercise.defaultReps,
+            targetWeight: exercise.defaultWeight,
+            actualReps: exercise.defaultReps,
+            actualWeight: exercise.defaultWeight,
+            setIndex: setIndex,
+            templateExerciseId: exercise.id,
+          }));
+        });
+
+        await createManual.mutateAsync({
+          startedAt: start.toISOString(),
+          finishedAt: finish.toISOString(),
+          templateName: selectedTemplate.name,
+          sets,
+        });
+      }
+
+      setManualOpen(false);
+    } catch (error) {
+      Alert.alert("Error", "Failed to create workout");
+    }
   };
 
   const handleStartWorkout = async () => {
@@ -500,7 +558,7 @@ const HistoryScreen = () => {
         };
       });
 
-      await createTemplate({
+      const created = await createTemplate({
         name: templateName.trim(),
         description: `Saved from workout on ${formatDateTimeShort(new Date(session.startedAt))}`,
         exercises,
@@ -509,7 +567,17 @@ const HistoryScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       setSaveTemplateOpen(false);
       setSaveTemplateSessionId(null);
-      Alert.alert("Success", "Workout saved as a new template!");
+      if (postSaveAction === "shareLink") {
+        setPostSaveAction(null);
+        setShareLinkTemplate({
+          templateId: created.id,
+          templateName: created.name,
+          sharingDisabled: created.sharingDisabled,
+        });
+        setShareLinkSheetVisible(true);
+      } else {
+        Alert.alert("Success", "Workout saved as a new template!");
+      }
     } catch (error) {
       Alert.alert("Error", "Failed to save workout as template");
     }
@@ -841,6 +909,7 @@ const HistoryScreen = () => {
       </View>
 
       {(isLoading ||
+        shareLinkLoading ||
         createManual.isPending ||
         duplicate.isPending ||
         deleteSession.isPending) && (
@@ -912,7 +981,7 @@ const HistoryScreen = () => {
                   icon='share-social'
                   label='Share workout'
                   onPress={() => {
-                    if (menuSession) handleShare(menuSession);
+                    if (menuSession) void openTemplateShareFromHistory(menuSession);
                     setMenuSession(null);
                   }}
                 />
@@ -1212,38 +1281,97 @@ const HistoryScreen = () => {
                 setManualForm((prev) => ({ ...prev, date: text }))
               }
             />
-            <Field
-              label='Title'
-              value={manualForm.templateName}
-              onChangeText={(text) =>
-                setManualForm((prev) => ({ ...prev, templateName: text }))
-              }
-            />
-            <Field
-              label='Primary Muscles / Exercise'
-              value={manualForm.exerciseName}
-              onChangeText={(text) =>
-                setManualForm((prev) => ({ ...prev, exerciseName: text }))
-              }
-            />
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Field
-                label='Weight (lbs)'
-                value={manualForm.weight}
-                keyboardType='numeric'
-                onChangeText={(text) =>
-                  setManualForm((prev) => ({ ...prev, weight: text }))
-                }
-              />
-              <Field
-                label='Reps'
-                value={manualForm.reps}
-                keyboardType='numeric'
-                onChangeText={(text) =>
-                  setManualForm((prev) => ({ ...prev, reps: text }))
-                }
-              />
+
+            <View>
+              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
+                Workout Template
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+              >
+                <Pressable
+                  onPress={() => setManualForm((prev) => ({
+                    ...prev,
+                    templateId: "manual",
+                    templateName: "Logged workout"
+                  }))}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: manualForm.templateId === "manual" ? colors.primary : colors.border,
+                    backgroundColor: manualForm.templateId === "manual"
+                      ? colors.primary + "22"
+                      : pressed
+                      ? colors.surfaceMuted
+                      : colors.surface,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: manualForm.templateId === "manual" ? colors.primary : colors.textPrimary,
+                      fontFamily: manualForm.templateId === "manual" ? fontFamilies.semibold : fontFamilies.medium,
+                    }}
+                  >
+                    Enter manually
+                  </Text>
+                </Pressable>
+                {(templates ?? []).map((template) => (
+                  <Pressable
+                    key={template.id}
+                    onPress={() => setManualForm((prev) => ({
+                      ...prev,
+                      templateId: template.id,
+                      templateName: template.name
+                    }))}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: manualForm.templateId === template.id ? colors.primary : colors.border,
+                      backgroundColor: manualForm.templateId === template.id
+                        ? colors.primary + "22"
+                        : pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        color: manualForm.templateId === template.id ? colors.primary : colors.textPrimary,
+                        fontFamily: manualForm.templateId === template.id ? fontFamilies.semibold : fontFamilies.medium,
+                      }}
+                    >
+                      {template.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
+
+            {manualForm.templateId === "manual" && (
+              <>
+                <Field
+                  label='Title'
+                  value={manualForm.templateName}
+                  onChangeText={(text) =>
+                    setManualForm((prev) => ({ ...prev, templateName: text }))
+                  }
+                />
+                <Field
+                  label='Primary Muscles / Exercise'
+                  value={manualForm.exerciseName}
+                  onChangeText={(text) =>
+                    setManualForm((prev) => ({ ...prev, exerciseName: text }))
+                  }
+                />
+              </>
+            )}
+
             <Field
               label='Duration (min)'
               value={manualForm.duration}
@@ -1673,6 +1801,7 @@ const HistoryScreen = () => {
         onRequestClose={() => {
           setSaveTemplateOpen(false);
           setSaveTemplateSessionId(null);
+          setPostSaveAction(null);
         }}
       >
         <View
@@ -1742,6 +1871,7 @@ const HistoryScreen = () => {
               onPress={() => {
                 setSaveTemplateOpen(false);
                 setSaveTemplateSessionId(null);
+                setPostSaveAction(null);
               }}
               style={{
                 paddingVertical: 12,
@@ -1756,6 +1886,93 @@ const HistoryScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        transparent
+        animationType='fade'
+        visible={!!shareNeedsTemplate}
+        onRequestClose={() => setShareNeedsTemplate(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShareNeedsTemplate(null)}>
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              backgroundColor: "rgba(0,0,0,0.55)",
+              paddingHorizontal: 16,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 18,
+                  padding: 18,
+                  gap: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                  Share a link
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  This workout doesn’t have a template yet. Create a template from it to generate a share link.
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    if (!shareNeedsTemplate) return;
+                    const defaultName = shareNeedsTemplate.templateName || "Workout";
+                    setTemplateName(defaultName);
+                    setSaveTemplateSessionId(shareNeedsTemplate.id);
+                    setPostSaveAction("shareLink");
+                    setShareNeedsTemplate(null);
+                    setSaveTemplateOpen(true);
+                  }}
+                  style={({ pressed }) => ({
+                    backgroundColor: colors.primary,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    borderRadius: 14,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={{ color: "#0B1220", fontFamily: fontFamilies.bold }}>
+                    Create template & share
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setShareNeedsTemplate(null)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceMuted,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+                </Pressable>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {shareLinkTemplate ? (
+        <ShareTemplateLinkSheet
+          visible={shareLinkSheetVisible}
+          onClose={() => {
+            setShareLinkSheetVisible(false);
+            setShareLinkTemplate(null);
+          }}
+          templateId={shareLinkTemplate.templateId}
+          templateName={shareLinkTemplate.templateName}
+          sharingDisabled={shareLinkTemplate.sharingDisabled}
+        />
+      ) : null}
     </ScreenContainer>
   );
 };

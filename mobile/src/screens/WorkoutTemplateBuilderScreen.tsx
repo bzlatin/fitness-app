@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import ExercisePicker from "../components/workouts/ExercisePicker";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
+import CreateCustomExerciseModal from "../components/workouts/CreateCustomExerciseModal";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import {
@@ -149,6 +150,8 @@ const WorkoutTemplateBuilderScreen = () => {
   const [swapExerciseFormId, setSwapExerciseFormId] = useState<string | null>(
     null
   );
+  const [showCreateCustom, setShowCreateCustom] = useState(false);
+  const [createCustomInitialName, setCreateCustomInitialName] = useState("");
   const [errors, setErrors] = useState<{ name?: string; exercises?: string }>(
     {}
   );
@@ -947,6 +950,25 @@ const WorkoutTemplateBuilderScreen = () => {
           selected={exercises}
           onAdd={handleAddExercise}
           onRemove={removeExerciseByExerciseId}
+          onCreateCustomExercise={(suggestedName) => {
+            setPickerVisible(false);
+            setCreateCustomInitialName(suggestedName ?? "");
+            setShowCreateCustom(true);
+          }}
+        />
+
+        <CreateCustomExerciseModal
+          visible={showCreateCustom}
+          initialName={createCustomInitialName}
+          onClose={() => {
+            setShowCreateCustom(false);
+            setCreateCustomInitialName("");
+          }}
+          onCreated={(exercise) => {
+            setShowCreateCustom(false);
+            setCreateCustomInitialName("");
+            setPickerVisible(true);
+          }}
         />
 
         {currentSwapExercise && (

@@ -11,6 +11,7 @@ import { fontFamilies } from "../theme/typography";
 import HistoryScreen from "../screens/HistoryScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import WorkoutTemplateDetailScreen from "../screens/WorkoutTemplateDetailScreen";
+import WorkoutTemplatePreviewScreen from "../screens/WorkoutTemplatePreviewScreen";
 import WorkoutTemplateBuilderScreen from "../screens/WorkoutTemplateBuilderScreen";
 import WorkoutGeneratorScreen from "../screens/WorkoutGeneratorScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
@@ -123,6 +124,11 @@ const RootNavigator = () => (
       options={{ title: "Workout" }}
     />
     <Stack.Screen
+      name='WorkoutTemplatePreview'
+      component={WorkoutTemplatePreviewScreen}
+      options={{ title: "Workout Preview" }}
+    />
+    <Stack.Screen
       name='WorkoutTemplateBuilder'
       component={WorkoutTemplateBuilderScreen}
       options={{
@@ -146,7 +152,12 @@ const RootNavigator = () => (
     <Stack.Screen
       name='WorkoutSession'
       component={WorkoutSessionScreen}
-      options={{ title: "Workout Session", headerShown: false }}
+      options={{
+        title: "Workout Session",
+        headerShown: false,
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      }}
     />
     <Stack.Screen
       name='UserProfile'

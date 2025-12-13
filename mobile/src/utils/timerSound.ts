@@ -1,7 +1,70 @@
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import { NativeModules, Platform } from 'react-native';
 
 let audioConfigured = false;
+const { LiveActivityModule } = NativeModules as {
+  LiveActivityModule?: {
+    scheduleTimerCompleteSound?: (
+      sessionId: string,
+      timestampMs: number
+    ) => Promise<boolean>;
+    cancelScheduledTimerSound?: () => void;
+  };
+};
+
+export const scheduleRestTimerFinishSound = async (
+  sessionId: string,
+  endsAtMs: number
+): Promise<boolean> => {
+  if (Platform.OS !== 'ios') return false;
+  if (!LiveActivityModule?.scheduleTimerCompleteSound) return false;
+
+  try {
+    const scheduled = await LiveActivityModule.scheduleTimerCompleteSound(
+      sessionId,
+      endsAtMs
+    );
+    return Boolean(scheduled);
+  } catch (error) {
+    return false;
+  }
+};
+
+export const cancelScheduledRestTimerFinishSound = async () => {
+  if (Platform.OS !== 'ios') return;
+  if (!LiveActivityModule?.cancelScheduledTimerSound) return;
+
+  try {
+    LiveActivityModule.cancelScheduledTimerSound();
+  } catch {
+    // ignore
+  }
+};
+
+export const playTimerHaptics = async () => {
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    setTimeout(async () => {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+        // ignore
+      }
+    }, 80);
+
+    setTimeout(async () => {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {
+        // ignore
+      }
+    }, 160);
+  } catch {
+    // ignore
+  }
+};
 
 /**
  * Play a satisfying notification when the rest timer completes
@@ -9,24 +72,7 @@ let audioConfigured = false;
  */
 export const playTimerSound = async () => {
   try {
-    // Triple-tap haptic pattern for a satisfying notification feel
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    setTimeout(async () => {
-      try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch (err) {
-        // Ignore
-      }
-    }, 80);
-
-    setTimeout(async () => {
-      try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch (err) {
-        // Ignore
-      }
-    }, 160);
+    await playTimerHaptics();
 
     // Play audible notification sound (plays even when ringer is off)
     try {

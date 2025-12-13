@@ -9,17 +9,39 @@
 import Foundation
 import React
 import ActivityKit
+import AVFoundation
 
 @objc(LiveActivityModule)
-class LiveActivityModule: RCTEventEmitter {
+class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
   // Store as Any to avoid @available restriction on stored properties
   private var _currentActivity: Any?
+  private var scheduledTimerPlayer: AVAudioPlayer?
+  private var scheduledTimerEndsAtMs: Double?
+  private var scheduledTimerWorkItem: DispatchWorkItem?
 
   @available(iOS 16.1, *)
   private var currentActivity: Activity<WorkoutActivityAttributes>? {
     get { _currentActivity as? Activity<WorkoutActivityAttributes> }
     set { _currentActivity = newValue }
+  }
+
+  @available(iOS 16.1, *)
+  private func findActivity(sessionId: String) -> Activity<WorkoutActivityAttributes>? {
+    return Activity<WorkoutActivityAttributes>.activities.first(where: { activity in
+      activity.contentState.sessionId == sessionId
+    })
+  }
+
+  @available(iOS 16.1, *)
+  private func endOtherActivities(except sessionId: String) {
+    for activity in Activity<WorkoutActivityAttributes>.activities {
+      if activity.contentState.sessionId != sessionId {
+        Task {
+          await activity.end(dismissalPolicy: .immediate)
+        }
+      }
+    }
   }
 
   override init() {
@@ -50,6 +72,108 @@ class LiveActivityModule: RCTEventEmitter {
 
   override func supportedEvents() -> [String]! {
     return ["onLogSetFromLiveActivity"]
+  }
+
+  // MARK: - Rest Timer Sound Scheduling (iOS)
+
+  @objc
+  func scheduleTimerCompleteSound(
+    _ sessionId: String,
+    timestampMs: NSNumber,
+    resolver resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    let endsAtMs = timestampMs.doubleValue
+    cancelScheduledTimerSound()
+    scheduledTimerEndsAtMs = endsAtMs
+    scheduledTimerWorkItem?.cancel()
+    scheduledTimerWorkItem = nil
+
+    guard let url = Bundle.main.url(forResource: "timer-complete", withExtension: "mp3") else {
+      print("⚠️ [TimerSound] timer-complete.mp3 not found in bundle resources")
+      resolve(false)
+      return
+    }
+
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      try session.setActive(true)
+
+      let player = try AVAudioPlayer(contentsOf: url)
+      player.delegate = self
+      player.volume = 0.6
+      player.prepareToPlay()
+      scheduledTimerPlayer = player
+
+      let intervalSeconds = max(0, (endsAtMs / 1000.0) - Date().timeIntervalSince1970)
+      let playAt = player.deviceCurrentTime + intervalSeconds
+      player.play(atTime: playAt)
+      print("✅ [TimerSound] Scheduled timer-complete.mp3 in \(intervalSeconds)s")
+
+      // Best-effort: when the timer ends, clear rest state on the Live Activity so the UI can show "Log Set".
+      let workItem = DispatchWorkItem { [weak self] in
+        guard let self else { return }
+        if #available(iOS 16.1, *) {
+          guard let activity = self.findActivity(sessionId: sessionId) ?? self.currentActivity else { return }
+          let currentState = activity.contentState
+          let updatedState = WorkoutActivityAttributes.ContentState(
+            exerciseName: currentState.exerciseName,
+            currentSet: currentState.currentSet,
+            totalSets: currentState.totalSets,
+            lastReps: currentState.lastReps,
+            lastWeight: currentState.lastWeight,
+            targetReps: currentState.targetReps,
+            targetWeight: currentState.targetWeight,
+            restEndTime: nil,
+            restDuration: nil,
+            sessionId: currentState.sessionId,
+            startTime: currentState.startTime,
+            totalExercises: currentState.totalExercises,
+            completedExercises: currentState.completedExercises
+          )
+          Task {
+            await activity.update(using: updatedState)
+            print("✅ [TimerSound] Cleared rest timer in Live Activity")
+          }
+        }
+      }
+      scheduledTimerWorkItem = workItem
+      DispatchQueue.main.asyncAfter(deadline: .now() + intervalSeconds + 0.05, execute: workItem)
+
+      resolve(true)
+    } catch {
+      print("❌ [TimerSound] Failed to schedule sound: \(error.localizedDescription)")
+      scheduledTimerPlayer = nil
+      reject("timer_sound_schedule_failed", error.localizedDescription, error)
+    }
+  }
+
+  @objc
+  func cancelScheduledTimerSound() {
+    scheduledTimerEndsAtMs = nil
+    scheduledTimerWorkItem?.cancel()
+    scheduledTimerWorkItem = nil
+    if let player = scheduledTimerPlayer {
+      player.stop()
+    }
+    scheduledTimerPlayer = nil
+
+    do {
+      try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    } catch {
+      // ignore
+    }
+  }
+
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    scheduledTimerPlayer = nil
+    scheduledTimerEndsAtMs = nil
+    do {
+      try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    } catch {
+      // ignore
+    }
   }
 
   // MARK: - Start Live Activity
@@ -97,6 +221,19 @@ class LiveActivityModule: RCTEventEmitter {
       completedExercises: completedExercises
     )
 
+    // Ensure only one workout Live Activity exists.
+    endOtherActivities(except: sessionId)
+
+    // Reuse an existing activity for this session (handles app restarts + avoids duplicates).
+    if let existing = findActivity(sessionId: sessionId) {
+      currentActivity = existing
+      Task {
+        await existing.update(using: initialState)
+        print("✅ Live Activity reused + updated: \(existing.id)")
+      }
+      return
+    }
+
     do {
       // Start the Live Activity
       let activity = try Activity<WorkoutActivityAttributes>.request(
@@ -117,10 +254,21 @@ class LiveActivityModule: RCTEventEmitter {
   @available(iOS 16.1, *)
   @objc
   func updateWorkoutActivity(_ params: NSDictionary) {
-    guard let activity = currentActivity else {
+    let sessionId = params["sessionId"] as? String
+    let resolvedActivity: Activity<WorkoutActivityAttributes>?
+    if let sessionId = sessionId {
+      resolvedActivity = findActivity(sessionId: sessionId) ?? currentActivity
+    } else {
+      resolvedActivity = currentActivity
+    }
+
+    guard let activity = resolvedActivity else {
       print("⚠️ No active Live Activity to update")
       return
     }
+
+    // Keep pointer current for future updates/end calls.
+    currentActivity = activity
 
     // Get current state
     let currentState = activity.contentState
@@ -179,8 +327,13 @@ class LiveActivityModule: RCTEventEmitter {
     }
     // Priority 3: Keep existing timer if no rest-related params provided
     else {
-      restEndTime = currentState.restEndTime
-      print("🔵 [LiveActivity] Keeping existing rest timer: \(restEndTime?.description ?? "none")")
+      if let existing = currentState.restEndTime, existing <= Date() {
+        restEndTime = nil
+        print("🔵 [LiveActivity] Existing rest timer expired; clearing")
+      } else {
+        restEndTime = currentState.restEndTime
+        print("🔵 [LiveActivity] Keeping existing rest timer: \(restEndTime?.description ?? "none")")
+      }
     }
 
     // Create updated state (only update provided fields)
@@ -211,15 +364,38 @@ class LiveActivityModule: RCTEventEmitter {
   @available(iOS 16.1, *)
   @objc
   func endWorkoutActivity() {
-    guard let activity = currentActivity else {
-      print("⚠️ No active Live Activity to end")
-      return
+    // End whatever we have a pointer to, then ensure no duplicates remain.
+    if let activity = currentActivity {
+      Task {
+        await activity.end(dismissalPolicy: .immediate)
+        print("✅ Live Activity ended")
+      }
     }
 
-    Task {
-      await activity.end(dismissalPolicy: .immediate)
-      currentActivity = nil
-      print("✅ Live Activity ended")
+    for activity in Activity<WorkoutActivityAttributes>.activities {
+      Task {
+        await activity.end(dismissalPolicy: .immediate)
+      }
+    }
+
+    currentActivity = nil
+  }
+
+  @objc
+  func endWorkoutActivityForSession(_ sessionId: String) {
+    if #available(iOS 16.1, *) {
+      if let activity = findActivity(sessionId: sessionId) {
+        Task {
+          await activity.end(dismissalPolicy: .immediate)
+          print("✅ Live Activity ended for session: \(sessionId)")
+        }
+      } else {
+        print("⚠️ No Live Activity found for session: \(sessionId)")
+      }
+
+      if currentActivity?.contentState.sessionId == sessionId {
+        currentActivity = nil
+      }
     }
   }
 
