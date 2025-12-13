@@ -23,6 +23,7 @@ import { followUser, getConnections, getUserProfile, removeFollower, unfollowUse
 import { SocialProfile, SocialUserSummary } from "../types/social";
 import { formatHandle } from "../utils/formatHandle";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import TotalWorkoutsBottomSheet from "../components/profile/TotalWorkoutsBottomSheet";
 import TotalVolumeBottomSheet from "../components/profile/TotalVolumeBottomSheet";
@@ -121,6 +122,7 @@ const ProfileScreen = () => {
   const route = useRoute();
   const queryClient = useQueryClient();
   const { user: currentUser, refresh: refreshCurrentUser } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
   // Handle both tab navigation (no params) and stack navigation (with userId param)
   const userId = (route.params as { userId?: string })?.userId ?? currentUser?.id;
   const invalidateConnections = () => {
@@ -579,6 +581,7 @@ const ProfileScreen = () => {
             gymName={resolvedProfile.gymName}
             gymVisibility={resolvedProfile.gymVisibility}
             avatarUrl={resolvedProfile.avatarUrl}
+            showProBadge={isViewingSelf && subscriptionAccess.hasProAccess}
             isViewingSelf={isViewingSelf}
             isFollowing={isFollowing}
             friendCount={friendCount}

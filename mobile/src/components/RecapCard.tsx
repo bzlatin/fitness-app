@@ -16,6 +16,7 @@ type RecapCardProps = {
   data?: RecapSlice | null;
   loading?: boolean;
   error?: boolean;
+  locked?: boolean;
   onRetry?: () => void;
   onPress?: () => void;
   ctaLabel?: string;
@@ -39,6 +40,7 @@ const RecapCard = ({
   data,
   loading,
   error,
+  locked = false,
   onRetry,
   onPress,
   ctaLabel = "View recap",
@@ -46,9 +48,17 @@ const RecapCard = ({
   style,
 }: RecapCardProps) => {
   const isExpanded = variant === "expanded";
+  const isLocked = locked && !data && !loading && !error;
   const hasData = !!data && data.quality.length > 0;
 
   const headline = useMemo(() => {
+    if (isLocked) {
+      return {
+        title: "Pro recap",
+        subtitle: "Unlock session quality, volume trends, and highlights",
+        tone: "info" as const,
+      };
+    }
     if (!data) return { title: "Session recap", subtitle: "We’ll populate this after a workout" };
     if (data.qualityDip) {
       return {
@@ -114,6 +124,29 @@ const RecapCard = ({
         ) : null}
       </View>
 
+      {isLocked ? (
+        <View style={{ gap: 12 }}>
+          <View style={styles.lockedRow}>
+            <View style={styles.lockedPill}>
+              <Ionicons name='lock-closed' size={14} color={colors.primary} />
+              <Text style={styles.lockedPillText}>Pro</Text>
+            </View>
+            <Text style={styles.lockedText}>Tap to upgrade and view your recap.</Text>
+          </View>
+          <View style={styles.previewBars}>
+            {Array.from({ length: 8 }).map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.previewBar,
+                  { opacity: 0.35 + (index % 3) * 0.18 },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={styles.loadingRow}>
           <ActivityIndicator color={colors.primary} />
@@ -133,14 +166,14 @@ const RecapCard = ({
         </View>
       ) : null}
 
-      {!loading && !error && !hasData ? (
+      {!isLocked && !loading && !error && !hasData ? (
         <View style={styles.emptyRow}>
           <Ionicons name='sparkles-outline' size={18} color={colors.textSecondary} />
           <Text style={styles.emptyText}>Log a workout to see highlights.</Text>
         </View>
       ) : null}
 
-      {hasData ? (
+      {!isLocked && hasData ? (
         <>
           <View style={styles.pillRow}>
             <View
@@ -341,6 +374,46 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 6,
     backgroundColor: colors.surfaceMuted,
+  },
+  lockedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  lockedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: `${colors.primary}18`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}35`,
+  },
+  lockedPillText: {
+    color: colors.primary,
+    fontFamily: fontFamilies.semibold,
+    fontSize: 12,
+  },
+  lockedText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.medium,
+    fontSize: 12,
+    flex: 1,
+    textAlign: "right",
+  },
+  previewBars: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  previewBar: {
+    height: 8,
+    flex: 1,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
   },
   highlightRow: {
     flexDirection: "row",

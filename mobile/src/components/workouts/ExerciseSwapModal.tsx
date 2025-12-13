@@ -17,7 +17,7 @@ import { fontFamilies, typography } from "../../theme/typography";
 import { swapExercise } from "../../api/ai";
 import { searchExercises } from "../../api/exercises";
 import { API_BASE_URL } from "../../api/client";
-import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useSubscriptionAccess } from "../../hooks/useSubscriptionAccess";
 import UpgradePrompt from "../premium/UpgradePrompt";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { Exercise } from "../../types/workouts";
@@ -66,7 +66,7 @@ const ExerciseSwapModal = ({
   exercise,
   onSwap,
 }: ExerciseSwapModalProps) => {
-  const { user } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
   const [swapMode, setSwapMode] = useState<"choose" | "ai" | "manual">("choose");
   const [isSwapping, setIsSwapping] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
@@ -77,7 +77,7 @@ const ExerciseSwapModal = ({
 
   const debouncedQuery = useDebouncedValue(query, 350);
 
-  const isPro = user?.plan === "pro";
+  const isPro = subscriptionAccess.hasProAccess;
 
   // Reset state when modal opens or when switching to manual mode
   useEffect(() => {

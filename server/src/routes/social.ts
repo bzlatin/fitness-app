@@ -373,7 +373,9 @@ const fetchWorkoutStats = async (userId: string) => {
   const sessions = await query<{ finished_at: string | Date }>(
     `SELECT finished_at
      FROM workout_sessions
-     WHERE user_id = $1 AND finished_at IS NOT NULL
+     WHERE user_id = $1
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'
      ORDER BY finished_at DESC
      LIMIT 90`,
     [userId]
@@ -445,7 +447,8 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
      WHERE user_id = $1
      AND started_at >= $2
      AND started_at < $3
-     AND finished_at IS NOT NULL`,
+     AND finished_at IS NOT NULL
+     AND ended_reason IS DISTINCT FROM 'auto_inactivity'`,
     [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]
   );
   const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);

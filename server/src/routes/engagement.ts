@@ -57,7 +57,8 @@ router.get("/widget-data", async (req, res) => {
        WHERE user_id = $1
        AND started_at >= $2
        AND started_at < $3
-       AND finished_at IS NOT NULL`,
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'`,
       [userId, weekStart.toISOString(), new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()]
     );
 
@@ -69,6 +70,7 @@ router.get("/widget-data", async (req, res) => {
        FROM workout_sessions
        WHERE user_id = $1
        AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'
        ORDER BY finished_at DESC
        LIMIT 1`,
       [userId]
@@ -83,6 +85,7 @@ router.get("/widget-data", async (req, res) => {
         FROM workout_sessions
         WHERE user_id = $1
         AND finished_at IS NOT NULL
+        AND ended_reason IS DISTINCT FROM 'auto_inactivity'
         ORDER BY workout_date DESC
       ),
       streaks AS (

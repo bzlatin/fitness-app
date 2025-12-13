@@ -963,7 +963,7 @@ Current focus: 5.1 Landing Page & App Store Presence (next)
 
 - ✅ Added `Analytics` route to `/mobile/src/navigation/types.ts`
 - ✅ Registered screen in `/mobile/src/navigation/RootNavigator.tsx`
-- ✅ Added "Advanced Analytics" card to HomeScreen (Pro users only)
+- ✅ Added "Advanced Analytics" card to HomeScreen (locked preview for Free users)
 
 **TypeScript Types** (`/mobile/src/types/analytics.ts`):
 

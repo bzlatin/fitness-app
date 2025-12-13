@@ -325,8 +325,8 @@ const HistoryScreen = () => {
     const weekday = weekdayNames[date.getUTCDay()];
     const month = monthNames[date.getUTCMonth()];
     const day = date.getUTCDate();
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
     const formattedHours = hours % 12 || 12;
     const ampm = hours >= 12 ? "PM" : "AM";
     const formattedMinutes = minutes.toString().padStart(2, "0");
@@ -356,8 +356,8 @@ const HistoryScreen = () => {
   };
 
   const formatTime = (date: Date) => {
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
     const formattedHours = hours % 12 || 12;
     const ampm = hours >= 12 ? "PM" : "AM";
     const formattedMinutes = minutes.toString().padStart(2, "0");

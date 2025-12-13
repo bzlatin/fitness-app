@@ -39,7 +39,7 @@ import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { WorkoutSet } from "../types/workouts";
-import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
@@ -351,6 +351,7 @@ const WorkoutSessionScreen = () => {
   const [elapsedBaseSeconds, setElapsedBaseSeconds] = useState(0);
   const [timerAnchor, setTimerAnchor] = useState<number | null>(null);
   const [timerActive, setTimerActive] = useState(false);
+  const [timerLocked, setTimerLocked] = useState(false);
   const [activeExerciseKey, setActiveExerciseKey] = useState<string | null>(
     null
   );
@@ -409,6 +410,7 @@ const WorkoutSessionScreen = () => {
     null
   );
   const autosaveRetryAttemptsRef = useRef<number>(0);
+  const timerLockedRef = useRef<boolean>(false);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -426,6 +428,10 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     loggedSetIdsRef.current = loggedSetIds;
   }, [loggedSetIds]);
+
+  useEffect(() => {
+    timerLockedRef.current = timerLocked;
+  }, [timerLocked]);
 
   // Check if user currently has Pro access (blocks grace/expired)
   const isPro = subscriptionAccess.hasProAccess;
@@ -683,21 +689,51 @@ const WorkoutSessionScreen = () => {
     autosaveRetryAttemptsRef.current = 0;
   }, [sessionId]);
 
-  const initializeTimer = (startedAt: string, autoStart = true) => {
-    const base = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
-    );
+  const initializeTimer = (
+    {
+      startedAt,
+      finishedAt,
+      durationSeconds,
+    }: {
+      startedAt: string;
+      finishedAt?: string;
+      durationSeconds?: number;
+    },
+    autoStart?: boolean
+  ) => {
+    const startedAtMs = new Date(startedAt).getTime();
+    const finishedAtMs = finishedAt ? new Date(finishedAt).getTime() : null;
+
+    const derivedBaseSeconds =
+      typeof durationSeconds === "number" &&
+      Number.isFinite(durationSeconds) &&
+      durationSeconds >= 0
+        ? Math.floor(durationSeconds)
+        : finishedAtMs !== null &&
+          Number.isFinite(finishedAtMs) &&
+          Number.isFinite(startedAtMs)
+        ? Math.max(0, Math.floor((finishedAtMs - startedAtMs) / 1000))
+        : Number.isFinite(startedAtMs)
+        ? Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000))
+        : 0;
+
+    const shouldAutoStart = autoStart ?? !finishedAt;
+    const nextLocked = Boolean(finishedAt);
+
+    timerLockedRef.current = nextLocked;
+    setTimerLocked(nextLocked);
     setStartTime(startedAt);
-    setElapsedBaseSeconds(base);
-    setElapsedSeconds(base);
-    if (autoStart) {
-      setTimerAnchor(Date.now());
-      setTimerActive(true);
-    } else {
+    setElapsedBaseSeconds(derivedBaseSeconds);
+    setElapsedSeconds(derivedBaseSeconds);
+
+    if (nextLocked || !shouldAutoStart) {
       setTimerAnchor(null);
       setTimerActive(false);
+      return;
     }
+
+    setTimerAnchor(Date.now());
+    setTimerActive(true);
   };
 
   const pauseTimer = () => {
@@ -716,6 +752,7 @@ const WorkoutSessionScreen = () => {
   };
 
   const resumeTimer = () => {
+    if (timerLockedRef.current) return;
     if (timerActive) return;
     setTimerAnchor(Date.now());
     setTimerActive(true);
@@ -738,7 +775,7 @@ const WorkoutSessionScreen = () => {
       setDefaultsApplied(false);
       setSessionId(session.id);
       setSets(trimmedSets);
-      initializeTimer(session.startedAt);
+      initializeTimer({ startedAt: session.startedAt });
       setHasHydratedSession(true);
       queryClient.setQueryData(["activeSession"], {
         session: { ...session, sets: trimmedSets },
@@ -751,22 +788,124 @@ const WorkoutSessionScreen = () => {
     },
   });
 
+  const applyProgressionWeightsToSession = useCallback(
+    (
+      exerciseIds?: string[],
+      { persist }: { persist?: boolean } = {}
+    ) => {
+      if (!progressionData) return;
+
+      const suggestions = progressionData.suggestions.filter((suggestion) => {
+        if (suggestion.increment === 0) return false;
+        if (!exerciseIds) return true;
+        return exerciseIds.includes(suggestion.exerciseId);
+      });
+
+      if (suggestions.length === 0) return;
+
+      const suggestedWeightByExerciseId = new Map(
+        suggestions.map((suggestion) => [
+          suggestion.exerciseId,
+          suggestion.suggestedWeight,
+        ])
+      );
+
+      const currentLoggedSetIds = loggedSetIdsRef.current;
+      const currentSets = setsRef.current;
+
+      const updatedSets = currentSets.map((set) => {
+        const suggestedWeight = suggestedWeightByExerciseId.get(set.exerciseId);
+        if (suggestedWeight === undefined) return set;
+        if (currentLoggedSetIds.has(set.id)) return set;
+
+        const previousTargetWeight = set.targetWeight;
+        const shouldUpdateActualWeight =
+          set.actualWeight === undefined || set.actualWeight === previousTargetWeight;
+
+        return {
+          ...set,
+          targetWeight: suggestedWeight,
+          actualWeight: shouldUpdateActualWeight ? suggestedWeight : set.actualWeight,
+        };
+      });
+
+      setsRef.current = updatedSets;
+      setSets(updatedSets);
+
+      queryClient.setQueryData(["activeSession"], (prev: any) => {
+        if (!prev?.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            sets: updatedSets,
+          },
+        };
+      });
+
+      if (sessionId) {
+        queryClient.setQueryData(["session", sessionId], (prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            sets: updatedSets,
+          };
+        });
+      }
+
+      if (persist) {
+        void persistSessionSets({ force: true });
+      }
+    },
+    [persistSessionSets, progressionData, queryClient, sessionId]
+  );
+
   const applyProgressionMutation = useMutation({
     mutationFn: (exerciseIds?: string[]) =>
       applyProgressionSuggestions(route.params.templateId, exerciseIds),
-    onSuccess: (result) => {
+    onMutate: (exerciseIds?: string[]) => {
+      const previousSets = setsRef.current;
+      applyProgressionWeightsToSession(exerciseIds);
+      return { previousSets };
+    },
+    onSuccess: (result, exerciseIds) => {
       setShowProgressionModal(false);
+      applyProgressionWeightsToSession(exerciseIds, { persist: true });
+      queryClient.invalidateQueries({ queryKey: templatesKey });
       Alert.alert(
         "Progression Applied",
         `Updated ${result.updated} exercise${
           result.updated === 1 ? "" : "s"
-        } in your template. The new weights will be used in future workouts.`,
+        } in your template. Your current workout weights were updated too.`,
         [{ text: "Got it" }]
       );
       // Optionally refresh the template
       // refetch templates if needed
     },
-    onError: () => {
+    onError: (_err, _exerciseIds, context) => {
+      if (context?.previousSets) {
+        setsRef.current = context.previousSets;
+        setSets(context.previousSets);
+        queryClient.setQueryData(["activeSession"], (prev: any) => {
+          if (!prev?.session) return prev;
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              sets: context.previousSets,
+            },
+          };
+        });
+        if (sessionId) {
+          queryClient.setQueryData(["session", sessionId], (prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              sets: context.previousSets,
+            };
+          });
+        }
+      }
       Alert.alert(
         "Could not apply progression",
         "Please try again or update weights manually."
@@ -789,7 +928,11 @@ const WorkoutSessionScreen = () => {
       setDefaultsApplied(false);
       const trimmedSets = trimCardioSetsToSingle(data.sets);
       setSets(trimmedSets);
-      initializeTimer(data.startedAt);
+      initializeTimer({
+        startedAt: data.startedAt,
+        finishedAt: data.finishedAt,
+        durationSeconds: data.durationSeconds,
+      });
       queryClient.setQueryData(["activeSession"], {
         session: { ...data, sets: trimmedSets },
         autoEndedSession: null,
@@ -1090,6 +1233,8 @@ const WorkoutSessionScreen = () => {
   // Sync initial session state to widget AND start Live Activity when session loads
   useEffect(() => {
     if (!sessionId || !startTime || groupedSets.length === 0) return;
+    if (timerLocked) return;
+    if (sessionQuery.data?.endedReason) return;
 
     // Find the first exercise with unlogged sets
     const firstIncompleteGroup = groupedSets.find((group) =>
@@ -1121,7 +1266,7 @@ const WorkoutSessionScreen = () => {
         });
       }
     }
-  }, [sessionId, startTime, groupedSets.length]);
+  }, [sessionId, startTime, groupedSets.length, timerLocked, sessionQuery.data?.endedReason]);
 
   const previousRestEndsAtRef = useRef<number | null>(null);
   const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
@@ -1391,6 +1536,7 @@ const WorkoutSessionScreen = () => {
     restEndsAtTimestamp?: number // Pass the actual restEndsAt timestamp from state
   ) => {
     if (!sessionId || !startTime) return;
+    if (timerLockedRef.current) return;
 
     const group = groupedSets.find((g) => g.key === exerciseKey);
     if (!group) return;
@@ -1481,10 +1627,12 @@ const WorkoutSessionScreen = () => {
       void persistLoggedSetIds(sessionId, updatedLoggedSetIds);
     }
 
-    if (!startTime) {
-      initializeTimer(new Date().toISOString());
-    } else if (!timerActive) {
-      resumeTimer();
+    if (!timerLockedRef.current) {
+      if (!startTime) {
+        initializeTimer({ startedAt: new Date().toISOString() });
+      } else if (!timerActive) {
+        resumeTimer();
+      }
     }
 
     // Calculate rest duration (needed for both timer and widget sync)
@@ -2136,7 +2284,7 @@ const WorkoutSessionScreen = () => {
             gap: 10,
           })}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
             <View
               style={{
                 width: 34,
@@ -2151,12 +2299,12 @@ const WorkoutSessionScreen = () => {
             >
               <Ionicons name='bar-chart' size={18} color={colors.primary} />
             </View>
-            <View style={{ gap: 2 }}>
+            <View style={{ gap: 2, flex: 1 }}>
               <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
                 Advanced analytics
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Trends, balance, and insights from your training
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
+                View trends and training insights
               </Text>
             </View>
           </View>
@@ -2166,6 +2314,7 @@ const WorkoutSessionScreen = () => {
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
+              flexShrink: 0,
             }}
           >
             {!isPro && (
@@ -2198,11 +2347,18 @@ const WorkoutSessionScreen = () => {
                 </Text>
               </View>
             )}
-            <Ionicons
-              name='chevron-forward'
-              size={18}
-              color={colors.textSecondary}
-            />
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name='chevron-forward'
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
           </View>
         </Pressable>
       </View>

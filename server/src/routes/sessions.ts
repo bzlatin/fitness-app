@@ -426,6 +426,7 @@ router.get("/history/range", async (req, res) => {
           AND s.started_at >= $2
           AND s.started_at < $3
           AND s.finished_at IS NOT NULL
+          AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
         ORDER BY s.started_at DESC
       `,
       [userId, rangeStart.toISOString(), rangeEnd.toISOString()]
@@ -544,7 +545,9 @@ router.get("/history/range", async (req, res) => {
       `
         SELECT started_at
         FROM workout_sessions
-        WHERE user_id = $1 AND finished_at IS NOT NULL
+        WHERE user_id = $1
+          AND finished_at IS NOT NULL
+          AND ended_reason IS DISTINCT FROM 'auto_inactivity'
         ORDER BY started_at DESC
       `,
       [userId]
@@ -600,7 +603,9 @@ router.get("/active/current", async (req, res) => {
     // Fetch all uncompleted sessions to evaluate stale timeouts
     const sessionResult = await query<SessionRow>(
       `SELECT * FROM workout_sessions
-       WHERE user_id = $1 AND finished_at IS NULL
+       WHERE user_id = $1
+         AND finished_at IS NULL
+         AND ended_reason IS NULL
        ORDER BY started_at DESC`,
       [userId]
     );
@@ -678,6 +683,7 @@ router.patch("/:id", async (req, res) => {
     startedAt?: string;
   };
 
+  const finishedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "finishedAt");
   const endedReasonProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "endedReason");
   const autoEndedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "autoEndedAt");
   const shouldUpdateDuration = startedAt !== undefined || finishedAt !== undefined;
@@ -733,6 +739,12 @@ router.patch("/:id", async (req, res) => {
         if (finishedAt !== undefined) {
           updateFragments.push(`finished_at = COALESCE($${values.length + 1}, finished_at)`);
           values.push(finishedAt ?? null);
+        }
+
+        // If a client marks the session finished but doesn't specify a reason, treat it as a user-completed workout.
+        // This lets us safely exclude auto-ended sessions from history/stats without breaking older clients.
+        if (finishedAtProvided && !endedReasonProvided && finishedAt) {
+          updateFragments.push(`ended_reason = COALESCE(ended_reason, 'user_finished')`);
         }
 
         if (endedReasonProvided) {

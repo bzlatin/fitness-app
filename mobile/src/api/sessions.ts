@@ -27,6 +27,7 @@ export const completeSession = async (id: string, sets: WorkoutSession["sets"]) 
   const res = await apiClient.patch<WorkoutSession>(`/sessions/${id}`, {
     sets,
     finishedAt: new Date().toISOString(),
+    endedReason: "user_finished",
   });
   return res.data;
 };

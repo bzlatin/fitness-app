@@ -13,6 +13,7 @@ type Props = {
   avatarUrl?: string | null;
   friendCount?: number | null;
   bio?: string | null;
+  showProBadge?: boolean;
   isViewingSelf: boolean;
   isFollowing: boolean;
   onToggleFollow?: () => void;
@@ -33,6 +34,7 @@ const ProfileHeader = ({
   avatarUrl,
   friendCount = null,
   bio,
+  showProBadge = false,
   isViewingSelf,
   isFollowing,
   onToggleFollow,
@@ -105,6 +107,34 @@ const ProfileHeader = ({
               >
                 {name}
               </Text>
+              {showProBadge ? (
+                <LinearGradient
+                  colors={[`${colors.primary}35`, `${colors.secondary}25`]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: `${colors.primary}55`,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name='sparkles' size={12} color={colors.primary} />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 12,
+                    }}
+                  >
+                    Pro
+                  </Text>
+                </LinearGradient>
+              ) : null}
               {onPressSettings && isViewingSelf ? (
                 <Pressable
                   onPress={onPressSettings}

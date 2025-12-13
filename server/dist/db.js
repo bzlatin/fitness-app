@@ -216,7 +216,10 @@ const initDb = async () => {
       ADD COLUMN IF NOT EXISTS progressive_overload_enabled BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS rest_timer_sound_enabled BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS push_token TEXT,
-      ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"goalReminders": true, "inactivityNudges": true, "squadActivity": true, "weeklyGoalMet": true, "quietHoursStart": 22, "quietHoursEnd": 8, "maxNotificationsPerWeek": 3}'::jsonb
+      ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"goalReminders": true, "inactivityNudges": true, "squadActivity": true, "weeklyGoalMet": true, "quietHoursStart": 22, "quietHoursEnd": 8, "maxNotificationsPerWeek": 3}'::jsonb,
+      ADD COLUMN IF NOT EXISTS apple_health_enabled BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS apple_health_permissions JSONB,
+      ADD COLUMN IF NOT EXISTS apple_health_last_sync_at TIMESTAMPTZ
   `);
     await (0, exports.query)(`
     CREATE UNIQUE INDEX IF NOT EXISTS users_handle_unique_idx
@@ -308,6 +311,13 @@ const initDb = async () => {
       template_name TEXT,
       started_at TIMESTAMPTZ NOT NULL,
       finished_at TIMESTAMPTZ,
+      duration_seconds INTEGER,
+      source TEXT NOT NULL DEFAULT 'manual',
+      external_id TEXT,
+      import_metadata JSONB,
+      total_energy_burned NUMERIC,
+      avg_heart_rate NUMERIC,
+      max_heart_rate NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -315,6 +325,26 @@ const initDb = async () => {
     await (0, exports.query)(`
     ALTER TABLE workout_sessions
       ADD COLUMN IF NOT EXISTS template_name TEXT
+  `);
+    await (0, exports.query)(`
+    ALTER TABLE workout_sessions
+      ADD COLUMN IF NOT EXISTS ended_reason TEXT,
+      ADD COLUMN IF NOT EXISTS auto_ended_at TIMESTAMPTZ
+  `);
+    await (0, exports.query)(`
+    ALTER TABLE workout_sessions
+      ADD COLUMN IF NOT EXISTS duration_seconds INTEGER,
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual',
+      ADD COLUMN IF NOT EXISTS external_id TEXT,
+      ADD COLUMN IF NOT EXISTS import_metadata JSONB,
+      ADD COLUMN IF NOT EXISTS total_energy_burned NUMERIC,
+      ADD COLUMN IF NOT EXISTS avg_heart_rate NUMERIC,
+      ADD COLUMN IF NOT EXISTS max_heart_rate NUMERIC
+  `);
+    await (0, exports.query)(`
+    CREATE UNIQUE INDEX IF NOT EXISTS workout_sessions_user_external_idx
+      ON workout_sessions(user_id, external_id)
+      WHERE external_id IS NOT NULL
   `);
     await (0, exports.query)(`
     CREATE TABLE IF NOT EXISTS workout_sets (
