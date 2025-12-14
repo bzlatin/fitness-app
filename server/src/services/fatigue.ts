@@ -7,6 +7,11 @@ export type MuscleFatigue = {
   last7DaysVolume: number;
   baselineVolume: number | null;
   fatigueScore: number;
+  lastTrainedAt: string | null;
+  lastSessionSets: number;
+  lastSessionReps: number;
+  lastSessionVolume: number;
+  recoveryLoad: number;
   status: "under-trained" | "optimal" | "moderate-fatigue" | "high-fatigue" | "no-data";
   color: "green" | "blue" | "yellow" | "red" | "gray";
   fatigued: boolean;
@@ -45,11 +50,36 @@ type VolumeRow = {
   volume: string;
 };
 
+type LastTrainedRow = {
+  muscle_group: string | null;
+  last_trained_at: string | null;
+};
+
+type LastSessionRow = {
+  muscle_group: string | null;
+  finished_at: string | null;
+  session_sets: string;
+  session_reps: string;
+  session_volume: string;
+};
+
 type TemplateMuscleRow = {
   id: string;
   name: string;
   split_type: string | null;
   muscle_groups: string[] | null;
+};
+
+type StimulusRow = {
+  muscle_group: string | null;
+  finished_at: string;
+  strength_sets: string;
+  strength_reps: string;
+  strength_volume: string;
+  cardio_minutes: string;
+  cardio_distance: string;
+  cardio_incline_minutes: string;
+  cardio_minutes_for_avg: string;
 };
 
 const BODYWEIGHT_FALLBACK_LBS = 100;
@@ -63,6 +93,8 @@ const TRACKED_MUSCLES: MuscleGroup[] = [
   "glutes",
   "core",
 ];
+
+const muscleGroupExpr = `LOWER(COALESCE(ue.primary_muscle_group, e.primary_muscle_group, 'other'))`;
 
 const statusColorMap: Record<MuscleFatigue["status"], MuscleFatigue["color"]> = {
   "under-trained": "green",
@@ -88,6 +120,53 @@ const safeDivide = (numerator: number, denominator: number | null | undefined) =
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const hoursBetween = (from: Date, to: Date) => (to.getTime() - from.getTime()) / (1000 * 60 * 60);
+
+const parseNumber = (value: unknown) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const estimateCardioMet = (params: {
+  minutes: number;
+  distance: number;
+  inclinePercent: number;
+}) => {
+  const minutes = Math.max(0, params.minutes);
+  if (minutes <= 0) return null;
+
+  const inclinePercent = clamp(params.inclinePercent, 0, 25);
+  const grade = inclinePercent / 100;
+
+  const distanceRaw = Math.max(0, params.distance);
+  if (distanceRaw <= 0) {
+    // Default to a moderate walk when distance isn't available.
+    return 3.5;
+  }
+
+  const hours = minutes / 60;
+  let mph = distanceRaw / hours;
+
+  // Heuristic: if mph is unrealistic, distance is likely in km.
+  if (mph > 12) {
+    mph = (distanceRaw * 0.621371) / hours;
+  }
+
+  const mPerMin = mph * 26.8224;
+  if (!Number.isFinite(mPerMin) || mPerMin <= 0) return 3.5;
+
+  const isRunning = mph >= 5;
+  const vo2 = isRunning
+    ? 0.2 * mPerMin + 0.9 * mPerMin * grade + 3.5
+    : 0.1 * mPerMin + 1.8 * mPerMin * grade + 3.5;
+  const met = vo2 / 3.5;
+  return Number.isFinite(met) ? clamp(met, 1, 18) : 3.5;
+};
+
 const statusFromScore = (score: number, hasData: boolean): MuscleFatigue["status"] => {
   if (!hasData) return "no-data";
   if (score < 70) return "under-trained";
@@ -106,24 +185,29 @@ const fetchVolumeByMuscle = async (userId: string, start: Date, end: Date) => {
   const result = await query<VolumeRow>(
     `
       SELECT
-        COALESCE(e.primary_muscle_group, 'other') as muscle_group,
+        ${muscleGroupExpr} as muscle_group,
         SUM(
           COALESCE(ws.actual_reps, ws.target_reps, 0) *
           COALESCE(
             ws.actual_weight,
             ws.target_weight,
-            CASE WHEN COALESCE(e.equipment, 'bodyweight') = 'bodyweight' THEN $4 ELSE 0 END
+            CASE
+              WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $4
+              ELSE 1
+            END
           )
         ) as volume
       FROM workout_sets ws
       JOIN workout_sessions s ON s.id = ws.session_id
       LEFT JOIN exercises e ON e.id = ws.exercise_id
+      LEFT JOIN user_exercises ue ON ue.id = ws.exercise_id AND ue.deleted_at IS NULL
       WHERE s.user_id = $1
         AND s.finished_at IS NOT NULL
         AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
+        AND COALESCE(LOWER(e.category), '') <> 'cardio'
         AND s.finished_at >= $2
         AND s.finished_at < $3
-      GROUP BY COALESCE(e.primary_muscle_group, 'other')
+      GROUP BY ${muscleGroupExpr}
     `,
     [userId, start.toISOString(), end.toISOString(), BODYWEIGHT_FALLBACK_LBS]
   );
@@ -133,6 +217,152 @@ const fetchVolumeByMuscle = async (userId: string, start: Date, end: Date) => {
     volumes.set(row.muscle_group ?? "other", Number(row.volume) || 0);
   });
   return volumes;
+};
+
+const fetchLastSessionByMuscle = async (userId: string) => {
+  const result = await query<LastSessionRow>(
+    `
+      WITH per_session AS (
+        SELECT
+          s.id as session_id,
+          s.finished_at,
+          ${muscleGroupExpr} as muscle_group,
+          COUNT(*) FILTER (WHERE COALESCE(ws.actual_reps, ws.target_reps, 0) > 0) as session_sets,
+          SUM(COALESCE(ws.actual_reps, ws.target_reps, 0)) as session_reps,
+          SUM(
+            COALESCE(ws.actual_reps, ws.target_reps, 0) *
+            COALESCE(
+              ws.actual_weight,
+              ws.target_weight,
+              CASE
+                WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $2
+                ELSE 1
+              END
+            )
+          ) as session_volume
+        FROM workout_sets ws
+        JOIN workout_sessions s ON s.id = ws.session_id
+        LEFT JOIN exercises e ON e.id = ws.exercise_id
+        LEFT JOIN user_exercises ue ON ue.id = ws.exercise_id AND ue.deleted_at IS NULL
+        WHERE s.user_id = $1
+          AND s.finished_at IS NOT NULL
+          AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
+        GROUP BY s.id, s.finished_at, ${muscleGroupExpr}
+      ),
+      ranked AS (
+        SELECT
+          muscle_group,
+          finished_at,
+          session_sets,
+          session_reps,
+          session_volume,
+          ROW_NUMBER() OVER (PARTITION BY muscle_group ORDER BY finished_at DESC) as rn
+        FROM per_session
+        WHERE muscle_group IS NOT NULL
+      )
+      SELECT
+        muscle_group,
+        finished_at,
+        COALESCE(session_sets, 0)::text as session_sets,
+        COALESCE(session_reps, 0)::text as session_reps,
+        COALESCE(session_volume, 0)::text as session_volume
+      FROM ranked
+      WHERE rn = 1
+    `,
+    [userId, BODYWEIGHT_FALLBACK_LBS]
+  );
+
+  const map = new Map<
+    string,
+    {
+      lastTrainedAt: string | null;
+      lastSessionSets: number;
+      lastSessionReps: number;
+      lastSessionVolume: number;
+    }
+  >();
+
+  result.rows.forEach((row) => {
+    map.set(row.muscle_group ?? "other", {
+      lastTrainedAt: row.finished_at ?? null,
+      lastSessionSets: Number(row.session_sets) || 0,
+      lastSessionReps: Number(row.session_reps) || 0,
+      lastSessionVolume: Number(row.session_volume) || 0,
+    });
+  });
+
+  return map;
+};
+
+const fetchStimulusRows = async (userId: string, start: Date) => {
+  const result = await query<StimulusRow>(
+    `
+      SELECT
+        ${muscleGroupExpr} as muscle_group,
+        s.finished_at,
+        COUNT(*) FILTER (
+          WHERE COALESCE(LOWER(e.category), '') <> 'cardio'
+            AND COALESCE(ws.actual_reps, ws.target_reps, 0) > 0
+        ) as strength_sets,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') <> 'cardio'
+            THEN COALESCE(ws.actual_reps, ws.target_reps, 0)
+            ELSE 0
+          END
+        ) as strength_reps,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') <> 'cardio'
+            THEN COALESCE(ws.actual_reps, ws.target_reps, 0) *
+              COALESCE(
+                ws.actual_weight,
+                ws.target_weight,
+                CASE
+                  WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $3
+                  ELSE 1
+                END
+              )
+            ELSE 0
+          END
+        ) as strength_volume,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
+            THEN COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            ELSE 0
+          END
+        ) as cardio_minutes,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
+            THEN COALESCE(ws.actual_distance, ws.target_distance, 0)
+            ELSE 0
+          END
+        ) as cardio_distance,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
+            THEN COALESCE(ws.actual_incline, ws.target_incline, 0) *
+              COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            ELSE 0
+          END
+        ) as cardio_incline_minutes,
+        SUM(
+          CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
+            THEN COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            ELSE 0
+          END
+        ) as cardio_minutes_for_avg
+      FROM workout_sets ws
+      JOIN workout_sessions s ON s.id = ws.session_id
+      LEFT JOIN exercises e ON e.id = ws.exercise_id
+      LEFT JOIN user_exercises ue ON ue.id = ws.exercise_id AND ue.deleted_at IS NULL
+      WHERE s.user_id = $1
+        AND s.finished_at IS NOT NULL
+        AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
+        AND s.finished_at >= $2
+      GROUP BY ${muscleGroupExpr}, s.finished_at
+    `,
+    [userId, start.toISOString(), BODYWEIGHT_FALLBACK_LBS]
+  );
+
+  return result.rows;
 };
 
 const sortMuscles = (items: MuscleFatigue[]) =>
@@ -160,15 +390,81 @@ export const getFatigueScores = async (userId: string): Promise<FatigueResult> =
   const baselineEnd = subtractDays(nowStart, 7);
   baselineEnd.setHours(0, 0, 0, 0);
 
-  const [last7Volumes, baselineVolumes] = await Promise.all([
+  const stimulusStart = subtractDays(nowStart, 7);
+  stimulusStart.setHours(0, 0, 0, 0);
+
+  const [last7Volumes, baselineVolumes, lastSessionByMuscle, stimulusRows] = await Promise.all([
     fetchVolumeByMuscle(userId, last7Start, nowStart),
     fetchVolumeByMuscle(userId, baselineStart, baselineEnd),
+    fetchLastSessionByMuscle(userId),
+    fetchStimulusRows(userId, stimulusStart),
   ]);
+
+  const baselineWeeklyByMuscle = new Map<string, number>();
+  baselineVolumes.forEach((value, key) => {
+    baselineWeeklyByMuscle.set(key, value / 4);
+  });
+
+  const recoveryLoadByMuscle = new Map<string, number>();
+  const recoveryHalfLifeHours = 36;
+  const maxStrengthSetsForStimulus = 8;
+  const baselineVolumeScale = 0.6;
+  const cardioStimulusDivisor = 240;
+
+  stimulusRows.forEach((row) => {
+    const muscle = (row.muscle_group ?? "other").toLowerCase();
+    if (!muscle) return;
+
+    const finishedAt = new Date(row.finished_at);
+    if (Number.isNaN(finishedAt.getTime())) return;
+
+    const ageHours = Math.max(0, hoursBetween(finishedAt, now));
+    const decay = Math.pow(0.5, ageHours / recoveryHalfLifeHours);
+
+    const strengthSets = parseNumber(row.strength_sets);
+    const strengthVolume = parseNumber(row.strength_volume);
+    const baselineWeekly = baselineWeeklyByMuscle.get(muscle) ?? 0;
+
+    const strengthFromSets = clamp(strengthSets / maxStrengthSetsForStimulus, 0, 1);
+    const strengthFromVolume =
+      baselineWeekly > 0
+        ? clamp(strengthVolume / (baselineWeekly * baselineVolumeScale), 0, 1.5)
+        : clamp(strengthVolume / 8000, 0, 1.5);
+    const strengthStimulus = Math.max(strengthFromSets, strengthFromVolume);
+
+    const cardioMinutes = parseNumber(row.cardio_minutes);
+    const cardioDistance = parseNumber(row.cardio_distance);
+    const cardioMinutesForAvg = parseNumber(row.cardio_minutes_for_avg);
+    const inclineAvg =
+      cardioMinutesForAvg > 0
+        ? parseNumber(row.cardio_incline_minutes) / cardioMinutesForAvg
+        : 0;
+
+    const met = estimateCardioMet({
+      minutes: cardioMinutes,
+      distance: cardioDistance,
+      inclinePercent: inclineAvg,
+    });
+    const cardioStimulus =
+      met && cardioMinutes > 0
+        ? clamp(((met - 1) * cardioMinutes) / cardioStimulusDivisor, 0, 0.9)
+        : 0;
+
+    const sessionStimulus = strengthStimulus + cardioStimulus;
+    if (sessionStimulus <= 0) return;
+
+    recoveryLoadByMuscle.set(
+      muscle,
+      (recoveryLoadByMuscle.get(muscle) ?? 0) + sessionStimulus * decay
+    );
+  });
 
   const muscles = new Set<string>([
     ...TRACKED_MUSCLES,
     ...last7Volumes.keys(),
     ...baselineVolumes.keys(),
+    ...lastSessionByMuscle.keys(),
+    ...recoveryLoadByMuscle.keys(),
   ]);
 
   const perMuscle: MuscleFatigue[] = [];
@@ -180,6 +476,7 @@ export const getFatigueScores = async (userId: string): Promise<FatigueResult> =
     const baselineWeekly = (baselineVolumes.get(muscle) ?? 0) / 4;
     const baselineMissing = baselineWeekly === 0;
     const hasAnyData = last7 > 0 || !baselineMissing;
+    const lastSession = lastSessionByMuscle.get(muscle);
 
     // Calculate fatigue score
     // Key insight: fatigueScore represents training load as a % of baseline
@@ -205,6 +502,11 @@ export const getFatigueScores = async (userId: string): Promise<FatigueResult> =
       last7DaysVolume: last7,
       baselineVolume: baselineMissing ? null : baselineWeekly,
       fatigueScore,
+      lastTrainedAt: lastSession?.lastTrainedAt ?? null,
+      lastSessionSets: lastSession?.lastSessionSets ?? 0,
+      lastSessionReps: lastSession?.lastSessionReps ?? 0,
+      lastSessionVolume: lastSession?.lastSessionVolume ?? 0,
+      recoveryLoad: recoveryLoadByMuscle.get(muscle) ?? 0,
       status,
       color: statusColorMap[status],
       fatigued: fatigueScore > 130,
@@ -269,11 +571,16 @@ const fetchTemplatesWithMuscles = async (userId: string) => {
         t.id,
         t.name,
         t.split_type,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(e.primary_muscle_group, 'other')), NULL) as muscle_groups
+        ARRAY_REMOVE(
+          ARRAY_AGG(DISTINCT ${muscleGroupExpr}),
+          NULL
+        ) as muscle_groups
       FROM workout_templates t
       LEFT JOIN workout_template_exercises te ON te.template_id = t.id
       LEFT JOIN exercises e ON e.id = te.exercise_id
+      LEFT JOIN user_exercises ue ON ue.id = te.exercise_id AND ue.deleted_at IS NULL
       WHERE t.user_id = $1
+        AND COALESCE(LOWER(e.category), '') <> 'cardio'
       GROUP BY t.id
     `,
     [userId]

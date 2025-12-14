@@ -48,6 +48,14 @@ const ensureUser = async (req, res, next) => {
     const email = normalizeClaim(payload.email);
     const name = normalizeClaim(payload.name) ??
         normalizeClaim(payload.nickname);
+    const rawShareCodeHeader = req.headers["x-template-share-code"];
+    const shareCode = typeof rawShareCodeHeader === "string"
+        ? rawShareCodeHeader
+        : Array.isArray(rawShareCodeHeader)
+            ? rawShareCodeHeader[0]
+            : undefined;
+    const normalizedShareCode = shareCode?.toLowerCase().trim();
+    const isValidShareCode = typeof normalizedShareCode === "string" && /^[0-9a-z]{8}$/.test(normalizedShareCode);
     try {
         const insertResult = await (0, db_1.query)(`
         INSERT INTO users (id, email, name)
@@ -65,6 +73,22 @@ const ensureUser = async (req, res, next) => {
               updated_at = NOW()
           WHERE id = $1
         `, [userId, email ?? null, name ?? null]);
+        }
+        if (isNewUser && isValidShareCode) {
+            await (0, db_1.query)(`
+          WITH share AS (
+            SELECT id
+            FROM template_shares
+            WHERE share_code = $1
+              AND is_revoked = false
+              AND (expires_at IS NULL OR expires_at > NOW())
+            LIMIT 1
+          )
+          INSERT INTO template_share_signups (share_id, user_id)
+          SELECT share.id, $2
+          FROM share
+          ON CONFLICT (share_id, user_id) DO NOTHING
+        `, [normalizedShareCode, userId]);
         }
         // No auto-friending - new users start with 0 friends
         return next();

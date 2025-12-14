@@ -41,6 +41,7 @@ import { colors } from "../theme/colors";
 import { WorkoutSet } from "../types/workouts";
 import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
+import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
@@ -1138,8 +1139,8 @@ const WorkoutSessionScreen = () => {
       });
 
       // Invalidate fatigue query to refresh recovery data
-      queryClient.invalidateQueries({ queryKey: ["fatigue"] });
-      queryClient.invalidateQueries({ queryKey: ["training-recommendations"] });
+      queryClient.invalidateQueries({ queryKey: fatigueQueryKey });
+      queryClient.invalidateQueries({ queryKey: recommendationsQueryKey });
 
       // Immediately remove "Resume Workout" banner
       queryClient.setQueryData(["activeSession"], {

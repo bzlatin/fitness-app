@@ -18,6 +18,7 @@ const waitlist_1 = __importDefault(require("./routes/waitlist"));
 const notifications_1 = __importDefault(require("./routes/notifications"));
 const feedback_1 = __importDefault(require("./routes/feedback"));
 const engagement_1 = __importDefault(require("./routes/engagement"));
+const templateShares_1 = require("./routes/templateShares");
 const stripe_1 = __importDefault(require("./webhooks/stripe"));
 const appstore_1 = __importDefault(require("./webhooks/appstore"));
 const auth_1 = require("./middleware/auth");
@@ -35,6 +36,8 @@ app.get("/health", (_req, res) => {
 app.use("/api/waitlist", waitlist_1.default);
 app.use("/api/exercises", exercises_1.default);
 const authChain = [auth_1.maybeRequireAuth, auth_1.attachUser, auth_1.ensureUser];
+app.use("/api/templates/share", templateShares_1.templateSharesPublicRouter);
+app.use("/api/templates/share", ...authChain, templateShares_1.templateSharesAuthedRouter);
 app.use("/api/templates", ...authChain, templates_1.default);
 app.use("/api/sessions", ...authChain, sessions_1.default);
 app.use("/api/social", ...authChain, social_1.default);
