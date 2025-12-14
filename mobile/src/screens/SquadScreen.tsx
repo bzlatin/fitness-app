@@ -160,16 +160,18 @@ const buildFeedItems = (
     (share) => share.user.id !== excludeUserId
   );
   const defaultLiveTitle = titles?.liveTitle ?? "Active friends";
-  const emptyLiveTitle =
-    titles?.liveEmptyTitle ??
-    (titles?.liveTitle ? titles.liveTitle : "No active friends");
   const items: FeedItem[] = [];
-  items.push({
-    kind: "section",
-    title: filteredActive.length ? defaultLiveTitle : emptyLiveTitle,
-    subtitle: titles?.liveSubtitle,
-  });
-  filteredActive.forEach((status) => items.push({ kind: "active", status }));
+
+  // Only show "Squad live" / "Active friends" section if there are actually active members
+  if (filteredActive.length > 0) {
+    items.push({
+      kind: "section",
+      title: defaultLiveTitle,
+      subtitle: titles?.liveSubtitle,
+    });
+    filteredActive.forEach((status) => items.push({ kind: "active", status }));
+  }
+
   items.push({
     kind: "section",
     title: titles?.recentTitle ?? "Recent sessions",
@@ -797,7 +799,6 @@ const {
               onPress={() => setSelectedSquadId(undefined)}
               style={({ pressed }) => ({
                 marginTop: 4,
-                alignSelf: "flex-start",
                 paddingVertical: 6,
                 paddingHorizontal: 10,
                 borderRadius: 10,
@@ -806,7 +807,7 @@ const {
                 backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6,
+                gap: 10,
               })}
             >
               <Ionicons
@@ -814,11 +815,33 @@ const {
                 size={16}
                 color={colors.textSecondary}
               />
-              <Text
-                style={{ color: colors.textSecondary, ...typography.caption }}
-              >
-                Viewing {selectedSquad?.name ?? "Squad"} — tap to switch back
-              </Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    ...typography.caption,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  Viewing{" "}
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    {selectedSquad?.name ?? "Squad"}
+                  </Text>
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Tap to switch back
+                </Text>
+              </View>
+              <Ionicons
+                name='arrow-undo-outline'
+                size={16}
+                color={colors.textSecondary}
+              />
             </Pressable>
           ) : null}
           {squadsError ? (

@@ -188,26 +188,28 @@ const ProfileHeader = ({
                 alignItems: "center",
               }}
             >
-              <View
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: `${colors.primary}1A`,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                }}
-              >
-                <Text
+              {isViewingSelf ? (
+                <View
                   style={{
-                    color: colors.primary,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 12,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: `${colors.primary}1A`,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
                   }}
                 >
-                  {isViewingSelf ? "You" : "Gym buddy ready"}
-                </Text>
-              </View>
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 12,
+                    }}
+                  >
+                    You
+                  </Text>
+                </View>
+              ) : null}
               <Pressable
                 onPress={onPressFriends}
                 disabled={!onPressFriends}

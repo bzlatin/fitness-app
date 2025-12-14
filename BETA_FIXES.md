@@ -27,6 +27,7 @@ _Priority: HIGH (User-reported issues from beta testing)_
   - **Completed**: 2025-12-14
 
 - [x] **Squad search keyboard not appearing** ✅ COMPLETE
+
   - **Issue**: No keyboard shows when trying to search for a squad
   - **Fix**: Added `autoFocus={true}` to TextInput to automatically show keyboard when modal opens
   - **Files**: [mobile/src/screens/SquadScreen.tsx:1129](mobile/src/screens/SquadScreen.tsx#L1129)
@@ -109,13 +110,13 @@ _Priority: HIGH (User-reported issues from beta testing)_
   - **Fix**: Truncate squad name with ellipsis, adjust layout for smaller screens
   - **Files**: Likely `mobile/src/components/home/SquadSwitchBanner.tsx` or similar
 
-- [ ] **Update "No live squad members" state**
+- [x] **Update "No live squad members" state**
 
   - **Issue**: "Squad live" text shows even when no one is live
   - **Fix**: Either hide the section or show "No squad members working out right now"
   - **Files**: `mobile/src/components/social/SquadLiveWidget.tsx` or home screen
 
-- [ ] **Remove "Gym buddy ready" text from user profiles**
+- [x] **Remove "Gym buddy ready" text from user profiles**
   - **Issue**: Text is shown when viewing other users' profiles (unclear what this means)
   - **Fix**: Remove this text element
   - **Files**: `mobile/src/screens/UserProfileScreen.tsx` or `mobile/src/components/profile/ProfileHeader.tsx`
@@ -226,15 +227,18 @@ _Priority: HIGH (User-reported issues from beta testing)_
 ### 2025-12-14
 
 1. **Block video uploads for profile pictures** ✅
+
    - Added `mediaTypes: ['images']` to ImagePicker configuration
    - File: [SettingsScreen.tsx:925](mobile/src/screens/SettingsScreen.tsx#L925)
 
 2. **Squad invite delays / UI not updating** ✅
+
    - Added immediate React Query cache invalidation for all squad-related queries after successful join
    - Users now see squad membership update instantly without needing to refresh
    - File: [SquadJoinScreen.tsx:143-148](mobile/src/screens/SquadJoinScreen.tsx#L143-L148)
 
 3. **Squad search keyboard not appearing** ✅
+
    - Added `autoFocus={true}` to search TextInput
    - Keyboard now appears immediately when user opens find buddies modal
    - File: [SquadScreen.tsx:1129](mobile/src/screens/SquadScreen.tsx#L1129)
