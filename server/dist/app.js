@@ -29,6 +29,12 @@ app.disable("x-powered-by");
 app.use("/webhooks/stripe", stripe_1.default);
 app.use("/webhooks/appstore", appstore_1.default);
 const isProduction = process.env.NODE_ENV === "production";
+if (process.env.TRUST_PROXY) {
+    app.set("trust proxy", process.env.TRUST_PROXY);
+}
+else if (isProduction) {
+    app.set("trust proxy", 1);
+}
 const parseAllowedOrigins = () => {
     const raw = process.env.CORS_ALLOWED_ORIGINS;
     if (raw && raw.trim()) {

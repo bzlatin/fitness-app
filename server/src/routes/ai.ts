@@ -10,6 +10,7 @@ import { loadExercisesJson } from "../utils/exerciseData";
 import { createLogger } from "../utils/logger";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
+import { aiGenerateLimiter, aiSwapLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 const log = createLogger("AI");
@@ -115,27 +116,6 @@ const buildExerciseLookup = async () => {
   };
 };
 
-// Simple in-memory rate limiter (can be replaced with Redis in production)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: number = 60000) => {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-
-  if (!userLimit || now > userLimit.resetAt) {
-    // New window
-    rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (userLimit.count >= maxRequests) {
-    return false;
-  }
-
-  userLimit.count++;
-  return true;
-};
-
 const deriveFocusName = (specificRequest?: string) => {
   if (!specificRequest) return null;
 
@@ -194,20 +174,13 @@ const deriveFocusName = (specificRequest?: string) => {
 router.post(
   "/generate-workout",
   requireProPlan,
+  aiGenerateLimiter,
   validateBody(generateWorkoutBodySchema),
   async (req, res) => {
   const userId = res.locals.userId;
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  // Rate limiting: 10 requests per minute
-  if (!checkRateLimit(userId, 10, 60000)) {
-    return res.status(429).json({
-      error: "Rate limit exceeded",
-      message: "Too many workout generation requests. Please wait a minute and try again.",
-    });
   }
 
   try {
@@ -447,20 +420,13 @@ router.post(
 router.post(
   "/swap-exercise",
   requireProPlan,
+  aiSwapLimiter,
   validateBody(swapExerciseBodySchema),
   async (req, res) => {
   const userId = res.locals.userId;
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  // Rate limiting: 20 swaps per minute
-  if (!checkRateLimit(userId, 20, 60000)) {
-    return res.status(429).json({
-      error: "Rate limit exceeded",
-      message: "Too many swap requests. Please wait a minute and try again.",
-    });
   }
 
   try {

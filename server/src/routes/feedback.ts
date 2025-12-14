@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { query } from "../db";
 import { generateId } from "../utils/id";
-import { validateProfanity, rateLimitFeedback } from "../middleware/profanityFilter";
+import { validateProfanity } from "../middleware/profanityFilter";
+import { feedbackCreateLimiter, feedbackReportLimiter } from "../middleware/rateLimit";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
 
@@ -283,7 +284,7 @@ router.post(
     }
     next();
   },
-  rateLimitFeedback,
+  feedbackCreateLimiter,
   validateBody(createFeedbackSchema),
   validateProfanity(["title", "description"]),
   async (req, res) => {
@@ -463,7 +464,7 @@ router.put("/:id/status", async (req, res) => {
  * POST /api/feedback/:id/report
  * Report a feedback item for moderation
  */
-router.post("/:id/report", validateBody(reportFeedbackSchema), async (req, res) => {
+router.post("/:id/report", feedbackReportLimiter, validateBody(reportFeedbackSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });

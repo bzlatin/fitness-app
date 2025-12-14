@@ -7,6 +7,7 @@ const db_1 = require("../db");
 const id_1 = require("../utils/id");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
+const rateLimit_1 = require("../middleware/rateLimit");
 const router = (0, express_1.Router)();
 const planSchema = zod_1.z
     .object({
@@ -106,7 +107,7 @@ router.get("/status", async (_req, res) => {
         return res.status(500).json({ error: "Failed to fetch subscription status" });
     }
 });
-router.post("/create-checkout-session", (0, validate_1.validateBody)(planSchema), async (req, res) => {
+router.post("/create-checkout-session", rateLimit_1.subscriptionWriteLimiter, (0, validate_1.validateBody)(planSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -174,7 +175,7 @@ router.post("/create-checkout-session", (0, validate_1.validateBody)(planSchema)
         return res.status(500).json({ error: "Failed to start checkout" });
     }
 });
-router.post("/cancel", async (_req, res) => {
+router.post("/cancel", rateLimit_1.subscriptionWriteLimiter, async (_req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -209,7 +210,7 @@ router.post("/cancel", async (_req, res) => {
         return res.status(500).json({ error: "Failed to cancel subscription" });
     }
 });
-router.post("/billing-portal", (0, validate_1.validateBody)(billingPortalSchema), async (req, res) => {
+router.post("/billing-portal", rateLimit_1.subscriptionWriteLimiter, (0, validate_1.validateBody)(billingPortalSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -239,7 +240,7 @@ router.post("/billing-portal", (0, validate_1.validateBody)(billingPortalSchema)
         return res.status(500).json({ error: "Failed to create billing portal session" });
     }
 });
-router.post("/switch", (0, validate_1.validateBody)(planSchema), async (req, res) => {
+router.post("/switch", rateLimit_1.subscriptionWriteLimiter, (0, validate_1.validateBody)(planSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -296,7 +297,7 @@ router.post("/switch", (0, validate_1.validateBody)(planSchema), async (req, res
         return res.status(500).json({ error: "Failed to switch subscription" });
     }
 });
-router.post("/ios/validate-receipt", (0, validate_1.validateBody)(validateReceiptSchema), async (req, res) => {
+router.post("/ios/validate-receipt", rateLimit_1.subscriptionWriteLimiter, (0, validate_1.validateBody)(validateReceiptSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });

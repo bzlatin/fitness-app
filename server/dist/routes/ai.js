@@ -12,6 +12,7 @@ const exerciseData_1 = require("../utils/exerciseData");
 const logger_1 = require("../utils/logger");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
+const rateLimit_1 = require("../middleware/rateLimit");
 const router = (0, express_1.Router)();
 const log = (0, logger_1.createLogger)("AI");
 const generateWorkoutBodySchema = zod_1.z
@@ -94,22 +95,6 @@ const buildExerciseLookup = async () => {
         lookup: new Map(catalog.map((item) => [item.id, item])),
     };
 };
-// Simple in-memory rate limiter (can be replaced with Redis in production)
-const rateLimitMap = new Map();
-const checkRateLimit = (userId, maxRequests = 10, windowMs = 60000) => {
-    const now = Date.now();
-    const userLimit = rateLimitMap.get(userId);
-    if (!userLimit || now > userLimit.resetAt) {
-        // New window
-        rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
-        return true;
-    }
-    if (userLimit.count >= maxRequests) {
-        return false;
-    }
-    userLimit.count++;
-    return true;
-};
 const deriveFocusName = (specificRequest) => {
     if (!specificRequest)
         return null;
@@ -158,17 +143,10 @@ const deriveFocusName = (specificRequest) => {
  * Generate a personalized workout using AI
  * Requires Pro plan
  */
-router.post("/generate-workout", planLimits_1.requireProPlan, (0, validate_1.validateBody)(generateWorkoutBodySchema), async (req, res) => {
+router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGenerateLimiter, (0, validate_1.validateBody)(generateWorkoutBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
-    }
-    // Rate limiting: 10 requests per minute
-    if (!checkRateLimit(userId, 10, 60000)) {
-        return res.status(429).json({
-            error: "Rate limit exceeded",
-            message: "Too many workout generation requests. Please wait a minute and try again.",
-        });
     }
     try {
         const { requestedSplit, specificRequest } = req.body;
@@ -367,17 +345,10 @@ router.post("/generate-workout", planLimits_1.requireProPlan, (0, validate_1.val
  * Swap an exercise for an alternative using AI
  * Requires Pro plan
  */
-router.post("/swap-exercise", planLimits_1.requireProPlan, (0, validate_1.validateBody)(swapExerciseBodySchema), async (req, res) => {
+router.post("/swap-exercise", planLimits_1.requireProPlan, rateLimit_1.aiSwapLimiter, (0, validate_1.validateBody)(swapExerciseBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
-    }
-    // Rate limiting: 20 swaps per minute
-    if (!checkRateLimit(userId, 20, 60000)) {
-        return res.status(429).json({
-            error: "Rate limit exceeded",
-            message: "Too many swap requests. Please wait a minute and try again.",
-        });
     }
     try {
         const { exerciseId, exerciseName, primaryMuscleGroup, reason } = req.body;

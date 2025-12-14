@@ -15,18 +15,20 @@ import notificationsRouter from "./routes/notifications";
 import feedbackRouter from "./routes/feedback";
 import engagementRouter from "./routes/engagement";
 import { templateSharesAuthedRouter, templateSharesPublicRouter } from "./routes/templateShares";
-import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
 
 const app = express();
 app.disable("x-powered-by");
 
-// Stripe webhooks need the raw body, so mount before JSON parsing.
-app.use("/webhooks/stripe", stripeWebhookRouter);
 app.use("/webhooks/appstore", appStoreWebhookRouter);
 
 const isProduction = process.env.NODE_ENV === "production";
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", process.env.TRUST_PROXY);
+} else if (isProduction) {
+  app.set("trust proxy", 1);
+}
 
 const parseAllowedOrigins = () => {
   const raw = process.env.CORS_ALLOWED_ORIGINS;

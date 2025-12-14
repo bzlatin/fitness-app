@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { query } from "../db";
 import { generateId } from "../utils/id";
+import { waitlistLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 
 const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-router.post("/", async (req, res) => {
+router.post("/", waitlistLimiter, async (req, res) => {
   const emailRaw = typeof req.body?.email === "string" ? req.body.email : "";
   const email = emailRaw.trim().toLowerCase();
 

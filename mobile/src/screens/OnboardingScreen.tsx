@@ -11,7 +11,6 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { NavigationContext } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useStripe } from "@stripe/stripe-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import ScreenContainer from "../components/layout/ScreenContainer";
@@ -48,7 +47,6 @@ const OnboardingScreen = () => {
   const { logout, isAuthorizing } = useAuth();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const stripe = useStripe();
   // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
   const navigation = useContext(NavigationContext);
   const subscriptionAccess = useSubscriptionAccess();
@@ -108,6 +106,13 @@ const OnboardingScreen = () => {
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("free");
 
   const handlePlanChange = (plan: "free" | "pro") => {
+    if (plan === "pro" && !isIOS) {
+      Alert.alert(
+        "Not available",
+        "Pro subscriptions are currently available on iOS only. Android billing is coming soon."
+      );
+      return;
+    }
     setSelectedPlan(plan);
     // Reset purchase state when switching plans
     if (plan === "free" && isSubmitting) {
@@ -120,9 +125,6 @@ const OnboardingScreen = () => {
     mutationFn: (plan: PlanChoice) =>
       startSubscription({
         plan,
-        stripe,
-        userEmail: user?.email ?? null,
-        userName: user?.name ?? null,
       }),
     onError: (err: unknown) => {
       const error = err as { message?: string; code?: string };
@@ -135,7 +137,7 @@ const OnboardingScreen = () => {
         return;
       }
       Alert.alert(
-        isIOS ? "Purchase failed" : "Checkout failed",
+        isIOS ? "Purchase failed" : "Not available",
         error.message || "Something went wrong. Please try again."
       );
     },

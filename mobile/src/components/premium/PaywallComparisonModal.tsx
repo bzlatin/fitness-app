@@ -9,12 +9,10 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useStripe } from "@stripe/stripe-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { colors } from "../../theme/colors";
 import { fontFamilies } from "../../theme/typography";
 import { startSubscription } from "../../services/payments";
-import { useCurrentUser } from "../../hooks/useCurrentUser";
 import type { PlanChoice } from "../../api/subscriptions";
 
 interface PaywallComparisonModalProps {
@@ -52,17 +50,12 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
     "yearly"
   );
   const queryClient = useQueryClient();
-  const { user } = useCurrentUser();
-  const stripe = useStripe();
   const isIOS = Platform.OS === "ios";
 
   const startCheckout = useMutation({
     mutationFn: (plan: PlanChoice) =>
       startSubscription({
         plan,
-        stripe,
-        userEmail: user?.email ?? null,
-        userName: user?.name ?? null,
       }),
     onError: (err: unknown) => {
       const error = err as { message?: string; code?: string };

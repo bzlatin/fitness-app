@@ -25,7 +25,14 @@ export const requireAuth = auth({
 export const maybeRequireAuth: RequestHandler = (req, res, next) => {
   // Helpful during local dev when Auth0 tokens are missing; do NOT enable in prod.
   if (ALLOW_DEV_AUTH_BYPASS && !req.headers.authorization) {
-    res.locals.userId = DEV_USER_ID;
+    const headerValue = req.headers["x-dev-user-id"];
+    const devUserId =
+      typeof headerValue === "string"
+        ? headerValue
+        : Array.isArray(headerValue)
+        ? headerValue[0]
+        : undefined;
+    res.locals.userId = devUserId?.trim() ? devUserId.trim() : DEV_USER_ID;
     return next();
   }
   return requireAuth(req, res, next);

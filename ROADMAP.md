@@ -54,7 +54,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 
 ### Payments
 
-- Stripe (React Native SDK + webhooks)
+- Apple In-App Purchase (StoreKit via `react-native-iap`)
 
 ---
 
@@ -486,7 +486,9 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 ### ✅ Phase 3: Monetization (Weeks 7-9) — Complete
 
-#### 3.1 Stripe Integration
+#### 3.1 Stripe Integration (Removed)
+
+> Note: Stripe client/server codepaths have been removed; Push/Pull is IAP-only for launch.
 
 **Priority**: CRITICAL | **Effort**: 10-12 days | **Impact**: VERY HIGH
 
@@ -1809,13 +1811,13 @@ CREATE INDEX template_shares_creator_idx ON template_shares(created_by);
 
 **Pre-Launch Checklist**:
 
-- See `PRE_LAUNCH_CHECKLIST.md` for the repo-specific execution plan (and Stripe/IAP decision TODOs).
+- See `PRE_LAUNCH_CHECKLIST.md` for the repo-specific execution plan.
 - [x] Clean up server/mobile logs and strip debug/PII before release
 - [ ] Harden security (input validation, SQL injection prevention, authz checks, dependency audit)
-- [ ] Enforce API rate limiting across login, AI, and payment endpoints
-- [ ] Decide payments stack (IAP-only vs web checkout) and remove Stripe logic if unused
-- [ ] Remove mock/beta users and test data from the production database
-- [ ] Verify database migrations/schemas are production-ready and indexed correctly
+- [x] Enforce API rate limiting across login, AI, and payment endpoints
+- [x] Decide payments stack (IAP-only vs web checkout) and remove Stripe logic if unused
+- [x] Remove mock/beta users and test data from the production database
+- [x] Verify database migrations/schemas are production-ready and indexed correctly
 - [ ] Run auth/token + permissions smoke tests to ensure no unauthorized access paths
 - [ ] Landing page live with current download badges and legal pages (see 5.1)
 
@@ -1863,7 +1865,7 @@ These features are planned for implementation after the initial app launch and w
 - [x] `/` - Home (main landing page) — built in `web/src/app/page.tsx`
 - [x] `/privacy` - Privacy Policy (required for App Store) — built in `web/src/app/privacy/page.tsx`
 - [x] `/terms` - Terms of Service (required for App Store) — built in `web/src/app/terms/page.tsx`
-- [ ] `/support` - Support/Contact page
+- [x] `/support` - Support/Contact page
 
 **Domain & Hosting**:
 
@@ -1879,8 +1881,8 @@ These features are planned for implementation after the initial app launch and w
 - [ ] Create Google Play Store listing (Android)
 - [x] Design app icon (1024x1024)
 - [ ] Create 5-6 app screenshots per platform
-- [ ] Write compelling app description
-- [ ] Choose keywords for ASO
+- [x] Write compelling app description
+- [x] Choose keywords for ASO
 - [ ] Create feature graphic for Play Store
 
 **Files to Create** (now live under `web/`):
@@ -1888,7 +1890,7 @@ These features are planned for implementation after the initial app launch and w
 - [x] `web/src/app/page.tsx` - Home page
 - [x] `web/src/app/privacy/page.tsx` - Privacy policy
 - [x] `web/src/app/terms/page.tsx` - Terms of service
-- [ ] `web/src/app/support/page.tsx` - Support page
+- [x] `web/src/app/support/page.tsx` - Support page
 - [ ] `web/src/components/FeatureShowcase.tsx`
 - [ ] `web/src/components/PricingTable.tsx`
 - [ ] `web/src/components/DownloadButtons.tsx`

@@ -15,3 +15,6 @@ export const TERMS_URL =
 export const PRIVACY_URL =
   process.env.EXPO_PUBLIC_LEGAL_PRIVACY_URL ??
   `${base ?? fallbackBase}/privacy`;
+
+export const SUPPORT_URL =
+  process.env.EXPO_PUBLIC_LEGAL_SUPPORT_URL ?? `${base ?? fallbackBase}/support`;

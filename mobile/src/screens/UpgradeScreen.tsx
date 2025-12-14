@@ -11,15 +11,9 @@ import {
   Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useStripe } from "@stripe/stripe-react-native";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
-import {
-  PlanChoice,
-  createBillingPortalSession,
-  switchSubscriptionPlan,
-} from "../api/subscriptions";
-import { useCurrentUser } from "../hooks/useCurrentUser";
+import { PlanChoice } from "../api/subscriptions";
 import { startSubscription } from "../services/payments";
 import { TERMS_URL, PRIVACY_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
@@ -72,12 +66,9 @@ const UpgradeScreen = () => {
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>("monthly");
   const queryClient = useQueryClient();
   const navigation = useNavigation<RootNavigation>();
-  const { user } = useCurrentUser();
-  const stripe = useStripe();
   const isIOS = Platform.OS === "ios";
   const subscriptionAccess = useSubscriptionAccess();
   const statusError = subscriptionAccess.isError;
-  const platformStatus = subscriptionAccess.status;
   const rawStatus = subscriptionAccess.raw;
   const currentInterval = rawStatus?.currentInterval ?? null;
   const isPro = subscriptionAccess.hasProAccess;
@@ -92,19 +83,10 @@ const UpgradeScreen = () => {
   const shouldManageInAppStore =
     isAppleSubscription && (isPro || isGrace || isExpired);
 
-  useEffect(() => {
-    if (isPro && currentInterval) {
-      setSelectedPlan(currentInterval === "annual" ? "monthly" : "annual");
-    }
-  }, [isPro, currentInterval]);
-
   const startCheckout = useMutation({
     mutationFn: (plan: PlanChoice) =>
       startSubscription({
         plan,
-        stripe,
-        userEmail: user?.email ?? null,
-        userName: user?.name ?? null,
       }),
     onError: (err: unknown) => {
       const error = err as { message?: string; code?: string };
@@ -113,7 +95,7 @@ const UpgradeScreen = () => {
         return;
       }
       Alert.alert(
-        isIOS ? "Purchase failed" : "Checkout failed",
+        isIOS ? "Purchase failed" : "Not available",
         error.message || "Something went wrong. Please try again."
       );
     },
@@ -127,34 +109,6 @@ const UpgradeScreen = () => {
           ? "Your Apple subscription is active."
           : "Your subscription is active."
       );
-    },
-  });
-
-  const portalMutation = useMutation({
-    mutationFn: () => createBillingPortalSession(),
-    onError: (err: Error) => Alert.alert("Unable to open portal", err.message),
-    onSuccess: (data) => {
-      // Opening inside the device browser to keep return_url simple.
-      void Linking.openURL(data.url);
-    },
-  });
-
-  const switchPlan = useMutation({
-    mutationFn: (plan: PlanChoice) => switchSubscriptionPlan(plan),
-    onError: (err: Error) => Alert.alert("Unable to switch", err.message),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["subscription", "status"],
-      });
-
-      // Stripe applies prorations immediately for both upgrades and downgrades
-      const isUpgrade =
-        currentInterval === "monthly" && selectedPlan === "annual";
-      const message = isUpgrade
-        ? "Your plan has been upgraded to annual. You were charged the difference after applying a credit for your unused monthly time."
-        : "Your plan has been switched to monthly. You received a prorated credit for your unused annual time.";
-
-      Alert.alert("Plan Updated", message);
     },
   });
 
@@ -187,13 +141,9 @@ const UpgradeScreen = () => {
     : undefined;
 
   const screenTitle = isPro
-    ? isAppleSubscription
+    ? isIOS
       ? "Manage with Apple"
-      : currentInterval
-      ? "Switch Plans"
       : "Manage Subscription"
-    : isIOS
-    ? "Upgrade to Pro"
     : "Upgrade to Pro";
 
   useEffect(() => {
@@ -201,24 +151,12 @@ const UpgradeScreen = () => {
   }, [navigation, screenTitle]);
 
   const screenDescription = isPro
-    ? currentInterval
-      ? `You're currently on the ${
-          currentInterval === "annual" ? "annual" : "monthly"
-        } plan. Switch to save or get more flexibility.`
-      : isAppleSubscription
+    ? isIOS
       ? "Manage your Pro subscription from your Apple ID subscriptions."
-      : "Manage your Pro subscription and billing details."
-    : "Unlock AI workouts, analytics, and premium templates. First-time upgrades get a 7-day trial.";
-
-  // Determine which plans to show
-  const availablePlans: PlanChoice[] =
-    isPro && isAppleSubscription
-      ? currentInterval
-        ? [currentInterval]
-        : ["monthly"]
-      : isPro && currentInterval
-      ? [currentInterval === "annual" ? "monthly" : "annual"]
-      : ["monthly", "annual"];
+      : "Subscriptions are managed through the app store on iOS. Android billing is coming soon."
+    : isIOS
+    ? "Unlock AI workouts, analytics, and premium templates. First-time upgrades get a 7-day trial."
+    : "Subscriptions are currently available on iOS only. Android billing is coming soon.";
 
   const openLegal = async (url: string) => {
     try {
@@ -497,144 +435,139 @@ const UpgradeScreen = () => {
       ) : null}
 
       {/* Plan Options */}
-      <View style={{ gap: 12 }}>
-        {availablePlans.map((plan) => {
-          const details = plans[plan];
-          const isSelected = plan === selectedPlan;
-          const isCurrentPlan = isPro && currentInterval === plan;
-          const isSelectionLocked = isAppleSubscription && isPro;
-
-          return (
-            <TouchableOpacity
-              key={plan}
-              onPress={() => setSelectedPlan(plan)}
-              disabled={isCurrentPlan || isSelectionLocked}
-              style={{
-                borderRadius: 16,
-                borderWidth: 2,
-                borderColor: isSelected ? colors.primary : colors.border,
-                backgroundColor: isCurrentPlan
-                  ? colors.surfaceMuted
-                  : isSelected
-                  ? "rgba(34,197,94,0.05)"
-                  : colors.surface,
-                padding: 18,
-                gap: 10,
-                opacity: isCurrentPlan || isSelectionLocked ? 0.6 : 1,
-              }}
-            >
-              <View
+      {!isPro ? (
+        <View style={{ gap: 12 }}>
+          {(["monthly", "annual"] as PlanChoice[]).map((plan) => {
+            const details = plans[plan];
+            const isSelected = plan === selectedPlan;
+            return (
+              <TouchableOpacity
+                key={plan}
+                onPress={() => setSelectedPlan(plan)}
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
+                  borderRadius: 16,
+                  borderWidth: 2,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  backgroundColor: isSelected
+                    ? "rgba(34,197,94,0.05)"
+                    : colors.surface,
+                  padding: 18,
+                  gap: 10,
                 }}
               >
-                <View style={{ flex: 1 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <Text
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View
                       style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.bold,
-                        fontSize: 18,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 4,
                       }}
                     >
-                      {details.title}
-                    </Text>
-                    {details.savings ? (
-                      <View
+                      <Text
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          backgroundColor: colors.primary,
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.bold,
+                          fontSize: 18,
                         }}
                       >
-                        <Text
+                        {details.title}
+                      </Text>
+                      {details.savings ? (
+                        <View
                           style={{
-                            color: "#041108",
-                            fontFamily: fontFamilies.bold,
-                            fontSize: 11,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            backgroundColor: colors.primary,
                           }}
                         >
-                          {details.savings}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "baseline",
-                      gap: 4,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text
+                          <Text
+                            style={{
+                              color: "#041108",
+                              fontFamily: fontFamilies.bold,
+                              fontSize: 11,
+                            }}
+                          >
+                            {details.savings}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View
                       style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.bold,
-                        fontSize: 32,
+                        flexDirection: "row",
+                        alignItems: "baseline",
+                        gap: 4,
+                        marginBottom: 8,
                       }}
                     >
-                      {details.price}
-                    </Text>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.bold,
+                          fontSize: 32,
+                        }}
+                      >
+                        {details.price}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fontFamilies.medium,
+                          fontSize: 16,
+                        }}
+                      >
+                        {plan === "annual" ? "/year" : "/month"}
+                      </Text>
+                    </View>
                     <Text
                       style={{
                         color: colors.textSecondary,
-                        fontFamily: fontFamilies.medium,
-                        fontSize: 16,
+                        fontFamily: fontFamilies.regular,
+                        fontSize: 14,
+                        lineHeight: 20,
                       }}
                     >
-                      {plan === "annual" ? "/year" : "/month"}
+                      {details.blurb}
                     </Text>
                   </View>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontFamily: fontFamilies.regular,
-                      fontSize: 14,
-                      lineHeight: 20,
-                    }}
-                  >
-                    {details.blurb}
-                  </Text>
-                </View>
-                {isSelected && !isCurrentPlan && !isSelectionLocked ? (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: colors.primary,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginLeft: 8,
-                    }}
-                  >
-                    <Text
+                  {isSelected ? (
+                    <View
                       style={{
-                        color: "#041108",
-                        fontFamily: fontFamilies.bold,
-                        fontSize: 16,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: colors.primary,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginLeft: 8,
                       }}
                     >
-                      ✓
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                      <Text
+                        style={{
+                          color: "#041108",
+                          fontFamily: fontFamilies.bold,
+                          fontSize: 16,
+                        }}
+                      >
+                        ✓
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
 
       {/* Features section - only show for non-Pro users */}
       {!isPro ? (
@@ -708,8 +641,7 @@ const UpgradeScreen = () => {
         disabled={
           startCheckout.isPending ||
           subscriptionAccess.isLoading ||
-          portalMutation.isPending ||
-          switchPlan.isPending
+          !isIOS
         }
         onPress={() => {
           if (shouldManageInAppStore) {
@@ -718,13 +650,20 @@ const UpgradeScreen = () => {
             );
             return;
           }
-          if (isPro && currentInterval) {
-            switchPlan.mutate(selectedPlan);
-          } else if (isPro) {
-            portalMutation.mutate();
-          } else {
-            startCheckout.mutate(selectedPlan);
+          if (!isIOS) {
+            Alert.alert(
+              "Not available",
+              "Subscriptions are currently available on iOS only. Android billing is coming soon."
+            );
+            return;
           }
+          if (isPro) {
+            void Linking.openURL(
+              "https://apps.apple.com/account/subscriptions"
+            );
+            return;
+          }
+          startCheckout.mutate(selectedPlan);
         }}
         style={{
           backgroundColor: colors.primary,
@@ -733,16 +672,10 @@ const UpgradeScreen = () => {
           alignItems: "center",
           justifyContent: "center",
           opacity:
-            startCheckout.isPending ||
-            portalMutation.isPending ||
-            switchPlan.isPending
-              ? 0.7
-              : 1,
+            startCheckout.isPending ? 0.7 : !isIOS ? 0.5 : 1,
         }}
       >
-        {startCheckout.isPending ||
-        portalMutation.isPending ||
-        switchPlan.isPending ? (
+        {startCheckout.isPending ? (
           <ActivityIndicator color='#041108' />
         ) : (
           <Text
@@ -752,19 +685,11 @@ const UpgradeScreen = () => {
               fontSize: 17,
             }}
           >
-            {isPro
-              ? isAppleSubscription
-                ? "Manage in App Store"
-                : currentInterval
-                ? `Switch to ${
-                    selectedPlan === "annual" ? "Annual" : "Monthly"
-                  } Plan`
-                : "Manage Subscription"
-              : shouldManageInAppStore
+            {isPro || shouldManageInAppStore
               ? "Manage in App Store"
               : isIOS
               ? "Subscribe with Apple"
-              : "Start 7-Day Trial"}
+              : "iOS only (for now)"}
           </Text>
         )}
       </TouchableOpacity>
@@ -785,8 +710,8 @@ const UpgradeScreen = () => {
         </Text>
       ) : null}
 
-      {/* Billing Portal Access for Pro users */}
-      {isPro ? (
+      {/* Manage subscription */}
+      {isPro && isIOS ? (
         <View style={{ gap: 12 }}>
           <View
             style={{
@@ -802,62 +727,31 @@ const UpgradeScreen = () => {
               textAlign: "center",
             }}
           >
-            {isAppleSubscription
-              ? "Manage your subscription from your Apple ID."
-              : "Need to update payment methods or cancel?"}
+            Manage your subscription from your Apple ID.
           </Text>
-          {isAppleSubscription ? (
-            <TouchableOpacity
-              onPress={() =>
-                Linking.openURL("https://apps.apple.com/account/subscriptions")
-              }
+          <TouchableOpacity
+            onPress={() =>
+              Linking.openURL("https://apps.apple.com/account/subscriptions")
+            }
+            style={{
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingVertical: 14,
+              alignItems: "center",
+              backgroundColor: colors.surface,
+            }}
+          >
+            <Text
               style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingVertical: 14,
-                alignItems: "center",
-                backgroundColor: colors.surface,
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 15,
               }}
             >
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 15,
-                }}
-              >
-                Open Apple Subscriptions
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => portalMutation.mutate()}
-              disabled={portalMutation.isPending}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingVertical: 14,
-                alignItems: "center",
-                backgroundColor: colors.surface,
-              }}
-            >
-              {portalMutation.isPending ? (
-                <ActivityIndicator color={colors.textPrimary} />
-              ) : (
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 15,
-                  }}
-                >
-                  Manage Billing & Payment
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+              Open Apple Subscriptions
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Push/Pull - Coming Soon',
     description: 'The workout tracker built for lifters.',
-    url: 'https://pushpull.app',
+    url: 'https://push-pull.app',
     siteName: 'Push/Pull',
     locale: 'en_US',
     type: 'website',

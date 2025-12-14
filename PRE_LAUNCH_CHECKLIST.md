@@ -88,8 +88,8 @@ You’re “ready to launch” when:
 
 **Validation**
 
-- [ ] Verify invalid inputs return 400 with clear messages.
-- [ ] Verify cross-user access attempts return 403/404 as appropriate.
+- [x] Verify invalid inputs return 400 with clear messages.
+- [x] Verify cross-user access attempts return 403/404 as appropriate.
 
 ## 4) Rate Limiting (Consistent + Production-Grade)
 
@@ -97,24 +97,24 @@ You’re “ready to launch” when:
 
 ### Plan
 
-- Add `express-rate-limit` (and optionally `rate-limit-redis` later).
-- Apply limits for:
-  - AI generation + exercise swap
-  - subscription/payment endpoints
-  - waitlist endpoint
-  - feedback/report endpoints (spam prevention)
+- [x] Add `express-rate-limit` (and optionally `rate-limit-redis` later).
+- [x] Apply limits for:
+  - [x] AI generation + exercise swap
+  - [x] subscription/payment endpoints
+  - [x] waitlist endpoint
+  - [x] feedback/report endpoints (spam prevention)
 
 **Validation**
 
-- Verify 429 responses and that limits are keyed per user (or per IP when unauthenticated).
+- [x] Verify 429 responses and that limits are keyed per user (or per IP when unauthenticated).
 
 ## 5) Production Data Hygiene
 
 **Why**: Roadmap requires removing mock/beta users and test data.
 
-- Ensure production deploy path never inserts demo accounts.
-- Add a one-time script/runbook for purging test rows (if any already exist in prod).
-- Confirm indexes are present for high-traffic queries (feed, templates, sessions, follows, notifications).
+- [x] Ensure production deploy path never inserts demo accounts.
+- [x] Add a one-time script/runbook for purging test rows (if any already exist in prod).
+- [x] Confirm indexes are present for high-traffic queries (feed, templates, sessions, follows, notifications).
 
 ## 6) Auth/Permissions Smoke Tests (Manual)
 
@@ -127,11 +127,11 @@ Create two test accounts and verify:
 
 ## 7) Web + App Store Readiness
 
-- Add missing `web/src/app/support/page.tsx` per roadmap.
-- Confirm privacy/terms URLs used in-app are correct for production.
-- Prepare store listing assets (screenshots, descriptions, keywords).
+- [x] Add missing `web/src/app/support/page.tsx` per roadmap.
+- [x] Confirm privacy/terms URLs used in-app are correct for production.
+- [x] Prepare store listing assets (screenshots, descriptions, keywords).
 
-## Payments Decision: Stripe vs IAP (TODO)
+## Payments Decision: IAP-Only (Complete)
 
 ### Reality check (policy)
 
@@ -142,19 +142,8 @@ If you sell **digital features/content** inside an iOS/Android app (like “Pro�
 
 Using **Stripe** for that in-app upgrade flow is typically not allowed by App Store / Play policies.
 
-### Recommendation for this project (current state)
+### Current decision
 
-You don’t have a consumer-facing web app checkout flow, so **Stripe isn’t required for launch** if you’re going “IAP-only”.
-
-### TODO: Remove Stripe integration (if you commit to IAP-only)
-
-- Mobile:
-  - Remove `@stripe/stripe-react-native` usage (`mobile/App.tsx`, `mobile/src/services/payments.ts`, `mobile/src/services/stripe.ts`)
-  - Remove Stripe paywall hooks (`mobile/src/screens/UpgradeScreen.tsx`, `mobile/src/screens/OnboardingScreen.tsx`, `mobile/src/screens/AccountSetupScreen.tsx`, `mobile/src/components/premium/PaywallComparisonModal.tsx`)
-  - Clean up UI strings referencing “Stripe” (e.g. settings label)
-- Server:
-  - Remove Stripe webhook endpoint (`server/src/app.ts` + `server/src/webhooks/stripe.ts`)
-  - Remove Stripe service + routes (`server/src/services/stripe.ts`, Stripe portions of `server/src/routes/subscriptions.ts`)
-  - Remove Stripe columns/fields if no longer needed (after migrations exist)
-
-If you want to keep Stripe for a future website checkout, keep the server Stripe code behind a feature flag and ensure it’s not reachable/advertised in the app until the web flow exists.
+- The app uses **Apple In-App Purchase (StoreKit)** for Pro upgrades.
+- All Stripe client/server codepaths have been removed from this repo.
+- Android subscriptions are not wired up yet (Google Play Billing validation requires server-side verification).

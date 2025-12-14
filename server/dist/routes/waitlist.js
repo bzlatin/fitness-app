@@ -3,9 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
+const rateLimit_1 = require("../middleware/rateLimit");
 const router = (0, express_1.Router)();
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-router.post("/", async (req, res) => {
+router.post("/", rateLimit_1.waitlistLimiter, async (req, res) => {
     const emailRaw = typeof req.body?.email === "string" ? req.body.email : "";
     const email = emailRaw.trim().toLowerCase();
     if (!email) {

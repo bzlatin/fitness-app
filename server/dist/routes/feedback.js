@@ -4,6 +4,7 @@ const express_1 = require("express");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
 const profanityFilter_1 = require("../middleware/profanityFilter");
+const rateLimit_1 = require("../middleware/rateLimit");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
 const router = (0, express_1.Router)();
@@ -175,7 +176,7 @@ router.post("/", async (req, res, next) => {
         res.locals.isAdmin = await isAdmin(userId);
     }
     next();
-}, profanityFilter_1.rateLimitFeedback, (0, validate_1.validateBody)(createFeedbackSchema), (0, profanityFilter_1.validateProfanity)(["title", "description"]), async (req, res) => {
+}, rateLimit_1.feedbackCreateLimiter, (0, validate_1.validateBody)(createFeedbackSchema), (0, profanityFilter_1.validateProfanity)(["title", "description"]), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -308,7 +309,7 @@ router.put("/:id/status", async (req, res) => {
  * POST /api/feedback/:id/report
  * Report a feedback item for moderation
  */
-router.post("/:id/report", (0, validate_1.validateBody)(reportFeedbackSchema), async (req, res) => {
+router.post("/:id/report", rateLimit_1.feedbackReportLimiter, (0, validate_1.validateBody)(reportFeedbackSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
