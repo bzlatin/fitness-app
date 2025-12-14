@@ -53,7 +53,7 @@ const WelcomeStep = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
         quality: 0.75,
-        base64: true,
+        base64: false,
         aspect: [1, 1],
         presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });

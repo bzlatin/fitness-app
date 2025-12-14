@@ -1,10 +1,15 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
+const cloudinary_1 = require("../services/cloudinary");
 const SQUAD_MEMBERS_AGGREGATE = `
   SELECT s.id, s.name, s.description, s.is_public, s.created_by,
     COALESCE(
@@ -76,6 +81,10 @@ const fetchSquadById = async (userId, squadId) => {
     return mapSquadRow(result.rows[0], userId);
 };
 const router = (0, express_1.Router)();
+const upload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+});
 const profileUpdateSchema = zod_1.z
     .object({
     name: zod_1.z.string().trim().min(1).max(60).optional(),
@@ -95,6 +104,36 @@ const profileUpdateSchema = zod_1.z
     appleHealthLastSyncAt: zod_1.z.string().datetime().nullable().optional(),
 })
     .strip();
+router.post("/me/avatar", upload.single("avatar"), async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const file = req.file;
+    if (!file?.buffer) {
+        return res.status(400).json({ error: "Missing avatar file" });
+    }
+    const validation = (0, cloudinary_1.validateImageBuffer)(file.buffer);
+    if (!validation.valid) {
+        return res.status(400).json({ error: validation.error ?? "Invalid image" });
+    }
+    try {
+        const existing = await (0, db_1.query)(`SELECT avatar_url FROM users WHERE id = $1 LIMIT 1`, [userId]);
+        const previousUrl = existing.rows[0]?.avatar_url ?? null;
+        const previousPublicId = previousUrl ? (0, cloudinary_1.extractPublicId)(previousUrl) : null;
+        const uploaded = await (0, cloudinary_1.uploadImage)(file.buffer, "avatars");
+        const avatarUrl = uploaded.secure_url;
+        await (0, db_1.query)(`UPDATE users SET avatar_url = $2, updated_at = NOW() WHERE id = $1`, [userId, avatarUrl]);
+        if (previousPublicId) {
+            (0, cloudinary_1.deleteImage)(previousPublicId).catch((err) => console.warn("[Social] Failed to delete previous avatar", err));
+        }
+        return res.json({ avatarUrl });
+    }
+    catch (err) {
+        console.error("Failed to upload avatar", err);
+        return res.status(500).json({ error: "Failed to upload avatar" });
+    }
+});
 const reactionBodySchema = zod_1.z
     .object({
     targetType: zod_1.z.enum(["status", "share"]),

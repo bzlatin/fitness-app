@@ -1,8 +1,15 @@
 import { Router } from "express";
+import multer from "multer";
 import { query } from "../db";
 import { generateId } from "../utils/id";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
+import {
+  deleteImage,
+  extractPublicId,
+  uploadImage,
+  validateImageBuffer,
+} from "../services/cloudinary";
 
 type Visibility = "private" | "followers" | "squad";
 
@@ -233,6 +240,10 @@ const fetchSquadById = async (userId: string, squadId: string) => {
 };
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 const profileUpdateSchema = z
   .object({
@@ -253,6 +264,51 @@ const profileUpdateSchema = z
     appleHealthLastSyncAt: z.string().datetime().nullable().optional(),
   })
   .strip();
+
+router.post("/me/avatar", upload.single("avatar"), async (req, res) => {
+  const userId = res.locals.userId as string | undefined;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const file = req.file;
+  if (!file?.buffer) {
+    return res.status(400).json({ error: "Missing avatar file" });
+  }
+
+  const validation = validateImageBuffer(file.buffer);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error ?? "Invalid image" });
+  }
+
+  try {
+    const existing = await query<{ avatar_url: string | null }>(
+      `SELECT avatar_url FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    const previousUrl = existing.rows[0]?.avatar_url ?? null;
+    const previousPublicId = previousUrl ? extractPublicId(previousUrl) : null;
+
+    const uploaded = await uploadImage(file.buffer, "avatars");
+    const avatarUrl = uploaded.secure_url;
+
+    await query(
+      `UPDATE users SET avatar_url = $2, updated_at = NOW() WHERE id = $1`,
+      [userId, avatarUrl]
+    );
+
+    if (previousPublicId) {
+      deleteImage(previousPublicId).catch((err) =>
+        console.warn("[Social] Failed to delete previous avatar", err)
+      );
+    }
+
+    return res.json({ avatarUrl });
+  } catch (err) {
+    console.error("Failed to upload avatar", err);
+    return res.status(500).json({ error: "Failed to upload avatar" });
+  }
+});
 
 const reactionBodySchema = z
   .object({

@@ -20,7 +20,8 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { colors } from '../theme/colors';
 import { fontFamilies, typography } from '../theme/typography';
 import { normalizeHandle } from '../utils/formatHandle';
-import { ensureShareableAvatarUri } from '../utils/avatarImage';
+import { isRemoteAvatarUrl } from '../utils/avatarImage';
+import { uploadCurrentUserAvatar } from '../api/social';
 import type { PlanChoice } from '../api/subscriptions';
 import type { OnboardingData } from '../types/onboarding';
 import { startSubscription } from '../services/payments';
@@ -138,7 +139,16 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     setIsSavingProfile(true);
     setError(null);
     try {
-      const uploadReadyAvatar = await ensureShareableAvatarUri(avatarUri);
+      let uploadReadyAvatar = isRemoteAvatarUrl(avatarUri) ? avatarUri : undefined;
+      if (avatarUri && !uploadReadyAvatar) {
+        try {
+          uploadReadyAvatar = await uploadCurrentUserAvatar(avatarUri);
+          setAvatarUri(uploadReadyAvatar);
+        } catch (err) {
+          console.error('[AccountSetup] Avatar upload failed', err);
+          uploadReadyAvatar = undefined;
+        }
+      }
       await updateProfile({
         name: name.trim(),
         handle: normalized,

@@ -198,6 +198,26 @@ export const updateCurrentUserProfile = async (payload: Partial<User>) => {
   return res.data;
 };
 
+export const uploadCurrentUserAvatar = async (uri: string) => {
+  const form = new FormData();
+  form.append(
+    "avatar",
+    {
+      uri,
+      name: "avatar.jpg",
+      type: "image/jpeg",
+    } as any
+  );
+
+  const res = await apiClient.post<{ avatarUrl: string }>("/social/me/avatar", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  if (!res.data?.avatarUrl) {
+    throw new Error("Avatar upload failed");
+  }
+  return res.data.avatarUrl;
+};
+
 export const deleteCurrentUserAccount = async () => {
   await apiClient.delete<void>("/social/me");
 };

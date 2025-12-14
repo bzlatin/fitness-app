@@ -40,7 +40,8 @@ import PlanSelectionStep from "../components/onboarding/PlanSelectionStep";
 import { normalizeHandle } from "../utils/formatHandle";
 import { registerForPushNotificationsAsync } from "../services/notifications";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
-import { ensureShareableAvatarUri } from "../utils/avatarImage";
+import { isRemoteAvatarUrl } from "../utils/avatarImage";
+import { uploadCurrentUserAvatar } from "../api/social";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -252,7 +253,16 @@ const OnboardingScreen = () => {
     }
 
     try {
-      const uploadReadyAvatar = await ensureShareableAvatarUri(avatarUri);
+      let uploadReadyAvatar = isRemoteAvatarUrl(avatarUri) ? avatarUri : undefined;
+      if (avatarUri && !uploadReadyAvatar) {
+        try {
+          uploadReadyAvatar = await uploadCurrentUserAvatar(avatarUri);
+          setAvatarUri(uploadReadyAvatar);
+        } catch (err) {
+          console.error("[Onboarding] Avatar upload failed", err);
+          uploadReadyAvatar = undefined;
+        }
+      }
       await completeOnboarding({
         name: name.trim(),
         handle: normalizedHandle,

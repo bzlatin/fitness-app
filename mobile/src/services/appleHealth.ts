@@ -190,7 +190,7 @@ export const syncAppleHealthWorkouts = async ({
     return { status: "skipped" };
   }
 
-  const authorized = await requestAppleHealthPermissions(selectedPermissions);
+  const authorized = await requestAppleHealthPermissions(selectedPermissions, "readWrite");
   if (!authorized) {
     return { status: "denied" };
   }
