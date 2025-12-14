@@ -53,7 +53,9 @@ const { normalized: normalizedConnectionString, isLocalHost, requestedSslMode } 
 
 const loadCaPem = () => {
   const inlinePem = process.env.DB_SSL_CA_PEM?.trim();
-  if (inlinePem) return inlinePem;
+  if (inlinePem) {
+    return inlinePem.includes("\\n") ? inlinePem.replace(/\\n/g, "\n") : inlinePem;
+  }
 
   const caPath = process.env.DB_SSL_CA_PATH?.trim();
   if (caPath) return fs.readFileSync(caPath, "utf8");
