@@ -163,14 +163,14 @@ This list is derived from actual `process.env.*` usage in `server/src/`.
 
 ### 3.3 App Store purchase flow
 
-- [ ] Products exist in App Store Connect and match your expected product IDs.
-- [ ] Purchase unlocks Pro features immediately.
-- [ ] Restore purchases works and updates Pro state.
+- [x] Products exist in App Store Connect and match your expected product IDs.
+- [x] Purchase unlocks Pro features immediately.
+- [] Restore purchases works and updates Pro state.
 
 ### 3.4 Permissions + privacy strings
 
-- [ ] Verify `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription` are accurate and required for your HealthKit usage.
-- [ ] Verify your privacy policy URL is live and matches what the app does (tracking, purchase, analytics, etc.).
+- [x] Verify `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription` are accurate and required for your HealthKit usage.
+- [x] Verify your privacy policy URL is live and matches what the app does (tracking, purchase, analytics, etc.).
 
 ---
 
