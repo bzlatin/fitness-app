@@ -13,6 +13,7 @@ public class PushPullAppleHealthKit: Module {
   private let healthStore = HKHealthStore()
   private let heartRateUnit = HKUnit.count().unitDivided(by: HKUnit.minute())
   private let energyUnit = HKUnit.kilocalorie()
+  private let defaultWorkoutActivityType: HKWorkoutActivityType = .traditionalStrengthTraining
   private let isoFormatterWithFractionalSeconds: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -60,10 +61,20 @@ public class PushPullAppleHealthKit: Module {
         readPermissions = []
       }
 
-      if readPermissions.isEmpty {
+      let writeAny = permissions["write"]
+      let writePermissions: [String]
+      if let write = writeAny as? [String] {
+        writePermissions = write
+      } else if let write = writeAny as? [Any] {
+        writePermissions = write.compactMap { $0 as? String }
+      } else {
+        writePermissions = []
+      }
+
+      if readPermissions.isEmpty && writePermissions.isEmpty {
         promise.reject(
           "E_HEALTHKIT_INVALID_PERMISSIONS",
-          "Invalid permissions payload (missing permissions.read)."
+          "Invalid permissions payload (missing permissions.read and permissions.write)."
         )
         return
       }
@@ -86,12 +97,108 @@ public class PushPullAppleHealthKit: Module {
         }
       }
 
-      self.healthStore.requestAuthorization(toShare: nil, read: readTypes) { success, error in
+      var shareTypes = Set<HKSampleType>()
+      for permission in writePermissions {
+        switch permission {
+        case "Workout":
+          shareTypes.insert(HKObjectType.workoutType())
+        case "ActiveEnergyBurned":
+          if let t = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+            shareTypes.insert(t)
+          }
+        case "HeartRate":
+          if let t = HKObjectType.quantityType(forIdentifier: .heartRate) {
+            shareTypes.insert(t)
+          }
+        default:
+          break
+        }
+      }
+
+      let shareTypesOrNil: Set<HKSampleType>? = shareTypes.isEmpty ? nil : shareTypes
+      let readTypesOrNil: Set<HKObjectType>? = readTypes.isEmpty ? nil : readTypes
+
+      self.healthStore.requestAuthorization(toShare: shareTypesOrNil, read: readTypesOrNil) { success, error in
         if let error = error {
           promise.reject("E_HEALTHKIT_AUTH", error.localizedDescription)
           return
         }
         promise.resolve(success)
+      }
+    }
+
+    AsyncFunction("saveWorkout") { [weak self] (input: [String: Any], promise: Promise) in
+      guard let self = self else { return }
+
+      guard HKHealthStore.isHealthDataAvailable() else {
+        promise.reject(
+          "E_HEALTHKIT_UNAVAILABLE",
+          "Health data is not available on this device."
+        )
+        return
+      }
+
+      guard
+        let startDateString = input["startDate"] as? String,
+        let startDate = self.parseISODate(startDateString),
+        let endDateString = input["endDate"] as? String,
+        let endDate = self.parseISODate(endDateString)
+      else {
+        promise.reject(
+          "E_HEALTHKIT_INVALID_INPUT",
+          "Missing or invalid startDate/endDate."
+        )
+        return
+      }
+
+      if endDate <= startDate {
+        promise.reject(
+          "E_HEALTHKIT_INVALID_INPUT",
+          "endDate must be after startDate."
+        )
+        return
+      }
+
+      let activityTypeString = (input["activityType"] as? String)
+      let activityType = self.parseWorkoutActivityType(activityTypeString) ?? self.defaultWorkoutActivityType
+
+      let totalEnergyBurned: HKQuantity?
+      if let energy = input["totalEnergyBurned"] as? NSNumber {
+        totalEnergyBurned = HKQuantity(unit: self.energyUnit, doubleValue: energy.doubleValue)
+      } else {
+        totalEnergyBurned = nil
+      }
+
+      var metadata: [String: Any] = (input["metadata"] as? [String: Any]) ?? [:]
+      if let externalUUIDString = input["externalUUID"] as? String,
+         let uuid = UUID(uuidString: externalUUIDString) {
+        metadata[HKMetadataKeyExternalUUID] = uuid
+      }
+      metadata[HKMetadataKeyWorkoutBrandName] = "PushPull"
+
+      let duration = endDate.timeIntervalSince(startDate)
+      let workout = HKWorkout(
+        activityType: activityType,
+        start: startDate,
+        end: endDate,
+        duration: duration,
+        totalEnergyBurned: totalEnergyBurned,
+        totalDistance: nil,
+        metadata: metadata.isEmpty ? nil : metadata
+      )
+
+      self.healthStore.save(workout) { success, error in
+        if let error = error {
+          promise.reject("E_HEALTHKIT_SAVE", error.localizedDescription)
+          return
+        }
+
+        if !success {
+          promise.reject("E_HEALTHKIT_SAVE", "HealthKit save failed.")
+          return
+        }
+
+        promise.resolve(workout.uuid.uuidString)
       }
     }
 
@@ -257,6 +364,31 @@ public class PushPullAppleHealthKit: Module {
     case .mindAndBody: return "mind_and_body"
     default:
       return "workout_\\(type.rawValue)"
+    }
+  }
+
+  private func parseWorkoutActivityType(_ input: String?) -> HKWorkoutActivityType? {
+    guard let raw = input?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+          !raw.isEmpty
+    else { return nil }
+
+    switch raw {
+    case "running": return .running
+    case "walking": return .walking
+    case "cycling": return .cycling
+    case "swimming": return .swimming
+    case "rowing": return .rowing
+    case "elliptical": return .elliptical
+    case "stair_climbing", "stairclimbing", "stair-climbing": return .stairClimbing
+    case "traditionalstrengthtraining", "traditional_strength_training", "strength_training": return .traditionalStrengthTraining
+    case "functionalstrengthtraining", "functional_strength_training": return .functionalStrengthTraining
+    case "hiit", "high_intensity_interval_training", "highintensityintervaltraining": return .highIntensityIntervalTraining
+    case "yoga": return .yoga
+    case "pilates": return .pilates
+    case "hiking": return .hiking
+    case "mind_and_body", "mindandbody": return .mindAndBody
+    default:
+      return nil
     }
   }
 

@@ -34,59 +34,43 @@ import { createTemplate, fetchTemplate } from "../api/templates";
 import { useQueryClient } from "@tanstack/react-query";
 import ShareTemplateLinkSheet from "../components/workout/ShareTemplateLinkSheet";
 
-const startOfMonth = (date: Date) => {
-  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-};
-
-const addMonths = (date: Date, delta: number) =>
-  startOfMonth(
-    new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1))
-  );
-
-const startOfDayUtc = (date: Date) => {
-  const copy = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  );
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-};
-
-const startOfDayLocal = (date: Date) => {
-  const copy = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-};
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
 const formatDateKey = (date: Date) =>
-  startOfDayUtc(date).toISOString().split("T")[0];
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const startOfDayLocal = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const startOfMonth = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), 1);
+
+const addMonths = (date: Date, delta: number) =>
+  startOfMonth(new Date(date.getFullYear(), date.getMonth() + delta, 1));
 
 const getWeekDates = (anchor: Date) => {
-  const start = startOfDayUtc(anchor);
-  const day = start.getUTCDay() === 0 ? 6 : start.getUTCDay() - 1;
-  start.setUTCDate(start.getUTCDate() - day);
+  const start = startOfDayLocal(anchor);
+  const day = start.getDay() === 0 ? 6 : start.getDay() - 1;
+  start.setDate(start.getDate() - day);
   return Array.from({ length: 7 }, (_value, idx) => {
     const d = new Date(start);
-    d.setUTCDate(start.getUTCDate() + idx);
+    d.setDate(start.getDate() + idx);
     return d;
   });
 };
 
 const buildMonthMatrix = (monthAnchor: Date) => {
   const first = startOfMonth(monthAnchor);
-  const offset = first.getUTCDay() === 0 ? 6 : first.getUTCDay() - 1;
+  const offset = first.getDay() === 0 ? 6 : first.getDay() - 1;
   const cursor = new Date(first);
-  cursor.setUTCDate(first.getUTCDate() - offset);
+  cursor.setDate(first.getDate() - offset);
 
   const weeks: Date[][] = [];
   for (let week = 0; week < 6; week += 1) {
     const days: Date[] = [];
     for (let day = 0; day < 7; day += 1) {
       days.push(new Date(cursor));
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      cursor.setDate(cursor.getDate() + 1);
     }
     weeks.push(days);
   }
@@ -95,8 +79,7 @@ const buildMonthMatrix = (monthAnchor: Date) => {
 
 const isSameDay = (a: Date, b: Date) => formatDateKey(a) === formatDateKey(b);
 const isSameMonth = (a: Date, b: Date) =>
-  a.getUTCFullYear() === b.getUTCFullYear() &&
-  a.getUTCMonth() === b.getUTCMonth();
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 
 const HistoryScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -236,25 +219,11 @@ const HistoryScreen = () => {
   };
 
   const handlePrevMonth = () => {
-    setMonthCursor((prev) => {
-      // Go back one month
-      const year = prev.getUTCFullYear();
-      const month = prev.getUTCMonth();
-      const newMonth = month === 0 ? 11 : month - 1;
-      const newYear = month === 0 ? year - 1 : year;
-      return new Date(Date.UTC(newYear, newMonth, 1, 0, 0, 0, 0));
-    });
+    setMonthCursor((prev) => addMonths(prev, -1));
   };
 
   const handleNextMonth = () => {
-    setMonthCursor((prev) => {
-      // Go forward one month
-      const year = prev.getUTCFullYear();
-      const month = prev.getUTCMonth();
-      const newMonth = month === 11 ? 0 : month + 1;
-      const newYear = month === 11 ? year + 1 : year;
-      return new Date(Date.UTC(newYear, newMonth, 1, 0, 0, 0, 0));
-    });
+    setMonthCursor((prev) => addMonths(prev, 1));
   };
 
   const dayStatus = (date: Date) => {
@@ -268,8 +237,8 @@ const HistoryScreen = () => {
   const hasWorkouts = (date: Date) => !!dayMap.get(formatDateKey(date));
 
   const formatMonthLabel = (date: Date) => {
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
+    const year = date.getFullYear();
+    const month = date.getMonth();
     const monthNames = [
       "January",
       "February",
@@ -311,9 +280,9 @@ const HistoryScreen = () => {
       "November",
       "December",
     ];
-    const weekday = weekdayNames[date.getUTCDay()];
-    const month = monthNames[date.getUTCMonth()];
-    const day = date.getUTCDate();
+    const weekday = weekdayNames[date.getDay()];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
     return `${weekday}, ${month} ${day}`;
   };
 
@@ -333,9 +302,9 @@ const HistoryScreen = () => {
       "Nov",
       "Dec",
     ];
-    const weekday = weekdayNames[date.getUTCDay()];
-    const month = monthNames[date.getUTCMonth()];
-    const day = date.getUTCDate();
+    const weekday = weekdayNames[date.getDay()];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const formattedHours = hours % 12 || 12;
@@ -360,9 +329,9 @@ const HistoryScreen = () => {
       "November",
       "December",
     ];
-    const weekday = weekdayNames[date.getUTCDay()];
-    const month = monthNames[date.getUTCMonth()];
-    const day = date.getUTCDate();
+    const weekday = weekdayNames[date.getDay()];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
     return `${weekday}, ${month} ${day}`;
   };
 
@@ -2118,7 +2087,7 @@ const WeekView = ({
                 fontSize: 16,
               }}
             >
-              {date.getUTCDate()}
+              {date.getDate()}
             </Text>
             {hasWorkouts(date) ? (
               <View
@@ -2210,7 +2179,7 @@ const MonthGrid = ({
                   fontFamily: fontFamilies.semibold,
                 }}
               >
-                {date.getUTCDate()}
+                {date.getDate()}
               </Text>
               {hasWorkouts(date) ? (
                 <View

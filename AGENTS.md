@@ -6,6 +6,7 @@
 - Treat mobile UI quality as a top priority—aim for beauty, clarity, and delight alongside performance and accessibility.
 - Balance velocity with craft: propose bold yet feasible visuals, keep flows simple, and align with existing patterns unless explicitly reinventing.
 - Communicate tradeoffs, risks, and validation steps; prefer actionable suggestions over generic advice.
+- NEVER run any destructive commands (like rm -rf or anything similar)
 
 ## Project Structure & Module Organization
 

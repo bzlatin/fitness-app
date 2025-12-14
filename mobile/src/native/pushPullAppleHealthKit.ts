@@ -27,6 +27,14 @@ export type HealthKitWorkout = {
 type NativePushPullAppleHealthKitModule = {
   isAvailable(): Promise<boolean>;
   initHealthKit(permissions: HealthKitPermissions): Promise<boolean>;
+  saveWorkout(options: {
+    startDate: string;
+    endDate: string;
+    activityType?: string;
+    totalEnergyBurned?: number;
+    externalUUID?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<string>;
   getWorkouts(options: {
     startDate: string;
     endDate?: string;

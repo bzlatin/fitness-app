@@ -64,6 +64,7 @@ import {
 } from "../utils/timerSound";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { syncActiveSessionToWidget } from "../services/widgetSync";
+import { exportWorkoutToAppleHealth } from "../services/appleHealth";
 import {
   startWorkoutLiveActivity,
   updateWorkoutLiveActivity,
@@ -188,8 +189,8 @@ const VisibilityModal = ({
 const summarizeSets = (sessionSets: WorkoutSet[]) => {
   const totalSets = sessionSets.length;
   const totalVolume = sessionSets.reduce((acc, cur) => {
-    const reps = cur.actualReps ?? cur.targetReps ?? 0;
-    const weight = cur.actualWeight ?? cur.targetWeight ?? 0;
+    const reps = cur.actualReps ?? 0;
+    const weight = cur.actualWeight ?? 0;
     return acc + reps * weight;
   }, 0);
   const prCount = sessionSets.filter(
@@ -360,7 +361,6 @@ const WorkoutSessionScreen = () => {
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [autoRestTimer, setAutoRestTimer] = useState(true);
-  const [defaultsApplied, setDefaultsApplied] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [loggedSetIds, setLoggedSetIds] = useState<Set<string>>(new Set());
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
@@ -775,7 +775,6 @@ const WorkoutSessionScreen = () => {
     mutationFn: () => startSessionFromTemplate(route.params.templateId),
     onSuccess: (session) => {
       const trimmedSets = trimCardioSetsToSingle(session.sets);
-      setDefaultsApplied(false);
       setSessionId(session.id);
       setSets(trimmedSets);
       initializeTimer({ startedAt: session.startedAt });
@@ -928,7 +927,6 @@ const WorkoutSessionScreen = () => {
     let cancelled = false;
 
     void (async () => {
-      setDefaultsApplied(false);
       const trimmedSets = trimCardioSetsToSingle(data.sets);
       setSets(trimmedSets);
       initializeTimer({
@@ -990,18 +988,6 @@ const WorkoutSessionScreen = () => {
     if (timerActive) return;
     setElapsedSeconds(elapsedBaseSeconds);
   }, [timerActive, elapsedBaseSeconds]);
-
-  useEffect(() => {
-    if (defaultsApplied || sets.length === 0) return;
-    setSets((prev) =>
-      prev.map((set) => ({
-        ...set,
-        actualWeight: set.actualWeight ?? set.targetWeight,
-        actualReps: set.actualReps ?? set.targetReps,
-      }))
-    );
-    setDefaultsApplied(true);
-  }, [defaultsApplied, sets.length]);
 
   // Check for progression suggestions when session starts
   useEffect(() => {
@@ -1136,6 +1122,16 @@ const WorkoutSessionScreen = () => {
         totalSets: summary.totalSets,
         totalVolume: summary.totalVolume ?? 0,
         durationMinutes: Math.floor(elapsedSeconds / 60),
+      });
+
+      void exportWorkoutToAppleHealth({
+        sessionId: session.id,
+        startedAt: session.startedAt,
+        finishedAt: session.finishedAt ?? new Date().toISOString(),
+        templateName,
+        totalEnergyBurned: session.totalEnergyBurned ?? null,
+        enabled: user?.appleHealthEnabled === true,
+        permissions: user?.appleHealthPermissions ?? null,
       });
 
       // Invalidate fatigue query to refresh recovery data
@@ -2499,7 +2495,30 @@ const WorkoutSessionScreen = () => {
 
       <Pressable
         disabled={!sessionId || finishMutation.isPending}
-        onPress={() => finishMutation.mutate()}
+        onPress={() => {
+          const unloggedSets = sets.filter((set) => !loggedSetIds.has(set.id));
+          if (unloggedSets.length === 0) {
+            finishMutation.mutate();
+            return;
+          }
+
+          const unloggedExercises = new Set(unloggedSets.map((s) => s.exerciseId)).size;
+          const title =
+            loggedSetIds.size === 0 ? "Finish without logging?" : "Some sets are unlogged";
+          const message =
+            loggedSetIds.size === 0
+              ? "You haven't logged any sets yet. If you finish now, this workout will count as 0 logged sets."
+              : `You have ${unloggedSets.length} unlogged set${unloggedSets.length === 1 ? "" : "s"} across ${unloggedExercises} exercise${unloggedExercises === 1 ? "" : "s"}.`;
+
+          Alert.alert(title, message, [
+            { text: "Keep logging", style: "cancel" },
+            {
+              text: "Finish anyway",
+              style: "destructive",
+              onPress: () => finishMutation.mutate(),
+            },
+          ]);
+        }}
         style={({ pressed }) => ({
           backgroundColor: colors.primary,
           paddingVertical: 16,

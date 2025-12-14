@@ -187,10 +187,9 @@ const fetchVolumeByMuscle = async (userId: string, start: Date, end: Date) => {
       SELECT
         ${muscleGroupExpr} as muscle_group,
         SUM(
-          COALESCE(ws.actual_reps, ws.target_reps, 0) *
+          COALESCE(ws.actual_reps, 0) *
           COALESCE(
             ws.actual_weight,
-            ws.target_weight,
             CASE
               WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $4
               ELSE 1
@@ -227,13 +226,12 @@ const fetchLastSessionByMuscle = async (userId: string) => {
           s.id as session_id,
           s.finished_at,
           ${muscleGroupExpr} as muscle_group,
-          COUNT(*) FILTER (WHERE COALESCE(ws.actual_reps, ws.target_reps, 0) > 0) as session_sets,
-          SUM(COALESCE(ws.actual_reps, ws.target_reps, 0)) as session_reps,
+          COUNT(*) FILTER (WHERE COALESCE(ws.actual_reps, 0) > 0) as session_sets,
+          SUM(COALESCE(ws.actual_reps, 0)) as session_reps,
           SUM(
-            COALESCE(ws.actual_reps, ws.target_reps, 0) *
+            COALESCE(ws.actual_reps, 0) *
             COALESCE(
               ws.actual_weight,
-              ws.target_weight,
               CASE
                 WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $2
                 ELSE 1
@@ -302,20 +300,19 @@ const fetchStimulusRows = async (userId: string, start: Date) => {
         s.finished_at,
         COUNT(*) FILTER (
           WHERE COALESCE(LOWER(e.category), '') <> 'cardio'
-            AND COALESCE(ws.actual_reps, ws.target_reps, 0) > 0
+            AND COALESCE(ws.actual_reps, 0) > 0
         ) as strength_sets,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') <> 'cardio'
-            THEN COALESCE(ws.actual_reps, ws.target_reps, 0)
+            THEN COALESCE(ws.actual_reps, 0)
             ELSE 0
           END
         ) as strength_reps,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') <> 'cardio'
-            THEN COALESCE(ws.actual_reps, ws.target_reps, 0) *
+            THEN COALESCE(ws.actual_reps, 0) *
               COALESCE(
                 ws.actual_weight,
-                ws.target_weight,
                 CASE
                   WHEN LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight')) = 'bodyweight' THEN $3
                   ELSE 1
@@ -326,26 +323,26 @@ const fetchStimulusRows = async (userId: string, start: Date) => {
         ) as strength_volume,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
-            THEN COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            THEN COALESCE(ws.actual_duration_minutes, 0)
             ELSE 0
           END
         ) as cardio_minutes,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
-            THEN COALESCE(ws.actual_distance, ws.target_distance, 0)
+            THEN COALESCE(ws.actual_distance, 0)
             ELSE 0
           END
         ) as cardio_distance,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
-            THEN COALESCE(ws.actual_incline, ws.target_incline, 0) *
-              COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            THEN COALESCE(ws.actual_incline, 0) *
+              COALESCE(ws.actual_duration_minutes, 0)
             ELSE 0
           END
         ) as cardio_incline_minutes,
         SUM(
           CASE WHEN COALESCE(LOWER(e.category), '') = 'cardio'
-            THEN COALESCE(ws.actual_duration_minutes, ws.target_duration_minutes, 0)
+            THEN COALESCE(ws.actual_duration_minutes, 0)
             ELSE 0
           END
         ) as cardio_minutes_for_avg

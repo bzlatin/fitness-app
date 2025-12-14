@@ -363,7 +363,7 @@ const SettingsScreen = () => {
       if (enabled) {
         const permissionsToUse = { workouts: true, activeEnergy: true, heartRate: true };
         setHealthPermissions(permissionsToUse);
-        const granted = await requestAppleHealthPermissions(permissionsToUse);
+        const granted = await requestAppleHealthPermissions(permissionsToUse, "readWrite");
         if (!granted) {
           setAppleHealthEnabledUi(previousEnabled);
           Alert.alert(
@@ -438,7 +438,7 @@ const SettingsScreen = () => {
 
     try {
       if (appleHealthEnabled && isIOS) {
-        await requestAppleHealthPermissions(next);
+        await requestAppleHealthPermissions(next, "readWrite");
       }
       await updateProfile({
         appleHealthPermissions: next,

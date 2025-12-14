@@ -50,9 +50,13 @@ export const undoAutoEndSession = async (id: string) => {
   return res.data;
 };
 
-export const fetchHistoryRange = async (start: string, end: string) => {
+export const fetchHistoryRange = async (
+  start: string,
+  end: string,
+  tzOffsetMinutes: number
+) => {
   const res = await apiClient.get<WorkoutHistoryResponse>("/sessions/history/range", {
-    params: { start, end },
+    params: { start, end, tzOffsetMinutes },
   });
   return res.data;
 };

@@ -1526,6 +1526,7 @@ To test notifications:
 
 - First-run permission prompt with clear toggle per data type: workouts, active energy, heart rate (optional)
 - Auto-import strength workouts (name, sets/reps/weight if available) into history with “Imported from Apple Health” badge
+- When enabled, completed in-app workouts are also saved to Apple Health as workouts (so they appear in the Health app)
 - Merge Apple Health sessions into streak + weekly goal calculations without double-counting in-app sessions
 - Optional heart rate overlay on session summary (avg/max) and calories burned estimates
 

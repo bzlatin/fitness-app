@@ -8,14 +8,20 @@ import {
 } from "../api/sessions";
 import { WorkoutHistoryResponse, WorkoutSet } from "../types/workouts";
 
-const historyKey = (startIso: string, endIso: string) => ["history", startIso, endIso];
+const historyKey = (startIso: string, endIso: string, tzOffsetMinutes: number) => [
+  "history",
+  startIso,
+  endIso,
+  tzOffsetMinutes,
+];
 
 export const useWorkoutHistory = (start: Date, end: Date) => {
   const startIso = start.toISOString();
   const endIso = end.toISOString();
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
   return useQuery<WorkoutHistoryResponse>({
-    queryKey: historyKey(startIso, endIso),
-    queryFn: () => fetchHistoryRange(startIso, endIso),
+    queryKey: historyKey(startIso, endIso, tzOffsetMinutes),
+    queryFn: () => fetchHistoryRange(startIso, endIso, tzOffsetMinutes),
     select: (data) => {
       const uniqueSessionIds = new Set<string>();
       // CRITICAL: Only show sessions that have been completed (finishedAt is set)
@@ -50,7 +56,11 @@ export const useCreateManualSession = (rangeStart: Date, rangeEnd: Date) => {
     mutationFn: createManualSession,
     onSuccess: () =>
       client.invalidateQueries({
-        queryKey: historyKey(rangeStart.toISOString(), rangeEnd.toISOString()),
+        queryKey: historyKey(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString(),
+          new Date().getTimezoneOffset()
+        ),
       }),
   });
 };
@@ -61,7 +71,11 @@ export const useDuplicateSession = (rangeStart: Date, rangeEnd: Date) => {
     mutationFn: duplicateSession,
     onSuccess: () =>
       client.invalidateQueries({
-        queryKey: historyKey(rangeStart.toISOString(), rangeEnd.toISOString()),
+        queryKey: historyKey(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString(),
+          new Date().getTimezoneOffset()
+        ),
       }),
   });
 };
@@ -72,7 +86,11 @@ export const useDeleteSession = (rangeStart: Date, rangeEnd: Date) => {
     mutationFn: deleteSession,
     onSuccess: () =>
       client.invalidateQueries({
-        queryKey: historyKey(rangeStart.toISOString(), rangeEnd.toISOString()),
+        queryKey: historyKey(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString(),
+          new Date().getTimezoneOffset()
+        ),
       }),
   });
 };
@@ -89,7 +107,11 @@ export const useUpdateSession = (rangeStart: Date, rangeEnd: Date) => {
     }) => updateSession(id, payload),
     onSuccess: () =>
       client.invalidateQueries({
-        queryKey: historyKey(rangeStart.toISOString(), rangeEnd.toISOString()),
+        queryKey: historyKey(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString(),
+          new Date().getTimezoneOffset()
+        ),
       }),
   });
 };
