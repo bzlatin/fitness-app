@@ -19,17 +19,38 @@ const isProduction = process.env.NODE_ENV === "production";
 if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Please add it to your .env.");
 }
+const normalizeSslMode = (value) => {
+    if (!value)
+        return null;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized)
+        return null;
+    return normalized;
+};
 const normalizeConnectionString = (raw) => {
     try {
         const url = new URL(raw);
         const hostname = url.hostname.toLowerCase();
         const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-        const requestedSslMode = url.searchParams.get("sslmode");
+        // Some providers/tools use `ssl=require` instead of libpq's `sslmode=require`.
+        // Normalize to `sslmode` so the rest of the code can behave consistently.
+        const sslParam = normalizeSslMode(url.searchParams.get("ssl"));
+        const requestedSslModeFromUrl = normalizeSslMode(url.searchParams.get("sslmode"));
+        let requestedSslMode = requestedSslModeFromUrl ??
+            (sslParam === "require" || sslParam === "true" || sslParam === "1"
+                ? "require"
+                : sslParam === "disable" || sslParam === "false" || sslParam === "0"
+                    ? "disable"
+                    : sslParam);
         if (!requestedSslMode && !isLocalHost) {
-            // Keep the URL "secure by default" for tools that honor libpq params.
             const isIpHost = net_1.default.isIP(hostname) !== 0;
-            url.searchParams.set("sslmode", isIpHost ? "verify-ca" : "verify-full");
+            requestedSslMode = isIpHost ? "verify-ca" : "verify-full";
         }
+        // Node-postgres parses `sslmode=require` into `ssl={}` (which still verifies certs),
+        // and the parsed SSL config overrides `config.ssl` when `connectionString` is used.
+        // Remove these params and rely on the explicit `ssl` option we compute below.
+        url.searchParams.delete("sslmode");
+        url.searchParams.delete("ssl");
         return { normalized: url.toString(), isLocalHost, requestedSslMode };
     }
     catch {
