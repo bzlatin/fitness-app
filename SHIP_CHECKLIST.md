@@ -9,7 +9,7 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 - [x] **No dev auth bypass in production**: `ALLOW_DEV_AUTH_BYPASS` is **not** set on Render (not present in the env list you shared).
 - [x] **DB seed data disabled**: `NODE_ENV=production` and `DB_BOOTSTRAP_MODE=prod` (verify values on Render).
 - [ ] **App Store webhooks are verified**: App Store Server Notifications are cryptographically verified (see section 2.4).
-- [ ] **TLS is verified**: database connections do not rely on `sslmode=no-verify` / `rejectUnauthorized: false` for production.
+- [x] **TLS is verified**: database connections do not rely on `sslmode=no-verify` / `rejectUnauthorized: false` for production.
 - [x] **Auth0 issuer/audience present**: `AUTH0_DOMAIN` + `AUTH0_AUDIENCE` are set on Render (verify values match production).
 - [ ] **Upgrade + restore works**: purchase → unlock Pro, restore purchases, refund/expire/renew paths.
 

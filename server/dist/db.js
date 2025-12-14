@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initDb = exports.query = exports.pool = void 0;
 const pg_1 = require("pg");
 const dns_1 = __importDefault(require("dns"));
+const fs_1 = __importDefault(require("fs"));
+const net_1 = __importDefault(require("net"));
 const exerciseData_1 = require("./utils/exerciseData");
 const migrationRunner_1 = require("./utils/migrationRunner");
 // Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
@@ -13,6 +15,7 @@ if (dns_1.default.setDefaultResultOrder) {
     dns_1.default.setDefaultResultOrder("ipv4first");
 }
 const connectionString = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === "production";
 if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Please add it to your .env.");
 }
@@ -21,29 +24,51 @@ const normalizeConnectionString = (raw) => {
         const url = new URL(raw);
         const hostname = url.hostname.toLowerCase();
         const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-        // Strip ssl directives from provider URLs so our explicit config isn't overwritten by pg's parser
+        const requestedSslMode = url.searchParams.get("sslmode");
+        // Strip SSL directives from provider URLs so our explicit config isn't overwritten by pg's parser.
         url.searchParams.delete("ssl");
         url.searchParams.delete("sslmode");
         if (!isLocalHost) {
-            url.searchParams.set("sslmode", "no-verify");
+            // Keep the URL "secure by default" for tools that honor libpq params.
+            const isIpHost = net_1.default.isIP(hostname) !== 0;
+            url.searchParams.set("sslmode", isIpHost ? "verify-ca" : "verify-full");
         }
-        return { normalized: url.toString(), isLocalHost };
+        return { normalized: url.toString(), isLocalHost, requestedSslMode };
     }
     catch {
         const isLocalHost = raw.includes("localhost") || raw.includes("127.0.0.1");
-        return { normalized: raw, isLocalHost };
+        return { normalized: raw, isLocalHost, requestedSslMode: null };
     }
 };
-const { normalized: normalizedConnectionString, isLocalHost } = normalizeConnectionString(connectionString);
-const ssl = isLocalHost ? false : { rejectUnauthorized: false };
-// Force pg to apply the same relaxed SSL policy (avoids self-signed chain errors from poolers)
-pg_1.defaults.ssl = ssl;
-// Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
-if (!ssl) {
-    process.env.PGSSLMODE = "disable";
-}
-else {
-    process.env.PGSSLMODE = "no-verify";
+const { normalized: normalizedConnectionString, isLocalHost, requestedSslMode } = normalizeConnectionString(connectionString);
+const loadCaPem = () => {
+    const inlinePem = process.env.DB_SSL_CA_PEM?.trim();
+    if (inlinePem)
+        return inlinePem;
+    const caPath = process.env.DB_SSL_CA_PATH?.trim();
+    if (caPath)
+        return fs_1.default.readFileSync(caPath, "utf8");
+    return undefined;
+};
+const caPem = loadCaPem();
+const ssl = isLocalHost
+    ? false
+    : caPem
+        ? { rejectUnauthorized: true, ca: caPem }
+        : { rejectUnauthorized: true };
+if (isProduction) {
+    if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
+        throw new Error("Refusing to start: NODE_TLS_REJECT_UNAUTHORIZED=0 disables TLS verification.");
+    }
+    if (!isLocalHost) {
+        const insecureSslModes = new Set(["disable", "allow", "prefer", "require", "no-verify"]);
+        if (requestedSslMode && insecureSslModes.has(requestedSslMode)) {
+            throw new Error(`Refusing to start: DATABASE_URL sslmode=${requestedSslMode} does not verify the database certificate. Set your production DATABASE_URL to use sslmode=verify-full (preferred) or sslmode=verify-ca.`);
+        }
+        if (ssl === false) {
+            throw new Error("Refusing to start: hosted database connections must use TLS in production.");
+        }
+    }
 }
 exports.pool = new pg_1.Pool({
     connectionString: normalizedConnectionString,
@@ -185,7 +210,6 @@ const seedExercisesFromJson = async () => {
 };
 const initDb = async () => {
     await (0, migrationRunner_1.runSqlMigrations)(exports.pool);
-    const isProduction = process.env.NODE_ENV === "production";
     const isHostedDatabase = !isLocalHost;
     const bootstrapModeRaw = process.env.DB_BOOTSTRAP_MODE;
     const bootstrapMode = bootstrapModeRaw

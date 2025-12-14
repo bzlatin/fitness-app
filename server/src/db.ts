@@ -1,5 +1,7 @@
-import { Pool, QueryResultRow, defaults as pgDefaults } from "pg";
+import { Pool, QueryResultRow } from "pg";
 import dns from "dns";
+import fs from "fs";
+import net from "net";
 import { loadExercisesJson } from "./utils/exerciseData";
 import { runSqlMigrations } from "./utils/migrationRunner";
 
@@ -9,46 +11,84 @@ if (dns.setDefaultResultOrder) {
 }
 
 const connectionString = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === "production";
 
 if (!connectionString) {
   throw new Error("DATABASE_URL is not set. Please add it to your .env.");
 }
 
-const normalizeConnectionString = (raw: string) => {
+type NormalizedConnection = {
+  normalized: string;
+  isLocalHost: boolean;
+  requestedSslMode: string | null;
+};
+
+const normalizeConnectionString = (raw: string): NormalizedConnection => {
   try {
     const url = new URL(raw);
     const hostname = url.hostname.toLowerCase();
     const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    const requestedSslMode = url.searchParams.get("sslmode");
 
-    // Strip ssl directives from provider URLs so our explicit config isn't overwritten by pg's parser
+    // Strip SSL directives from provider URLs so our explicit config isn't overwritten by pg's parser.
     url.searchParams.delete("ssl");
     url.searchParams.delete("sslmode");
 
     if (!isLocalHost) {
-      url.searchParams.set("sslmode", "no-verify");
+      // Keep the URL "secure by default" for tools that honor libpq params.
+      const isIpHost = net.isIP(hostname) !== 0;
+      url.searchParams.set("sslmode", isIpHost ? "verify-ca" : "verify-full");
     }
 
-    return { normalized: url.toString(), isLocalHost };
+    return { normalized: url.toString(), isLocalHost, requestedSslMode };
   } catch {
     const isLocalHost =
       raw.includes("localhost") || raw.includes("127.0.0.1");
-    return { normalized: raw, isLocalHost };
+    return { normalized: raw, isLocalHost, requestedSslMode: null };
   }
 };
 
-const { normalized: normalizedConnectionString, isLocalHost } =
+const { normalized: normalizedConnectionString, isLocalHost, requestedSslMode } =
   normalizeConnectionString(connectionString);
 
-const ssl = isLocalHost ? false : { rejectUnauthorized: false };
+const loadCaPem = () => {
+  const inlinePem = process.env.DB_SSL_CA_PEM?.trim();
+  if (inlinePem) return inlinePem;
 
-// Force pg to apply the same relaxed SSL policy (avoids self-signed chain errors from poolers)
-pgDefaults.ssl = ssl;
+  const caPath = process.env.DB_SSL_CA_PATH?.trim();
+  if (caPath) return fs.readFileSync(caPath, "utf8");
 
-// Ensure pg skips TLS chain verification on hosted DBs with self-signed certs (e.g., Supabase pooler)
-if (!ssl) {
-  process.env.PGSSLMODE = "disable";
-} else {
-  process.env.PGSSLMODE = "no-verify";
+  return undefined;
+};
+
+const caPem = loadCaPem();
+const ssl = isLocalHost
+  ? false
+  : caPem
+    ? { rejectUnauthorized: true, ca: caPem }
+    : { rejectUnauthorized: true };
+
+if (isProduction) {
+  if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
+    throw new Error(
+      "Refusing to start: NODE_TLS_REJECT_UNAUTHORIZED=0 disables TLS verification."
+    );
+  }
+
+  if (!isLocalHost) {
+    const insecureSslModes = new Set(["disable", "allow", "prefer", "require", "no-verify"]);
+    if (requestedSslMode && insecureSslModes.has(requestedSslMode)) {
+      throw new Error(
+        `Refusing to start: DATABASE_URL sslmode=${requestedSslMode} does not verify the database certificate. Set your production DATABASE_URL to use sslmode=verify-full (preferred) or sslmode=verify-ca.`
+      );
+    }
+
+    if (ssl === false) {
+      throw new Error(
+        "Refusing to start: hosted database connections must use TLS in production."
+      );
+    }
+  }
 }
 
 export const pool = new Pool({
@@ -239,7 +279,6 @@ const seedExercisesFromJson = async () => {
 export const initDb = async () => {
   await runSqlMigrations(pool);
 
-  const isProduction = process.env.NODE_ENV === "production";
   const isHostedDatabase = !isLocalHost;
   const bootstrapModeRaw = process.env.DB_BOOTSTRAP_MODE;
   const bootstrapMode = bootstrapModeRaw
