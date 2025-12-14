@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import {
   Modal,
   Pressable,
@@ -11,7 +11,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,7 +79,8 @@ const HomeScreen = () => {
   }, [activeSessionStatus, activeSessionId, rawActiveSessionId, autoEndedSessionId]);
 
   // Fetch fatigue data for all users (free users can see heatmap)
-  const { data: fatigue, isLoading: fatigueLoading } = useFatigue(true);
+  const { data: fatigue, isLoading: fatigueLoading, refetch: refetchFatigue } =
+    useFatigue(true);
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
@@ -133,6 +134,12 @@ const HomeScreen = () => {
     setPaywallTrigger(trigger);
     setShowPaywallModal(true);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchFatigue();
+    }, [refetchFatigue])
+  );
 
   const closePaywall = () => {
     setShowPaywallModal(false);

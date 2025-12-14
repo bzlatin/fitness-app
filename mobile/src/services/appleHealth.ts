@@ -15,6 +15,7 @@ import {
 } from "../api/analytics";
 
 const LAST_SYNC_STORAGE_KEY = "pushpull.apple_health.last_sync";
+const EXPORTED_SESSIONS_STORAGE_KEY = "pushpull.apple_health.exported_sessions";
 const DEFAULT_LOOKBACK_DAYS = 14;
 const DEFAULT_PERMISSIONS: AppleHealthPermissions = {
   workouts: true,
@@ -75,7 +76,8 @@ const formatWorkoutName = (raw?: string | null) => {
 };
 
 export const requestAppleHealthPermissions = async (
-  permissions: AppleHealthPermissions = DEFAULT_PERMISSIONS
+  permissions: AppleHealthPermissions = DEFAULT_PERMISSIONS,
+  mode: "read" | "readWrite" = "read"
 ) => {
   const HealthKit = getHealthKitModule();
   if (!HealthKit) return false;
@@ -88,6 +90,7 @@ export const requestAppleHealthPermissions = async (
     return await HealthKit.initHealthKit({
       permissions: {
         read: readPermissions,
+        write: mode === "readWrite" ? ["Workout"] : [],
       },
     });
   } catch (error) {
@@ -104,13 +107,13 @@ const fetchWorkoutsSince = async (
   if (!HealthKit) return [];
 
   try {
-    const workouts = await HealthKit.getWorkouts({
+    const workouts = (await HealthKit.getWorkouts({
       startDate: since.toISOString(),
       includeHeartRate: permissions.heartRate,
-    });
+    })) as unknown[];
 
     return workouts
-      .map((workout) => {
+      .map((workout: unknown) => {
         const item = workout as Record<string, unknown>;
         const start = new Date((item.startDate as string) ?? (item.start as string));
         const endRaw = (item.endDate as string) ?? (item.end as string);
@@ -221,9 +224,123 @@ export const syncAppleHealthWorkouts = async ({
 export const clearAppleHealthData = async () => {
   await clearAppleHealthImports();
   await AsyncStorage.removeItem(LAST_SYNC_STORAGE_KEY);
+  await AsyncStorage.removeItem(EXPORTED_SESSIONS_STORAGE_KEY);
 };
 
 export const getLastAppleHealthSync = async () => {
   const raw = await AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY);
   return raw ? new Date(raw) : null;
+};
+
+const guessActivityType = (templateName?: string | null) => {
+  const name = (templateName ?? "").toLowerCase();
+  if (!name) return "strength_training";
+  if (/\brun(ning)?\b/.test(name)) return "running";
+  if (/\bwalk(ing)?\b/.test(name)) return "walking";
+  if (/\bcycle|cycling|bike\b/.test(name)) return "cycling";
+  if (/\bswim(ming)?\b/.test(name)) return "swimming";
+  if (/\brow(ing)?\b/.test(name)) return "rowing";
+  if (/\belliptical\b/.test(name)) return "elliptical";
+  if (/\bhiit\b/.test(name)) return "hiit";
+  if (/\byoga\b/.test(name)) return "yoga";
+  if (/\bpilates\b/.test(name)) return "pilates";
+  if (/\bhike|hiking\b/.test(name)) return "hiking";
+  if (/\bstair\b/.test(name)) return "stair_climbing";
+  return "strength_training";
+};
+
+const readExportedSessionIds = async (): Promise<Record<string, string>> => {
+  const raw = await AsyncStorage.getItem(EXPORTED_SESSIONS_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+
+const writeExportedSessionIds = async (value: Record<string, string>) => {
+  const entries = Object.entries(value);
+  if (entries.length <= 200) {
+    await AsyncStorage.setItem(EXPORTED_SESSIONS_STORAGE_KEY, JSON.stringify(value));
+    return;
+  }
+
+  const trimmed = entries
+    .sort((a, b) => (a[1] < b[1] ? 1 : -1))
+    .slice(0, 200)
+    .reduce<Record<string, string>>((acc, [k, v]) => {
+      acc[k] = v;
+      return acc;
+    }, {});
+
+  await AsyncStorage.setItem(EXPORTED_SESSIONS_STORAGE_KEY, JSON.stringify(trimmed));
+};
+
+export const exportWorkoutToAppleHealth = async ({
+  sessionId,
+  startedAt,
+  finishedAt,
+  templateName,
+  totalEnergyBurned,
+  enabled,
+  permissions,
+}: {
+  sessionId: string;
+  startedAt: string;
+  finishedAt: string;
+  templateName?: string | null;
+  totalEnergyBurned?: number | null;
+  enabled: boolean;
+  permissions?: AppleHealthPermissions | null;
+}): Promise<{ status: "exported" | "skipped" | "unavailable" | "denied" | "disabled" }> => {
+  if (Platform.OS !== "ios") return { status: "unavailable" };
+  if (!enabled) return { status: "disabled" };
+  if (permissions?.workouts === false) return { status: "disabled" };
+
+  const HealthKit = getHealthKitModule();
+  if (!HealthKit || typeof HealthKit.saveWorkout !== "function") {
+    return { status: "unavailable" };
+  }
+
+  const start = new Date(startedAt);
+  const end = new Date(finishedAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return { status: "skipped" };
+  }
+
+  const exportedIds = await readExportedSessionIds();
+  if (exportedIds[sessionId]) return { status: "skipped" };
+
+  const authorized = await requestAppleHealthPermissions(
+    { ...DEFAULT_PERMISSIONS, ...permissions, workouts: true },
+    "readWrite"
+  );
+  if (!authorized) return { status: "denied" };
+
+  try {
+    await HealthKit.saveWorkout({
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      activityType: guessActivityType(templateName),
+      totalEnergyBurned:
+        typeof totalEnergyBurned === "number" && Number.isFinite(totalEnergyBurned)
+          ? totalEnergyBurned
+          : undefined,
+      externalUUID: sessionId,
+      metadata: {
+        templateName: templateName ?? undefined,
+      },
+    });
+
+    exportedIds[sessionId] = new Date().toISOString();
+    await writeExportedSessionIds(exportedIds);
+
+    return { status: "exported" };
+  } catch (err) {
+    console.warn("[AppleHealth] Failed to export workout", err);
+    return { status: "unavailable" };
+  }
 };

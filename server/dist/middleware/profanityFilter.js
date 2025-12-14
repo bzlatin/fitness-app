@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rateLimitFeedback = exports.validateProfanity = exports.containsProfanity = void 0;
+exports.validateProfanity = exports.containsProfanity = void 0;
 /**
  * Profanity word list - common inappropriate words to filter
  * This is a basic list and should be expanded based on moderation needs
@@ -73,36 +73,3 @@ const validateProfanity = (fields) => {
     };
 };
 exports.validateProfanity = validateProfanity;
-/**
- * Rate limiting for feedback submissions
- * Prevents spam by limiting users to 5 submissions per hour (30 for admins)
- */
-const submissionTracking = new Map();
-const rateLimitFeedback = async (req, res, next) => {
-    const userId = res.locals.userId;
-    if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-    // Check if user is admin (admins get higher limit for testing)
-    const isAdmin = res.locals.isAdmin ?? false;
-    const limit = isAdmin ? 30 : 5;
-    const now = Date.now();
-    const userTracking = submissionTracking.get(userId);
-    // Reset if hour has passed
-    if (!userTracking || now > userTracking.resetAt) {
-        submissionTracking.set(userId, {
-            count: 1,
-            resetAt: now + 60 * 60 * 1000, // 1 hour from now
-        });
-        return next();
-    }
-    // Check if under limit
-    if (userTracking.count < limit) {
-        userTracking.count += 1;
-        return next();
-    }
-    return res.status(429).json({
-        error: `You've submitted too many feedback items. Please try again in an hour.`,
-    });
-};
-exports.rateLimitFeedback = rateLimitFeedback;

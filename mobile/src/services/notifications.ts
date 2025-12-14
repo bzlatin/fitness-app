@@ -90,7 +90,7 @@ export const registerForPushNotificationsAsync = async (): Promise<
       })
     ).data;
 
-    console.log("[Notifications] Push token obtained:", token);
+    console.log("[Notifications] Push token obtained");
 
     // Register token with backend
     await apiClient.post("/notifications/register-token", {

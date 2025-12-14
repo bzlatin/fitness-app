@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
+const zod_1 = require("zod");
+const validate_1 = require("../middleware/validate");
 const SQUAD_MEMBERS_AGGREGATE = `
   SELECT s.id, s.name, s.description, s.is_public, s.created_by,
     COALESCE(
@@ -74,6 +76,39 @@ const fetchSquadById = async (userId, squadId) => {
     return mapSquadRow(result.rows[0], userId);
 };
 const router = (0, express_1.Router)();
+const profileUpdateSchema = zod_1.z
+    .object({
+    name: zod_1.z.string().trim().min(1).max(60).optional(),
+    handle: zod_1.z.string().trim().min(1).max(32).nullable().optional(),
+    bio: zod_1.z.string().max(500).nullable().optional(),
+    avatarUrl: zod_1.z.string().url().max(2048).nullable().optional(),
+    profileCompletedAt: zod_1.z.string().datetime().nullable().optional(),
+    trainingStyle: zod_1.z.string().max(80).nullable().optional(),
+    gymName: zod_1.z.string().max(80).nullable().optional(),
+    gymVisibility: zod_1.z.enum(["hidden", "shown"]).nullable().optional(),
+    weeklyGoal: zod_1.z.number().int().min(1).max(14).optional(),
+    onboardingData: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).nullable().optional(),
+    progressiveOverloadEnabled: zod_1.z.boolean().optional(),
+    restTimerSoundEnabled: zod_1.z.boolean().optional(),
+    appleHealthEnabled: zod_1.z.boolean().optional(),
+    appleHealthPermissions: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).nullable().optional(),
+    appleHealthLastSyncAt: zod_1.z.string().datetime().nullable().optional(),
+})
+    .strip();
+const reactionBodySchema = zod_1.z
+    .object({
+    targetType: zod_1.z.enum(["status", "share"]),
+    targetId: zod_1.z.string().trim().min(1).max(200),
+    emoji: zod_1.z.string().trim().min(1).max(8),
+})
+    .strip();
+const commentBodySchema = zod_1.z
+    .object({
+    targetType: zod_1.z.enum(["status", "share"]),
+    targetId: zod_1.z.string().trim().min(1).max(200),
+    comment: zod_1.z.string().trim().min(1).max(500),
+})
+    .strip();
 const normalizeHandle = (value) => {
     if (!value)
         return undefined;
@@ -310,7 +345,7 @@ router.get("/me", async (_req, res) => {
         return res.status(500).json({ error: "Failed to load profile" });
     }
 });
-router.put("/me", async (req, res) => {
+router.put("/me", (0, validate_1.validateBody)(profileUpdateSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -318,21 +353,6 @@ router.put("/me", async (req, res) => {
     const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, restTimerSoundEnabled, appleHealthEnabled, appleHealthPermissions, appleHealthLastSyncAt, } = req.body;
     const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
     const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
-    if (name !== undefined && !name.trim()) {
-        return res.status(400).json({ error: "Name cannot be empty" });
-    }
-    if (gymVisibility &&
-        gymVisibility !== "hidden" &&
-        gymVisibility !== "shown") {
-        return res.status(400).json({ error: "Invalid gym visibility" });
-    }
-    if (progressiveOverloadEnabled !== undefined &&
-        typeof progressiveOverloadEnabled !== "boolean") {
-        return res.status(400).json({ error: "Invalid progressive overload flag" });
-    }
-    if (appleHealthEnabled !== undefined && typeof appleHealthEnabled !== "boolean") {
-        return res.status(400).json({ error: "Invalid Apple Health enabled flag" });
-    }
     const currentUserResult = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
     const currentUser = currentUserResult.rows[0];
     if (!currentUser) {
@@ -1000,21 +1020,12 @@ router.get("/blocked", async (_req, res) => {
     }
 });
 // Workout reactions - add emoji reaction
-router.post("/reactions", async (req, res) => {
+router.post("/reactions", (0, validate_1.validateBody)(reactionBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     const { targetType, targetId, emoji } = req.body;
-    if (!targetType || !["status", "share"].includes(targetType)) {
-        return res.status(400).json({ error: "Invalid targetType" });
-    }
-    if (!targetId) {
-        return res.status(400).json({ error: "targetId is required" });
-    }
-    if (!emoji) {
-        return res.status(400).json({ error: "emoji is required" });
-    }
     const allowedEmojis = ["🔥", "💪", "🚀", "🙌", "❤️", "👏"];
     if (!allowedEmojis.includes(emoji)) {
         return res.status(400).json({ error: "Invalid emoji" });
@@ -1055,23 +1066,13 @@ router.delete("/reactions/:targetType/:targetId/:emoji", async (req, res) => {
     }
 });
 // Add comment
-router.post("/comments", async (req, res) => {
+router.post("/comments", (0, validate_1.validateBody)(commentBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     const { targetType, targetId, comment } = req.body;
-    if (!targetType || !["status", "share"].includes(targetType)) {
-        return res.status(400).json({ error: "Invalid targetType" });
-    }
-    if (!targetId) {
-        return res.status(400).json({ error: "targetId is required" });
-    }
-    if (!comment?.trim()) {
-        return res.status(400).json({ error: "comment is required" });
-    }
-    // Limit comment length
-    const trimmedComment = comment.trim().slice(0, 500);
+    const trimmedComment = comment;
     try {
         const id = (0, id_1.generateId)();
         const result = await (0, db_1.query)(`

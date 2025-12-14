@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import path from "path";
 import { UnauthorizedError } from "express-oauth2-jwt-bearer";
 import exercisesRouter from "./routes/exercises";
@@ -14,18 +15,73 @@ import notificationsRouter from "./routes/notifications";
 import feedbackRouter from "./routes/feedback";
 import engagementRouter from "./routes/engagement";
 import { templateSharesAuthedRouter, templateSharesPublicRouter } from "./routes/templateShares";
-import stripeWebhookRouter from "./webhooks/stripe";
 import appStoreWebhookRouter from "./webhooks/appstore";
 import { attachUser, ensureUser, maybeRequireAuth } from "./middleware/auth";
 
 const app = express();
+app.disable("x-powered-by");
 
-// Stripe webhooks need the raw body, so mount before JSON parsing.
-app.use("/webhooks/stripe", stripeWebhookRouter);
 app.use("/webhooks/appstore", appStoreWebhookRouter);
 
-app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+const isProduction = process.env.NODE_ENV === "production";
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", process.env.TRUST_PROXY);
+} else if (isProduction) {
+  app.set("trust proxy", 1);
+}
+
+const parseAllowedOrigins = () => {
+  const raw = process.env.CORS_ALLOWED_ORIGINS;
+  if (raw && raw.trim()) {
+    return raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  if (isProduction) return [];
+
+  return [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:19006",
+    "http://127.0.0.1:19006",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ];
+};
+
+const allowedOrigins = new Set(parseAllowedOrigins());
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      return callback(null, false);
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Template-Share-Code"],
+    maxAge: 86400,
+    optionsSuccessStatus: 204,
+  })
+);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+const defaultJson = express.json({ limit: "200kb" });
+app.use("/api/ai", express.json({ limit: "500kb" }));
+app.use("/api/subscriptions", express.json({ limit: "50kb" }));
+app.use("/api/social", express.json({ limit: "100kb" }));
+app.use("/api/feedback", express.json({ limit: "100kb" }));
+app.use(defaultJson);
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -60,6 +116,15 @@ app.use(
         });
       }
       return res.status(status).json({ error: err.message || "Unauthorized" });
+    }
+
+    const bodyParserError = err as Error & { type?: string; status?: number };
+    if (bodyParserError.type === "entity.too.large" || bodyParserError.status === 413) {
+      return res.status(413).json({ error: "Payload too large" });
+    }
+
+    if (err instanceof SyntaxError && "body" in err) {
+      return res.status(400).json({ error: "Invalid JSON body" });
     }
 
     console.error("Unhandled error", err);

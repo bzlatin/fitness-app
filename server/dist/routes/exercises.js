@@ -46,7 +46,12 @@ const auth_1 = require("../middleware/auth");
 const planLimits_1 = require("../middleware/planLimits");
 const cloudinary_1 = require("../services/cloudinary");
 const router = (0, express_1.Router)();
-const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
+const upload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+    },
+});
 const mapExerciseRow = (row) => {
     const imagePath = row.image_paths?.[0];
     return {

@@ -146,6 +146,10 @@ export default function Home() {
           <Link href="/terms" className="hover:text-text-primary transition-colors">
             Terms of Service
           </Link>
+          <span className="hidden sm:inline">·</span>
+          <Link href="/support" className="hover:text-text-primary transition-colors">
+            Support
+          </Link>
         </div>
       </footer>
     </main>

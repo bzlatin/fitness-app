@@ -7,8 +7,29 @@ import { query } from "../db";
 import { nanoid } from "nanoid";
 import { fetchExerciseCatalog, ExerciseMeta } from "../utils/exerciseCatalog";
 import { loadExercisesJson } from "../utils/exerciseData";
+import { createLogger } from "../utils/logger";
+import { z } from "zod";
+import { validateBody } from "../middleware/validate";
+import { aiGenerateLimiter, aiSwapLimiter } from "../middleware/rateLimit";
 
 const router = Router();
+const log = createLogger("AI");
+
+const generateWorkoutBodySchema = z
+  .object({
+    requestedSplit: z.string().trim().min(1).max(80).optional(),
+    specificRequest: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strip();
+
+const swapExerciseBodySchema = z
+  .object({
+    exerciseId: z.string().trim().min(1).max(200),
+    exerciseName: z.string().trim().min(1).max(200),
+    primaryMuscleGroup: z.string().trim().min(1).max(50),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strip();
 
 type LocalExercise = {
   id?: string;
@@ -95,27 +116,6 @@ const buildExerciseLookup = async () => {
   };
 };
 
-// Simple in-memory rate limiter (can be replaced with Redis in production)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-const checkRateLimit = (userId: string, maxRequests: number = 10, windowMs: number = 60000) => {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-
-  if (!userLimit || now > userLimit.resetAt) {
-    // New window
-    rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (userLimit.count >= maxRequests) {
-    return false;
-  }
-
-  userLimit.count++;
-  return true;
-};
-
 const deriveFocusName = (specificRequest?: string) => {
   if (!specificRequest) return null;
 
@@ -171,23 +171,21 @@ const deriveFocusName = (specificRequest?: string) => {
  * Generate a personalized workout using AI
  * Requires Pro plan
  */
-router.post("/generate-workout", requireProPlan, async (req, res) => {
+router.post(
+  "/generate-workout",
+  requireProPlan,
+  aiGenerateLimiter,
+  validateBody(generateWorkoutBodySchema),
+  async (req, res) => {
   const userId = res.locals.userId;
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // Rate limiting: 10 requests per minute
-  if (!checkRateLimit(userId, 10, 60000)) {
-    return res.status(429).json({
-      error: "Rate limit exceeded",
-      message: "Too many workout generation requests. Please wait a minute and try again.",
-    });
-  }
-
   try {
-    const { requestedSplit, specificRequest } = req.body;
+    const { requestedSplit, specificRequest } =
+      req.body as z.infer<typeof generateWorkoutBodySchema>;
 
     // Get user profile data
     const userResult = await query<{
@@ -221,7 +219,7 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       );
       if (nextInCycle) {
         finalRequestedSplit = nextInCycle;
-        console.log(`[AI] Auto-detected next in cycle: ${nextInCycle}`);
+        log.debug("Auto-detected next in cycle", { nextInCycle, userId });
       }
     }
 
@@ -248,15 +246,14 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       specificRequest,
     };
 
-    console.log(`[AI] Generating workout for user ${userId}`);
-    console.log(
-      `[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`
-    );
-    console.log(
-      `[AI] Targeting muscles: ${fatigueTargets.prioritize.join(", ") || "auto"} | Avoid: ${
-        fatigueTargets.avoid.join(", ") || "none"
-      }`
-    );
+    log.debug("Generating workout", {
+      userId,
+      requestedSplit: finalRequestedSplit ?? null,
+      recentWorkoutsCount: recentWorkouts.length,
+      hasFatigueData: Object.keys(muscleFatigue).length > 0,
+      targetMuscles: fatigueTargets.prioritize,
+      avoidMuscles: fatigueTargets.avoid,
+    });
 
     const { catalog: exerciseCatalog, lookup: exerciseLookup } = await buildExerciseLookup();
     const aiProvider = getAIProvider();
@@ -353,9 +350,12 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
 
         // Log if we couldn't find metadata or image
         if (!meta) {
-          console.warn(`[AI] No metadata found for exercise: ${ex.exerciseId} (${ex.exerciseName})`);
+          log.debug("No metadata found for exercise", {
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.exerciseName,
+          });
         } else if (!meta.gifUrl) {
-          console.warn(`[AI] Exercise found but has no image: ${meta.id} (${meta.name})`);
+          log.debug("Exercise found but has no image", { exerciseId: meta.id, exerciseName: meta.name });
         }
 
         const resolvedName =
@@ -384,14 +384,17 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       ]
     );
 
-    console.log(`[AI] Successfully generated workout: "${enrichedWorkout.name}"`);
+    log.info("Successfully generated workout", {
+      workoutName: enrichedWorkout.name,
+      exercisesCount: enrichedWorkout.exercises.length,
+    });
 
     return res.json({
       success: true,
       workout: enrichedWorkout,
     });
   } catch (error) {
-    console.error("[AI] Error generating workout:", error);
+    log.error("Error generating workout", { error, userId });
 
     // Check if it's an OpenAI API error
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
@@ -406,37 +409,29 @@ router.post("/generate-workout", requireProPlan, async (req, res) => {
       message: error instanceof Error ? error.message : "An unexpected error occurred",
     });
   }
-});
+  }
+);
 
 /**
  * POST /api/ai/swap-exercise
  * Swap an exercise for an alternative using AI
  * Requires Pro plan
  */
-router.post("/swap-exercise", requireProPlan, async (req, res) => {
+router.post(
+  "/swap-exercise",
+  requireProPlan,
+  aiSwapLimiter,
+  validateBody(swapExerciseBodySchema),
+  async (req, res) => {
   const userId = res.locals.userId;
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // Rate limiting: 20 swaps per minute
-  if (!checkRateLimit(userId, 20, 60000)) {
-    return res.status(429).json({
-      error: "Rate limit exceeded",
-      message: "Too many swap requests. Please wait a minute and try again.",
-    });
-  }
-
   try {
-    const { exerciseId, exerciseName, primaryMuscleGroup, reason } = req.body;
-
-    if (!exerciseId || !exerciseName || !primaryMuscleGroup) {
-      return res.status(400).json({
-        error: "Missing required fields",
-        message: "exerciseId, exerciseName, and primaryMuscleGroup are required",
-      });
-    }
+    const { exerciseId, exerciseName, primaryMuscleGroup, reason } =
+      req.body as z.infer<typeof swapExerciseBodySchema>;
 
     // Get user profile for equipment
     const userResult = await query<{
@@ -464,7 +459,7 @@ router.post("/swap-exercise", requireProPlan, async (req, res) => {
     const aiProvider = getAIProvider();
     const swapReason = reason || "User requested swap";
 
-    console.log(`[AI] Swapping exercise ${exerciseName} for user ${userId}`);
+    log.debug("Swapping exercise", { userId, exerciseId, exerciseName, primaryMuscleGroup });
 
     const result = await aiProvider.swapExercise(
       exerciseName,
@@ -496,14 +491,17 @@ router.post("/swap-exercise", requireProPlan, async (req, res) => {
       ]
     );
 
-    console.log(`[AI] Successfully swapped to: ${result.exerciseName}`);
+    log.info("Successfully swapped exercise", {
+      fromExerciseName: exerciseName,
+      toExerciseName: result.exerciseName,
+    });
 
     return res.json({
       success: true,
       exercise: result,
     });
   } catch (error) {
-    console.error("[AI] Error swapping exercise:", error);
+    log.error("Error swapping exercise", { error, userId });
 
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
       return res.status(500).json({
@@ -517,7 +515,8 @@ router.post("/swap-exercise", requireProPlan, async (req, res) => {
       message: error instanceof Error ? error.message : "An unexpected error occurred",
     });
   }
-});
+  }
+);
 
 /**
  * GET /api/ai/usage
@@ -552,7 +551,7 @@ router.get("/usage", requireProPlan, async (req, res) => {
       lastGeneratedAt: stats?.last_generated_at || null,
     });
   } catch (error) {
-    console.error("[AI] Error fetching usage:", error);
+    log.error("Error fetching usage", { error, userId });
     return res.status(500).json({ error: "Failed to fetch usage stats" });
   }
 });

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   Modal,
@@ -11,19 +10,16 @@ import {
   Text,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import FatigueIndicator from "../components/FatigueIndicator";
-import { useFatigue, useTrainingRecommendations } from "../hooks/useFatigue";
+import { useFatigue } from "../hooks/useFatigue";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { MuscleFatigue } from "../types/analytics";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
-import { RootNavigation } from "../navigation/RootNavigator";
 import { formatMuscleGroup } from "../utils/muscleGroupCalculations";
 import RecoveryBodyMap from "../components/RecoveryBodyMap";
-import { generateWorkout } from "../api/ai";
 import { useWorkoutHistory } from "../hooks/useWorkoutHistory";
 import { fetchExercisesByIds } from "../api/exercises";
 import {
@@ -42,7 +38,6 @@ const statusOrder: Record<MuscleFatigue["status"], number> = {
 }
 
 const RecoveryScreen = () => {
-  const navigation = useNavigation<RootNavigation>();
   const { user } = useCurrentUser();
   const [showFresh, setShowFresh] = useState(false);
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
@@ -68,47 +63,6 @@ const RecoveryScreen = () => {
     refetch,
     error: fatigueError,
   } = useFatigue(true);
-  const {
-    data: recommendations,
-    isLoading: recLoading,
-    isRefetching: recRefetching,
-    refetch: refetchRecommendations,
-    error: recommendationsError,
-  } = useTrainingRecommendations(isPro && !!fatigue);
-  const aiWorkout = useMutation({
-    mutationFn: async () => {
-      const targetMuscles = recommendations?.targetMuscles ?? [];
-      const highFatigue = (fatigue?.perMuscle ?? [])
-        .filter((m) => m.fatigued)
-        .map((m) => formatMuscleGroup(m.muscleGroup));
-
-      // Build the instruction for the AI
-      const requestParts: string[] = [];
-      if (targetMuscles.length > 0) {
-        requestParts.push(
-          `Prioritize: ${targetMuscles.map(formatMuscleGroup).join(", ")}`
-        );
-      }
-      if (highFatigue.length > 0) {
-        requestParts.push(`Limit volume for: ${highFatigue.join(", ")}`);
-      }
-      requestParts.push("Stay near recent baseline volume");
-
-      const workout = await generateWorkout({
-        specificRequest: requestParts.join(" | "),
-      });
-      return workout;
-    },
-    onSuccess: (workout) => {
-      navigation.navigate("WorkoutPreview", { workout });
-    },
-    onError: (err: any) => {
-      Alert.alert(
-        "AI could not generate workout",
-        err?.response?.data?.message || "Please try again."
-      );
-    },
-  });
 
   const filteredMuscles = useMemo(
     () =>
@@ -130,23 +84,16 @@ const RecoveryScreen = () => {
     [fatigue?.freshMuscles]
   );
 
-  const sortedMuscles = useMemo(
-    () =>
-      filteredMuscles.slice().sort((a, b) => {
-        const order = statusOrder[a.status] - statusOrder[b.status];
-        if (order !== 0) return order;
-        if (a.status === "under-trained")
-          return a.fatigueScore - b.fatigueScore;
-        return b.fatigueScore - a.fatigueScore;
-      }),
-    [filteredMuscles]
-  );
-
   const readinessByMuscle = useMemo(
     () =>
       filteredMuscles.map((item) => ({
         ...item,
-        readiness: readinessFromFatigueScore(item.fatigueScore),
+        readiness: readinessFromFatigueScore(item.fatigueScore, item.lastTrainedAt, {
+          lastSessionSets: item.lastSessionSets,
+          lastSessionVolume: item.lastSessionVolume,
+          baselineWeeklyVolume: item.baselineVolume,
+          recoveryLoad: item.recoveryLoad,
+        }),
       })),
     [filteredMuscles]
   );
@@ -158,25 +105,32 @@ const RecoveryScreen = () => {
       .sort((a, b) => a.readiness.percent - b.readiness.percent)[0];
   }, [readinessByMuscle]);
 
-  const fatiguedMuscles = useMemo(
+  const needsRestMuscles = useMemo(
     () =>
       readinessByMuscle
-        .filter(
-          (m) => m.status === "high-fatigue" || m.status === "moderate-fatigue"
-        )
-        .sort((a, b) => a.readiness.percent - b.readiness.percent)
-        .slice(0, 3),
+        .filter((m) => m.readiness.percent <= 50)
+        .sort((a, b) => a.readiness.percent - b.readiness.percent),
     [readinessByMuscle]
   );
 
-  const freshestMusclesDetailed = useMemo(
+  const sortedMusclesByReadiness = useMemo(
     () =>
       readinessByMuscle
-        .filter((m) => m.status === "optimal" || m.status === "under-trained")
-        .sort((a, b) => b.readiness.percent - a.readiness.percent)
-        .slice(0, 3),
+        .slice()
+        .sort((a, b) => a.readiness.percent - b.readiness.percent),
     [readinessByMuscle]
   );
+
+  const goodToPushMuscles = useMemo(
+    () =>
+      readinessByMuscle
+        .filter((m) => m.readiness.percent >= 70)
+        .sort((a, b) => b.readiness.percent - a.readiness.percent),
+    [readinessByMuscle]
+  );
+  // Legacy aliases kept to avoid hot-reload reference errors
+  const fatiguedMuscles = needsRestMuscles;
+  const freshestMusclesDetailed = goodToPushMuscles;
 
   const averageReadiness =
     readinessByMuscle.length === 0
@@ -341,10 +295,10 @@ const RecoveryScreen = () => {
     weakestMuscle?.readiness.color ?? colors.textSecondary;
 
   const guidanceCopy = useMemo(() => {
-    const fatigueList = fatiguedMuscles.map((m) =>
+    const fatigueList = needsRestMuscles.map((m) =>
       formatMuscleGroup(m.muscleGroup)
     );
-    const readyList = freshestMusclesDetailed.map((m) =>
+    const readyList = goodToPushMuscles.map((m) =>
       formatMuscleGroup(m.muscleGroup)
     );
 
@@ -367,18 +321,17 @@ const RecoveryScreen = () => {
     }
 
     return "Tap a muscle on the map to see per-muscle readiness and recent exercises.";
-  }, [fatiguedMuscles, freshestMusclesDetailed]);
+  }, [needsRestMuscles, goodToPushMuscles]);
 
   const onRefresh = useCallback(async () => {
     await refetch();
-    await refetchRecommendations();
-  }, [refetch, refetchRecommendations]);
+  }, [refetch]);
 
   useEffect(() => {
-    if (fatigueError?.requiresUpgrade || recommendationsError?.requiresUpgrade) {
+    if (fatigueError?.requiresUpgrade) {
       setShowPaywallModal(true);
     }
-  }, [fatigueError, recommendationsError]);
+  }, [fatigueError]);
 
   const handleMuscleSelect = useCallback((muscle: string) => {
     // Free users can see the heatmap but not the detailed percentages modal
@@ -716,7 +669,7 @@ const RecoveryScreen = () => {
               {guidanceCopy}
             </Text>
 
-            {fatiguedMuscles.length > 0 && (
+            {needsRestMuscles.length > 0 && (
               <View style={{ gap: 8 }}>
                 <Text
                   style={{
@@ -730,7 +683,7 @@ const RecoveryScreen = () => {
                   Needs rest
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {fatiguedMuscles.map((muscle) => (
+                  {needsRestMuscles.map((muscle) => (
                     <View
                       key={muscle.muscleGroup}
                       style={{
@@ -767,7 +720,7 @@ const RecoveryScreen = () => {
               </View>
             )}
 
-            {freshestMusclesDetailed.length > 0 && (
+            {goodToPushMuscles.length > 0 && (
               <View style={{ gap: 8 }}>
                 <Text
                   style={{
@@ -781,7 +734,7 @@ const RecoveryScreen = () => {
                   Good to push
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {freshestMusclesDetailed.map((muscle) => (
+                  {goodToPushMuscles.map((muscle) => (
                     <View
                       key={muscle.muscleGroup}
                       style={{
@@ -818,8 +771,8 @@ const RecoveryScreen = () => {
               </View>
             )}
 
-            {fatiguedMuscles.length === 0 &&
-              freshestMusclesDetailed.length === 0 && (
+            {needsRestMuscles.length === 0 &&
+              goodToPushMuscles.length === 0 && (
                 <Text
                   style={{
                     color: colors.textSecondary,
@@ -1016,171 +969,13 @@ const RecoveryScreen = () => {
               Muscle Group Status
             </Text>
             <View style={{ gap: 10 }}>
-              {sortedMuscles.map((item) => (
+              {sortedMusclesByReadiness.map((item) => (
                 <FatigueIndicator key={item.muscleGroup} item={item} />
               ))}
             </View>
           </View>
         )}
 
-        {/* Pro users: AI recommendations section */}
-        {isPro && (
-          <View style={{ gap: 12 }}>
-            <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-              What should I train today?
-            </Text>
-
-            <Pressable
-              onPress={() => {
-                if (!isPro) {
-                  setShowPaywallModal(true);
-                  return;
-                }
-                aiWorkout.mutate();
-              }}
-              disabled={aiWorkout.isPending}
-              style={({ pressed }) => ({
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor:
-                  pressed || aiWorkout.isPending
-                    ? colors.surfaceMuted
-                    : colors.surface,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              })}
-            >
-              {aiWorkout.isPending && (
-                <ActivityIndicator color={colors.primary} size='small' />
-              )}
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 14,
-                }}
-              >
-                Generate fatigue-aware session
-                {!isPro && " 👑"}
-              </Text>
-            </Pressable>
-
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {(recommendations?.targetMuscles ?? []).map((muscle) => (
-                <View
-                  key={muscle}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    backgroundColor: `${colors.primary}18`,
-                    borderWidth: 1,
-                    borderColor: `${colors.primary}30`,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.medium,
-                      fontSize: 13,
-                    }}
-                  >
-                    {formatMuscleGroup(muscle)}
-                  </Text>
-                </View>
-              ))}
-              {(recommendations?.targetMuscles?.length ?? 0) === 0 && (
-                <Text style={{ color: colors.textSecondary }}>
-                  We'll balance volume across optimal muscle groups.
-                </Text>
-              )}
-            </View>
-
-            <View style={{ gap: 10 }}>
-              {(recommendations?.recommendedWorkouts ?? []).map((workout) => {
-                const canNavigate =
-                  workout.id && !workout.id.startsWith("fallback");
-                return (
-                  <Pressable
-                    key={workout.id}
-                    disabled={!canNavigate}
-                    onPress={() =>
-                      canNavigate &&
-                      navigation.navigate("WorkoutTemplateDetail", {
-                        templateId: workout.id,
-                      })
-                    }
-                    style={({ pressed }) => ({
-                      backgroundColor: colors.surface,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      padding: 14,
-                      opacity: pressed ? 0.92 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 6,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 16,
-                        }}
-                      >
-                        {workout.name}
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontFamily: fontFamilies.medium,
-                          fontSize: 12,
-                        }}
-                      >
-                        {workout.muscleGroups.map(formatMuscleGroup).join(" • ")}
-                      </Text>
-                    </View>
-                    <Text style={{ color: colors.textSecondary }}>
-                      {workout.reason}
-                    </Text>
-                    {!canNavigate && (
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontFamily: fontFamilies.medium,
-                          marginTop: 6,
-                        }}
-                      >
-                        Try a light full-body / mobility session.
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-
-              {recLoading && (
-                <View
-                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-                >
-                  <ActivityIndicator color={colors.secondary} size='small' />
-                  <Text style={{ color: colors.textSecondary }}>
-                    Curating today's picks...
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
       </View>
     );
   };
@@ -1194,7 +989,7 @@ const RecoveryScreen = () => {
         includeTopInset={false}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching || recRefetching}
+            refreshing={isRefetching}
             onRefresh={onRefresh}
             tintColor={colors.primary}
           />

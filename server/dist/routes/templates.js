@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const id_1 = require("../utils/id");
+const nanoid_1 = require("nanoid");
 const db_1 = require("../db");
 const planLimits_1 = require("../middleware/planLimits");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
@@ -37,12 +38,20 @@ const mapTemplate = (row, exerciseRows, metaMap) => ({
     description: row.description ?? undefined,
     splitType: row.split_type ?? undefined,
     isFavorite: row.is_favorite,
+    sharingDisabled: row.sharing_disabled,
     exercises: exerciseRows
         .filter((ex) => ex.template_id === row.id)
         .sort((a, b) => a.order_index - b.order_index)
         .map((ex) => mapExercise(ex, metaMap)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+});
+const SHARE_CODE_REGEX = /^[0-9a-z]{8}$/;
+const generateShareCode = (0, nanoid_1.customAlphabet)("0123456789abcdefghijklmnopqrstuvwxyz", 8);
+const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "https://push-pull.app").replace(/\/+$/, "");
+const buildShareUrls = (shareCode) => ({
+    webUrl: `${PUBLIC_APP_URL}/workout/${shareCode}`,
+    deepLinkUrl: `push-pull://workout/share/${shareCode}`,
 });
 const buildTemplates = async (templateRows) => {
     if (templateRows.length === 0)
@@ -180,7 +189,7 @@ router.put("/:id", (req, res) => {
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const { name, description, splitType, isFavorite, exercises } = req.body;
+    const { name, description, splitType, isFavorite, sharingDisabled, exercises } = req.body;
     if (name !== undefined && !name.trim()) {
         return res.status(400).json({ error: "Name is required" });
     }
@@ -209,6 +218,11 @@ router.put("/:id", (req, res) => {
         if (isFavorite !== undefined) {
             updates.push(`is_favorite = $${idx}`);
             values.push(isFavorite);
+            idx += 1;
+        }
+        if (sharingDisabled !== undefined) {
+            updates.push(`sharing_disabled = $${idx}`);
+            values.push(Boolean(sharingDisabled));
             idx += 1;
         }
         updates.push(`updated_at = NOW()`);
@@ -257,6 +271,154 @@ router.put("/:id", (req, res) => {
         console.error("Failed to update template", err);
         return res.status(500).json({ error: "Failed to update template" });
     });
+});
+router.post("/:templateId/share", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const templateId = req.params.templateId;
+    const { expiresAt } = (req.body ?? {});
+    const parsedExpiresAt = expiresAt && !Number.isNaN(new Date(expiresAt).getTime()) ? new Date(expiresAt) : null;
+    if (expiresAt && !parsedExpiresAt) {
+        return res.status(400).json({ error: "Invalid expiresAt" });
+    }
+    if (parsedExpiresAt && parsedExpiresAt.getTime() <= Date.now()) {
+        return res.status(400).json({ error: "expiresAt must be in the future" });
+    }
+    try {
+        const templateResult = await (0, db_1.query)(`SELECT sharing_disabled FROM workout_templates WHERE id = $1 AND user_id = $2 LIMIT 1`, [templateId, userId]);
+        const templateRow = templateResult.rows[0];
+        if (!templateRow) {
+            return res.status(404).json({ error: "Template not found" });
+        }
+        if (templateRow.sharing_disabled) {
+            return res.status(403).json({ error: "Sharing is disabled for this template" });
+        }
+        const existing = await (0, db_1.query)(`
+        SELECT share_code, expires_at, is_revoked, created_at
+        FROM template_shares
+        WHERE template_id = $1
+          AND created_by = $2
+          AND is_revoked = false
+          AND (expires_at IS NULL OR expires_at > NOW())
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [templateId, userId]);
+        if (existing.rows[0]) {
+            const shareCode = existing.rows[0].share_code;
+            return res.json({
+                shareCode,
+                ...buildShareUrls(shareCode),
+                expiresAt: existing.rows[0].expires_at,
+                isRevoked: existing.rows[0].is_revoked,
+                createdAt: existing.rows[0].created_at,
+            });
+        }
+        const created = await withTransaction(async (client) => {
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+                const shareCode = generateShareCode();
+                try {
+                    const row = (await client.query(`
+                INSERT INTO template_shares (id, template_id, share_code, created_by, expires_at)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING share_code, expires_at, is_revoked, created_at
+              `, [(0, id_1.generateId)(), templateId, shareCode, userId, parsedExpiresAt?.toISOString() ?? null])).rows[0];
+                    return row;
+                }
+                catch (err) {
+                    const pgErr = err;
+                    if (pgErr.code === "23505") {
+                        continue;
+                    }
+                    throw err;
+                }
+            }
+            throw new Error("FAILED_TO_CREATE_SHARE");
+        });
+        const shareCode = created.share_code;
+        return res.status(201).json({
+            shareCode,
+            ...buildShareUrls(shareCode),
+            expiresAt: created.expires_at,
+            isRevoked: created.is_revoked,
+            createdAt: created.created_at,
+        });
+    }
+    catch (err) {
+        console.error("Failed to create template share", err);
+        return res.status(500).json({ error: "Failed to create template share" });
+    }
+});
+router.delete("/:templateId/share", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const templateId = req.params.templateId;
+    try {
+        const result = await (0, db_1.query)(`
+        UPDATE template_shares
+        SET is_revoked = true
+        WHERE template_id = $1 AND created_by = $2 AND is_revoked = false
+        RETURNING id
+      `, [templateId, userId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Share link not found" });
+        }
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to revoke template share", err);
+        return res.status(500).json({ error: "Failed to revoke template share" });
+    }
+});
+router.get("/:templateId/share/stats", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const templateId = req.params.templateId;
+    try {
+        const templateResult = await (0, db_1.query)(`SELECT id FROM workout_templates WHERE id = $1 AND user_id = $2 LIMIT 1`, [templateId, userId]);
+        if (templateResult.rowCount === 0) {
+            return res.status(404).json({ error: "Template not found" });
+        }
+        const shareResult = await (0, db_1.query)(`
+        SELECT id, share_code, created_at, expires_at, is_revoked, views_count, copies_count
+        FROM template_shares
+        WHERE template_id = $1 AND created_by = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [templateId, userId]);
+        const share = shareResult.rows[0];
+        if (!share) {
+            return res.status(404).json({ error: "Share link not found" });
+        }
+        const signupsResult = await (0, db_1.query)(`SELECT COUNT(*)::text AS count FROM template_share_signups WHERE share_id = $1`, [share.id]);
+        const signupsCount = Number(signupsResult.rows[0]?.count ?? "0");
+        const urls = buildShareUrls(share.share_code);
+        const copyRate = share.views_count > 0 ? Number((share.copies_count / share.views_count).toFixed(4)) : 0;
+        const signupRate = share.views_count > 0 ? Number((signupsCount / share.views_count).toFixed(4)) : 0;
+        return res.json({
+            shareCode: share.share_code,
+            ...urls,
+            createdAt: share.created_at,
+            expiresAt: share.expires_at,
+            isRevoked: share.is_revoked,
+            stats: {
+                viewsCount: share.views_count,
+                copiesCount: share.copies_count,
+                signupsCount,
+                copyRate,
+                signupRate,
+            },
+        });
+    }
+    catch (err) {
+        console.error("Failed to fetch template share stats", err);
+        return res.status(500).json({ error: "Failed to fetch template share stats" });
+    }
 });
 router.post("/:id/duplicate", async (req, res) => {
     const userId = res.locals.userId;

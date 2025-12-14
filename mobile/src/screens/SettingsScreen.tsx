@@ -39,7 +39,7 @@ import { RootNavigation } from "../navigation/RootNavigator";
 import { RootRoute } from "../navigation/types";
 import { restorePurchases } from "../services/payments";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
-import { TERMS_URL, PRIVACY_URL } from "../config/legal";
+import { TERMS_URL, PRIVACY_URL, SUPPORT_URL } from "../config/legal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { ensureShareableAvatarUri, processAvatarAsset } from "../utils/avatarImage";
 import {
@@ -363,7 +363,7 @@ const SettingsScreen = () => {
       if (enabled) {
         const permissionsToUse = { workouts: true, activeEnergy: true, heartRate: true };
         setHealthPermissions(permissionsToUse);
-        const granted = await requestAppleHealthPermissions(permissionsToUse);
+        const granted = await requestAppleHealthPermissions(permissionsToUse, "readWrite");
         if (!granted) {
           setAppleHealthEnabledUi(previousEnabled);
           Alert.alert(
@@ -438,7 +438,7 @@ const SettingsScreen = () => {
 
     try {
       if (appleHealthEnabled && isIOS) {
-        await requestAppleHealthPermissions(next);
+        await requestAppleHealthPermissions(next, "readWrite");
       }
       await updateProfile({
         appleHealthPermissions: next,
@@ -923,7 +923,7 @@ const SettingsScreen = () => {
   const billingSubtitle = isSubscriptionLoading
     ? "Loading billing status…"
     : isPro
-    ? `Pro · ${isAppleSubscription ? "Apple billing" : "Stripe"}${
+    ? `Pro · ${isAppleSubscription ? "Apple billing" : "Billing"}${
         renewalDate
           ? ` · ${
               subscriptionStatus?.cancelAtPeriodEnd
@@ -1516,9 +1516,11 @@ const SettingsScreen = () => {
           </Pressable>
           <Pressable
             onPress={() =>
-              Alert.alert(
-                "Quick support",
-                "Need help? Share context in squads or send us your session ID—we’ll follow up."
+              Linking.openURL(SUPPORT_URL).catch(() =>
+                Alert.alert(
+                  "Contact support",
+                  "If the support page won't open, email us at help@push-pull.app."
+                )
               )
             }
             style={({ pressed }) => ({

@@ -12,7 +12,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import ScreenContainer from "../components/layout/ScreenContainer";
-import VolumeChart from "../components/VolumeChart";
 import { fetchAdvancedAnalytics, fetchRecap } from "../api/analytics";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -33,7 +32,6 @@ const AnalyticsScreen = () => {
   const isGraceOrExpired = subscriptionAccess.isGrace || subscriptionAccess.isExpired;
 
   const [timeRange, setTimeRange] = useState<4 | 8 | 12>(4);
-  const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   const {
@@ -79,19 +77,6 @@ const AnalyticsScreen = () => {
 
   const isRefreshing = isRefetching || recapRefetching;
 
-  const handleMuscleToggle = (muscle: string) => {
-    setSelectedMuscles((prev) => {
-      if (prev.includes(muscle)) {
-        return prev.filter((m) => m !== muscle);
-      }
-      return [...prev, muscle];
-    });
-  };
-
-  const handleClearSelection = () => {
-    setSelectedMuscles([]);
-  };
-
   if (!isPro) {
     return (
       <ScreenContainer>
@@ -120,7 +105,6 @@ const AnalyticsScreen = () => {
           <View style={styles.featuresContainer}>
             <Text style={styles.featuresTitle}>Included Features</Text>
             {[
-              "Weekly volume per muscle group (last 12 weeks)",
               "Push vs Pull volume balance indicator",
               "Most/least trained muscle groups",
               "Volume PR tracking per muscle group",
@@ -306,27 +290,6 @@ const AnalyticsScreen = () => {
             </Pressable>
           ))}
         </View>
-        {selectedMuscles.length > 0 && (
-          <Pressable
-            onPress={handleClearSelection}
-            style={styles.clearFilterButton}
-          >
-            <Text style={styles.clearFilterText}>Clear Filter</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Weekly Volume Chart */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Weekly Volume by Muscle Group</Text>
-        <VolumeChart
-          data={weeklyVolumeData}
-          selectedMuscles={
-            selectedMuscles.length > 0 ? selectedMuscles : undefined
-          }
-          onMuscleToggle={handleMuscleToggle}
-          weeks={timeRange}
-        />
       </View>
 
       {/* Push/Pull Balance */}
@@ -675,20 +638,6 @@ const styles = StyleSheet.create({
   },
   timeRangeButtonTextActive: {
     color: colors.surface,
-  },
-  clearFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary + "20",
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignSelf: "flex-start",
-  },
-  clearFilterText: {
-    fontSize: 13,
-    fontFamily: fontFamilies.semibold,
-    color: colors.primary,
   },
   section: {
     paddingHorizontal: 16,

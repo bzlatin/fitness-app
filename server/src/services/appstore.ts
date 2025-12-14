@@ -1,9 +1,14 @@
 import {
-  AppStoreServerAPIClient,
-  Environment,
-  type JWSRenewalInfoDecodedPayload,
-  type JWSTransactionDecodedPayload,
+	AppStoreServerAPIClient,
+	Environment,
+	SignedDataVerifier,
+	VerificationException,
+	VerificationStatus,
+	type JWSRenewalInfoDecodedPayload,
+	type JWSTransactionDecodedPayload,
 } from "@apple/app-store-server-library";
+import fs from "fs";
+import path from "path";
 import { query } from "../db";
 import { generateId } from "../utils/id";
 
@@ -11,8 +16,16 @@ const APP_STORE_ISSUER_ID = process.env.APP_STORE_ISSUER_ID;
 const APP_STORE_KEY_ID = process.env.APP_STORE_KEY_ID;
 const APP_STORE_PRIVATE_KEY = process.env.APP_STORE_PRIVATE_KEY;
 const APP_STORE_BUNDLE_ID =
-  process.env.APP_STORE_BUNDLE_ID ?? process.env.APP_STORE_BUNDLE_IDENTIFIER;
+	process.env.APP_STORE_BUNDLE_ID ?? process.env.APP_STORE_BUNDLE_IDENTIFIER;
 const APP_STORE_ENV = process.env.APP_STORE_ENV ?? "Sandbox";
+const APP_STORE_APP_APPLE_ID_RAW = process.env.APP_STORE_APP_APPLE_ID;
+const APP_STORE_VERIFY_NOTIFICATIONS_RAW = process.env.APP_STORE_VERIFY_NOTIFICATIONS;
+const APP_STORE_ENABLE_ONLINE_VERIFICATION_RAW =
+	process.env.APP_STORE_ENABLE_ONLINE_VERIFICATION;
+const APP_STORE_ROOT_CA_PEM = process.env.APP_STORE_ROOT_CA_PEM;
+const APP_STORE_ROOT_CA_PEM_PATH =
+	process.env.APP_STORE_ROOT_CA_PEM_PATH ??
+	path.join(__dirname, "..", "certs", "apple-root-cas.pem");
 
 type PlanChoice = "monthly" | "annual";
 
@@ -22,9 +35,76 @@ const productToPlan: Record<string, PlanChoice | undefined> = {
 };
 
 const resolveEnvironment = () =>
-  APP_STORE_ENV.toLowerCase() === "production"
-    ? Environment.PRODUCTION
-    : Environment.SANDBOX;
+	APP_STORE_ENV.toLowerCase() === "production"
+		? Environment.PRODUCTION
+		: Environment.SANDBOX;
+
+const resolveAppAppleId = () => {
+	if (!APP_STORE_APP_APPLE_ID_RAW) return undefined;
+	const parsed = Number(APP_STORE_APP_APPLE_ID_RAW);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error(`Invalid APP_STORE_APP_APPLE_ID: ${APP_STORE_APP_APPLE_ID_RAW}`);
+	}
+	return parsed;
+};
+
+const shouldVerifyNotifications = () => {
+	const isProduction = process.env.NODE_ENV === "production";
+	if (APP_STORE_VERIFY_NOTIFICATIONS_RAW === undefined) return isProduction;
+	return APP_STORE_VERIFY_NOTIFICATIONS_RAW === "true";
+};
+
+const shouldEnableOnlineChecks = () => {
+	const isProduction = process.env.NODE_ENV === "production";
+	if (APP_STORE_ENABLE_ONLINE_VERIFICATION_RAW === undefined) return isProduction;
+	return APP_STORE_ENABLE_ONLINE_VERIFICATION_RAW === "true";
+};
+
+const extractPemCertificates = (pem: string): Buffer[] => {
+	const matches = pem.match(
+		/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g
+	);
+	if (!matches || matches.length === 0) {
+		throw new Error("No PEM certificates found for App Store verification");
+	}
+	return matches.map((block) => Buffer.from(`${block}\n`, "utf8"));
+};
+
+let cachedRootCAs: Buffer[] | null = null;
+const loadAppleRootCAs = () => {
+	if (cachedRootCAs) return cachedRootCAs;
+	const pem =
+		APP_STORE_ROOT_CA_PEM ??
+		fs.readFileSync(APP_STORE_ROOT_CA_PEM_PATH, { encoding: "utf8" });
+	cachedRootCAs = extractPemCertificates(pem);
+	return cachedRootCAs;
+};
+
+const createVerifier = (environment: Environment) => {
+	if (!APP_STORE_BUNDLE_ID) {
+		throw new Error(
+			"APP_STORE_BUNDLE_ID is required to verify App Store notifications."
+		);
+	}
+
+	const enableOnlineChecks = shouldEnableOnlineChecks();
+	const appAppleId =
+		environment === Environment.PRODUCTION ? resolveAppAppleId() : undefined;
+
+	if (environment === Environment.PRODUCTION && !appAppleId) {
+		throw new Error(
+			"APP_STORE_APP_APPLE_ID is required to verify App Store notifications in Production."
+		);
+	}
+
+	return new SignedDataVerifier(
+		loadAppleRootCAs(),
+		enableOnlineChecks,
+		environment,
+		APP_STORE_BUNDLE_ID,
+		appAppleId
+	);
+};
 
 const getClient = (environment?: Environment) => {
   if (
@@ -281,23 +361,72 @@ export const recordNotification = async (params: {
 };
 
 export const decodeNotification = (signedPayload: string) => {
-  const payload = decodeSignedPayload<{
-    data?: { signedTransactionInfo?: string; signedRenewalInfo?: string };
-  }>(signedPayload);
-  const signedTransactionInfo = payload?.data?.signedTransactionInfo;
-  const signedRenewalInfo = payload?.data?.signedRenewalInfo;
-  const transaction = signedTransactionInfo
-    ? decodeSignedPayload<JWSTransactionDecodedPayload>(signedTransactionInfo)
-    : null;
-  const renewalInfo = signedRenewalInfo
-    ? decodeSignedPayload<JWSRenewalInfoDecodedPayload>(signedRenewalInfo)
-    : null;
+	const payload = decodeSignedPayload<{
+		data?: { signedTransactionInfo?: string; signedRenewalInfo?: string };
+	}>(signedPayload);
+	const signedTransactionInfo = payload?.data?.signedTransactionInfo;
+	const signedRenewalInfo = payload?.data?.signedRenewalInfo;
+	const transaction = signedTransactionInfo
+		? decodeSignedPayload<JWSTransactionDecodedPayload>(signedTransactionInfo)
+		: null;
+	const renewalInfo = signedRenewalInfo
+		? decodeSignedPayload<JWSRenewalInfoDecodedPayload>(signedRenewalInfo)
+		: null;
 
-  return {
-    payload,
-    transaction,
-    renewalInfo,
-  };
+	return {
+		payload,
+		transaction,
+		renewalInfo,
+		verified: false as const,
+	};
+};
+
+export const decodeNotificationSecure = async (signedPayload: string) => {
+	if (!shouldVerifyNotifications()) {
+		return decodeNotification(signedPayload);
+	}
+
+	const preferredEnv = resolveEnvironment();
+	const envOrder =
+		preferredEnv === Environment.PRODUCTION
+			? [Environment.PRODUCTION, Environment.SANDBOX]
+			: [Environment.SANDBOX, Environment.PRODUCTION];
+
+	let lastError: unknown = null;
+	for (const env of envOrder) {
+		try {
+			const verifier = createVerifier(env);
+			const payload = await verifier.verifyAndDecodeNotification(signedPayload);
+			const signedTransactionInfo = payload.data?.signedTransactionInfo;
+			const signedRenewalInfo = payload.data?.signedRenewalInfo;
+
+			const transaction = signedTransactionInfo
+				? await verifier.verifyAndDecodeTransaction(signedTransactionInfo)
+				: null;
+			const renewalInfo = signedRenewalInfo
+				? await verifier.verifyAndDecodeRenewalInfo(signedRenewalInfo)
+				: null;
+
+			return {
+				payload,
+				transaction,
+				renewalInfo,
+				verified: true as const,
+			};
+		} catch (err) {
+			lastError = err;
+			if (err instanceof VerificationException) {
+				if (err.status === VerificationStatus.INVALID_ENVIRONMENT) {
+					continue;
+				}
+			}
+			break;
+		}
+	}
+
+	throw lastError instanceof Error
+		? lastError
+		: new Error("Failed to verify App Store notification payload");
 };
 
 export const findUserByOriginalTransaction = async (

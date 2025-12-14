@@ -16,7 +16,12 @@ const hintForItem = (item: MuscleFatigue) => {
 };
 
 const FatigueIndicator = ({ item, compact = false }: FatigueIndicatorProps) => {
-  const readiness = readinessFromFatigueScore(item.fatigueScore);
+  const readiness = readinessFromFatigueScore(item.fatigueScore, item.lastTrainedAt, {
+    lastSessionSets: item.lastSessionSets,
+    lastSessionVolume: item.lastSessionVolume,
+    baselineWeeklyVolume: item.baselineVolume,
+    recoveryLoad: item.recoveryLoad,
+  });
   const hint = hintForItem(item);
 
   return (

@@ -12,7 +12,6 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useStripe } from '@stripe/stripe-react-native';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import WelcomeStep from '../components/onboarding/WelcomeStep';
 import PlanSelectionStep from '../components/onboarding/PlanSelectionStep';
@@ -37,7 +36,6 @@ const TOTAL_STEPS = 2;
 const AccountSetupScreen = ({ onFinished }: Props) => {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const stripe = useStripe();
   const subscriptionAccess = useSubscriptionAccess();
   const { logout, isAuthorizing } = useAuth();
   const { user, updateProfile, completeOnboarding } = useCurrentUser();
@@ -54,6 +52,18 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
 
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro'>('pro');
   const [selectedBilling, setSelectedBilling] = useState<'monthly' | 'yearly'>('yearly');
+
+  const handlePlanChange = (plan: 'free' | 'pro') => {
+    if (plan === 'pro' && Platform.OS !== 'ios') {
+      Alert.alert(
+        'Not available',
+        'Pro subscriptions are currently available on iOS only. Android billing is coming soon.'
+      );
+      setSelectedPlan('free');
+      return;
+    }
+    setSelectedPlan(plan);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -160,9 +170,6 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     mutationFn: (plan: PlanChoice) =>
       startSubscription({
         plan,
-        stripe,
-        userEmail: user?.email ?? null,
-        userName: name.trim() ? name.trim() : user?.name ?? null,
       }),
     onError: (err: unknown) => {
       const error = err as { message?: string; code?: string };
@@ -170,7 +177,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
         return;
       }
       Alert.alert(
-        Platform.OS === 'ios' ? 'Purchase failed' : 'Checkout failed',
+        Platform.OS === 'ios' ? 'Purchase failed' : 'Not available',
         error.message || 'Something went wrong. Please try again.'
       );
     },
@@ -204,6 +211,13 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
   };
 
   const handleStartTrial = async (planType: 'monthly' | 'yearly') => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'Not available',
+        'Pro subscriptions are currently available on iOS only. Android billing is coming soon.'
+      );
+      return;
+    }
     const planChoice: PlanChoice = planType === 'yearly' ? 'annual' : 'monthly';
     startCheckout.mutate(planChoice);
   };
@@ -302,7 +316,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
             ) : (
               <PlanSelectionStep
                 selectedPlan={selectedPlan}
-                onPlanChange={setSelectedPlan}
+                onPlanChange={handlePlanChange}
                 onContinueFree={handleContinueFree}
                 onStartTrial={handleStartTrial}
                 isProcessingPurchase={startCheckout.isPending}
@@ -358,7 +372,9 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                   <ActivityIndicator color={colors.surface} />
                 ) : (
                   <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
-                    {selectedPlan === 'pro' ? 'Start 7-Day Trial' : 'Continue with Free'}
+                    {selectedPlan === 'pro' && Platform.OS === 'ios'
+                      ? 'Start 7-Day Trial'
+                      : 'Continue with Free'}
                   </Text>
                 )}
               </Pressable>

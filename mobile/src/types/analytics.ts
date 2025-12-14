@@ -3,6 +3,11 @@ export type MuscleFatigue = {
   last7DaysVolume: number;
   baselineVolume: number | null;
   fatigueScore: number;
+  lastTrainedAt: string | null;
+  lastSessionSets: number;
+  lastSessionReps: number;
+  lastSessionVolume: number;
+  recoveryLoad: number;
   status: "under-trained" | "optimal" | "moderate-fatigue" | "high-fatigue" | "no-data";
   color: "green" | "blue" | "yellow" | "red" | "gray";
   fatigued: boolean;

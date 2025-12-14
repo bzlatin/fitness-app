@@ -143,15 +143,21 @@ const fetchRecentSessions = async (userId: string, lookbackWeeks: number): Promi
         COALESCE(s.template_name, wt.name) as template_name,
         s.finished_at,
         SUM(
-          COALESCE(ws.actual_reps, ws.target_reps, 0) *
+          COALESCE(ws.actual_reps, 0) *
           COALESCE(
             ws.actual_weight,
-            ws.target_weight,
             CASE WHEN COALESCE(e.equipment, 'bodyweight') = 'bodyweight' THEN $3 ELSE 0 END
           )
         ) as total_volume,
         AVG(ws.rpe) as avg_rpe,
-        COUNT(ws.id) as set_count,
+        COUNT(ws.id) FILTER (
+          WHERE ws.actual_reps IS NOT NULL
+            OR ws.actual_weight IS NOT NULL
+            OR ws.rpe IS NOT NULL
+            OR ws.actual_distance IS NOT NULL
+            OR ws.actual_duration_minutes IS NOT NULL
+            OR ws.actual_incline IS NOT NULL
+        ) as set_count,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(e.primary_muscle_group, 'other')), NULL) as muscle_groups
       FROM workout_sessions s
       LEFT JOIN workout_sets ws ON ws.session_id = s.id

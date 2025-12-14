@@ -76,7 +76,12 @@ const RecoveryBodyMap = ({
 
       const mapped = muscleMap[item.muscleGroup];
       if (!mapped) return;
-      const readiness = readinessFromFatigueScore(item.fatigueScore);
+      const readiness = readinessFromFatigueScore(item.fatigueScore, item.lastTrainedAt, {
+        lastSessionSets: item.lastSessionSets,
+        lastSessionVolume: item.lastSessionVolume,
+        baselineWeeklyVolume: item.baselineVolume,
+        recoveryLoad: item.recoveryLoad,
+      });
       const intensity = fatigueToIntensity(readiness.percent);
       mapped.forEach((slug) =>
         entries.push({
