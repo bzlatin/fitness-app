@@ -45,14 +45,20 @@ const getWeeklyVolumeByMuscleGroup = async (userId, weeks = 12) => {
       DATE_TRUNC('week', s.finished_at)::date as week_start,
       COALESCE(e.primary_muscle_group, 'other') as muscle_group,
       SUM(
-        COALESCE(ws.actual_reps, ws.target_reps, 0) *
+        COALESCE(ws.actual_reps, 0) *
         COALESCE(
           ws.actual_weight,
-          ws.target_weight,
           CASE WHEN COALESCE(e.equipment, 'bodyweight') = 'bodyweight' THEN $3 ELSE 0 END
         )
       ) as total_volume,
-      COUNT(DISTINCT ws.id) as total_sets,
+      COUNT(DISTINCT ws.id) FILTER (
+        WHERE ws.actual_reps IS NOT NULL
+          OR ws.actual_weight IS NOT NULL
+          OR ws.rpe IS NOT NULL
+          OR ws.actual_distance IS NOT NULL
+          OR ws.actual_duration_minutes IS NOT NULL
+          OR ws.actual_incline IS NOT NULL
+      ) as total_sets,
       COUNT(DISTINCT s.id) as workout_count
     FROM workout_sets ws
     JOIN workout_sessions s ON s.id = ws.session_id
@@ -90,14 +96,20 @@ const getMuscleGroupSummaries = async (userId, weeks = 12) => {
     SELECT
       COALESCE(e.primary_muscle_group, 'other') as muscle_group,
       SUM(
-        COALESCE(ws.actual_reps, ws.target_reps, 0) *
+        COALESCE(ws.actual_reps, 0) *
         COALESCE(
           ws.actual_weight,
-          ws.target_weight,
           CASE WHEN COALESCE(e.equipment, 'bodyweight') = 'bodyweight' THEN $3 ELSE 0 END
         )
       ) as total_volume,
-      COUNT(DISTINCT ws.id) as total_sets,
+      COUNT(DISTINCT ws.id) FILTER (
+        WHERE ws.actual_reps IS NOT NULL
+          OR ws.actual_weight IS NOT NULL
+          OR ws.rpe IS NOT NULL
+          OR ws.actual_distance IS NOT NULL
+          OR ws.actual_duration_minutes IS NOT NULL
+          OR ws.actual_incline IS NOT NULL
+      ) as total_sets,
       COUNT(DISTINCT s.id) as workout_count,
       MAX(s.finished_at) as last_trained
     FROM workout_sets ws

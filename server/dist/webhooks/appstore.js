@@ -13,7 +13,7 @@ router.post("/", express_1.default.json({ limit: "2mb" }), async (req, res) => {
         return res.status(400).json({ error: "Missing signedPayload" });
     }
     try {
-        const { payload, transaction, renewalInfo } = (0, appstore_1.decodeNotification)(signedPayload);
+        const { payload, transaction, renewalInfo } = await (0, appstore_1.decodeNotificationSecure)(signedPayload);
         const notificationType = (payload?.notificationType ?? "UNKNOWN");
         const originalTransactionId = transaction?.originalTransactionId ??
             renewalInfo?.originalTransactionId ??

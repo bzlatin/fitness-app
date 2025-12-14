@@ -70,7 +70,13 @@ const startOfDayUtc = (date) => {
     copy.setUTCHours(0, 0, 0, 0);
     return copy;
 };
-const formatDateKey = (date) => startOfDayUtc(date).toISOString().split("T")[0];
+const pad2 = (n) => String(n).padStart(2, "0");
+const shiftDateByOffsetMinutes = (date, tzOffsetMinutes) => new Date(date.getTime() - tzOffsetMinutes * 60 * 1000);
+const formatDateKeyForTzOffset = (date, tzOffsetMinutes) => {
+    const shifted = shiftDateByOffsetMinutes(date, tzOffsetMinutes);
+    return `${shifted.getUTCFullYear()}-${pad2(shifted.getUTCMonth() + 1)}-${pad2(shifted.getUTCDate())}`;
+};
+const formatDateKeyUtc = (date) => `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 const startOfWeekUtc = (date) => {
     const day = date.getUTCDay(); // 0 is Sunday
     const diff = day === 0 ? -6 : 1 - day; // start on Monday
@@ -80,16 +86,26 @@ const startOfWeekUtc = (date) => {
     return start;
 };
 const computeSetVolume = (set) => {
-    const weight = set.actualWeight ?? set.targetWeight ?? 0;
-    const reps = set.actualReps ?? set.targetReps ?? 0;
+    const weight = set.actualWeight ?? 0;
+    const reps = set.actualReps ?? 0;
     return weight * reps;
 };
 const computeSessionVolume = (sets) => sets.reduce((total, current) => total + computeSetVolume(current), 0);
-const computeStreak = (dates, today) => {
+const isSetLogged = (set) => {
+    const hasStrengthReps = typeof set.actualReps === "number" && Number.isFinite(set.actualReps) && set.actualReps > 0;
+    const hasCardioMinutes = typeof set.actualDurationMinutes === "number" &&
+        Number.isFinite(set.actualDurationMinutes) &&
+        set.actualDurationMinutes > 0;
+    const hasCardioDistance = typeof set.actualDistance === "number" &&
+        Number.isFinite(set.actualDistance) &&
+        set.actualDistance > 0;
+    return hasStrengthReps || hasCardioMinutes || hasCardioDistance;
+};
+const computeStreak = (dates, today, tzOffsetMinutes) => {
     const dateSet = new Set(dates);
     let streak = 0;
-    let cursor = startOfDayUtc(today);
-    while (dateSet.has(formatDateKey(cursor))) {
+    let cursor = startOfDayUtc(shiftDateByOffsetMinutes(today, tzOffsetMinutes));
+    while (dateSet.has(formatDateKeyUtc(cursor))) {
         streak += 1;
         cursor.setUTCDate(cursor.getUTCDate() - 1);
     }
@@ -245,6 +261,10 @@ router.get("/history/range", async (req, res) => {
     }
     const startParam = req.query.start;
     const endParam = req.query.end;
+    const tzOffsetMinutesRaw = Number(req.query.tzOffsetMinutes ?? 0);
+    const tzOffsetMinutes = Number.isFinite(tzOffsetMinutesRaw)
+        ? Math.max(-14 * 60, Math.min(14 * 60, Math.trunc(tzOffsetMinutesRaw)))
+        : 0;
     const today = new Date();
     const defaultStart = new Date(today);
     defaultStart.setUTCFullYear(defaultStart.getUTCFullYear() - 2);
@@ -282,7 +302,8 @@ router.get("/history/range", async (req, res) => {
             const sets = setRows
                 .filter((set) => set.session_id === row.id)
                 .map((set) => mapSet(set, metaMap));
-            const totalVolume = computeSessionVolume(sets);
+            const loggedSets = sets.filter(isSetLogged);
+            const totalVolume = computeSessionVolume(loggedSets);
             const durationSeconds = row.duration_seconds ??
                 (row.finished_at
                     ? Math.max(0, Math.round((new Date(row.finished_at).getTime() -
@@ -296,7 +317,7 @@ router.get("/history/range", async (req, res) => {
             const maxHeartRate = row.max_heart_rate === null ? undefined : Number(row.max_heart_rate);
             const estimatedCalories = energyBurned !== undefined ? Math.round(energyBurned) : Math.round(totalVolume * 0.03);
             const exerciseMap = new Map();
-            sets.forEach((set) => {
+            loggedSets.forEach((set) => {
                 const existing = exerciseMap.get(set.exerciseId);
                 const volume = computeSetVolume(set);
                 if (existing) {
@@ -336,7 +357,7 @@ router.get("/history/range", async (req, res) => {
         });
         const dayMap = new Map();
         summaries.forEach((summary) => {
-            const key = formatDateKey(new Date(summary.startedAt));
+            const key = formatDateKeyForTzOffset(new Date(summary.startedAt), tzOffsetMinutes);
             const existing = dayMap.get(key);
             if (!existing) {
                 dayMap.set(key, {
@@ -365,18 +386,20 @@ router.get("/history/range", async (req, res) => {
           AND ended_reason IS DISTINCT FROM 'auto_inactivity'
         ORDER BY started_at DESC
       `, [userId]);
-        const allDates = streakRows.rows.map((row) => formatDateKey(new Date(row.started_at)));
+        const allDates = streakRows.rows.map((row) => formatDateKeyForTzOffset(new Date(row.started_at), tzOffsetMinutes));
         const uniqueDates = Array.from(new Set(allDates));
-        const currentWeekStart = startOfWeekUtc(today);
+        const shiftedToday = shiftDateByOffsetMinutes(today, tzOffsetMinutes);
+        const currentWeekStart = startOfWeekUtc(shiftedToday);
         const currentWeekEnd = new Date(currentWeekStart);
         currentWeekEnd.setUTCDate(currentWeekEnd.getUTCDate() + 7);
         // Count unique workout DAYS in the current week, not total sessions
         const uniqueWorkoutDaysThisWeek = new Set(summaries
             .filter((summary) => {
             const started = new Date(summary.startedAt);
-            return started >= currentWeekStart && started < currentWeekEnd;
+            const startedShifted = shiftDateByOffsetMinutes(started, tzOffsetMinutes);
+            return startedShifted >= currentWeekStart && startedShifted < currentWeekEnd;
         })
-            .map((summary) => formatDateKey(new Date(summary.startedAt)))).size;
+            .map((summary) => formatDateKeyForTzOffset(new Date(summary.startedAt), tzOffsetMinutes))).size;
         const weeklyCompleted = uniqueWorkoutDaysThisWeek;
         const userResult = await (0, db_1.query)(`SELECT weekly_goal FROM users WHERE id = $1 LIMIT 1`, [userId]);
         const weeklyGoal = userResult.rows[0]?.weekly_goal ?? 4;
@@ -384,7 +407,7 @@ router.get("/history/range", async (req, res) => {
             totalWorkouts: summaries.length,
             weeklyGoal,
             weeklyCompleted,
-            currentStreak: computeStreak(uniqueDates, today),
+            currentStreak: computeStreak(uniqueDates, today, tzOffsetMinutes),
         };
         return res.json({ days, stats });
     }
