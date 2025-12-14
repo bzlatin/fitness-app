@@ -185,14 +185,22 @@ const seedExercisesFromJson = async () => {
 };
 const initDb = async () => {
     await (0, migrationRunner_1.runSqlMigrations)(exports.pool);
+    const isProduction = process.env.NODE_ENV === "production";
+    const isHostedDatabase = !isLocalHost;
     const bootstrapModeRaw = process.env.DB_BOOTSTRAP_MODE;
     const bootstrapMode = bootstrapModeRaw
         ? bootstrapModeRaw.toLowerCase()
-        : process.env.NODE_ENV === "production"
+        : isProduction
             ? "prod"
             : "dev";
     if (bootstrapMode !== "dev" && bootstrapMode !== "prod") {
         throw new Error(`Invalid DB_BOOTSTRAP_MODE: ${bootstrapModeRaw}`);
+    }
+    if (isProduction && bootstrapMode !== "prod") {
+        throw new Error(`Refusing to run DB bootstrap mode "${bootstrapMode}" in production. Remove DB_BOOTSTRAP_MODE or set it to "prod".`);
+    }
+    if (isHostedDatabase && bootstrapMode !== "prod") {
+        throw new Error(`Refusing to run DB bootstrap mode "${bootstrapMode}" against a hosted database (non-localhost). Remove DB_BOOTSTRAP_MODE or set it to "prod".`);
     }
     if (bootstrapMode === "prod")
         return;

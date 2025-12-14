@@ -20,13 +20,10 @@ const notifications_1 = __importDefault(require("./routes/notifications"));
 const feedback_1 = __importDefault(require("./routes/feedback"));
 const engagement_1 = __importDefault(require("./routes/engagement"));
 const templateShares_1 = require("./routes/templateShares");
-const stripe_1 = __importDefault(require("./webhooks/stripe"));
 const appstore_1 = __importDefault(require("./webhooks/appstore"));
 const auth_1 = require("./middleware/auth");
 const app = (0, express_1.default)();
 app.disable("x-powered-by");
-// Stripe webhooks need the raw body, so mount before JSON parsing.
-app.use("/webhooks/stripe", stripe_1.default);
 app.use("/webhooks/appstore", appstore_1.default);
 const isProduction = process.env.NODE_ENV === "production";
 if (process.env.TRUST_PROXY) {
