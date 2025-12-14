@@ -9,7 +9,25 @@ const db_1 = require("../db");
 const nanoid_1 = require("nanoid");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const exerciseData_1 = require("../utils/exerciseData");
+const logger_1 = require("../utils/logger");
+const zod_1 = require("zod");
+const validate_1 = require("../middleware/validate");
 const router = (0, express_1.Router)();
+const log = (0, logger_1.createLogger)("AI");
+const generateWorkoutBodySchema = zod_1.z
+    .object({
+    requestedSplit: zod_1.z.string().trim().min(1).max(80).optional(),
+    specificRequest: zod_1.z.string().trim().min(1).max(2000).optional(),
+})
+    .strip();
+const swapExerciseBodySchema = zod_1.z
+    .object({
+    exerciseId: zod_1.z.string().trim().min(1).max(200),
+    exerciseName: zod_1.z.string().trim().min(1).max(200),
+    primaryMuscleGroup: zod_1.z.string().trim().min(1).max(50),
+    reason: zod_1.z.string().trim().min(1).max(500).optional(),
+})
+    .strip();
 const formatExerciseName = (value) => value
     .replace(/^ex[-_]/i, "")
     .replace(/[_-]/g, " ")
@@ -140,7 +158,7 @@ const deriveFocusName = (specificRequest) => {
  * Generate a personalized workout using AI
  * Requires Pro plan
  */
-router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) => {
+router.post("/generate-workout", planLimits_1.requireProPlan, (0, validate_1.validateBody)(generateWorkoutBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -174,7 +192,7 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
             const nextInCycle = (0, workoutPrompts_1.determineNextInCycle)(recentWorkouts, onboardingData.preferred_split);
             if (nextInCycle) {
                 finalRequestedSplit = nextInCycle;
-                console.log(`[AI] Auto-detected next in cycle: ${nextInCycle}`);
+                log.debug("Auto-detected next in cycle", { nextInCycle, userId });
             }
         }
         const fatigueTargets = {
@@ -198,9 +216,14 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
             requestedSplit: finalRequestedSplit,
             specificRequest,
         };
-        console.log(`[AI] Generating workout for user ${userId}`);
-        console.log(`[AI] Recent workouts: ${recentWorkouts.length}, Fatigue data available: ${Object.keys(muscleFatigue).length > 0}`);
-        console.log(`[AI] Targeting muscles: ${fatigueTargets.prioritize.join(", ") || "auto"} | Avoid: ${fatigueTargets.avoid.join(", ") || "none"}`);
+        log.debug("Generating workout", {
+            userId,
+            requestedSplit: finalRequestedSplit ?? null,
+            recentWorkoutsCount: recentWorkouts.length,
+            hasFatigueData: Object.keys(muscleFatigue).length > 0,
+            targetMuscles: fatigueTargets.prioritize,
+            avoidMuscles: fatigueTargets.avoid,
+        });
         const { catalog: exerciseCatalog, lookup: exerciseLookup } = await buildExerciseLookup();
         const aiProvider = (0, ai_1.getAIProvider)();
         const generatedWorkout = await aiProvider.generateWorkout(params, exerciseCatalog);
@@ -287,10 +310,13 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
                 }
                 // Log if we couldn't find metadata or image
                 if (!meta) {
-                    console.warn(`[AI] No metadata found for exercise: ${ex.exerciseId} (${ex.exerciseName})`);
+                    log.debug("No metadata found for exercise", {
+                        exerciseId: ex.exerciseId,
+                        exerciseName: ex.exerciseName,
+                    });
                 }
                 else if (!meta.gifUrl) {
-                    console.warn(`[AI] Exercise found but has no image: ${meta.id} (${meta.name})`);
+                    log.debug("Exercise found but has no image", { exerciseId: meta.id, exerciseName: meta.name });
                 }
                 const resolvedName = meta?.name ?? formatExerciseName(ex.exerciseName || ex.exerciseId);
                 return {
@@ -312,14 +338,17 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
             JSON.stringify({ requestedSplit, specificRequest }),
             JSON.stringify(enrichedWorkout),
         ]);
-        console.log(`[AI] Successfully generated workout: "${enrichedWorkout.name}"`);
+        log.info("Successfully generated workout", {
+            workoutName: enrichedWorkout.name,
+            exercisesCount: enrichedWorkout.exercises.length,
+        });
         return res.json({
             success: true,
             workout: enrichedWorkout,
         });
     }
     catch (error) {
-        console.error("[AI] Error generating workout:", error);
+        log.error("Error generating workout", { error, userId });
         // Check if it's an OpenAI API error
         if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
             return res.status(500).json({
@@ -338,7 +367,7 @@ router.post("/generate-workout", planLimits_1.requireProPlan, async (req, res) =
  * Swap an exercise for an alternative using AI
  * Requires Pro plan
  */
-router.post("/swap-exercise", planLimits_1.requireProPlan, async (req, res) => {
+router.post("/swap-exercise", planLimits_1.requireProPlan, (0, validate_1.validateBody)(swapExerciseBodySchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -352,12 +381,6 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, async (req, res) => {
     }
     try {
         const { exerciseId, exerciseName, primaryMuscleGroup, reason } = req.body;
-        if (!exerciseId || !exerciseName || !primaryMuscleGroup) {
-            return res.status(400).json({
-                error: "Missing required fields",
-                message: "exerciseId, exerciseName, and primaryMuscleGroup are required",
-            });
-        }
         // Get user profile for equipment
         const userResult = await (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
         const user = userResult.rows[0];
@@ -374,7 +397,7 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, async (req, res) => {
         }
         const aiProvider = (0, ai_1.getAIProvider)();
         const swapReason = reason || "User requested swap";
-        console.log(`[AI] Swapping exercise ${exerciseName} for user ${userId}`);
+        log.debug("Swapping exercise", { userId, exerciseId, exerciseName, primaryMuscleGroup });
         const result = await aiProvider.swapExercise(exerciseName, primaryMuscleGroup, swapReason, availableEquipment, similarExercises);
         if (!result || !result.exerciseId) {
             return res.status(404).json({
@@ -393,14 +416,17 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, async (req, res) => {
             JSON.stringify({ exerciseId, exerciseName, reason }),
             JSON.stringify(result),
         ]);
-        console.log(`[AI] Successfully swapped to: ${result.exerciseName}`);
+        log.info("Successfully swapped exercise", {
+            fromExerciseName: exerciseName,
+            toExerciseName: result.exerciseName,
+        });
         return res.json({
             success: true,
             exercise: result,
         });
     }
     catch (error) {
-        console.error("[AI] Error swapping exercise:", error);
+        log.error("Error swapping exercise", { error, userId });
         if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
             return res.status(500).json({
                 error: "AI service not configured",
@@ -437,7 +463,7 @@ router.get("/usage", planLimits_1.requireProPlan, async (req, res) => {
         });
     }
     catch (error) {
-        console.error("[AI] Error fetching usage:", error);
+        log.error("Error fetching usage", { error, userId });
         return res.status(500).json({ error: "Failed to fetch usage stats" });
     }
 });

@@ -46,7 +46,7 @@ const resolveApiBaseUrl = () => {
 export const API_BASE_URL = resolveApiBaseUrl();
 // Debug the resolved API host during development.
 // eslint-disable-next-line no-console
-console.log("API base URL", API_BASE_URL);
+if (__DEV__) console.log("API base URL", API_BASE_URL);
 
 type RequestConfig = {
   params?: Record<string, string | number | boolean | undefined>;

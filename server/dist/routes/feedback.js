@@ -4,7 +4,35 @@ const express_1 = require("express");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
 const profanityFilter_1 = require("../middleware/profanityFilter");
+const zod_1 = require("zod");
+const validate_1 = require("../middleware/validate");
 const router = (0, express_1.Router)();
+const createFeedbackSchema = zod_1.z
+    .object({
+    title: zod_1.z.string().trim().min(1).max(200),
+    description: zod_1.z.string().trim().min(1).max(2000),
+    category: zod_1.z.enum([
+        "feature_request",
+        "bug_report",
+        "ui_ux_improvement",
+        "performance",
+        "social_features",
+    ]),
+    impact: zod_1.z.enum([
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "must_have",
+        "nice_to_have",
+    ]),
+})
+    .strip();
+const reportFeedbackSchema = zod_1.z
+    .object({
+    reason: zod_1.z.string().trim().min(1).max(500),
+})
+    .strip();
 const mapFeedbackRow = (row) => ({
     id: row.id,
     userId: row.user_id,
@@ -147,48 +175,12 @@ router.post("/", async (req, res, next) => {
         res.locals.isAdmin = await isAdmin(userId);
     }
     next();
-}, profanityFilter_1.rateLimitFeedback, (0, profanityFilter_1.validateProfanity)(["title", "description"]), async (req, res) => {
+}, profanityFilter_1.rateLimitFeedback, (0, validate_1.validateBody)(createFeedbackSchema), (0, profanityFilter_1.validateProfanity)(["title", "description"]), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     const { title, description, category, impact } = req.body;
-    // Validation
-    if (!title || !title.trim()) {
-        return res.status(400).json({ error: "Title is required" });
-    }
-    if (title.length > 200) {
-        return res.status(400).json({ error: "Title must be 200 characters or less" });
-    }
-    if (!description || !description.trim()) {
-        return res.status(400).json({ error: "Description is required" });
-    }
-    if (description.length > 2000) {
-        return res
-            .status(400)
-            .json({ error: "Description must be 2000 characters or less" });
-    }
-    const validCategories = [
-        "feature_request",
-        "bug_report",
-        "ui_ux_improvement",
-        "performance",
-        "social_features",
-    ];
-    if (!validCategories.includes(category)) {
-        return res.status(400).json({ error: "Invalid category" });
-    }
-    const validImpacts = [
-        "critical",
-        "high",
-        "medium",
-        "low",
-        "must_have",
-        "nice_to_have",
-    ];
-    if (!validImpacts.includes(impact)) {
-        return res.status(400).json({ error: "Invalid impact level" });
-    }
     try {
         const id = (0, id_1.generateId)();
         const result = await (0, db_1.query)(`
@@ -316,19 +308,13 @@ router.put("/:id/status", async (req, res) => {
  * POST /api/feedback/:id/report
  * Report a feedback item for moderation
  */
-router.post("/:id/report", async (req, res) => {
+router.post("/:id/report", (0, validate_1.validateBody)(reportFeedbackSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     const { id } = req.params;
     const { reason } = req.body;
-    if (!reason || !reason.trim()) {
-        return res.status(400).json({ error: "Report reason is required" });
-    }
-    if (reason.length > 500) {
-        return res.status(400).json({ error: "Reason must be 500 characters or less" });
-    }
     try {
         // Check if feedback item exists
         const feedbackCheck = await (0, db_1.query)(`SELECT id, is_hidden FROM feedback_items WHERE id = $1 LIMIT 1`, [id]);

@@ -1809,9 +1809,11 @@ CREATE INDEX template_shares_creator_idx ON template_shares(created_by);
 
 **Pre-Launch Checklist**:
 
-- [ ] Clean up server/mobile logs and strip debug/PII before release
+- See `PRE_LAUNCH_CHECKLIST.md` for the repo-specific execution plan (and Stripe/IAP decision TODOs).
+- [x] Clean up server/mobile logs and strip debug/PII before release
 - [ ] Harden security (input validation, SQL injection prevention, authz checks, dependency audit)
 - [ ] Enforce API rate limiting across login, AI, and payment endpoints
+- [ ] Decide payments stack (IAP-only vs web checkout) and remove Stripe logic if unused
 - [ ] Remove mock/beta users and test data from the production database
 - [ ] Verify database migrations/schemas are production-ready and indexed correctly
 - [ ] Run auth/token + permissions smoke tests to ensure no unauthorized access paths
@@ -2024,4 +2026,5 @@ These features are planned for implementation after the initial app launch and w
 - **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
 - **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
 - **v1.6.3**: Workout template share links (native share sheet + clipboard, shared template preview, one-tap copy, creator analytics + signup attribution)
+- **v1.6.4**: Logging + PII cleanup (server log levels + redaction; gated mobile debug logs)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

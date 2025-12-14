@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { query } from "../db";
 import { generateId } from "../utils/id";
+import { z } from "zod";
+import { validateBody } from "../middleware/validate";
 
 type Visibility = "private" | "followers" | "squad";
 
@@ -231,6 +233,42 @@ const fetchSquadById = async (userId: string, squadId: string) => {
 };
 
 const router = Router();
+
+const profileUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60).optional(),
+    handle: z.string().trim().min(1).max(32).nullable().optional(),
+    bio: z.string().max(500).nullable().optional(),
+    avatarUrl: z.string().url().max(2048).nullable().optional(),
+    profileCompletedAt: z.string().datetime().nullable().optional(),
+    trainingStyle: z.string().max(80).nullable().optional(),
+    gymName: z.string().max(80).nullable().optional(),
+    gymVisibility: z.enum(["hidden", "shown"]).nullable().optional(),
+    weeklyGoal: z.number().int().min(1).max(14).optional(),
+    onboardingData: z.record(z.string(), z.unknown()).nullable().optional(),
+    progressiveOverloadEnabled: z.boolean().optional(),
+    restTimerSoundEnabled: z.boolean().optional(),
+    appleHealthEnabled: z.boolean().optional(),
+    appleHealthPermissions: z.record(z.string(), z.unknown()).nullable().optional(),
+    appleHealthLastSyncAt: z.string().datetime().nullable().optional(),
+  })
+  .strip();
+
+const reactionBodySchema = z
+  .object({
+    targetType: z.enum(["status", "share"]),
+    targetId: z.string().trim().min(1).max(200),
+    emoji: z.string().trim().min(1).max(8),
+  })
+  .strip();
+
+const commentBodySchema = z
+  .object({
+    targetType: z.enum(["status", "share"]),
+    targetId: z.string().trim().min(1).max(200),
+    comment: z.string().trim().min(1).max(500),
+  })
+  .strip();
 
 const normalizeHandle = (value?: string | null) => {
   if (!value) return undefined;
@@ -532,7 +570,7 @@ router.get("/me", async (_req, res) => {
   }
 });
 
-router.put("/me", async (req, res) => {
+router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -560,26 +598,6 @@ router.put("/me", async (req, res) => {
     "handle"
   );
   const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
-
-  if (name !== undefined && !name.trim()) {
-    return res.status(400).json({ error: "Name cannot be empty" });
-  }
-  if (
-    gymVisibility &&
-    gymVisibility !== "hidden" &&
-    gymVisibility !== "shown"
-  ) {
-    return res.status(400).json({ error: "Invalid gym visibility" });
-  }
-  if (
-    progressiveOverloadEnabled !== undefined &&
-    typeof progressiveOverloadEnabled !== "boolean"
-  ) {
-    return res.status(400).json({ error: "Invalid progressive overload flag" });
-  }
-  if (appleHealthEnabled !== undefined && typeof appleHealthEnabled !== "boolean") {
-    return res.status(400).json({ error: "Invalid Apple Health enabled flag" });
-  }
 
   const currentUserResult = await query<UserRow>(
     `SELECT * FROM users WHERE id = $1 LIMIT 1`,
@@ -1450,27 +1468,14 @@ router.get("/blocked", async (_req, res) => {
 });
 
 // Workout reactions - add emoji reaction
-router.post("/reactions", async (req, res) => {
+router.post("/reactions", validateBody(reactionBodySchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { targetType, targetId, emoji } = req.body as {
-    targetType?: "status" | "share";
-    targetId?: string;
-    emoji?: string;
-  };
-
-  if (!targetType || !["status", "share"].includes(targetType)) {
-    return res.status(400).json({ error: "Invalid targetType" });
-  }
-  if (!targetId) {
-    return res.status(400).json({ error: "targetId is required" });
-  }
-  if (!emoji) {
-    return res.status(400).json({ error: "emoji is required" });
-  }
+  const { targetType, targetId, emoji } =
+    req.body as z.infer<typeof reactionBodySchema>;
 
   const allowedEmojis = ["🔥", "💪", "🚀", "🙌", "❤️", "👏"];
   if (!allowedEmojis.includes(emoji)) {
@@ -1521,30 +1526,15 @@ router.delete("/reactions/:targetType/:targetId/:emoji", async (req, res) => {
 });
 
 // Add comment
-router.post("/comments", async (req, res) => {
+router.post("/comments", validateBody(commentBodySchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { targetType, targetId, comment } = req.body as {
-    targetType?: "status" | "share";
-    targetId?: string;
-    comment?: string;
-  };
-
-  if (!targetType || !["status", "share"].includes(targetType)) {
-    return res.status(400).json({ error: "Invalid targetType" });
-  }
-  if (!targetId) {
-    return res.status(400).json({ error: "targetId is required" });
-  }
-  if (!comment?.trim()) {
-    return res.status(400).json({ error: "comment is required" });
-  }
-
-  // Limit comment length
-  const trimmedComment = comment.trim().slice(0, 500);
+  const { targetType, targetId, comment } =
+    req.body as z.infer<typeof commentBodySchema>;
+  const trimmedComment = comment;
 
   try {
     const id = generateId();

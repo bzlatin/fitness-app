@@ -9,26 +9,28 @@ const app_1 = __importDefault(require("./app"));
 const db_1 = require("./db");
 const node_cron_1 = __importDefault(require("node-cron"));
 const notifications_1 = require("./jobs/notifications");
+const logger_1 = require("./utils/logger");
 const PORT = process.env.PORT || 4000;
+const log = (0, logger_1.createLogger)("Server");
 (0, db_1.initDb)()
     .then(() => {
     app_1.default.listen(PORT, () => {
-        console.log(`Push / Pull API running on http://localhost:${PORT}`);
+        log.info(`Push / Pull API running on http://localhost:${PORT}`);
         // Schedule daily notification job at 9am
         node_cron_1.default.schedule("0 9 * * *", async () => {
-            console.log("[Cron] Running daily notification job at 9am...");
+            log.info("Running daily notification job at 9am...");
             try {
                 await (0, notifications_1.processNotifications)();
-                console.log("[Cron] Daily notification job completed successfully");
+                log.info("Daily notification job completed successfully");
             }
             catch (error) {
-                console.error("[Cron] Daily notification job failed:", error);
+                log.error("Daily notification job failed", { error });
             }
         });
-        console.log("[Cron] Daily notification job scheduled for 9:00 AM");
+        log.info("Daily notification job scheduled for 9:00 AM");
     });
 })
     .catch((err) => {
-    console.error("Failed to initialize database", err);
+    log.error("Failed to initialize database", { error: err });
     process.exit(1);
 });

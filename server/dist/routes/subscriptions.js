@@ -5,7 +5,24 @@ const stripe_1 = require("../services/stripe");
 const appstore_1 = require("../services/appstore");
 const db_1 = require("../db");
 const id_1 = require("../utils/id");
+const zod_1 = require("zod");
+const validate_1 = require("../middleware/validate");
 const router = (0, express_1.Router)();
+const planSchema = zod_1.z
+    .object({
+    plan: zod_1.z.enum(["monthly", "annual"]).optional(),
+})
+    .strip();
+const billingPortalSchema = zod_1.z
+    .object({
+    returnUrl: zod_1.z.string().url().max(2048).optional(),
+})
+    .strip();
+const validateReceiptSchema = zod_1.z
+    .object({
+    transactionId: zod_1.z.string().trim().min(1).max(512),
+})
+    .strip();
 const getSubscriptionPlanDetails = (subscription) => {
     const firstItem = subscription.items.data[0];
     const lookupKey = firstItem?.price?.lookup_key ?? null;
@@ -89,15 +106,12 @@ router.get("/status", async (_req, res) => {
         return res.status(500).json({ error: "Failed to fetch subscription status" });
     }
 });
-router.post("/create-checkout-session", async (req, res) => {
+router.post("/create-checkout-session", (0, validate_1.validateBody)(planSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const plan = (req.body?.plan ?? "monthly");
-    if (plan !== "monthly" && plan !== "annual") {
-        return res.status(400).json({ error: "Invalid plan" });
-    }
+    const plan = (req.body.plan ?? "monthly");
     try {
         const priceId = (0, stripe_1.resolvePriceId)(plan);
         const billing = await (0, stripe_1.ensureStripeCustomer)(userId);
@@ -195,12 +209,12 @@ router.post("/cancel", async (_req, res) => {
         return res.status(500).json({ error: "Failed to cancel subscription" });
     }
 });
-router.post("/billing-portal", async (req, res) => {
+router.post("/billing-portal", (0, validate_1.validateBody)(billingPortalSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const returnUrl = req.body?.returnUrl ??
+    const returnUrl = req.body.returnUrl ??
         process.env.BILLING_PORTAL_RETURN_URL ??
         "https://example.com/billing-return";
     try {
@@ -225,15 +239,12 @@ router.post("/billing-portal", async (req, res) => {
         return res.status(500).json({ error: "Failed to create billing portal session" });
     }
 });
-router.post("/switch", async (req, res) => {
+router.post("/switch", (0, validate_1.validateBody)(planSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const plan = (req.body?.plan ?? "monthly");
-    if (plan !== "monthly" && plan !== "annual") {
-        return res.status(400).json({ error: "Invalid plan" });
-    }
+    const plan = (req.body.plan ?? "monthly");
     try {
         const billing = await (0, stripe_1.fetchUserBilling)(userId);
         if (billing.subscription_platform === "apple" || billing.apple_original_transaction_id) {
@@ -285,15 +296,12 @@ router.post("/switch", async (req, res) => {
         return res.status(500).json({ error: "Failed to switch subscription" });
     }
 });
-router.post("/ios/validate-receipt", async (req, res) => {
+router.post("/ios/validate-receipt", (0, validate_1.validateBody)(validateReceiptSchema), async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const transactionId = req.body?.transactionId;
-    if (!transactionId) {
-        return res.status(400).json({ error: "transactionId is required" });
-    }
+    const transactionId = req.body.transactionId;
     try {
         const status = await (0, appstore_1.validateAndActivate)(userId, transactionId);
         return res.json({

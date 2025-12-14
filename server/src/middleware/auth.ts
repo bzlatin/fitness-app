@@ -3,7 +3,9 @@ import { auth } from "express-oauth2-jwt-bearer";
 import { query } from "../db";
 
 const { AUTH0_DOMAIN, AUTH0_AUDIENCE } = process.env;
-const ALLOW_DEV_AUTH_BYPASS = process.env.ALLOW_DEV_AUTH_BYPASS === "true";
+const isProduction = process.env.NODE_ENV === "production";
+const ALLOW_DEV_AUTH_BYPASS =
+  process.env.ALLOW_DEV_AUTH_BYPASS === "true" && !isProduction;
 const DEV_USER_ID = process.env.DEV_USER_ID || "demo-user";
 
 if (!AUTH0_DOMAIN) {

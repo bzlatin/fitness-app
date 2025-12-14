@@ -4,7 +4,8 @@ exports.ensureUser = exports.attachUser = exports.maybeRequireAuth = exports.req
 const express_oauth2_jwt_bearer_1 = require("express-oauth2-jwt-bearer");
 const db_1 = require("../db");
 const { AUTH0_DOMAIN, AUTH0_AUDIENCE } = process.env;
-const ALLOW_DEV_AUTH_BYPASS = process.env.ALLOW_DEV_AUTH_BYPASS === "true";
+const isProduction = process.env.NODE_ENV === "production";
+const ALLOW_DEV_AUTH_BYPASS = process.env.ALLOW_DEV_AUTH_BYPASS === "true" && !isProduction;
 const DEV_USER_ID = process.env.DEV_USER_ID || "demo-user";
 if (!AUTH0_DOMAIN) {
     throw new Error("AUTH0_DOMAIN is not set. Please add it to your .env.");

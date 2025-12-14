@@ -4,8 +4,28 @@ import { stripe, resolvePriceId, ensureStripeCustomer, fetchUserBilling, Billing
 import { fetchSubscriptionStatus as fetchAppleSubscriptionStatus, validateAndActivate } from "../services/appstore";
 import { query } from "../db";
 import { generateId } from "../utils/id";
+import { z } from "zod";
+import { validateBody } from "../middleware/validate";
 
 const router = Router();
+
+const planSchema = z
+  .object({
+    plan: z.enum(["monthly", "annual"]).optional(),
+  })
+  .strip();
+
+const billingPortalSchema = z
+  .object({
+    returnUrl: z.string().url().max(2048).optional(),
+  })
+  .strip();
+
+const validateReceiptSchema = z
+  .object({
+    transactionId: z.string().trim().min(1).max(512),
+  })
+  .strip();
 
 type StatusResponse = {
   status: string;
@@ -116,16 +136,13 @@ router.get("/status", async (_req, res) => {
   }
 });
 
-router.post("/create-checkout-session", async (req, res) => {
+router.post("/create-checkout-session", validateBody(planSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const plan = (req.body?.plan ?? "monthly") as BillingPlan;
-  if (plan !== "monthly" && plan !== "annual") {
-    return res.status(400).json({ error: "Invalid plan" });
-  }
+  const plan = (req.body.plan ?? "monthly") as BillingPlan;
 
   try {
     const priceId = resolvePriceId(plan);
@@ -246,14 +263,14 @@ router.post("/cancel", async (_req, res) => {
   }
 });
 
-router.post("/billing-portal", async (req, res) => {
+router.post("/billing-portal", validateBody(billingPortalSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   const returnUrl =
-    req.body?.returnUrl ??
+    req.body.returnUrl ??
     process.env.BILLING_PORTAL_RETURN_URL ??
     "https://example.com/billing-return";
 
@@ -285,16 +302,13 @@ router.post("/billing-portal", async (req, res) => {
   }
 });
 
-router.post("/switch", async (req, res) => {
+router.post("/switch", validateBody(planSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const plan = (req.body?.plan ?? "monthly") as BillingPlan;
-  if (plan !== "monthly" && plan !== "annual") {
-    return res.status(400).json({ error: "Invalid plan" });
-  }
+  const plan = (req.body.plan ?? "monthly") as BillingPlan;
 
   try {
     const billing = await fetchUserBilling(userId);
@@ -354,16 +368,13 @@ router.post("/switch", async (req, res) => {
   }
 });
 
-router.post("/ios/validate-receipt", async (req, res) => {
+router.post("/ios/validate-receipt", validateBody(validateReceiptSchema), async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const transactionId = req.body?.transactionId as string | undefined;
-  if (!transactionId) {
-    return res.status(400).json({ error: "transactionId is required" });
-  }
+  const transactionId = req.body.transactionId;
 
   try {
     const status = await validateAndActivate(userId, transactionId);

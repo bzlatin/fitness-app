@@ -10,6 +10,7 @@ import {
   buildWorkoutGenerationPrompt,
   buildSubstitutionPrompt,
 } from "./workoutPrompts";
+import { createLogger } from "../../utils/logger";
 
 /**
  * OpenAI implementation of the AI provider
@@ -18,6 +19,7 @@ import {
 export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
   private model: string;
+  private log = createLogger("OpenAI");
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -62,11 +64,11 @@ export class OpenAIProvider implements AIProvider {
         }))
       );
 
-      console.log(`[OpenAI] Generating workout for user ${params.userId}...`);
-      console.log(`[OpenAI] Split: ${params.requestedSplit || "auto"}`);
-      console.log(
-        `[OpenAI] Available exercises: ${filteredExercises.length}`
-      );
+      this.log.debug("Generating workout", {
+        userId: params.userId,
+        split: params.requestedSplit || "auto",
+        availableExercises: filteredExercises.length,
+      });
 
       const response = await this.client.chat.completions.create({
         model: this.model,
@@ -101,10 +103,9 @@ export class OpenAIProvider implements AIProvider {
       );
 
       if (invalidExercises.length > 0) {
-        console.warn(
-          `[OpenAI] Warning: AI generated invalid exercise IDs:`,
-          invalidExercises.map((ex) => ex.exerciseId)
-        );
+        this.log.warn("AI generated invalid exercise IDs", {
+          invalidExerciseIds: invalidExercises.map((ex) => ex.exerciseId),
+        });
         // Filter out invalid exercises
         generatedWorkout.exercises = generatedWorkout.exercises.filter((ex) =>
           validExerciseIds.has(ex.exerciseId)
@@ -156,13 +157,14 @@ export class OpenAIProvider implements AIProvider {
 
       generatedWorkout.name = workoutName;
 
-      console.log(
-        `[OpenAI] Successfully generated workout: "${generatedWorkout.name}" with ${generatedWorkout.exercises.length} exercises`
-      );
+      this.log.info("Successfully generated workout", {
+        workoutName: generatedWorkout.name,
+        exercisesCount: generatedWorkout.exercises.length,
+      });
 
       return generatedWorkout;
     } catch (error) {
-      console.error("[OpenAI] Error generating workout:", error);
+      this.log.error("Error generating workout", { error, userId: params.userId });
       throw new Error(
         `Failed to generate workout: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -182,12 +184,14 @@ export class OpenAIProvider implements AIProvider {
     try {
       // For now, return null - this can be implemented later
       // We'll need access to the full exercise database here
-      console.log(
-        `[OpenAI] Exercise substitution requested for ${exercise.name}: ${reason}`
-      );
+      this.log.debug("Exercise substitution requested", {
+        exerciseName: exercise.name,
+        reason,
+        availableEquipment,
+      });
       return null;
     } catch (error) {
-      console.error("[OpenAI] Error suggesting substitution:", error);
+      this.log.error("Error suggesting substitution", { error, exerciseName: exercise.name });
       return null;
     }
   }
@@ -211,8 +215,12 @@ export class OpenAIProvider implements AIProvider {
         availableExercises
       );
 
-      console.log(`[OpenAI] Swapping exercise: ${exerciseName}`);
-      console.log(`[OpenAI] Available alternatives: ${availableExercises.length}`);
+      this.log.debug("Swapping exercise", {
+        exerciseName,
+        primaryMuscleGroup,
+        reason,
+        availableAlternatives: availableExercises.length,
+      });
 
       const response = await this.client.chat.completions.create({
         model: this.model,
@@ -240,14 +248,20 @@ export class OpenAIProvider implements AIProvider {
       const result = JSON.parse(content) as ExerciseSwapResult;
 
       if (result.exerciseId) {
-        console.log(`[OpenAI] Successfully swapped to: ${result.exerciseName}`);
+        this.log.info("Successfully swapped exercise", {
+          fromExerciseName: exerciseName,
+          toExerciseName: result.exerciseName,
+        });
       } else {
-        console.log(`[OpenAI] No suitable alternative found`);
+        this.log.info("No suitable alternative found", {
+          exerciseName,
+          primaryMuscleGroup,
+        });
       }
 
       return result;
     } catch (error) {
-      console.error("[OpenAI] Error swapping exercise:", error);
+      this.log.error("Error swapping exercise", { error, exerciseName, primaryMuscleGroup });
       throw new Error(
         `Failed to swap exercise: ${
           error instanceof Error ? error.message : "Unknown error"

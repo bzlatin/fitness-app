@@ -55,13 +55,14 @@ import {
 declare const process: any;
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
-// Log startup info for debugging production issues
-console.log("[App] Starting Push/Pull...");
-console.log("[App] Platform:", Platform.OS, Platform.Version);
-console.log("[App] STRIPE_PUBLISHABLE_KEY set:", !!STRIPE_PUBLISHABLE_KEY);
-console.log("[App] ENV AUTH0_DOMAIN:", process.env.EXPO_PUBLIC_AUTH0_DOMAIN ? "set" : "NOT SET");
-console.log("[App] ENV AUTH0_CLIENT_ID:", process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID ? "set" : "NOT SET");
-console.log("[App] ENV API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "NOT SET");
+if (__DEV__) {
+  console.log("[App] Starting Push/Pull...");
+  console.log("[App] Platform:", Platform.OS, Platform.Version);
+  console.log("[App] STRIPE_PUBLISHABLE_KEY set:", !!STRIPE_PUBLISHABLE_KEY);
+  console.log("[App] ENV AUTH0_DOMAIN:", process.env.EXPO_PUBLIC_AUTH0_DOMAIN ? "set" : "NOT SET");
+  console.log("[App] ENV AUTH0_CLIENT_ID:", process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID ? "set" : "NOT SET");
+  console.log("[App] ENV API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "NOT SET");
+}
 
 // Dynamically load AuthProvider to catch module-level errors
 let AuthProvider: React.ComponentType<{ children: ReactNode }> | null = null;
@@ -69,7 +70,7 @@ let authLoadError: Error | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   AuthProvider = require("./src/context/AuthContext").AuthProvider;
-  console.log("[App] AuthProvider loaded successfully");
+  if (__DEV__) console.log("[App] AuthProvider loaded successfully");
 } catch (err) {
   authLoadError = err instanceof Error ? err : new Error(String(err));
   console.error("[App] Failed to load AuthProvider:", authLoadError.message);
