@@ -915,6 +915,36 @@ router.get("/connections", async (_req, res) => {
   }
 });
 
+// Get pending friend requests count (for notification badge)
+router.get("/pending-requests-count", async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Count followers who the user is not following back (pending friend requests)
+    const result = await query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text as count
+        FROM follows f
+        WHERE f.target_user_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM follows f2
+            WHERE f2.user_id = $1 AND f2.target_user_id = f.user_id
+          )
+      `,
+      [userId]
+    );
+
+    const count = parseInt(result.rows[0]?.count ?? "0", 10);
+    return res.json({ count });
+  } catch (err) {
+    console.error("Failed to get pending requests count", err);
+    return res.status(500).json({ error: "Failed to get pending requests count" });
+  }
+});
+
 router.get("/squads", async (_req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
@@ -1932,10 +1962,53 @@ router.post("/follow", async (req, res) => {
     return res.status(400).json({ error: "Invalid follow target" });
   }
   try {
-    await query(
-      `INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    // Insert the follow relationship
+    const result = await query(
+      `INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`,
       [userId, targetUserId]
     );
+
+    // Only send notifications if this was a new follow (not a duplicate)
+    if (result.rowCount && result.rowCount > 0) {
+      // Get current user info to send in notification
+      const currentUserResult = await query<UserRow>(
+        `SELECT name, handle FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      const currentUser = currentUserResult.rows[0];
+
+      // Check if target user was already following current user (mutual follow)
+      const isMutualResult = await query(
+        `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
+        [targetUserId, userId]
+      );
+      const isMutual = (isMutualResult.rowCount ?? 0) > 0;
+
+      if (isMutual) {
+        // This is a friend acceptance - notify the original requester (target user)
+        const { sendFriendAcceptanceNotification } = await import("../jobs/notifications");
+        sendFriendAcceptanceNotification(
+          targetUserId,
+          userId,
+          currentUser?.name ?? "Someone",
+          currentUser?.handle ?? undefined
+        ).catch((err) =>
+          console.error("[Social] Failed to send friend acceptance notification:", err)
+        );
+      } else {
+        // This is a new friend request - notify the target user
+        const { sendFriendRequestNotification } = await import("../jobs/notifications");
+        sendFriendRequestNotification(
+          targetUserId,
+          userId,
+          currentUser?.name ?? "Someone",
+          currentUser?.handle ?? undefined
+        ).catch((err) =>
+          console.error("[Social] Failed to send friend request notification:", err)
+        );
+      }
+    }
+
     return res.status(204).send();
   } catch (err) {
     console.error("Failed to follow user", err);

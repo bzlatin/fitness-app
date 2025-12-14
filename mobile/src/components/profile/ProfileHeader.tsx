@@ -12,6 +12,7 @@ type Props = {
   gymVisibility?: "hidden" | "shown";
   avatarUrl?: string | null;
   friendCount?: number | null;
+  pendingRequestsCount?: number;
   bio?: string | null;
   showProBadge?: boolean;
   isViewingSelf: boolean;
@@ -33,6 +34,7 @@ const ProfileHeader = ({
   gymVisibility,
   avatarUrl,
   friendCount = null,
+  pendingRequestsCount = 0,
   bio,
   showProBadge = false,
   isViewingSelf,
@@ -220,6 +222,7 @@ const ProfileHeader = ({
                   alignItems: "center",
                   gap: 6,
                   opacity: onPressFriends && pressed ? 0.8 : 1,
+                  position: "relative",
                 })}
               >
                 <Ionicons
@@ -236,6 +239,35 @@ const ProfileHeader = ({
                 >
                   {friendCount ?? 0} friends
                 </Text>
+                {/* Notification badge for pending friend requests */}
+                {isViewingSelf && pendingRequestsCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -6,
+                      backgroundColor: colors.error,
+                      borderRadius: 999,
+                      minWidth: 18,
+                      height: 18,
+                      paddingHorizontal: 5,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 2,
+                      borderColor: colors.surface,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontFamily: fontFamilies.bold,
+                        fontSize: 10,
+                      }}
+                    >
+                      {pendingRequestsCount > 9 ? "9+" : pendingRequestsCount}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
               {!isViewingSelf ? (
                 <Pressable

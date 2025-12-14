@@ -198,6 +198,10 @@ const ProfileScreen = () => {
           type: "active",
         });
       }
+      // Invalidate pending requests count (user just followed someone or accepted a request)
+      await queryClient.invalidateQueries({
+        queryKey: ["social", "pendingRequestsCount"],
+      });
       void refreshCurrentUser();
     },
   });
@@ -307,6 +311,17 @@ const ProfileScreen = () => {
     queryKey: ["social", "connections", "profile"],
     queryFn: getConnections,
     enabled: Boolean(currentUser) && isViewingSelf && showConnectionsModal,
+  });
+
+  // Get pending friend requests count for notification badge
+  const { data: pendingRequestsCount = 0 } = useQuery({
+    queryKey: ["social", "pendingRequestsCount"],
+    queryFn: async () => {
+      const { getPendingRequestsCount } = await import("../api/social");
+      return getPendingRequestsCount();
+    },
+    enabled: Boolean(currentUser) && isViewingSelf,
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const friends = connectionsQuery.data?.friends ?? [];
@@ -585,6 +600,7 @@ const ProfileScreen = () => {
             isViewingSelf={isViewingSelf}
             isFollowing={isFollowing}
             friendCount={friendCount}
+            pendingRequestsCount={pendingRequestsCount}
             bio={resolvedProfile.bio}
             onToggleFollow={handleFollowToggle}
             isFollowLoading={

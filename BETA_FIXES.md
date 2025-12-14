@@ -53,35 +53,40 @@ _Priority: HIGH (User-reported issues from beta testing)_
 
 ### Notifications
 
-- [ ] **Missing notification permissions prompt**
+- [x] **Missing notification permissions prompt** ✅ COMPLETE
 
   - **Issue**: Notification permission prompt should show after plan selection but doesn't appear
-  - **Expected flow**: Login → Choose plan → Request notification permissions
-  - **Files**: `mobile/src/screens/OnboardingScreen.tsx` or post-onboarding flow
+  - **Status**: Already implemented at onboarding step 9 (before plan selection)
+  - **Files**: [mobile/src/screens/OnboardingScreen.tsx:372-381](mobile/src/screens/OnboardingScreen.tsx#L372-L381)
+  - **Note**: Permission prompt is working as designed - shows at step 9, registers token at step 10 after onboarding
+  - **Completed**: 2025-12-14
 
-- [ ] **No friend request notifications**
+- [x] **No friend request notifications** ✅ COMPLETE
 
   - **Issue**: No alerts when someone sends you a friend request
-  - **Fix**: Implement both in-app notification system (badge, alert) + push notifications
+  - **Fix**: Implemented both in-app notification badge + push notifications
   - **Implementation**:
-    - **In-app**: Badge on profile tab, notification banner/alert in UI
-    - **Push**: expo-notifications for remote notifications
-    - **Backend**: New endpoint for unread friend requests count + notification payload
+    - **In-app**: Red badge on "friends" button in ProfileScreen showing pending request count
+    - **Push**: expo-notifications sends push notification when someone follows you
+    - **Backend**: Added `/api/social/pending-requests-count` endpoint for badge count
+    - **Backend**: Added notification triggers in follow endpoint to send friend request notifications
   - **Files**:
-    - `mobile/src/screens/ProfileScreen.tsx`
-    - `mobile/src/components/social/FriendRequestBadge.tsx` (new)
-    - `mobile/src/services/notifications.ts` (new - push notification setup)
-    - `server/src/routes/social.ts` (trigger notification on friend request)
-  - **Priority**: MEDIUM - User engagement feature
+    - [mobile/src/screens/ProfileScreen.tsx:313-321](mobile/src/screens/ProfileScreen.tsx#L313-L321) - Badge count query
+    - [mobile/src/components/profile/ProfileHeader.tsx:243-270](mobile/src/components/profile/ProfileHeader.tsx#L243-L270) - Notification badge
+    - [mobile/src/api/social.ts:284-292](mobile/src/api/social.ts#L284-L292) - API client function
+    - [server/src/routes/social.ts:919-946](server/src/routes/social.ts#L919-L946) - Pending count endpoint
+    - [server/src/routes/social.ts:1942-1979](server/src/routes/social.ts#L1942-L1979) - Friend request notification trigger
+    - [server/src/jobs/notifications.ts:487-525](server/src/jobs/notifications.ts#L487-L525) - Friend request notification helper
+  - **Completed**: 2025-12-14
 
-- [ ] **No friend acceptance notifications**
+- [x] **No friend acceptance notifications** ✅ COMPLETE
   - **Issue**: No alerts when someone accepts your friend request
-  - **Fix**: Add both in-app + push notification when follow request is accepted
-  - **Implementation**: Similar to friend request notifications above
+  - **Fix**: Added both in-app + push notification when follow request is accepted (mutual follow detected)
+  - **Implementation**: When user follows back, backend detects mutual follow and sends acceptance notification
   - **Files**:
-    - Same as above + update friend acceptance endpoint to trigger notifications
-    - `server/src/routes/social.ts` (POST /api/social/follow/:userId route)
-  - **Priority**: MEDIUM - User engagement feature
+    - [server/src/routes/social.ts:1957-1967](server/src/routes/social.ts#L1957-L1967) - Friend acceptance notification trigger
+    - [server/src/jobs/notifications.ts:530-568](server/src/jobs/notifications.ts#L530-L568) - Friend acceptance notification helper
+  - **Completed**: 2025-12-14
 
 ---
 

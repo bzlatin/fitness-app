@@ -281,6 +281,16 @@ export const getConnections = async () => {
   };
 };
 
+export const getPendingRequestsCount = async (): Promise<number> => {
+  try {
+    const res = await apiClient.get<{ count: number }>("/social/pending-requests-count");
+    return res.data?.count ?? 0;
+  } catch (err) {
+    console.error("Failed to get pending requests count:", err);
+    return 0;
+  }
+};
+
 // Squad Management
 
 export const getSquadById = async (squadId: string): Promise<SquadDetail | null> => {

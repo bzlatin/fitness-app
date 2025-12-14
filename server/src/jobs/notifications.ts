@@ -480,3 +480,89 @@ export const sendSquadActivityNotification = async (
     });
   }
 };
+
+/**
+ * Send notification when someone sends a friend request
+ */
+export const sendFriendRequestNotification = async (
+  targetUserId: string,
+  requesterUserId: string,
+  requesterName: string,
+  requesterHandle?: string
+): Promise<void> => {
+  const userResult = await query<User>(
+    `
+    SELECT
+      id,
+      name,
+      email,
+      weekly_goal as "weeklyGoal",
+      push_token as "pushToken",
+      notification_preferences as "notificationPreferences"
+    FROM users
+    WHERE id = $1
+    `,
+    [targetUserId]
+  );
+
+  if (!userResult.rows.length) return;
+  const user = userResult.rows[0];
+
+  // Always send social notifications (not governed by squad activity preference)
+  await sendNotification(user, {
+    type: "friend_request",
+    triggerReason: "new_follower",
+    title: "New friend request 👋",
+    body: requesterHandle
+      ? `${requesterName} (${requesterHandle}) wants to connect`
+      : `${requesterName} wants to connect`,
+    data: {
+      requesterId: requesterUserId,
+      requesterName,
+      requesterHandle,
+    },
+  });
+};
+
+/**
+ * Send notification when someone accepts your friend request
+ */
+export const sendFriendAcceptanceNotification = async (
+  originalRequesterId: string,
+  acceptorUserId: string,
+  acceptorName: string,
+  acceptorHandle?: string
+): Promise<void> => {
+  const userResult = await query<User>(
+    `
+    SELECT
+      id,
+      name,
+      email,
+      weekly_goal as "weeklyGoal",
+      push_token as "pushToken",
+      notification_preferences as "notificationPreferences"
+    FROM users
+    WHERE id = $1
+    `,
+    [originalRequesterId]
+  );
+
+  if (!userResult.rows.length) return;
+  const user = userResult.rows[0];
+
+  // Always send social notifications
+  await sendNotification(user, {
+    type: "friend_acceptance",
+    triggerReason: "request_accepted",
+    title: "Friend request accepted! 🎉",
+    body: acceptorHandle
+      ? `${acceptorName} (${acceptorHandle}) accepted your friend request`
+      : `${acceptorName} accepted your friend request`,
+    data: {
+      acceptorId: acceptorUserId,
+      acceptorName,
+      acceptorHandle,
+    },
+  });
+};
