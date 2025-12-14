@@ -74,6 +74,7 @@ const SettingsScreen = () => {
   const { logout, isAuthorizing } = useAuth();
   const { user, updateProfile, deleteAccount, refresh, isLoading } =
     useCurrentUser();
+  const lastUserIdRef = useRef<string | null>(null);
   const [draftName, setDraftName] = useState(user?.name ?? "");
   const [draftHandle, setDraftHandle] = useState(user?.handle ?? "");
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
@@ -115,7 +116,7 @@ const SettingsScreen = () => {
     useState<AppleHealthPermissions>({
       workouts: true,
       activeEnergy: true,
-      heartRate: false,
+      heartRate: true,
     });
   const [isSyncingHealth, setIsSyncingHealth] = useState(false);
   const [lastHealthSync, setLastHealthSync] = useState<Date | null>(null);
@@ -202,25 +203,33 @@ const SettingsScreen = () => {
   }, [appleHealthEnabledFromProfile, appleHealthEnabledUi]);
 
   useEffect(() => {
-    if (user) {
-      setDraftName(user.name ?? "");
-      setDraftHandle(user.handle ?? "");
-      setDraftBio(user.bio ?? "");
-      setDraftTraining(user.trainingStyle ?? "");
-      setDraftGym(user.gymName ?? "");
-      setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
-      setShowGym((user.gymVisibility ?? "hidden") === "shown");
-      setAvatarUri(user.avatarUrl ?? undefined);
+    const lastUserId = lastUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+    lastUserIdRef.current = nextUserId;
+
+    if (lastUserId && nextUserId && lastUserId !== nextUserId) {
+      setIsEditing(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || isEditing) return;
+    setDraftName(user.name ?? "");
+    setDraftHandle(user.handle ?? "");
+    setDraftBio(user.bio ?? "");
+    setDraftTraining(user.trainingStyle ?? "");
+    setDraftGym(user.gymName ?? "");
+    setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
+    setShowGym((user.gymVisibility ?? "hidden") === "shown");
+    setAvatarUri(user.avatarUrl ?? undefined);
       setHealthPermissions({
         workouts: user.appleHealthPermissions?.workouts ?? true,
         activeEnergy: user.appleHealthPermissions?.activeEnergy ?? true,
-        heartRate: user.appleHealthPermissions?.heartRate ?? false,
+        heartRate: user.appleHealthPermissions?.heartRate ?? true,
       });
-      setLastHealthSync(
-        user.appleHealthLastSyncAt ? new Date(user.appleHealthLastSyncAt) : null
-      );
-      setIsEditing(false);
-    }
+    setLastHealthSync(
+      user.appleHealthLastSyncAt ? new Date(user.appleHealthLastSyncAt) : null
+    );
   }, [
     user?.id,
     user?.name,
@@ -233,6 +242,7 @@ const SettingsScreen = () => {
     user?.weeklyGoal,
     user?.appleHealthPermissions,
     user?.appleHealthLastSyncAt,
+    isEditing,
   ]);
 
   useEffect(() => {

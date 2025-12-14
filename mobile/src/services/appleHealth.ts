@@ -20,7 +20,7 @@ const DEFAULT_LOOKBACK_DAYS = 14;
 const DEFAULT_PERMISSIONS: AppleHealthPermissions = {
   workouts: true,
   activeEnergy: true,
-  heartRate: false,
+  heartRate: true,
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

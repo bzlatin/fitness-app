@@ -4,6 +4,11 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 
 ---
 
+## How to ship:
+
+- npx eas-cli build --platform ios --profile production --local
+- npx eas-cli submit --platform ios --profile production --path <path>
+
 ## 0) Quick “Go / No‑Go” Gates
 
 - [x] **No dev auth bypass in production**: `ALLOW_DEV_AUTH_BYPASS` is **not** set on Render (not present in the env list you shared).
