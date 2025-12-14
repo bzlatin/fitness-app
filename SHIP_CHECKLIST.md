@@ -20,6 +20,7 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 ### 1.1 Build + runtime
 
 - [x] Render service uses the correct start command for the server package (e.g. `npm install --prefix server && npm run build --prefix server && npm start --prefix server`).
+- [x] Render build installs TypeScript declaration deps needed to compile (`@types/express`, `@types/pg`).
 - [x] `NODE_ENV=production` is set on Render (key exists; verify value).
 - [x] Health check returns OK: `GET /health` returns `{ "status": "ok" }`.
 
@@ -46,8 +47,8 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 
 ### 1.5 Rate limits + abuse controls
 
-- [ ] AI endpoints rate limit as expected (429 on abuse).
-- [ ] Waitlist + feedback rate limits work.
+- [x] AI endpoints rate limit as expected (429 on abuse).
+- [x] Waitlist + feedback rate limits work.
 
 ### 1.6 Storage / uploads (optional features)
 
