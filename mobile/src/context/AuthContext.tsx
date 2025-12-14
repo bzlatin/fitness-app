@@ -37,6 +37,7 @@ type AuthContextValue = {
   isLoading: boolean;
   isAuthorizing: boolean;
   login: () => Promise<void>;
+  loginWithConnection: (connection: string) => Promise<void>;
   logout: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
   error?: string | null;
@@ -304,7 +305,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     void completeAuth();
   }, [response, request, discovery, redirectUri]);
 
-  const login = useCallback(async () => {
+  const startLogin = useCallback(async (connection?: string) => {
     if (!request) {
       setError("Auth session not ready. Please try again.");
       return;
@@ -312,7 +313,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     setIsAuthorizing(true);
     try {
-      const result = await promptAsync();
+      const url =
+        connection && discovery
+          ? `${await request.makeAuthUrlAsync(discovery)}&connection=${encodeURIComponent(connection)}`
+          : undefined;
+      const result = await promptAsync(url ? { url } : undefined);
       if (result.type !== "success") {
         setIsAuthorizing(false);
         if (result.type === "error") {
@@ -326,7 +331,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError((err as Error).message);
       setIsAuthorizing(false);
     }
-  }, [request, promptAsync]);
+  }, [request, promptAsync, discovery]);
+
+  const login = useCallback(async () => startLogin(), [startLogin]);
+  const loginWithConnection = useCallback(
+    async (connection: string) => startLogin(connection),
+    [startLogin]
+  );
 
   const logout = useCallback(async () => {
     setIsAuthorizing(true);
@@ -363,11 +374,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isLoading: isInitializing,
       isAuthorizing,
       login,
+      loginWithConnection,
       logout,
       getAccessToken,
       error,
     }),
-    [isSessionActive, isInitializing, isAuthorizing, login, logout, getAccessToken, error]
+    [
+      isSessionActive,
+      isInitializing,
+      isAuthorizing,
+      login,
+      loginWithConnection,
+      logout,
+      getAccessToken,
+      error,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

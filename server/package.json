@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc -p tsconfig.json && cp -r public dist/",
+    "build": "tsc -p tsconfig.json && cp -r public dist/ && cp -r src/certs dist/certs",
     "start": "node dist/index.js",
     "purge:test-data": "ts-node src/scripts/purgeTestData.ts"
   },

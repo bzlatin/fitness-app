@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  decodeNotification,
+  decodeNotificationSecure,
   findUserByOriginalTransaction,
   fetchSubscriptionStatus,
   recordNotification,
@@ -17,7 +17,8 @@ router.post("/", express.json({ limit: "2mb" }), async (req, res) => {
   }
 
   try {
-    const { payload, transaction, renewalInfo } = decodeNotification(signedPayload);
+    const { payload, transaction, renewalInfo } =
+      await decodeNotificationSecure(signedPayload);
     const notificationType: string =
       ((payload as { notificationType?: string } | null)?.notificationType ?? "UNKNOWN");
     const originalTransactionId: string | undefined =

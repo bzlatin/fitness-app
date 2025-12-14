@@ -34,3 +34,4 @@ Thumbs.db
 .env.*.local
 server/.env
 mobile/.env
+server/src/certs/*.cer

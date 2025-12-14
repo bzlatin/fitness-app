@@ -79,6 +79,7 @@ When developing on a physical device, ensure `EXPO_PUBLIC_API_URL` uses your com
 
 - Install native deps: `npm install --prefix mobile` (adds `react-native-iap`).
 - Set App Store credentials in `server/.env` (`APP_STORE_KEY_ID`, `APP_STORE_ISSUER_ID`, `APP_STORE_PRIVATE_KEY`, `APP_STORE_BUNDLE_ID`, optionally `APP_STORE_ENV=Sandbox`).
+- For App Store Server Notifications verification (recommended for production): set `APP_STORE_VERIFY_NOTIFICATIONS=true`, `APP_STORE_APP_APPLE_ID=<your appAppleId>` and keep `server/src/certs/apple-root-cas.pem` deployed (build copies it to `dist/certs`).
 - Build a dev client/TestFlight build on iOS, then test: new purchase, restore purchases from Settings, renewal/cancel in sandbox. See `IOS_IAP_SETUP.md` for the full checklist.
 
 ## Making `main` the Default Branch

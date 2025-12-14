@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Animated,
+  Platform,
   Pressable,
   Text,
   TouchableOpacity,
@@ -31,7 +32,8 @@ const FullScreenMessage = ({ children }: { children: ReactNode }) => (
 );
 
 const AuthGate = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, isLoading, isAuthorizing, login, error } = useAuth();
+  const { isAuthenticated, isLoading, isAuthorizing, login, loginWithConnection, error } =
+    useAuth();
   const preAuthControls = usePreAuthOnboardingControls();
   const [reduceMotion, setReduceMotion] = useState(false);
   const intro = useRef(new Animated.Value(0)).current;
@@ -141,11 +143,11 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
               </Text>
             </View>
 
-            <TouchableOpacity
-              onPress={login}
-              disabled={isAuthorizing}
-              style={{
-                backgroundColor: isAuthorizing ? colors.surfaceMuted : colors.primary,
+          <TouchableOpacity
+            onPress={login}
+            disabled={isAuthorizing}
+            style={{
+              backgroundColor: isAuthorizing ? colors.surfaceMuted : colors.primary,
                 paddingHorizontal: 24,
                 paddingVertical: 14,
                 borderRadius: 999,
@@ -165,17 +167,71 @@ const AuthGate = ({ children }: { children: ReactNode }) => {
               </Text>
             </TouchableOpacity>
 
-            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 12 }}>
-              <Text
+            <View style={{ width: "100%", marginTop: 12, gap: 10 }}>
+              {Platform.OS === "ios" ? (
+                <TouchableOpacity
+                  onPress={() => void loginWithConnection("apple")}
+                  disabled={isAuthorizing}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Apple"
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    paddingHorizontal: 18,
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    opacity: isAuthorizing ? 0.7 : 1,
+                  }}
+                >
+                  <Ionicons name="logo-apple" size={18} color={colors.textPrimary} />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 15,
+                    }}
+                  >
+                    Continue with Apple
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={() => void loginWithConnection("google-oauth2")}
+                disabled={isAuthorizing}
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Google"
                 style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamilies.regular,
-                  fontSize: 13,
-                  textAlign: "center",
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  paddingHorizontal: 18,
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  opacity: isAuthorizing ? 0.7 : 1,
                 }}
               >
-                Sign in with Google, Apple, or Email
-              </Text>
+                <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Continue with Google
+                </Text>
+              </TouchableOpacity>
+
             </View>
 
             {preAuthControls?.restart ? (
