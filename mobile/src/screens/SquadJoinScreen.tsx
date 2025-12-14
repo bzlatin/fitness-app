@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, Pressable, ActivityIndicator, Image } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
+import { useQueryClient } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -27,6 +28,7 @@ const SquadJoinScreen = () => {
   const { code } = route.params;
   const { getAccessToken } = useCurrentUser();
   const { login, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -136,6 +138,14 @@ const SquadJoinScreen = () => {
         setError(data.error || "Failed to join squad");
         return;
       }
+
+      // Immediately invalidate squad-related queries for instant UI update
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["squads"] }),
+        queryClient.invalidateQueries({ queryKey: ["squad", preview.squadId] }),
+        queryClient.invalidateQueries({ queryKey: ["squadFeed"] }),
+        queryClient.invalidateQueries({ queryKey: ["social"] }),
+      ]);
 
       // Navigate to Squad tab on success
       navigation.navigate("RootTabs", { screen: "Squad" });

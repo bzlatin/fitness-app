@@ -922,6 +922,7 @@ const SettingsScreen = () => {
         quality: 0.75,
         base64: false,
         aspect: [1, 1],
+        mediaTypes: ['images'], // Only allow images, no videos
         presentationStyle:
           ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
