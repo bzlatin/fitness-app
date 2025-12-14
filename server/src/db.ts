@@ -30,11 +30,7 @@ const normalizeConnectionString = (raw: string): NormalizedConnection => {
     const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
     const requestedSslMode = url.searchParams.get("sslmode");
 
-    // Strip SSL directives from provider URLs so our explicit config isn't overwritten by pg's parser.
-    url.searchParams.delete("ssl");
-    url.searchParams.delete("sslmode");
-
-    if (!isLocalHost) {
+    if (!requestedSslMode && !isLocalHost) {
       // Keep the URL "secure by default" for tools that honor libpq params.
       const isIpHost = net.isIP(hostname) !== 0;
       url.searchParams.set("sslmode", isIpHost ? "verify-ca" : "verify-full");
@@ -64,11 +60,20 @@ const loadCaPem = () => {
 };
 
 const caPem = loadCaPem();
+const sslMode = (requestedSslMode ?? "").toLowerCase();
+const allowInsecureDbTls =
+  process.env.DB_SSL_ALLOW_INSECURE === "1" ||
+  process.env.DB_SSL_ALLOW_INSECURE?.toLowerCase() === "true";
+
 const ssl = isLocalHost
   ? false
-  : caPem
-    ? { rejectUnauthorized: true, ca: caPem }
-    : { rejectUnauthorized: true };
+  : sslMode === "disable"
+    ? false
+    : sslMode === "require" || sslMode === "no-verify"
+      ? { rejectUnauthorized: false }
+      : caPem
+        ? { rejectUnauthorized: true, ca: caPem }
+        : { rejectUnauthorized: true };
 
 if (isProduction) {
   if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
@@ -79,9 +84,9 @@ if (isProduction) {
 
   if (!isLocalHost) {
     const insecureSslModes = new Set(["disable", "allow", "prefer", "require", "no-verify"]);
-    if (requestedSslMode && insecureSslModes.has(requestedSslMode)) {
+    if (requestedSslMode && insecureSslModes.has(requestedSslMode) && !allowInsecureDbTls) {
       throw new Error(
-        `Refusing to start: DATABASE_URL sslmode=${requestedSslMode} does not verify the database certificate. Set your production DATABASE_URL to use sslmode=verify-full (preferred) or sslmode=verify-ca.`
+        `Refusing to start: DATABASE_URL sslmode=${requestedSslMode} does not verify the database certificate. Use sslmode=verify-full (preferred) or sslmode=verify-ca, or set DB_SSL_ALLOW_INSECURE=true to override.`
       );
     }
 
