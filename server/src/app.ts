@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import { UnauthorizedError } from "express-oauth2-jwt-bearer";
+import type { CorsOptions } from "cors";
 import exercisesRouter from "./routes/exercises";
 import templatesRouter from "./routes/templates";
 import sessionsRouter from "./routes/sessions";
@@ -55,13 +56,15 @@ const parseAllowedOrigins = () => {
 
 const allowedOrigins = new Set(parseAllowedOrigins());
 
+const corsOrigin: CorsOptions["origin"] = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.has(origin)) return callback(null, true);
+  return callback(null, false);
+};
+
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.has(origin)) return callback(null, true);
-      return callback(null, false);
-    },
+    origin: corsOrigin,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Template-Share-Code"],
     maxAge: 86400,
