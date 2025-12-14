@@ -68,7 +68,9 @@ const normalizeDurationSeconds = (
   finishedAt?: Date | null,
   provided?: number
 ) => {
-  if (Number.isFinite(provided)) return provided;
+  if (Number.isFinite(provided)) {
+    return Math.max(0, Math.round(provided as number));
+  }
   if (!finishedAt) return undefined;
   return Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
 };
@@ -77,6 +79,67 @@ const formatAppleWorkoutName = (raw?: string | null) => {
   if (!raw) return undefined;
   const pretty = raw.replace(/[_-]+/g, " ").trim();
   return pretty ? pretty.replace(/\b\w/g, (c) => c.toUpperCase()) : undefined;
+};
+
+const normalizeOptionalInteger = (value?: number) => {
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value as number);
+};
+
+const isIgnoredAppleSession = async (
+  client: PoolClient,
+  userId: string,
+  session: {
+    externalId?: string;
+    startedAt: Date;
+    durationSeconds?: number;
+    workoutType?: string;
+  }
+) => {
+  if (session.externalId) {
+    const ignored = await client.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM apple_health_ignored_workouts
+          WHERE user_id = $1 AND external_id = $2
+        ) as exists
+      `,
+      [userId, session.externalId]
+    );
+    return ignored.rows[0]?.exists === true;
+  }
+
+  const windowStart = new Date(session.startedAt.getTime() - 5 * 60 * 1000);
+  const windowEnd = new Date(session.startedAt.getTime() + 5 * 60 * 1000);
+  const ignored = await client.query<{ id: string }>(
+    `
+      SELECT id
+      FROM apple_health_ignored_workouts
+      WHERE user_id = $1
+        AND external_id IS NULL
+        AND started_at BETWEEN $2 AND $3
+        AND (
+          $4::int IS NULL
+          OR duration_seconds IS NULL
+          OR ABS(duration_seconds - $4::int) <= 120
+        )
+        AND (
+          $5::text IS NULL
+          OR workout_type IS NULL
+          OR workout_type = $5
+        )
+      LIMIT 1
+    `,
+    [
+      userId,
+      windowStart.toISOString(),
+      windowEnd.toISOString(),
+      session.durationSeconds ?? null,
+      session.workoutType ?? null,
+    ]
+  );
+  return (ignored.rowCount ?? 0) > 0;
 };
 
 const findDuplicateAppleSession = async (
@@ -190,11 +253,11 @@ router.post("/apple-health/import", async (req, res) => {
           Array.isArray(session.sets) && session.sets.length
             ? session.sets.map((set, idx) => ({
                 exerciseId: set.exerciseId ?? "imported_strength_work",
-                actualReps: Number.isFinite(set.actualReps) ? Number(set.actualReps) : null,
+                actualReps: normalizeOptionalInteger(set.actualReps),
                 actualWeight: Number.isFinite(set.actualWeight)
                   ? Number(set.actualWeight)
                   : null,
-                setIndex: Number.isFinite(set.setIndex) ? Number(set.setIndex) : idx,
+                setIndex: normalizeOptionalInteger(set.setIndex) ?? idx,
               }))
             : [],
       };
@@ -234,6 +297,12 @@ router.post("/apple-health/import", async (req, res) => {
       let skipped = 0;
 
       for (const session of normalizedSessions) {
+        const isIgnored = await isIgnoredAppleSession(client, userId, session);
+        if (isIgnored) {
+          skipped += 1;
+          continue;
+        }
+
         const duplicateId = await findDuplicateAppleSession(
           client,
           userId,

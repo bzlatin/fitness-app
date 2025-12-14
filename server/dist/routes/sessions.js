@@ -761,11 +761,63 @@ router.delete("/:id", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
     try {
-        const result = await (0, db_1.query)(`DELETE FROM workout_sessions WHERE id = $1 AND user_id = $2`, [req.params.id, userId]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: "Session not found" });
+        const sessionId = req.params.id;
+        const client = await db_1.pool.connect();
+        try {
+            await client.query("BEGIN");
+            const existing = await client.query(`
+          SELECT
+            id,
+            source,
+            external_id,
+            started_at,
+            duration_seconds,
+            import_metadata->>'workoutType' AS workout_type
+          FROM workout_sessions
+          WHERE id = $1 AND user_id = $2
+        `, [sessionId, userId]);
+            const row = existing.rows[0];
+            if (!row) {
+                await client.query("ROLLBACK");
+                return res.status(404).json({ error: "Session not found" });
+            }
+            if (row.source === "apple_health") {
+                await client.query(`
+            INSERT INTO apple_health_ignored_workouts (
+              id, user_id, external_id, started_at, duration_seconds, workout_type
+            )
+            SELECT $1, $2, $3, $4, $5, $6
+            WHERE
+              $3::text IS NULL
+              OR NOT EXISTS (
+                SELECT 1
+                FROM apple_health_ignored_workouts
+                WHERE user_id = $2 AND external_id = $3
+              )
+          `, [
+                    (0, id_1.generateId)(),
+                    userId,
+                    row.external_id,
+                    row.started_at,
+                    row.duration_seconds,
+                    row.workout_type,
+                ]);
+            }
+            const result = await client.query(`DELETE FROM workout_sessions WHERE id = $1 AND user_id = $2`, [sessionId, userId]);
+            if (result.rowCount === 0) {
+                await client.query("ROLLBACK");
+                return res.status(404).json({ error: "Session not found" });
+            }
+            await client.query("COMMIT");
+            return res.status(204).end();
         }
-        return res.status(204).end();
+        catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        }
+        finally {
+            client.release();
+        }
     }
     catch (err) {
         console.error("Failed to delete session", err);

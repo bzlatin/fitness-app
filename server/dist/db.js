@@ -10,6 +10,7 @@ const fs_1 = __importDefault(require("fs"));
 const net_1 = __importDefault(require("net"));
 const exerciseData_1 = require("./utils/exerciseData");
 const migrationRunner_1 = require("./utils/migrationRunner");
+const logger_1 = require("./utils/logger");
 // Favor IPv4 to avoid connection failures on hosts that resolve to IPv6 first (e.g., Supabase)
 if (dns_1.default.setDefaultResultOrder) {
     dns_1.default.setDefaultResultOrder("ipv4first");
@@ -99,6 +100,15 @@ if (isProduction) {
 exports.pool = new pg_1.Pool({
     connectionString: normalizedConnectionString,
     ssl,
+});
+const log = (0, logger_1.createLogger)("DB");
+// When Postgres (or a connection proxy like Supabase's) terminates an idle connection,
+// node-postgres emits this on the pool. Without a handler, it can crash the process.
+exports.pool.on("error", (error) => {
+    log.warn("Postgres connection error (will reconnect on next query)", {
+        error,
+        code: error.code,
+    });
 });
 const query = (text, params) => exports.pool.query(text, params);
 exports.query = query;

@@ -82,6 +82,8 @@ const ScreenContainer = forwardRef<ScrollView, Props>(({
             contentInsetAdjustmentBehavior={adjustScrollInsets ? "automatic" : "never"}
             automaticallyAdjustsScrollIndicatorInsets={adjustScrollInsets}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             onContentSizeChange={(w, h) => setContentHeight(h)}
             onLayout={(e: LayoutChangeEvent) => setScrollViewHeight(e.nativeEvent.layout.height)}
             onScroll={handleScroll}
