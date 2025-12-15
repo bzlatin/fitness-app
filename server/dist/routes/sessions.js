@@ -10,6 +10,41 @@ const formatExerciseId = (id) => id
     .replace(/[_-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
+const normalizeSetKind = (value) => value === "warmup" ? "warmup" : "working";
+const roundToIncrement = (value, increment) => {
+    if (!Number.isFinite(value))
+        return value;
+    if (!Number.isFinite(increment) || increment <= 0)
+        return value;
+    return Math.round(value / increment) * increment;
+};
+const suggestWarmupSetSpecs = (workingWeight, workingReps) => {
+    if (!Number.isFinite(workingWeight) || workingWeight <= 0)
+        return [];
+    const normalizedWorkingReps = typeof workingReps === "number" && Number.isFinite(workingReps) && workingReps > 0
+        ? Math.round(workingReps)
+        : undefined;
+    const increments = 2.5;
+    const progressions = [
+        { percent: 0.5, reps: normalizedWorkingReps ? Math.min(8, normalizedWorkingReps) : 8 },
+        { percent: 0.75, reps: normalizedWorkingReps ? Math.min(5, Math.max(3, normalizedWorkingReps - 3)) : 5 },
+        { percent: 0.9, reps: 2 },
+    ];
+    const seen = new Set();
+    const specs = [];
+    for (const item of progressions) {
+        const rawWeight = workingWeight * item.percent;
+        const rounded = roundToIncrement(rawWeight, increments);
+        const targetWeight = Math.max(increments, Math.min(rounded, workingWeight - increments));
+        if (targetWeight >= workingWeight)
+            continue;
+        if (seen.has(targetWeight))
+            continue;
+        seen.add(targetWeight);
+        specs.push({ targetWeight, targetReps: item.reps });
+    }
+    return specs;
+};
 const buildMetaMapFromSets = async (setRows) => {
     const ids = Array.from(new Set(setRows.map((set) => set.exercise_id).filter(Boolean)));
     return (0, exerciseCatalog_1.fetchExerciseMetaByIds)(ids);
@@ -23,6 +58,7 @@ const mapSet = (row, metaMap) => {
         templateExerciseId: row.template_exercise_id ?? undefined,
         exerciseId: row.exercise_id,
         setIndex: row.set_index,
+        setKind: normalizeSetKind(row.set_kind),
         targetReps: row.target_reps ?? undefined,
         targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
         actualReps: row.actual_reps ?? undefined,
@@ -210,16 +246,39 @@ router.post("/from-template/:templateId", async (req, res) => {
           VALUES ($1, $2, $3, $4, $5, $5, $5)
         `, [sessionId, userId, template.id, template.name, now]);
             for (const templateExercise of templateExercises.rows) {
-                for (let index = 0; index < templateExercise.default_sets; index += 1) {
+                const workingWeight = templateExercise.default_weight === null
+                    ? undefined
+                    : Number(templateExercise.default_weight);
+                const warmupSpecs = typeof workingWeight === "number" && Number.isFinite(workingWeight) && workingWeight > 0
+                    ? suggestWarmupSetSpecs(workingWeight, templateExercise.default_reps)
+                    : [];
+                for (const warmup of warmupSpecs) {
                     await client.query(`
-              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, target_reps, target_weight)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
+              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_weight)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             `, [
                         (0, id_1.generateId)(),
                         sessionId,
                         templateExercise.id,
                         templateExercise.exercise_id,
                         setIndex,
+                        "warmup",
+                        warmup.targetReps,
+                        warmup.targetWeight,
+                    ]);
+                    setIndex += 1;
+                }
+                for (let index = 0; index < templateExercise.default_sets; index += 1) {
+                    await client.query(`
+              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_weight)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [
+                        (0, id_1.generateId)(),
+                        sessionId,
+                        templateExercise.id,
+                        templateExercise.exercise_id,
+                        setIndex,
+                        "working",
                         templateExercise.default_reps,
                         templateExercise.default_weight,
                     ]);
@@ -492,20 +551,46 @@ router.patch("/:id", async (req, res) => {
             if (sets) {
                 await client.query(`DELETE FROM workout_sets WHERE session_id = $1`, [req.params.id]);
                 for (const set of sets) {
+                    const setKind = normalizeSetKind(set.setKind);
                     await client.query(`
-              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, target_reps, target_weight, actual_reps, actual_weight, rpe)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              INSERT INTO workout_sets (
+                id,
+                session_id,
+                template_exercise_id,
+                exercise_id,
+                set_index,
+                set_kind,
+                target_reps,
+                target_weight,
+                actual_reps,
+                actual_weight,
+                rpe,
+                target_distance,
+                actual_distance,
+                target_incline,
+                actual_incline,
+                target_duration_minutes,
+                actual_duration_minutes
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             `, [
                         set.id ?? (0, id_1.generateId)(),
                         req.params.id,
                         set.templateExerciseId ?? null,
                         set.exerciseId,
                         set.setIndex,
+                        setKind,
                         set.targetReps ?? null,
                         set.targetWeight ?? null,
                         set.actualReps ?? null,
                         set.actualWeight ?? null,
                         set.rpe ?? null,
+                        set.targetDistance ?? null,
+                        set.actualDistance ?? null,
+                        set.targetIncline ?? null,
+                        set.actualIncline ?? null,
+                        set.targetDurationMinutes ?? null,
+                        set.actualDurationMinutes ?? null,
                     ]);
                 }
             }
@@ -658,20 +743,46 @@ router.post("/manual", async (req, res) => {
             for (const [index, set] of sets.entries()) {
                 if (!set.exerciseId)
                     continue;
+                const setKind = normalizeSetKind(set.setKind);
                 await client.query(`
-            INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, target_reps, target_weight, actual_reps, actual_weight, rpe)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO workout_sets (
+              id,
+              session_id,
+              template_exercise_id,
+              exercise_id,
+              set_index,
+              set_kind,
+              target_reps,
+              target_weight,
+              actual_reps,
+              actual_weight,
+              rpe,
+              target_distance,
+              actual_distance,
+              target_incline,
+              actual_incline,
+              target_duration_minutes,
+              actual_duration_minutes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           `, [
                     set.id ?? (0, id_1.generateId)(),
                     sessionId,
                     set.templateExerciseId ?? null,
                     set.exerciseId,
                     set.setIndex ?? index,
+                    setKind,
                     set.targetReps ?? null,
                     set.targetWeight ?? null,
                     set.actualReps ?? null,
                     set.actualWeight ?? null,
                     set.rpe ?? null,
+                    set.targetDistance ?? null,
+                    set.actualDistance ?? null,
+                    set.targetIncline ?? null,
+                    set.actualIncline ?? null,
+                    set.targetDurationMinutes ?? null,
+                    set.actualDurationMinutes ?? null,
                 ]);
             }
             const setRows = (await client.query(`SELECT * FROM workout_sets WHERE session_id = $1`, [
@@ -730,20 +841,46 @@ router.post("/:id/duplicate", async (req, res) => {
                 session.finishedAt ?? null,
             ]);
             for (const set of session.sets) {
+                const setKind = normalizeSetKind(set.setKind);
                 await client.query(`
-            INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, target_reps, target_weight, actual_reps, actual_weight, rpe)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO workout_sets (
+              id,
+              session_id,
+              template_exercise_id,
+              exercise_id,
+              set_index,
+              set_kind,
+              target_reps,
+              target_weight,
+              actual_reps,
+              actual_weight,
+              rpe,
+              target_distance,
+              actual_distance,
+              target_incline,
+              actual_incline,
+              target_duration_minutes,
+              actual_duration_minutes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           `, [
                     (0, id_1.generateId)(),
                     newSessionId,
                     set.templateExerciseId ?? null,
                     set.exerciseId,
                     set.setIndex,
+                    setKind,
                     set.targetReps ?? null,
                     set.targetWeight ?? null,
                     set.actualReps ?? null,
                     set.actualWeight ?? null,
                     set.rpe ?? null,
+                    set.targetDistance ?? null,
+                    set.actualDistance ?? null,
+                    set.targetIncline ?? null,
+                    set.actualIncline ?? null,
+                    set.targetDurationMinutes ?? null,
+                    set.actualDurationMinutes ?? null,
                 ]);
             }
         });

@@ -74,6 +74,7 @@ export interface WorkoutSet {
   exerciseId: string;
   exerciseName?: string;
   exerciseImageUrl?: string;
+  setKind?: "warmup" | "working";
   setIndex: number;
   targetReps?: number;
   targetWeight?: number;

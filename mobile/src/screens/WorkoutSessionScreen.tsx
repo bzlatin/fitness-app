@@ -72,8 +72,18 @@ import {
   endWorkoutLiveActivityWithSummary,
   addLogSetListener,
 } from "../services/liveActivity";
+import {
+  getStoredShowWarmupSets,
+  setStoredShowWarmupSets,
+} from "../utils/warmupPreference";
+import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution";
+import { formatMuscleGroup, getTopMuscleGroups } from "../utils/muscleGroupCalculations";
+import { getWarmupSuggestionsForMuscleGroups } from "../utils/warmupSuggestions";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const DEFAULT_WORKING_REST_SECONDS = 75;
+const DEFAULT_WARMUP_REST_SECONDS = 45;
 
 const visibilityOptions: {
   value: Visibility;
@@ -187,13 +197,14 @@ const VisibilityModal = ({
 );
 
 const summarizeSets = (sessionSets: WorkoutSet[]) => {
-  const totalSets = sessionSets.length;
-  const totalVolume = sessionSets.reduce((acc, cur) => {
+  const workingSets = sessionSets.filter((set) => set.setKind !== "warmup");
+  const totalSets = workingSets.length;
+  const totalVolume = workingSets.reduce((acc, cur) => {
     const reps = cur.actualReps ?? 0;
     const weight = cur.actualWeight ?? 0;
     return acc + reps * weight;
   }, 0);
-  const prCount = sessionSets.filter(
+  const prCount = workingSets.filter(
     (set) =>
       set.actualWeight !== undefined &&
       set.targetWeight !== undefined &&
@@ -390,6 +401,9 @@ const WorkoutSessionScreen = () => {
     "progression" | "analytics"
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showWarmupSets, setShowWarmupSets] = useState(true);
+  const [hasHydratedWarmupPreference, setHasHydratedWarmupPreference] =
+    useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
@@ -414,6 +428,9 @@ const WorkoutSessionScreen = () => {
   const timerLockedRef = useRef<boolean>(false);
   const previousRestEndsAtRef = useRef<number | null>(null);
   const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
+  const exercisesListRef = useRef<any>(null);
+  const shouldAutoScrollToActiveExerciseRef = useRef(false);
+  const hasUserChangedWarmupPreferenceRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -443,6 +460,22 @@ const WorkoutSessionScreen = () => {
     () => templates?.find((t) => t.id === route.params.templateId),
     [templates, route.params.templateId]
   );
+
+  const { distribution: muscleDistribution } = useMuscleGroupDistribution(template);
+  const warmupSuggestions = useMemo(() => {
+    const topMuscles = getTopMuscleGroups(muscleDistribution, 2).map(
+      (group) => group.muscleGroup
+    );
+    return getWarmupSuggestionsForMuscleGroups(topMuscles, { maxSuggestions: 4 });
+  }, [muscleDistribution]);
+
+  const warmupTargetsLabel = useMemo(() => {
+    const topMuscles = getTopMuscleGroups(muscleDistribution, 2)
+      .map((group) => group.muscleGroup)
+      .filter(Boolean);
+    if (topMuscles.length === 0) return "Warm up";
+    return `Warm up ${topMuscles.map(formatMuscleGroup).join(" + ")}`;
+  }, [muscleDistribution]);
 
   const restLookup = useMemo(() => {
     if (!template) return {};
@@ -1215,10 +1248,58 @@ const WorkoutSessionScreen = () => {
     applySetUpdates([updated]);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const stored = await getStoredShowWarmupSets();
+      if (cancelled) return;
+      if (!hasUserChangedWarmupPreferenceRef.current) {
+        setShowWarmupSets(stored);
+      }
+      setHasHydratedWarmupPreference(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedWarmupPreference) return;
+    void setStoredShowWarmupSets(showWarmupSets);
+  }, [hasHydratedWarmupPreference, showWarmupSets]);
+
+  const visibleSets = useMemo(() => {
+    if (showWarmupSets) return sets;
+    return sets.filter((set) => set.setKind !== "warmup");
+  }, [sets, showWarmupSets]);
+
   const groupedSets = useMemo(
-    () => groupSetsByExercise(sets, restLookup, sessionRestTimes),
-    [sets, restLookup, sessionRestTimes]
+    () => groupSetsByExercise(visibleSets, restLookup, sessionRestTimes),
+    [visibleSets, restLookup, sessionRestTimes]
   );
+
+  useEffect(() => {
+    if (!activeExerciseKey) return;
+    if (!shouldAutoScrollToActiveExerciseRef.current) return;
+    const index = groupedSets.findIndex((group) => group.key === activeExerciseKey);
+    if (index < 0) return;
+
+    shouldAutoScrollToActiveExerciseRef.current = false;
+    const id = setTimeout(() => {
+      try {
+        exercisesListRef.current?.scrollToIndex?.({
+          index,
+          animated: true,
+          viewPosition: 0,
+          viewOffset: 70,
+        });
+      } catch {
+        // ignore
+      }
+    }, 50);
+
+    return () => clearTimeout(id);
+  }, [activeExerciseKey, groupedSets]);
 
   // Auto-focus logic - only runs when autoFocusEnabled is true
   // This should NOT override activeSetId that was just set by logSet
@@ -1254,6 +1335,24 @@ const WorkoutSessionScreen = () => {
     loggedSetIds,
     autoFocusEnabled,
   ]);
+
+  useEffect(() => {
+    if (showWarmupSets) return;
+    if (!activeSetId) return;
+    const activeSet = setsRef.current.find((set) => set.id === activeSetId);
+    if (!activeSet || activeSet.setKind !== "warmup") return;
+
+    const key = activeSet.templateExerciseId ?? activeSet.exerciseId;
+    const group = groupedSets.find((g) => g.key === key);
+    const fallback = group?.sets.find((s) => !loggedSetIds.has(s.id)) ?? group?.sets[0];
+    if (!fallback) {
+      setActiveSetId(null);
+      activeSetIdRef.current = null;
+      return;
+    }
+    setActiveSetId(fallback.id);
+    activeSetIdRef.current = fallback.id;
+  }, [activeSetId, groupedSets, loggedSetIds, showWarmupSets]);
 
   // Sync initial session state to widget AND start Live Activity when session loads
   useEffect(() => {
@@ -1561,7 +1660,7 @@ const WorkoutSessionScreen = () => {
   }, [sessionId, activeSetId]);
 
   const startRestTimer = (seconds?: number) => {
-    const duration = Math.max(10, seconds ?? 90);
+    const duration = Math.max(10, seconds ?? DEFAULT_WORKING_REST_SECONDS);
     setRestRemaining(duration);
     setRestEndsAt(Date.now() + duration * 1000);
   };
@@ -1588,7 +1687,9 @@ const WorkoutSessionScreen = () => {
     // If restDuration is explicitly 0, pass 0 to clear the timer
     // If undefined, use the group's rest seconds as fallback
     const actualRestDuration =
-      restDuration !== undefined ? restDuration : group.restSeconds ?? 90;
+      restDuration !== undefined
+        ? restDuration
+        : group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
 
     // Calculate restEndsAt ISO string if we have a timestamp
     const restEndsAtISO =
@@ -1686,11 +1787,15 @@ const WorkoutSessionScreen = () => {
       restSeconds ??
       currentSet.targetRestSeconds ??
       restLookup[groupKey];
+    const defaultRestSeconds =
+      currentSet.setKind === "warmup"
+        ? DEFAULT_WARMUP_REST_SECONDS
+        : DEFAULT_WORKING_REST_SECONDS;
 
     // Start rest timer and capture the end timestamp
     let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
-      const restDuration = fallbackRest ?? 90;
+      const restDuration = fallbackRest ?? defaultRestSeconds;
       calculatedRestEndsAt = Date.now() + restDuration * 1000;
       startRestTimer(restDuration);
     } else {
@@ -1705,21 +1810,12 @@ const WorkoutSessionScreen = () => {
       const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
 
       if (nextSet) {
-        // Immediately update activeSetId to the next unlogged set
-        const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
-
-        // CRITICAL: Disable auto-focus to prevent the useEffect from overriding our state
-        setAutoFocusEnabled(false);
-
-        // IMMEDIATELY update the ref BEFORE React state update
-        activeSetIdRef.current = nextSet.id;
-        setActiveSetId(nextSet.id);
-
-        // Sync next set to widget with rest timer
-        const restDuration = fallbackRest ?? 90;
+        // Do not auto-advance between sets; only auto-advance after the last set of an exercise.
+        const currentSetIndex = sorted.findIndex((s) => s.id === setId);
+        const restDuration = fallbackRest ?? defaultRestSeconds;
         syncCurrentExerciseToWidget(
           groupKey,
-          nextSetIndex,
+          Math.max(0, currentSetIndex),
           updated.actualReps,
           updated.actualWeight,
           autoRestTimer ? restDuration : 0, // Pass 0 to explicitly clear timer when disabled
@@ -1735,6 +1831,7 @@ const WorkoutSessionScreen = () => {
           const nextGroup = groupedSets[currentIndex + 1];
           if (nextGroup) {
             setAutoFocusEnabled(true);
+            shouldAutoScrollToActiveExerciseRef.current = true;
             setActiveExerciseKey(nextGroup.key);
             const firstUnloggedInNextGroup = nextGroup.sets.find(
               (s) => !updatedLoggedSetIds.has(s.id)
@@ -1872,6 +1969,7 @@ const WorkoutSessionScreen = () => {
         exerciseId: exerciseForm.exercise.id,
         exerciseName: exerciseForm.exercise.name,
         exerciseImageUrl: exerciseForm.exercise.gifUrl,
+        setKind: "working",
         setIndex: baseIndex + i,
         targetReps: exerciseForm.reps || 10,
         targetWeight: undefined,
@@ -1917,10 +2015,19 @@ const WorkoutSessionScreen = () => {
   };
 
   const handleReorderExercises = (newGroupedSets: ExerciseGroup[]) => {
-    // Update all set indices based on new order
+    const allSets = setsRef.current;
+    const fullGroups = groupSetsByExercise(
+      allSets,
+      restLookup,
+      sessionRestTimesRef.current
+    );
+    const fullGroupMap = new Map(fullGroups.map((group) => [group.key, group]));
+
     const reorderedSets: WorkoutSet[] = [];
     newGroupedSets.forEach((group, groupIndex) => {
-      group.sets.forEach((set, setIndex) => {
+      const full = fullGroupMap.get(group.key);
+      const nextSets = full?.sets ?? group.sets;
+      nextSets.forEach((set, setIndex) => {
         reorderedSets.push({
           ...set,
           setIndex: groupIndex * 100 + setIndex,
@@ -1950,6 +2057,7 @@ const WorkoutSessionScreen = () => {
       exerciseId: lastSet.exerciseId,
       exerciseName: lastSet.exerciseName,
       exerciseImageUrl: lastSet.exerciseImageUrl,
+      setKind: "working",
       setIndex: lastSet.setIndex + 1,
       targetReps: lastSet.targetReps,
       targetWeight: lastSet.targetWeight,
@@ -2113,7 +2221,7 @@ const WorkoutSessionScreen = () => {
     const contentHeight = contentSize.height;
 
     // Show top gradient when scrolled down
-    setShowTopGradient(scrollY > 5);
+    setShowTopGradient(scrollY > 24);
 
     // Show bottom gradient when not at the bottom
     const isNearBottom = scrollY + scrollViewHeight >= contentHeight - 20;
@@ -2121,7 +2229,7 @@ const WorkoutSessionScreen = () => {
   };
 
   const renderHeader = () => (
-    <View style={{ gap: 12, marginBottom: 12 }}>
+    <View style={{ gap: 12, marginTop: 8, marginBottom: 12 }}>
       <View
         style={{
           flexDirection: "row",
@@ -2303,6 +2411,128 @@ const WorkoutSessionScreen = () => {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => {
+            hasUserChangedWarmupPreferenceRef.current = true;
+            setShowWarmupSets((prev) => !prev);
+          }}
+          style={({ pressed }) => ({
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+              Warm-up sets
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {showWarmupSets ? "Shown before working sets" : "Hidden (working sets only)"}
+            </Text>
+          </View>
+          <View pointerEvents='none'>
+            <Switch
+              value={showWarmupSets}
+              onValueChange={setShowWarmupSets}
+              trackColor={{
+                false: colors.border,
+                true: "rgba(56,189,248,0.35)",
+              }}
+              thumbColor={showWarmupSets ? colors.secondary : "#6B7280"}
+            />
+          </View>
+        </Pressable>
+
+        {showWarmupSets && warmupSuggestions.length > 0 && (
+          <View
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: `${colors.secondary}15`,
+                  borderWidth: 1,
+                  borderColor: `${colors.secondary}25`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name='flash-outline' size={18} color={colors.secondary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  {warmupTargetsLabel}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Quick routine (2–4 min)
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {warmupSuggestions.map((item) => (
+                <View
+                  key={`${item.title}-${item.note ?? ""}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    paddingVertical: 8,
+                    paddingHorizontal: 10,
+                    borderRadius: 12,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
+                      backgroundColor: `${colors.secondary}12`,
+                      borderWidth: 1,
+                      borderColor: `${colors.secondary}25`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginTop: 1,
+                    }}
+                  >
+                    <Ionicons name='checkmark' size={14} color={colors.secondary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                      {item.title}
+                    </Text>
+                    {item.note ? (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                        {item.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <Pressable
           onPress={() => {
@@ -2583,7 +2813,7 @@ const WorkoutSessionScreen = () => {
         <TimerAdjustmentModal
           visible={!!timerAdjustExerciseKey}
           onClose={() => setTimerAdjustExerciseKey(null)}
-          currentSeconds={timerAdjustGroup.restSeconds ?? 90}
+          currentSeconds={timerAdjustGroup.restSeconds ?? DEFAULT_WORKING_REST_SECONDS}
           exerciseName={timerAdjustGroup.name}
           onSave={(seconds) => {
             handleAdjustTimer(timerAdjustExerciseKey!, seconds);
@@ -2665,12 +2895,25 @@ const WorkoutSessionScreen = () => {
       <View style={{ flex: 1, marginHorizontal: -18 }}>
         <View style={{ flex: 1, paddingTop: insets.top }}>
           <DraggableFlatList
+            ref={exercisesListRef}
             data={groupedSets}
             keyExtractor={(item) => item.key}
             onDragEnd={({ data }) => handleReorderExercises(data)}
             onScroll={handleScroll}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              const offset = Math.max(0, index * (averageItemLength || 180));
+              exercisesListRef.current?.scrollToOffset?.({ offset, animated: true });
+              setTimeout(() => {
+                exercisesListRef.current?.scrollToIndex?.({
+                  index,
+                  animated: true,
+                  viewPosition: 0,
+                  viewOffset: 70,
+                });
+              }, 50);
+            }}
             onScrollOffsetChange={(offset) => {
-              setShowTopGradient(offset > 5);
+              setShowTopGradient(offset > 24);
             }}
             scrollEventThrottle={16}
             ListHeaderComponent={renderHeader}
@@ -2797,6 +3040,7 @@ const WorkoutSessionScreen = () => {
 type SetInputRowProps = {
   set: WorkoutSet;
   displayIndex: number;
+  isWarmup?: boolean;
   onChange: (updated: WorkoutSet) => void;
   onLog: () => void;
   restSeconds?: number;
@@ -2811,6 +3055,7 @@ type SetInputRowProps = {
 const SetInputRow = ({
   set,
   displayIndex,
+  isWarmup,
   onChange,
   onLog,
   restSeconds,
@@ -2824,6 +3069,9 @@ const SetInputRow = ({
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
   const [isEditingWeight, setIsEditingWeight] = useState(false);
+  const restLabelSeconds =
+    restSeconds ??
+    (isWarmup ? DEFAULT_WARMUP_REST_SECONDS : DEFAULT_WORKING_REST_SECONDS);
 
   useEffect(() => {
     if (isEditingWeight) return;
@@ -2873,9 +3121,15 @@ const SetInputRow = ({
         padding: 10,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: isActive ? colors.primary : colors.border,
+        borderColor: isActive
+          ? colors.primary
+          : isWarmup
+          ? `${colors.secondary}35`
+          : colors.border,
         backgroundColor: isActive
           ? "rgba(34,197,94,0.12)"
+          : isWarmup
+          ? "rgba(56,189,248,0.08)"
           : colors.surfaceMuted,
       }}
     >
@@ -2888,9 +3142,34 @@ const SetInputRow = ({
         }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-            Set {displayIndex + 1}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+              Set {displayIndex + 1}
+            </Text>
+            {isWarmup ? (
+              <View
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                  backgroundColor: `${colors.secondary}20`,
+                  borderWidth: 1,
+                  borderColor: `${colors.secondary}35`,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.secondary,
+                    fontSize: 10,
+                    fontWeight: "900",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  WARM UP
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
             {targetLine ? `Target ${targetLine}` : "Log this effort"}
           </Text>
@@ -3106,7 +3385,7 @@ const SetInputRow = ({
         }}
       >
         <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-          Rest after set: {restSeconds ?? 90}s
+          Rest after set: {restLabelSeconds}s
         </Text>
         {!autoRestTimer ? (
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
@@ -3169,9 +3448,16 @@ const ExerciseCard = ({
   const allSetsLogged = loggedSetsCount === group.sets.length;
   const isCardioGroup = isCardioExercise(group.exerciseId, group.name);
 
-  const summaryLine = `${group.sets.length} sets · ${
-    group.sets[0]?.targetReps
-      ? `${group.sets[0].targetReps} reps`
+  const warmupSetCount = group.sets.filter((set) => set.setKind === "warmup").length;
+  const workingSetCount = group.sets.length - warmupSetCount;
+  const primaryWorkingSet =
+    group.sets.find((set) => set.setKind !== "warmup") ?? group.sets[0];
+
+  const summaryLine = `${workingSetCount} working${
+    warmupSetCount > 0 ? ` · ${warmupSetCount} warm-up` : ""
+  } · ${
+    primaryWorkingSet?.targetReps
+      ? `${primaryWorkingSet.targetReps} reps`
       : "adjust as you go"
   }`;
 
@@ -3227,6 +3513,8 @@ const ExerciseCard = ({
                 fontSize: 16,
                 fontWeight: "700",
               }}
+              numberOfLines={1}
+              ellipsizeMode='tail'
             >
               {group.name}
             </Text>
@@ -3365,7 +3653,7 @@ const ExerciseCard = ({
                   fontWeight: "600",
                 }}
               >
-                Rest: {group.restSeconds ?? 90}s
+                Rest: {group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS}s
               </Text>
             </Pressable>
           </View>
@@ -3375,6 +3663,7 @@ const ExerciseCard = ({
               <SetInputRow
                 set={set}
                 displayIndex={displayIndex}
+                isWarmup={set.setKind === "warmup"}
                 onChange={onChangeSet}
                 onLog={() => onLogSet(set.id, group.restSeconds)}
                 restSeconds={group.restSeconds}
