@@ -150,6 +150,15 @@ export interface Exercise {
   createdBy?: string;
 }
 
+export interface ExerciseDetails extends Exercise {
+  instructions: string[];
+  level?: string;
+  force?: string;
+  mechanic?: string;
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
+}
+
 export interface CustomExercise {
   id: string;
   userId: string;

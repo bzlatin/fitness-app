@@ -16,6 +16,7 @@ import {
   AppState,
   NativeModules,
   PanResponder,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,7 +39,8 @@ import {
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
-import { SetDifficultyRating, WorkoutSet } from "../types/workouts";
+import { SetDifficultyRating, WorkoutSet, ExerciseDetails } from "../types/workouts";
+import { fetchExerciseDetails } from "../api/exercises";
 import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
@@ -197,6 +199,243 @@ const VisibilityModal = ({
     </Pressable>
   </Modal>
 );
+
+// Exercise Instructions Modal
+const ExerciseInstructionsModal = ({
+  visible,
+  exerciseId,
+  exerciseName,
+  onClose,
+}: {
+  visible: boolean;
+  exerciseId: string | null;
+  exerciseName: string | null;
+  onClose: () => void;
+}) => {
+  const [details, setDetails] = useState<ExerciseDetails | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible && exerciseId) {
+      setLoading(true);
+      setError(null);
+      fetchExerciseDetails(exerciseId)
+        .then((data) => {
+          setDetails(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch exercise details:", err);
+          setError("Could not load instructions");
+          setLoading(false);
+        });
+    } else if (!visible) {
+      // Reset when modal closes
+      setDetails(null);
+      setError(null);
+    }
+  }, [visible, exerciseId]);
+
+  const formatMuscle = (muscle: string) =>
+    muscle.charAt(0).toUpperCase() + muscle.slice(1).replace(/_/g, " ");
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "flex-end",
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: "85%",
+            borderWidth: 1,
+            borderColor: colors.border,
+            width: "100%",
+            flexShrink: 1,
+          }}
+        >
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: "800",
+                }}
+                numberOfLines={2}
+              >
+                {exerciseName ?? "Exercise"}
+              </Text>
+              {details?.level && (
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  {details.level.charAt(0).toUpperCase() + details.level.slice(1)} •{" "}
+                  {details.mechanic ?? "—"} • {details.equipment ?? "—"}
+                </Text>
+              )}
+            </View>
+            <Pressable
+              onPress={onClose}
+              style={{
+                padding: 8,
+                borderRadius: 20,
+                backgroundColor: colors.surfaceMuted,
+              }}
+            >
+              <Ionicons name="close" color={colors.textSecondary} size={20} />
+            </Pressable>
+          </View>
+
+          {/* Content */}
+          <ScrollView
+            style={{ maxHeight: "100%" }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 0 }}
+            showsVerticalScrollIndicator
+            bounces
+          >
+            {loading ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
+                  Loading instructions...
+                </Text>
+              </View>
+            ) : error ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Ionicons name="alert-circle-outline" size={40} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
+                  {error}
+                </Text>
+              </View>
+            ) : details ? (
+              <View style={{ gap: 20 }}>
+                {/* Muscles */}
+                {(details.primaryMuscles.length > 0 || details.secondaryMuscles.length > 0) && (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                      Muscles Worked
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {details.primaryMuscles.map((muscle) => (
+                        <View
+                          key={muscle}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                            backgroundColor: `${colors.primary}20`,
+                            borderWidth: 1,
+                            borderColor: `${colors.primary}40`,
+                          }}
+                        >
+                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "600" }}>
+                            {formatMuscle(muscle)}
+                          </Text>
+                        </View>
+                      ))}
+                      {details.secondaryMuscles.map((muscle) => (
+                        <View
+                          key={muscle}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                            backgroundColor: colors.surfaceMuted,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                        >
+                          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}>
+                            {formatMuscle(muscle)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Instructions */}
+                {details.instructions.length > 0 ? (
+                  <View style={{ gap: 12 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                      How to Perform
+                    </Text>
+                    {details.instructions.map((instruction, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          flexDirection: "row",
+                          gap: 12,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: `${colors.primary}20`,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontSize: 12,
+                              fontWeight: "800",
+                            }}
+                          >
+                            {index + 1}
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            flex: 1,
+                            color: colors.textPrimary,
+                            fontSize: 14,
+                            lineHeight: 20,
+                          }}
+                        >
+                          {instruction}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                    <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, marginTop: 8, textAlign: "center" }}>
+                      No detailed instructions available for this exercise.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
 
 const summarizeSets = (sessionSets: WorkoutSet[]) => {
   const workingSets = sessionSets.filter((set) => set.setKind !== "warmup");
@@ -405,6 +644,10 @@ const WorkoutSessionScreen = () => {
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showWarmupSets, setShowWarmupSets] = useState(true);
+  const [instructionsExercise, setInstructionsExercise] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [hasHydratedWarmupPreference, setHasHydratedWarmupPreference] =
     useState(false);
   const { data: templates } = useWorkoutTemplates();
@@ -2955,6 +3198,12 @@ const WorkoutSessionScreen = () => {
           }}
         />
       )}
+      <ExerciseInstructionsModal
+        visible={!!instructionsExercise}
+        exerciseId={instructionsExercise?.id ?? null}
+        exerciseName={instructionsExercise?.name ?? null}
+        onClose={() => setInstructionsExercise(null)}
+      />
       <ExercisePicker
         visible={showExercisePicker}
         onClose={() => setShowExercisePicker(false)}
@@ -3112,6 +3361,12 @@ const WorkoutSessionScreen = () => {
                   onDeleteExercise={() => handleDeleteExercise(group.key)}
                   onImagePress={() =>
                     group.imageUrl && setImagePreviewUrl(group.imageUrl)
+                  }
+                  onShowInstructions={() =>
+                    setInstructionsExercise({
+                      id: group.exerciseId,
+                      name: group.name,
+                    })
                   }
                   showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
                   onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
@@ -3585,6 +3840,7 @@ type ExerciseCardProps = {
   onRemoveSet: (setId: string) => void;
   onDeleteExercise: () => void;
   onImagePress: () => void;
+  onShowInstructions: () => void;
   showExerciseDifficultyFeedback: boolean;
   onExerciseDifficultyFeedback: (rating: SetDifficultyRating) => void;
   onSkipDifficultyFeedback: () => void;
@@ -3613,6 +3869,7 @@ const ExerciseCard = ({
   onRemoveSet,
   onDeleteExercise,
   onImagePress,
+  onShowInstructions,
   showExerciseDifficultyFeedback,
   onExerciseDifficultyFeedback,
   onSkipDifficultyFeedback,
@@ -3794,6 +4051,28 @@ const ExerciseCard = ({
 
           {/* Action buttons */}
           <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={onShowInstructions}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons
+                name='information-circle-outline'
+                size={18}
+                color={colors.secondary}
+              />
+            </Pressable>
             <Pressable
               onPress={onSwap}
               style={({ pressed }) => ({
