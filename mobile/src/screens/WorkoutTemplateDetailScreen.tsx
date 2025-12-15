@@ -19,6 +19,10 @@ import { colors } from "../theme/colors";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ShareTemplateButton from "../components/workout/ShareTemplateButton";
+import {
+  getStoredLiveVisibility,
+  setStoredLiveVisibility,
+} from "../utils/liveVisibilityPreference";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -43,6 +47,7 @@ const WorkoutTemplateDetailScreen = () => {
     mutationFn: () => startSessionFromTemplate(route.params.templateId),
     onSuccess: (session) => {
       setStartModalVisible(false);
+      void setStoredLiveVisibility(liveVisibility);
       navigation.navigate("WorkoutSession", {
         templateId: route.params.templateId,
         sessionId: session.id,
@@ -56,6 +61,18 @@ const WorkoutTemplateDetailScreen = () => {
   const [draftName, setDraftName] = useState(template?.name ?? "");
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [liveVisibility, setLiveVisibility] = useState<Visibility>("private");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const stored = await getStoredLiveVisibility();
+      if (cancelled) return;
+      if (stored) setLiveVisibility(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setDraftName(template?.name ?? "");

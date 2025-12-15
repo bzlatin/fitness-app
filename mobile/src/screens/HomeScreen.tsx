@@ -34,6 +34,7 @@ import { fetchRecap } from "../api/analytics";
 import { useFatigue } from "../hooks/useFatigue";
 import { endWorkoutLiveActivity } from "../services/liveActivity";
 import { syncActiveSessionToWidget } from "../services/widgetSync";
+import { clearActiveWorkoutStatus } from "../api/social";
 import { cancelScheduledRestTimerFinishSound } from "../utils/timerSound";
 import {
   TRAINING_SPLIT_LABELS,
@@ -208,6 +209,7 @@ const HomeScreen = () => {
             void cancelScheduledRestTimerFinishSound();
             void endWorkoutLiveActivity();
             void syncActiveSessionToWidget(null);
+            void clearActiveWorkoutStatus(sessionId);
             setDismissedSession({
               id: sessionId,
               dismissedAt: Date.now(),

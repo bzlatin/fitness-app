@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation';
 
 type WorkoutShareRedirectPageProps = {
-  params: {
+  params: Promise<{
     code: string;
-  };
+  }>;
 };
 
-export default function WorkoutShareRedirectPage({ params }: WorkoutShareRedirectPageProps) {
-  const raw = (params.code ?? '').trim();
+export default async function WorkoutShareRedirectPage({ params }: WorkoutShareRedirectPageProps) {
+  const resolvedParams = await params;
+  const raw = (resolvedParams.code ?? '').trim();
   redirect(`/workout/${raw}`);
 }
-

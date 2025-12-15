@@ -5,6 +5,10 @@ import {
   setActiveWorkoutStatus,
 } from "../api/social";
 import { Visibility } from "../types/social";
+import {
+  getStoredLiveVisibility,
+  setStoredLiveVisibility,
+} from "../utils/liveVisibilityPreference";
 
 type Options = {
   sessionId?: string;
@@ -24,13 +28,37 @@ export const useActiveWorkoutStatus = ({
   const [visibility, setVisibilityState] = useState<Visibility>(
     initialVisibility ?? "private"
   );
+  const [visibilityResolved, setVisibilityResolved] = useState<boolean>(
+    Boolean(initialVisibility)
+  );
   const lastSessionId = useRef<string | undefined>(sessionId);
   const hasInitialized = useRef(false);
   const lastTemplateName = useRef<string | undefined>(templateName);
 
   useEffect(() => {
+    if (initialVisibility) {
+      setVisibilityState(initialVisibility);
+      setVisibilityResolved(true);
+      void setStoredLiveVisibility(initialVisibility);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const stored = await getStoredLiveVisibility();
+      if (cancelled) return;
+      if (stored) setVisibilityState(stored);
+      setVisibilityResolved(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialVisibility]);
+
+  useEffect(() => {
     if (sessionId !== lastSessionId.current) {
       setVisibilityState(initialVisibility ?? "private");
+      setVisibilityResolved(Boolean(initialVisibility));
       hasInitialized.current = false;
       lastSessionId.current = sessionId;
     }
@@ -47,7 +75,7 @@ export const useActiveWorkoutStatus = ({
   const clearStatus = clearStatusMutation.mutate;
 
   useEffect(() => {
-    if (!sessionId || hasInitialized.current) return;
+    if (!sessionId || hasInitialized.current || !visibilityResolved) return;
     setStatus({
       sessionId,
       templateId,
@@ -73,6 +101,8 @@ export const useActiveWorkoutStatus = ({
   const setVisibility = useCallback(
     (next: Visibility) => {
       setVisibilityState(next);
+      setVisibilityResolved(true);
+      void setStoredLiveVisibility(next);
       if (!sessionId) return;
       setStatus({
         sessionId,

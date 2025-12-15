@@ -9,6 +9,8 @@ const base =
 
 const fallbackBase = "https://push-pull.app";
 
+export const LANDING_BASE_URL = base ?? fallbackBase;
+
 export const TERMS_URL =
   process.env.EXPO_PUBLIC_LEGAL_TERMS_URL ?? `${base ?? fallbackBase}/terms`;
 
