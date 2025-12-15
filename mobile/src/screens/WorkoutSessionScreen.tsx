@@ -53,6 +53,7 @@ import ProgressionSuggestionModal, {
 import {
   fetchProgressionSuggestions,
   applyProgressionSuggestions,
+  fetchStartingSuggestion,
 } from "../api/analytics";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
@@ -79,6 +80,7 @@ import {
 import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution";
 import { formatMuscleGroup, getTopMuscleGroups } from "../utils/muscleGroupCalculations";
 import { getWarmupSuggestionsForMuscleGroups } from "../utils/warmupSuggestions";
+import { StartingSuggestion } from "../types/analytics";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -431,6 +433,10 @@ const WorkoutSessionScreen = () => {
   const exercisesListRef = useRef<any>(null);
   const shouldAutoScrollToActiveExerciseRef = useRef(false);
   const hasUserChangedWarmupPreferenceRef = useRef(false);
+  const startingSuggestionFetchRef = useRef<Set<string>>(new Set());
+  const [startingSuggestions, setStartingSuggestions] = useState<
+    Record<string, StartingSuggestion>
+  >({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1279,6 +1285,42 @@ const WorkoutSessionScreen = () => {
   );
 
   useEffect(() => {
+    const missingExerciseIds = Array.from(
+      new Set(
+        groupedSets
+          .filter((group) => !isCardioExercise(group.exerciseId, group.name))
+          .filter((group) =>
+            group.sets.some(
+              (set) =>
+                set.setKind !== "warmup" &&
+                set.actualWeight === undefined &&
+                set.targetWeight === undefined
+            )
+          )
+          .map((group) => group.exerciseId)
+      )
+    );
+
+    if (missingExerciseIds.length === 0) return;
+
+    missingExerciseIds.forEach((exerciseId) => {
+      if (startingSuggestionFetchRef.current.has(exerciseId)) return;
+      startingSuggestionFetchRef.current.add(exerciseId);
+      void (async () => {
+        try {
+          const suggestion = await fetchStartingSuggestion(exerciseId);
+          setStartingSuggestions((prev) => ({
+            ...prev,
+            [exerciseId]: suggestion,
+          }));
+        } catch {
+          // ignore
+        }
+      })();
+    });
+  }, [groupedSets]);
+
+  useEffect(() => {
     if (!activeExerciseKey) return;
     if (!shouldAutoScrollToActiveExerciseRef.current) return;
     const index = groupedSets.findIndex((group) => group.key === activeExerciseKey);
@@ -1807,68 +1849,132 @@ const WorkoutSessionScreen = () => {
       const sorted = [...group.sets]
         .map((s) => (s.id === setId ? updated : s))
         .sort((a, b) => a.setIndex - b.setIndex);
-      const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
+      const currentSortedIndex = sorted.findIndex((s) => s.id === setId);
+      const nextSetAfterCurrent =
+        currentSortedIndex >= 0
+          ? sorted
+              .slice(currentSortedIndex + 1)
+              .find((s) => !updatedLoggedSetIds.has(s.id))
+          : undefined;
 
-      if (nextSet) {
-        // Do not auto-advance between sets; only auto-advance after the last set of an exercise.
-        const currentSetIndex = sorted.findIndex((s) => s.id === setId);
-        const restDuration = fallbackRest ?? defaultRestSeconds;
-        syncCurrentExerciseToWidget(
-          groupKey,
-          Math.max(0, currentSetIndex),
-          updated.actualReps,
-          updated.actualWeight,
-          autoRestTimer ? restDuration : 0, // Pass 0 to explicitly clear timer when disabled
-          autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
-        );
-      } else {
-        // All sets in this exercise are logged, move to next exercise
-        const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
-        if (allLogged) {
-          const currentIndex = groupedSets.findIndex(
-            (g) => g.key === group.key
+      // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
+      const restDuration = fallbackRest ?? defaultRestSeconds;
+      syncCurrentExerciseToWidget(
+        groupKey,
+        Math.max(0, currentSortedIndex),
+        updated.actualReps,
+        updated.actualWeight,
+        autoRestTimer ? restDuration : 0,
+        autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
+      );
+
+      // Auto-carry weight + reps to the next set (strength only, working sets only).
+      if (
+        nextSetAfterCurrent &&
+        updated.setKind !== "warmup" &&
+        !isCardioExercise(updated.exerciseId, updated.exerciseName) &&
+        nextSetAfterCurrent.setKind !== "warmup"
+      ) {
+        const carryWeight =
+          updated.actualWeight !== undefined &&
+          nextSetAfterCurrent.actualWeight === undefined;
+        const carryReps =
+          updated.actualReps !== undefined &&
+          nextSetAfterCurrent.actualReps === undefined;
+
+        if (carryWeight || carryReps) {
+          setSets((prev) =>
+            prev.map((set) => {
+              if (set.id !== nextSetAfterCurrent.id) return set;
+              return {
+                ...set,
+                actualWeight:
+                  carryWeight && set.actualWeight === undefined
+                    ? updated.actualWeight
+                    : set.actualWeight,
+                actualReps:
+                  carryReps && set.actualReps === undefined
+                    ? updated.actualReps
+                    : set.actualReps,
+              };
+            })
           );
-          const nextGroup = groupedSets[currentIndex + 1];
-          if (nextGroup) {
-            setAutoFocusEnabled(true);
-            shouldAutoScrollToActiveExerciseRef.current = true;
-            setActiveExerciseKey(nextGroup.key);
-            const firstUnloggedInNextGroup = nextGroup.sets.find(
-              (s) => !updatedLoggedSetIds.has(s.id)
-            );
-            const nextSetId =
-              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+        }
+      }
 
-            // IMMEDIATELY update the ref BEFORE React state update
-            activeSetIdRef.current = nextSetId;
-            setActiveSetId(nextSetId);
+      // All sets in this exercise are logged, move to next exercise.
+      const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
+      if (allLogged) {
+        const currentIndex = groupedSets.findIndex((g) => g.key === group.key);
+        const nextGroup = groupedSets[currentIndex + 1];
+        if (nextGroup) {
+          setAutoFocusEnabled(true);
+          shouldAutoScrollToActiveExerciseRef.current = true;
+          setActiveExerciseKey(nextGroup.key);
+          const firstUnloggedInNextGroup = nextGroup.sets.find(
+            (s) => !updatedLoggedSetIds.has(s.id)
+          );
+          const nextSetId =
+            firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
 
-            // Sync next exercise to widget
-            if (firstUnloggedInNextGroup) {
-              const nextSetIndex = nextGroup.sets.findIndex(
-                (s) => s.id === firstUnloggedInNextGroup.id
-              );
-              syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
-            }
-          } else {
-            // IMMEDIATELY update the ref BEFORE React state update
-            activeSetIdRef.current = null;
-            setActiveExerciseKey(null);
-            setActiveSetId(null);
-            // All exercises complete, keep showing last exercise with completed state
-            const lastSetIndex = sorted.length - 1;
-            syncCurrentExerciseToWidget(
-              groupKey,
-              lastSetIndex,
-              updated.actualReps,
-              updated.actualWeight,
-              0 // No rest timer after workout complete
+          activeSetIdRef.current = nextSetId;
+          setActiveSetId(nextSetId);
+
+          if (firstUnloggedInNextGroup) {
+            const nextSetIndex = nextGroup.sets.findIndex(
+              (s) => s.id === firstUnloggedInNextGroup.id
             );
+            syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
           }
+        } else {
+          activeSetIdRef.current = null;
+          setActiveExerciseKey(null);
+          setActiveSetId(null);
+          const lastSetIndex = sorted.length - 1;
+          syncCurrentExerciseToWidget(
+            groupKey,
+            lastSetIndex,
+            updated.actualReps,
+            updated.actualWeight,
+            0
+          );
         }
       }
     }
   };
+
+  const applyStartingSuggestionToGroup = useCallback(
+    (exerciseKey: string, suggestion: StartingSuggestion | undefined) => {
+      if (!suggestion) return;
+      setSets((prev) =>
+        prev.map((set) => {
+          const setKey = set.templateExerciseId ?? set.exerciseId;
+          if (setKey !== exerciseKey) return set;
+          if (set.setKind === "warmup") return set;
+          if (loggedSetIdsRef.current.has(set.id)) return set;
+
+          const shouldFillWeight =
+            suggestion.suggestedWeight !== undefined &&
+            set.actualWeight === undefined &&
+            set.targetWeight === undefined;
+          const shouldFillReps =
+            suggestion.suggestedReps !== undefined &&
+            set.actualReps === undefined &&
+            set.targetReps === undefined;
+          if (!shouldFillWeight && !shouldFillReps) return set;
+
+          return {
+            ...set,
+            targetWeight: shouldFillWeight ? suggestion.suggestedWeight : set.targetWeight,
+            actualWeight: shouldFillWeight ? suggestion.suggestedWeight : set.actualWeight,
+            targetReps: shouldFillReps ? suggestion.suggestedReps : set.targetReps,
+            actualReps: shouldFillReps ? suggestion.suggestedReps : set.actualReps,
+          };
+        })
+      );
+    },
+    []
+  );
 
   const undoSet = (setId: string) => {
     // Create updated loggedSetIds without the undone set
@@ -1932,6 +2038,14 @@ const WorkoutSessionScreen = () => {
             targetReps: newExercise.reps ?? set.targetReps,
             targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
             actualReps: newExercise.reps ?? set.actualReps,
+            targetWeight: undefined,
+            actualWeight: undefined,
+            targetDistance: undefined,
+            actualDistance: undefined,
+            targetIncline: undefined,
+            actualIncline: undefined,
+            targetDurationMinutes: undefined,
+            actualDurationMinutes: undefined,
           };
         }
         return set;
@@ -2954,6 +3068,13 @@ const WorkoutSessionScreen = () => {
                     });
                   }}
                   onChangeSet={updateSet}
+                  startingSuggestion={startingSuggestions[group.exerciseId]}
+                  onApplyStartingSuggestion={() =>
+                    applyStartingSuggestionToGroup(
+                      group.key,
+                      startingSuggestions[group.exerciseId]
+                    )
+                  }
                   onLogSet={logSet}
                   activeSetId={activeSetId}
                   onSelectSet={setActiveSetId}
@@ -3402,6 +3523,8 @@ type ExerciseCardProps = {
   expanded: boolean;
   onToggle: () => void;
   onChangeSet: (updated: WorkoutSet) => void;
+  startingSuggestion?: StartingSuggestion;
+  onApplyStartingSuggestion?: () => void;
   onLogSet: (setId: string, restSeconds?: number) => void;
   activeSetId: string | null;
   onSelectSet: (setId: string | null) => void;
@@ -3425,6 +3548,8 @@ const ExerciseCard = ({
   expanded,
   onToggle,
   onChangeSet,
+  startingSuggestion,
+  onApplyStartingSuggestion,
   onLogSet,
   activeSetId,
   onSelectSet,
@@ -3460,6 +3585,33 @@ const ExerciseCard = ({
       ? `${primaryWorkingSet.targetReps} reps`
       : "adjust as you go"
   }`;
+
+  const hasWeightSuggestion =
+    typeof startingSuggestion?.suggestedWeight === "number" &&
+    Number.isFinite(startingSuggestion.suggestedWeight);
+  const hasRepsSuggestion =
+    typeof startingSuggestion?.suggestedReps === "number" &&
+    Number.isFinite(startingSuggestion.suggestedReps);
+
+  const hasMissingWeight = group.sets.some(
+    (set) =>
+      set.setKind !== "warmup" &&
+      !loggedSetIds.has(set.id) &&
+      set.actualWeight === undefined &&
+      set.targetWeight === undefined
+  );
+  const hasMissingReps = group.sets.some(
+    (set) =>
+      set.setKind !== "warmup" &&
+      !loggedSetIds.has(set.id) &&
+      set.actualReps === undefined &&
+      set.targetReps === undefined
+  );
+
+  const canApplyStartingSuggestion =
+    Boolean(startingSuggestion) &&
+    ((hasWeightSuggestion && hasMissingWeight) ||
+      (hasRepsSuggestion && hasMissingReps));
 
   return (
     <View
@@ -3657,6 +3809,49 @@ const ExerciseCard = ({
               </Text>
             </Pressable>
           </View>
+
+          {canApplyStartingSuggestion ? (
+            <View
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                gap: 10,
+              }}
+            >
+              <View style={{ gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  Suggested start
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {startingSuggestion?.suggestedWeight
+                    ? `${startingSuggestion.suggestedWeight} lb`
+                    : "—"}
+                  {startingSuggestion?.suggestedReps
+                    ? ` · ${startingSuggestion.suggestedReps} reps`
+                    : ""}
+                  {startingSuggestion?.reason ? ` · ${startingSuggestion.reason}` : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={onApplyStartingSuggestion}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ color: "#0B1220", fontWeight: "900" }}>
+                  Apply to working sets
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {group.sets.map((set, displayIndex) => (
             <View key={set.id} style={{ gap: 8 }}>

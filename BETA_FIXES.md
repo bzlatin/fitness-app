@@ -17,19 +17,19 @@
 
 ### Exercise Transition & Navigation
 
-- [ ] Fix exercise transition behavior
+- [x] Fix exercise transition behavior
   - **Issue**: Currently auto-focuses on weight input when moving to next exercise
   - **Desired**: Show exercise name and image at top first (confirmation of what's next)
   - Keep focus on exercise overview, let user tap into weight input manually
 
 ### Weight & Rep Recommendations
 
-- [ ] Initial weight and rep suggestions for new exercises
+- [x] Initial weight and rep suggestions for new exercises
 
   - Use progression service to analyze user's history with similar movements
   - Show suggested starting weight for users with no history on that exercise
 
-- [ ] Auto-carry weight to next set
+- [x] Auto-carry weight to next set
   - Pre-fill next set with previous set's weight
 
 ### Exercise Instructions

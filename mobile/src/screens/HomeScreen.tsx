@@ -596,7 +596,7 @@ const HomeScreen = () => {
             </Text>
           </View>
           <Pressable
-            onPress={() => navigation.navigate("WorkoutTemplateBuilder", {})}
+            onPress={() => setSwapOpen(true)}
             style={({ pressed }) => ({
               paddingHorizontal: 12,
               paddingVertical: 10,
@@ -1491,8 +1491,7 @@ const SwapModal = ({
           justifyContent: "flex-end",
         }}
       >
-        <Pressable
-          onPress={() => {}}
+        <View
           style={{
             backgroundColor: colors.surface,
             borderTopLeftRadius: 20,
@@ -1712,11 +1711,10 @@ const SwapModal = ({
                 ref={smartScrollRef}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled
-                bounces={smartCanScroll}
-                alwaysBounceVertical={false}
-                overScrollMode='never'
+                bounces
+                overScrollMode='auto'
                 style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: safeBottomPadding + 12 }}
+                contentContainerStyle={{ paddingBottom: safeBottomPadding + 12, flexGrow: 1 }}
                 keyboardShouldPersistTaps='handled'
                 onScroll={handleSmartScroll}
                 scrollEventThrottle={16}
@@ -2325,6 +2323,7 @@ const SwapModal = ({
                   ref={savedListRef}
                   data={templates}
                   keyExtractor={(item) => item.id}
+                  removeClippedSubviews={false}
                   renderItem={({ item: template }) => (
                     <View
                       style={{
@@ -2419,10 +2418,8 @@ const SwapModal = ({
                   }}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
-                  scrollEnabled={savedCanScroll}
-                  bounces={savedCanScroll}
-                  alwaysBounceVertical={false}
-                  overScrollMode='never'
+                  bounces
+                  overScrollMode='auto'
                   keyboardShouldPersistTaps='handled'
                   style={{ flex: 1 }}
                   onScroll={handleSavedScroll}
@@ -2492,7 +2489,7 @@ const SwapModal = ({
               </View>
             </>
           )}
-        </Pressable>
+        </View>
       </Pressable>
     </Modal>
   );
