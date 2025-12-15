@@ -22,6 +22,7 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation, RootRoute } from "../navigation/RootNavigator";
+import { LANDING_BASE_URL } from "../config/legal";
 import {
   getSquadById,
   updateSquad,
@@ -208,14 +209,14 @@ const SquadSettingsScreen = () => {
 
   const handleCopyInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `push-pull://squad/join/${currentInviteCode}`;
+    const link = `${LANDING_BASE_URL}/squad/join/${currentInviteCode}`;
     await Clipboard.setStringAsync(link);
     Alert.alert("Copied!", "Invite link copied to clipboard");
   };
 
   const handleShareInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `push-pull://squad/join/${currentInviteCode}`;
+    const link = `${LANDING_BASE_URL}/squad/join/${currentInviteCode}`;
     try {
       await Share.share({
         message: `Join my squad "${squad?.name}" on Push/Pull! ${link}`,
@@ -434,10 +435,10 @@ const SquadSettingsScreen = () => {
                       ...typography.caption,
                       color: colors.textPrimary,
                       fontFamily: fontFamilies.regular,
-                    }}
-                    numberOfLines={1}
-                  >
-                    push-pull://squad/join/{currentInviteCode}
+                  }}
+                  numberOfLines={1}
+                >
+                    {LANDING_BASE_URL}/squad/join/{currentInviteCode}
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>

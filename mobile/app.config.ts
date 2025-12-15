@@ -73,6 +73,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
               host: "push-pull.app",
               pathPrefix: "/workout",
             },
+            {
+              scheme: "https",
+              host: "push-pull.app",
+              pathPrefix: "/squad",
+            },
           ],
           category: ["BROWSABLE", "DEFAULT"],
         },

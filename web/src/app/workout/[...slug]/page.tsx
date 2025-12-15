@@ -1,15 +1,16 @@
 import { redirect } from 'next/navigation';
 
 type WorkoutCatchAllPageProps = {
-  params: {
+  params: Promise<{
     slug: string[];
-  };
+  }>;
 };
 
 const extractCode = (input: string) => input.match(/[0-9a-z]{8}/i)?.[0] ?? null;
 
-export default function WorkoutCatchAllPage({ params }: WorkoutCatchAllPageProps) {
-  const slug = Array.isArray(params.slug) ? params.slug : [];
+export default async function WorkoutCatchAllPage({ params }: WorkoutCatchAllPageProps) {
+  const resolvedParams = await params;
+  const slug = Array.isArray(resolvedParams.slug) ? resolvedParams.slug : [];
   const joined = slug.join('/');
   const code = extractCode(joined);
   if (code) {
@@ -17,4 +18,3 @@ export default function WorkoutCatchAllPage({ params }: WorkoutCatchAllPageProps
   }
   redirect('/?invalidWorkoutShare=1');
 }
-

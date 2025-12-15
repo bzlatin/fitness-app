@@ -36,7 +36,7 @@ export async function GET() {
         details: [
           {
             appID: appId,
-            paths: ['/workout/*'],
+            paths: ['/workout/*', '/squad/*'],
           },
         ],
       },
@@ -48,4 +48,3 @@ export async function GET() {
     }
   );
 }
-
