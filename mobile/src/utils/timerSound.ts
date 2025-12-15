@@ -80,7 +80,8 @@ export const playTimerSound = async () => {
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true, // Play even when ringer is off
           staysActiveInBackground: true, // Keep playing when app is in background/lock screen
-          shouldDuckAndroid: true,
+          shouldDuckAndroid: true, // Lower other audio volume on Android
+          interruptionModeIOS: 2, // INTERRUPTION_MODE_IOS_DUCK_OTHERS - lower music volume when chime plays
         });
         audioConfigured = true;
       }

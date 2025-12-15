@@ -54,8 +54,10 @@
   - Add stretch timer option ✅ 5-minute preset in timer adjustment modal
   - Added quick preset buttons: Warm-up (45s), Working (90s), Heavy (3min), Stretch (5min)
 
-- [ ] Fix rest timer chime sound
-  - When music is playing it is hard to hear it - how can we fix this? Also should it play no matters users silent mode on/off? i think if headphones are in and music is playing it should play the sound no matter what.
+- [x] Fix rest timer chime sound
+  - ✅ Changed audio session from `.mixWithOthers` to `.duckOthers` - this temporarily lowers music volume when the chime plays, making it clearly audible even with loud music through AirPods
+  - ✅ Sound plays regardless of silent mode (using `.playback` category)
+  - Files modified: `ios/pushpull/LiveActivityModule.swift`, `src/utils/timerSound.ts`
 
 ### UI/Display Fixes
 

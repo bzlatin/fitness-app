@@ -97,7 +97,10 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
     do {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      // Use .duckOthers to temporarily lower music volume when chime plays
+      // This ensures the timer sound is audible even with loud music through AirPods
+      // .playback category ensures sound plays even when device is in silent mode
+      try session.setCategory(.playback, mode: .default, options: [.duckOthers])
       try session.setActive(true)
 
       let player = try AVAudioPlayer(contentsOf: url)
