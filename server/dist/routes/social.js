@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -156,7 +189,7 @@ const normalizeHandle = (value) => {
         return undefined;
     return `@${cleaned}`;
 };
-const mapUserRow = (row) => ({
+const mapUserRow = (row, options) => ({
     id: row.id,
     name: row.name ?? "Athlete",
     email: row.email ?? undefined,
@@ -177,6 +210,9 @@ const mapUserRow = (row) => ({
     appleHealthEnabled: row.apple_health_enabled ?? false,
     appleHealthPermissions: row.apple_health_permissions ?? undefined,
     appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
+    aiGenerationsUsedCount: options?.includePrivateFields
+        ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
+        : undefined,
 });
 const fetchUserSummary = async (userId) => {
     const result = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
@@ -317,8 +353,9 @@ const fetchProfile = async (viewerId, targetUserId) => {
      AND finished_at IS NOT NULL
      AND ended_reason IS DISTINCT FROM 'auto_inactivity'`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
     const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+    const includePrivateFields = viewerId === targetUserId;
     return {
-        ...mapUserRow(user),
+        ...mapUserRow(user, { includePrivateFields }),
         ...counts,
         ...stats,
         workoutsThisWeek,
@@ -514,7 +551,7 @@ router.put("/me", (0, validate_1.validateBody)(profileUpdateSchema), async (req,
         const counts = await fetchRelationshipCounts(userId);
         const stats = await fetchWorkoutStats(userId);
         return res.json({
-            ...mapUserRow(updated),
+            ...mapUserRow(updated, { includePrivateFields: true }),
             ...counts,
             ...stats,
             friendsPreview: await fetchMutualFriends(userId, 12),
@@ -612,6 +649,31 @@ router.get("/connections", async (_req, res) => {
         return res.status(500).json({ error: "Failed to load connections" });
     }
 });
+// Get pending friend requests count (for notification badge)
+router.get("/pending-requests-count", async (_req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        // Count followers who the user is not following back (pending friend requests)
+        const result = await (0, db_1.query)(`
+        SELECT COUNT(*)::text as count
+        FROM follows f
+        WHERE f.target_user_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM follows f2
+            WHERE f2.user_id = $1 AND f2.target_user_id = f.user_id
+          )
+      `, [userId]);
+        const count = parseInt(result.rows[0]?.count ?? "0", 10);
+        return res.json({ count });
+    }
+    catch (err) {
+        console.error("Failed to get pending requests count", err);
+        return res.status(500).json({ error: "Failed to get pending requests count" });
+    }
+});
 router.get("/squads", async (_req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
@@ -626,18 +688,90 @@ router.get("/squads", async (_req, res) => {
         return res.status(500).json({ error: "Failed to load squads" });
     }
 });
+// Discover public squads
+router.get("/squads/discover", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const searchQuery = req.query.q?.trim() || "";
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    try {
+        let squads;
+        if (searchQuery) {
+            // Search public squads by name
+            squads = await (0, db_1.query)(`
+          SELECT
+            s.id,
+            s.name,
+            s.description,
+            COUNT(DISTINCT sm.user_id)::text as member_count,
+            s.max_members,
+            s.created_by,
+            CASE WHEN EXISTS(
+              SELECT 1 FROM squad_members sm2
+              WHERE sm2.squad_id = s.id AND sm2.user_id = $1
+            ) THEN '1' ELSE '0' END as is_member
+          FROM squads s
+          LEFT JOIN squad_members sm ON sm.squad_id = s.id
+          WHERE s.is_public = true
+            AND LOWER(s.name) LIKE LOWER($2)
+          GROUP BY s.id, s.name, s.description, s.max_members, s.created_by
+          ORDER BY member_count DESC, s.name ASC
+          LIMIT $3
+        `, [userId, `%${searchQuery}%`, limit]);
+        }
+        else {
+            // Get popular public squads
+            squads = await (0, db_1.query)(`
+          SELECT
+            s.id,
+            s.name,
+            s.description,
+            COUNT(DISTINCT sm.user_id)::text as member_count,
+            s.max_members,
+            s.created_by,
+            CASE WHEN EXISTS(
+              SELECT 1 FROM squad_members sm2
+              WHERE sm2.squad_id = s.id AND sm2.user_id = $1
+            ) THEN '1' ELSE '0' END as is_member
+          FROM squads s
+          LEFT JOIN squad_members sm ON sm.squad_id = s.id
+          WHERE s.is_public = true
+          GROUP BY s.id, s.name, s.description, s.max_members, s.created_by
+          ORDER BY member_count DESC, s.created_at DESC
+          LIMIT $2
+        `, [userId, limit]);
+        }
+        const formattedSquads = squads.rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            memberCount: parseInt(row.member_count),
+            maxMembers: row.max_members,
+            createdBy: row.created_by,
+            isMember: row.is_member === '1',
+        }));
+        return res.json({ squads: formattedSquads });
+    }
+    catch (err) {
+        console.error("Failed to discover squads", err);
+        return res.status(500).json({ error: "Failed to discover squads" });
+    }
+});
 router.post("/squads", async (req, res) => {
     const userId = res.locals.userId;
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const { name } = req.body;
+    const { name, description, isPublic } = req.body;
     if (!name?.trim()) {
         return res.status(400).json({ error: "Squad name required" });
     }
     const squadId = (0, id_1.generateId)();
     try {
-        await (0, db_1.query)(`INSERT INTO squads (id, name, created_by) VALUES ($1, $2, $3)`, [squadId, name.trim(), userId]);
+        await (0, db_1.query)(`INSERT INTO squads (id, name, description, created_by, is_public)
+       VALUES ($1, $2, $3, $4, $5)`, [squadId, name.trim(), description?.trim() || null, userId, isPublic ?? false]);
         await (0, db_1.query)(`
         INSERT INTO squad_members (squad_id, user_id, role)
         VALUES ($1, $2, 'owner')
@@ -652,6 +786,51 @@ router.post("/squads", async (req, res) => {
     catch (err) {
         console.error("Failed to create squad", err);
         return res.status(500).json({ error: "Failed to create squad" });
+    }
+});
+// Join a public squad directly
+router.post("/squads/:squadId/join", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { squadId } = req.params;
+    try {
+        // Check if squad exists and is public
+        const squadResult = await (0, db_1.query)(`SELECT is_public, max_members FROM squads WHERE id = $1 LIMIT 1`, [squadId]);
+        if (squadResult.rowCount === 0) {
+            return res.status(404).json({ error: "Squad not found" });
+        }
+        const squad = squadResult.rows[0];
+        if (!squad.is_public) {
+            return res.status(403).json({ error: "This squad is private. Use an invite link to join." });
+        }
+        // Check if already a member
+        const membershipCheck = await (0, db_1.query)(`SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`, [squadId, userId]);
+        if (membershipCheck.rowCount && membershipCheck.rowCount > 0) {
+            return res.status(400).json({ error: "Already a member of this squad" });
+        }
+        // Check if squad is full
+        const memberCount = await (0, db_1.query)(`SELECT COUNT(*)::text as count FROM squad_members WHERE squad_id = $1`, [squadId]);
+        const currentCount = parseInt(memberCount.rows[0]?.count || '0');
+        if (currentCount >= squad.max_members) {
+            return res.status(400).json({ error: "Squad is full" });
+        }
+        // Join the squad
+        await (0, db_1.query)(`
+        INSERT INTO squad_members (squad_id, user_id, role)
+        VALUES ($1, $2, 'member')
+        ON CONFLICT (squad_id, user_id) DO NOTHING
+      `, [squadId, userId]);
+        const updatedSquad = await fetchSquadById(userId, squadId);
+        if (!updatedSquad) {
+            return res.status(404).json({ error: "Squad not found" });
+        }
+        return res.json({ squad: updatedSquad });
+    }
+    catch (err) {
+        console.error("Failed to join squad", err);
+        return res.status(500).json({ error: "Failed to join squad" });
     }
 });
 router.post("/squads/:squadId/members", async (req, res) => {
@@ -1252,7 +1431,27 @@ router.post("/follow", async (req, res) => {
         return res.status(400).json({ error: "Invalid follow target" });
     }
     try {
-        await (0, db_1.query)(`INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [userId, targetUserId]);
+        // Insert the follow relationship
+        const result = await (0, db_1.query)(`INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`, [userId, targetUserId]);
+        // Only send notifications if this was a new follow (not a duplicate)
+        if (result.rowCount && result.rowCount > 0) {
+            // Get current user info to send in notification
+            const currentUserResult = await (0, db_1.query)(`SELECT name, handle FROM users WHERE id = $1 LIMIT 1`, [userId]);
+            const currentUser = currentUserResult.rows[0];
+            // Check if target user was already following current user (mutual follow)
+            const isMutualResult = await (0, db_1.query)(`SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`, [targetUserId, userId]);
+            const isMutual = (isMutualResult.rowCount ?? 0) > 0;
+            if (isMutual) {
+                // This is a friend acceptance - notify the original requester (target user)
+                const { sendFriendAcceptanceNotification } = await Promise.resolve().then(() => __importStar(require("../jobs/notifications")));
+                sendFriendAcceptanceNotification(targetUserId, userId, currentUser?.name ?? "Someone", currentUser?.handle ?? undefined).catch((err) => console.error("[Social] Failed to send friend acceptance notification:", err));
+            }
+            else {
+                // This is a new friend request - notify the target user
+                const { sendFriendRequestNotification } = await Promise.resolve().then(() => __importStar(require("../jobs/notifications")));
+                sendFriendRequestNotification(targetUserId, userId, currentUser?.name ?? "Someone", currentUser?.handle ?? undefined).catch((err) => console.error("[Social] Failed to send friend request notification:", err));
+            }
+        }
         return res.status(204).send();
     }
     catch (err) {

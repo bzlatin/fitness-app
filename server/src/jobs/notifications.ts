@@ -1,8 +1,8 @@
 import { query } from "../db";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from "expo-server-sdk";
-import { customAlphabet } from "nanoid";
+import { createIdGenerator } from "../utils/id";
 
-const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 12);
+const nanoid = createIdGenerator("0123456789abcdefghijklmnopqrstuvwxyz", 12);
 
 const expo = new Expo();
 

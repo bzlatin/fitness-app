@@ -1,9 +1,9 @@
 import express, { Router } from "express";
 import path from "path";
 import multer from "multer";
-import { nanoid } from "nanoid";
 import { query } from "../db";
 import { fetchExerciseMetaByIds, ExerciseMeta } from "../utils/exerciseCatalog";
+import { generateId } from "../utils/id";
 import { maybeRequireAuth, attachUser } from "../middleware/auth";
 import { checkCustomExerciseLimit } from "../middleware/planLimits";
 import { uploadImage, validateImageBuffer, deleteImage, extractPublicId } from "../services/cloudinary";
@@ -229,7 +229,7 @@ router.post(
     }
 
     try {
-      const exerciseId = nanoid();
+      const exerciseId = generateId();
 
       await query(
         `INSERT INTO user_exercises (

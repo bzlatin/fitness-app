@@ -6,7 +6,7 @@ const fatigue_1 = require("../services/fatigue");
 const workoutPrompts_1 = require("../services/ai/workoutPrompts");
 const planLimits_1 = require("../middleware/planLimits");
 const db_1 = require("../db");
-const nanoid_1 = require("nanoid");
+const id_1 = require("../utils/id");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const exerciseData_1 = require("../utils/exerciseData");
 const logger_1 = require("../utils/logger");
@@ -143,8 +143,9 @@ const deriveFocusName = (specificRequest) => {
  * Generate a personalized workout using AI
  * Requires Pro plan
  */
-router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGenerateLimiter, (0, validate_1.validateBody)(generateWorkoutBodySchema), async (req, res) => {
+router.post("/generate-workout", rateLimit_1.aiGenerateLimiter, (0, validate_1.validateBody)(generateWorkoutBodySchema), planLimits_1.checkAiWorkoutGenerationLimit, async (req, res) => {
     const userId = res.locals.userId;
+    const reservedFreeGeneration = Boolean(res.locals.aiFreeWorkoutGenerationReserved);
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -310,7 +311,7 @@ router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGene
       INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
-            (0, nanoid_1.nanoid)(),
+            (0, id_1.generateId)(),
             userId,
             "workout",
             JSON.stringify({ requestedSplit, specificRequest }),
@@ -327,6 +328,18 @@ router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGene
     }
     catch (error) {
         log.error("Error generating workout", { error, userId });
+        if (reservedFreeGeneration) {
+            (0, db_1.query)(`
+          UPDATE users
+          SET ai_generations_used_count = GREATEST(ai_generations_used_count - 1, 0)
+          WHERE id = $1
+        `, [userId]).catch((rollbackError) => {
+                log.warn("Failed to roll back reserved AI generation", {
+                    rollbackError,
+                    userId,
+                });
+            });
+        }
         // Check if it's an OpenAI API error
         if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
             return res.status(500).json({
@@ -381,7 +394,7 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, rateLimit_1.aiSwapLim
       INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
-            (0, nanoid_1.nanoid)(),
+            (0, id_1.generateId)(),
             userId,
             "exercise_swap",
             JSON.stringify({ exerciseId, exerciseName, reason }),

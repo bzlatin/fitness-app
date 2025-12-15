@@ -170,7 +170,7 @@ const WorkoutPreviewScreen = () => {
             onPress={() => {
               Alert.alert(
                 "Discard Workout",
-                "Are you sure you want to discard this AI-generated workout?",
+                "Are you sure you want to discard this generated workout?",
                 [
                   { text: "Cancel", style: "cancel" },
                   {
@@ -265,7 +265,7 @@ const WorkoutPreviewScreen = () => {
                 <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                   {workout.splitType && <Chip label={workout.splitType} />}
                   <Chip label={`${workout.estimatedDurationMinutes} min`} />
-                  <Chip label="AI Generated" />
+                  <Chip label="Made For You" />
                 </View>
               </View>
 

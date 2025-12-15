@@ -42,6 +42,10 @@ import RecoveryBodyMap from "../components/RecoveryBodyMap";
 import TrialBanner from "../components/premium/TrialBanner";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import {
+  canGenerateAiWorkout,
+  getAiWorkoutGenerationsRemaining,
+} from "../utils/featureGating";
 import RecapCard from "../components/RecapCard";
 import { RecapSlice } from "../types/analytics";
 
@@ -56,6 +60,8 @@ const HomeScreen = () => {
   const subscriptionAccess = useSubscriptionAccess();
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
+  const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+  const aiFreeUsed = !hasProAccess && aiRemaining === 0;
   const [paywallTrigger, setPaywallTrigger] = useState<
     "analytics" | "ai" | "templates" | "recovery" | "progression" | null
   >(null);
@@ -398,7 +404,7 @@ const HomeScreen = () => {
               marginTop: 4,
             }}
           >
-            Renew your plan to unlock AI workouts, analytics, and progression.
+            Renew your plan to unlock smart workouts, analytics, and progression.
           </Text>
         </Pressable>
       ) : null}
@@ -1084,6 +1090,12 @@ const HomeScreen = () => {
         visible={showPaywallModal}
         onClose={closePaywall}
         triggeredBy={paywallTrigger ?? undefined}
+        aiFreeUsed={paywallTrigger === "ai" ? aiFreeUsed : undefined}
+        aiFreeRemaining={
+          paywallTrigger === "ai" && Number.isFinite(aiRemaining)
+            ? aiRemaining
+            : undefined
+        }
       />
     </ScreenContainer>
   );
@@ -1166,7 +1178,7 @@ const SwapModal = ({
 }) => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
-  const { user } = useCurrentUser();
+  const { user, refresh } = useCurrentUser();
   const { hasProAccess } = useSubscriptionAccess();
   const insets = useSafeAreaInsets();
   const [showSaved, setShowSaved] = useState(false);
@@ -1177,6 +1189,9 @@ const SwapModal = ({
   const [savedIsNearTop, setSavedIsNearTop] = useState(true);
 
   const isPro = hasProAccess;
+  const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+  const canUseAi = canGenerateAiWorkout(user, { hasProAccess });
+  const aiFreeAvailable = !hasProAccess && aiRemaining > 0;
   const templateCount = templates?.length ?? 0;
   const safeBottomPadding = Math.max(insets.bottom, 12);
 
@@ -1222,10 +1237,17 @@ const SwapModal = ({
       return workout;
     },
     onSuccess: (workout) => {
+      if (!hasProAccess) {
+        void refresh();
+      }
       onClose();
       navigation.navigate("WorkoutPreview", { workout });
     },
     onError: (error: any) => {
+      if (error?.response?.data?.requiresUpgrade) {
+        showPaywallModal();
+        return;
+      }
       Alert.alert(
         "Generation Failed",
         error?.response?.data?.message ||
@@ -1238,7 +1260,7 @@ const SwapModal = ({
     type: "muscle" | "split",
     showPaywallCallback: () => void
   ) => {
-    if (!isPro) {
+    if (!canUseAi) {
       showPaywallCallback();
       return;
     }
@@ -1268,7 +1290,7 @@ const SwapModal = ({
     const preferredSplit = user?.onboardingData?.preferredSplit;
 
     if (!preferredSplit) {
-      return "Smart AI-generated workout";
+      return "Smart workout, made for you";
     }
 
     // Map splits to readable cycle names
@@ -1303,13 +1325,19 @@ const SwapModal = ({
   const actionOptions = [
     {
       label: "Smart Next Workout",
-      helper: isPro ? getNextInCycle() : "AI-generated (Pro)",
+      helper: isPro
+        ? getNextInCycle()
+        : "Made for you",
       action: "ai" as const,
       icon: "🎯",
     },
     {
       label: "Muscle Focus",
-      helper: isPro ? "Target specific muscles" : "AI muscle focus (Pro)",
+      helper: isPro
+        ? "Target specific muscles"
+        : canUseAi
+        ? "Target specific muscles"
+        : "Muscle focus (Upgrade)",
       action: "muscle" as const,
       icon: "💪",
     },
@@ -1498,25 +1526,31 @@ const SwapModal = ({
                       >
                         {option.label}
                       </Text>
-                      {!isPro &&
+                      {!hasProAccess &&
                         (option.action === "muscle" ||
                           option.action === "ai") && (
                           <View
                             style={{
                               backgroundColor: colors.primary,
-                              paddingHorizontal: 5,
-                              paddingVertical: 2,
+                              paddingHorizontal: aiFreeAvailable ? 7 : 5,
+                              paddingVertical: 3,
                               borderRadius: 4,
+                              minWidth: aiFreeAvailable ? 34 : 28,
+                              alignItems: "center",
                             }}
                           >
                             <Text
                               style={{
                                 color: "#0B1220",
-                                fontSize: 8,
+                                fontSize: aiFreeAvailable ? 8 : 8,
                                 fontWeight: "700",
+                                includeFontPadding: false,
                               }}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.85}
                             >
-                              PRO
+                              {aiFreeAvailable ? "FREE" : "PRO"}
                             </Text>
                           </View>
                         )}
@@ -1524,7 +1558,7 @@ const SwapModal = ({
                     <Text
                       style={{
                         color: colors.textSecondary,
-                        fontSize: 11,
+                        fontSize: 10,
                         marginTop: 4,
                         textAlign: "center",
                       }}

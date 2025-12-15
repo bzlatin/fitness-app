@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const id_1 = require("../utils/id");
-const nanoid_1 = require("nanoid");
 const db_1 = require("../db");
 const planLimits_1 = require("../middleware/planLimits");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
@@ -47,7 +46,7 @@ const mapTemplate = (row, exerciseRows, metaMap) => ({
     updatedAt: row.updated_at,
 });
 const SHARE_CODE_REGEX = /^[0-9a-z]{8}$/;
-const generateShareCode = (0, nanoid_1.customAlphabet)("0123456789abcdefghijklmnopqrstuvwxyz", 8);
+const generateShareCode = (0, id_1.createIdGenerator)("0123456789abcdefghijklmnopqrstuvwxyz", 8);
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "https://push-pull.app").replace(/\/+$/, "");
 const buildShareUrls = (shareCode) => ({
     webUrl: `${PUBLIC_APP_URL}/workout/${shareCode}`,

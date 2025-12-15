@@ -35,9 +35,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../db");
-const nanoid_1 = require("nanoid");
+const id_1 = require("../utils/id");
 const router = (0, express_1.Router)();
-const nanoid = (0, nanoid_1.customAlphabet)("0123456789abcdefghijklmnopqrstuvwxyz", 12);
+const nanoid = (0, id_1.createIdGenerator)("0123456789abcdefghijklmnopqrstuvwxyz", 12);
 /**
  * Register/update user's push notification token
  */

@@ -36,6 +36,7 @@ type UserRow = {
   apple_health_enabled: boolean | null;
   apple_health_permissions: unknown;
   apple_health_last_sync_at: string | null;
+  ai_generations_used_count: number | null;
 };
 
 type SocialProfile = {
@@ -66,6 +67,7 @@ type SocialProfile = {
   appleHealthEnabled?: boolean;
   appleHealthPermissions?: AppleHealthPermissions;
   appleHealthLastSyncAt?: string | null;
+  aiGenerationsUsedCount?: number;
   friendsPreview?: {
     id: string;
     name: string;
@@ -333,7 +335,10 @@ const normalizeHandle = (value?: string | null) => {
   return `@${cleaned}`;
 };
 
-const mapUserRow = (row: UserRow): SocialProfile => ({
+const mapUserRow = (
+  row: UserRow,
+  options?: { includePrivateFields?: boolean }
+): SocialProfile => ({
   id: row.id,
   name: row.name ?? "Athlete",
   email: row.email ?? undefined,
@@ -354,6 +359,9 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   appleHealthEnabled: row.apple_health_enabled ?? false,
   appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
   appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
+  aiGenerationsUsedCount: options?.includePrivateFields
+    ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
+    : undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -547,8 +555,9 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
   );
   const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
 
+  const includePrivateFields = viewerId === targetUserId;
   return {
-    ...mapUserRow(user),
+    ...mapUserRow(user, { includePrivateFields }),
     ...counts,
     ...stats,
     workoutsThisWeek,
@@ -798,7 +807,7 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
     const counts = await fetchRelationshipCounts(userId);
     const stats = await fetchWorkoutStats(userId);
     return res.json({
-      ...mapUserRow(updated),
+      ...mapUserRow(updated, { includePrivateFields: true }),
       ...counts,
       ...stats,
       friendsPreview: await fetchMutualFriends(userId, 12),

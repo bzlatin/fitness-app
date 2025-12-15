@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendSquadActivityNotification = exports.processNotifications = void 0;
+exports.sendFriendAcceptanceNotification = exports.sendFriendRequestNotification = exports.sendSquadActivityNotification = exports.processNotifications = void 0;
 const db_1 = require("../db");
 const expo_server_sdk_1 = require("expo-server-sdk");
-const nanoid_1 = require("nanoid");
-const nanoid = (0, nanoid_1.customAlphabet)("0123456789abcdefghijklmnopqrstuvwxyz", 12);
+const id_1 = require("../utils/id");
+const nanoid = (0, id_1.createIdGenerator)("0123456789abcdefghijklmnopqrstuvwxyz", 12);
 const expo = new expo_server_sdk_1.Expo();
 /**
  * Check if current time is within quiet hours (local to server timezone)
@@ -358,3 +358,71 @@ const sendSquadActivityNotification = async (userId, activityType, data) => {
     }
 };
 exports.sendSquadActivityNotification = sendSquadActivityNotification;
+/**
+ * Send notification when someone sends a friend request
+ */
+const sendFriendRequestNotification = async (targetUserId, requesterUserId, requesterName, requesterHandle) => {
+    const userResult = await (0, db_1.query)(`
+    SELECT
+      id,
+      name,
+      email,
+      weekly_goal as "weeklyGoal",
+      push_token as "pushToken",
+      notification_preferences as "notificationPreferences"
+    FROM users
+    WHERE id = $1
+    `, [targetUserId]);
+    if (!userResult.rows.length)
+        return;
+    const user = userResult.rows[0];
+    // Always send social notifications (not governed by squad activity preference)
+    await sendNotification(user, {
+        type: "friend_request",
+        triggerReason: "new_follower",
+        title: "New friend request 👋",
+        body: requesterHandle
+            ? `${requesterName} (${requesterHandle}) wants to connect`
+            : `${requesterName} wants to connect`,
+        data: {
+            requesterId: requesterUserId,
+            requesterName,
+            requesterHandle,
+        },
+    });
+};
+exports.sendFriendRequestNotification = sendFriendRequestNotification;
+/**
+ * Send notification when someone accepts your friend request
+ */
+const sendFriendAcceptanceNotification = async (originalRequesterId, acceptorUserId, acceptorName, acceptorHandle) => {
+    const userResult = await (0, db_1.query)(`
+    SELECT
+      id,
+      name,
+      email,
+      weekly_goal as "weeklyGoal",
+      push_token as "pushToken",
+      notification_preferences as "notificationPreferences"
+    FROM users
+    WHERE id = $1
+    `, [originalRequesterId]);
+    if (!userResult.rows.length)
+        return;
+    const user = userResult.rows[0];
+    // Always send social notifications
+    await sendNotification(user, {
+        type: "friend_acceptance",
+        triggerReason: "request_accepted",
+        title: "Friend request accepted! 🎉",
+        body: acceptorHandle
+            ? `${acceptorName} (${acceptorHandle}) accepted your friend request`
+            : `${acceptorName} accepted your friend request`,
+        data: {
+            acceptorId: acceptorUserId,
+            acceptorName,
+            acceptorHandle,
+        },
+    });
+};
+exports.sendFriendAcceptanceNotification = sendFriendAcceptanceNotification;

@@ -15,7 +15,7 @@ interface UpgradePromptProps {
 
 const DEFAULT_BENEFITS = [
   "Unlimited workout templates",
-  "AI workout generation",
+  "Smart workout generator",
   "Fatigue & recovery tracking",
   "Smart progression suggestions",
 ];
@@ -27,7 +27,7 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   visible,
   onClose,
   onUpgrade,
-  feature = "AI Workout Generation",
+  feature = "Smart Workouts",
   benefits = DEFAULT_BENEFITS,
 }) => {
   const navigation = useNavigation<RootNavigation>();

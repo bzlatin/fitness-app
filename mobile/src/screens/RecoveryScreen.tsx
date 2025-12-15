@@ -409,7 +409,7 @@ const RecoveryScreen = () => {
               Recovery insights require Pro
             </Text>
             <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
-              Upgrade to Pro to unlock fatigue intelligence, per-muscle readiness, and AI painting
+              Upgrade to Pro to unlock fatigue intelligence, per-muscle readiness, and smart insights
               of your recovery window.
             </Text>
             <Pressable
@@ -554,7 +554,7 @@ const RecoveryScreen = () => {
                 </Text>
               </View>
               <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
-                Get detailed readiness percentages for each muscle, view your exercise history, and receive AI-powered training recommendations.
+                Get detailed readiness percentages for each muscle, view your exercise history, and receive smart training recommendations.
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                 <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
@@ -564,7 +564,7 @@ const RecoveryScreen = () => {
                   <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Exercise history</Text>
                 </View>
                 <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ AI recommendations</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Smart recommendations</Text>
                 </View>
               </View>
               <Pressable
@@ -835,7 +835,7 @@ const RecoveryScreen = () => {
               </Text>
             </View>
             <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
-              Tap any muscle to see detailed readiness percentages, recent exercises, and get AI-powered training recommendations.
+              Tap any muscle to see detailed readiness percentages, recent exercises, and get smart training recommendations.
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
               <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
@@ -845,7 +845,7 @@ const RecoveryScreen = () => {
                 <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Exercise history</Text>
               </View>
               <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "30" }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ AI recommendations</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>✓ Smart recommendations</Text>
               </View>
             </View>
             <Pressable

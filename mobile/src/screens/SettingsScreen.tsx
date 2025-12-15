@@ -1171,7 +1171,7 @@ const SettingsScreen = () => {
             }`
           : ""
       }`
-    : "Free · Upgrade for unlimited templates and AI";
+    : "Free · Upgrade for unlimited templates and smart workouts";
 
   return (
     <ScreenContainer

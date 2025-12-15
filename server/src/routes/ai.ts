@@ -2,9 +2,9 @@ import { Router } from "express";
 import { getAIProvider, MuscleFatigueData, WorkoutGenerationParams } from "../services/ai";
 import { getFatigueScores, getRecentWorkouts, getTrainingRecommendations } from "../services/fatigue";
 import { determineNextInCycle } from "../services/ai/workoutPrompts";
-import { requireProPlan } from "../middleware/planLimits";
+import { checkAiWorkoutGenerationLimit, requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
-import { nanoid } from "nanoid";
+import { generateId } from "../utils/id";
 import { fetchExerciseCatalog, ExerciseMeta } from "../utils/exerciseCatalog";
 import { loadExercisesJson } from "../utils/exerciseData";
 import { createLogger } from "../utils/logger";
@@ -173,11 +173,14 @@ const deriveFocusName = (specificRequest?: string) => {
  */
 router.post(
   "/generate-workout",
-  requireProPlan,
   aiGenerateLimiter,
   validateBody(generateWorkoutBodySchema),
+  checkAiWorkoutGenerationLimit,
   async (req, res) => {
   const userId = res.locals.userId;
+  const reservedFreeGeneration = Boolean(
+    res.locals.aiFreeWorkoutGenerationReserved
+  );
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -376,7 +379,7 @@ router.post(
       VALUES ($1, $2, $3, $4, $5, NOW())
     `,
       [
-        nanoid(),
+        generateId(),
         userId,
         "workout",
         JSON.stringify({ requestedSplit, specificRequest }),
@@ -396,11 +399,28 @@ router.post(
   } catch (error) {
     log.error("Error generating workout", { error, userId });
 
+    if (reservedFreeGeneration) {
+      query(
+        `
+          UPDATE users
+          SET ai_generations_used_count = GREATEST(ai_generations_used_count - 1, 0)
+          WHERE id = $1
+        `,
+        [userId]
+      ).catch((rollbackError) => {
+        log.warn("Failed to roll back reserved AI generation", {
+          rollbackError,
+          userId,
+        });
+      });
+    }
+
     // Check if it's an OpenAI API error
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
       return res.status(500).json({
-        error: "AI service not configured",
-        message: "The AI workout generation service is not properly configured. Please contact support.",
+        error: "Workout service not configured",
+        message:
+          "The smart workout generation service is not properly configured. Please contact support.",
       });
     }
 
@@ -472,7 +492,7 @@ router.post(
     if (!result || !result.exerciseId) {
       return res.status(404).json({
         error: "No suitable alternative found",
-        message: "AI could not find a suitable replacement for this exercise",
+        message: "Could not find a suitable replacement for this exercise",
       });
     }
 
@@ -483,7 +503,7 @@ router.post(
       VALUES ($1, $2, $3, $4, $5, NOW())
     `,
       [
-        nanoid(),
+        generateId(),
         userId,
         "exercise_swap",
         JSON.stringify({ exerciseId, exerciseName, reason }),
@@ -505,8 +525,9 @@ router.post(
 
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
       return res.status(500).json({
-        error: "AI service not configured",
-        message: "The AI exercise swap service is not properly configured. Please contact support.",
+        error: "Workout service not configured",
+        message:
+          "The smart exercise swap service is not properly configured. Please contact support.",
       });
     }
 

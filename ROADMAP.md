@@ -1,6 +1,6 @@
 # Push/Pull Fitness App - Feature Roadmap
 
-> Last Updated: 2025-12-06
+> Last Updated: 2025-12-14
 > Status: Phase 1-4 complete — Phase 4.4 (Retention & Feedback) 🎯 In progress (Profile/Settings + Streaks shipped) — Phase 5 (Marketing & Growth) ▶️ On deck after 4.4
 
 ## Product Vision
@@ -17,6 +17,7 @@ Build a social-first fitness app that combines intelligent workout programming w
 - ✅ Full squad features (create, join, share, feed)
 - ✅ Follow/followers social system
 - ✅ Up to 3 saved workout templates
+- ✅ 1 free AI workout generation (lifetime)
 - ✅ Basic analytics (volume, streaks, calendar)
 - ✅ Complete exercise library access
 - ✅ Workout history tracking
@@ -2030,4 +2031,5 @@ These features are planned for implementation after the initial app launch and w
 - **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
 - **v1.6.3**: Workout template share links (native share sheet + clipboard, shared template preview, one-tap copy, creator analytics + signup attribution)
 - **v1.6.4**: Logging + PII cleanup (server log levels + redaction; gated mobile debug logs)
+- **v1.6.5**: Free-tier AI trial (1 lifetime AI workout generation + paywall copy)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)

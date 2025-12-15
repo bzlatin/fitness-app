@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkCustomExerciseLimit = exports.checkTemplateLimit = exports.requireProPlan = void 0;
+exports.checkCustomExerciseLimit = exports.checkTemplateLimit = exports.checkAiWorkoutGenerationLimit = exports.requireProPlan = void 0;
 const db_1 = require("../db");
 /**
  * Middleware to enforce Pro plan requirement
@@ -45,6 +45,81 @@ const requireProPlan = async (req, res, next) => {
     }
 };
 exports.requireProPlan = requireProPlan;
+/**
+ * Gate AI workout generation.
+ * - Pro/lifetime: allowed (must not be expired)
+ * - Free: 1 lifetime AI workout generation
+ *
+ * Note: for free users, this reserves the one-time generation up-front to avoid
+ * concurrent requests consuming multiple "free" generations.
+ * The caller should roll back the reservation if generation fails.
+ */
+const checkAiWorkoutGenerationLimit = async (_req, res, next) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const userResult = await (0, db_1.query)(`
+        SELECT
+          plan,
+          plan_expires_at,
+          COALESCE(ai_generations_used_count, 0) as ai_generations_used_count
+        FROM users
+        WHERE id = $1
+      `, [userId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        const user = userResult.rows[0];
+        const plan = user.plan ?? "free";
+        // Pro/lifetime users must have an active subscription (or lifetime access)
+        if (plan === "pro" || plan === "lifetime") {
+            if (user.plan_expires_at) {
+                const expiresAt = new Date(user.plan_expires_at);
+                if (expiresAt < new Date()) {
+                    return res.status(403).json({
+                        error: "Pro plan expired",
+                        message: "Your Pro subscription has expired. Please renew to continue using this feature.",
+                        requiresUpgrade: true,
+                    });
+                }
+            }
+            return next();
+        }
+        const FREE_AI_GENERATION_LIMIT = 1;
+        const used = Math.max(0, Number(user.ai_generations_used_count ?? 0));
+        if (used >= FREE_AI_GENERATION_LIMIT) {
+            return res.status(403).json({
+                error: "Free AI workout used",
+                message: "You've used your free AI workout. Upgrade for unlimited!",
+                requiresUpgrade: true,
+            });
+        }
+        // Reserve the free generation so concurrent requests can't double-spend it.
+        const reserve = await (0, db_1.query)(`
+        UPDATE users
+        SET ai_generations_used_count = ai_generations_used_count + 1
+        WHERE id = $1
+          AND ai_generations_used_count < $2
+        RETURNING ai_generations_used_count
+      `, [userId, FREE_AI_GENERATION_LIMIT]);
+        if (reserve.rows.length === 0) {
+            return res.status(403).json({
+                error: "Free AI workout used",
+                message: "You've used your free AI workout. Upgrade for unlimited!",
+                requiresUpgrade: true,
+            });
+        }
+        res.locals.aiFreeWorkoutGenerationReserved = true;
+        return next();
+    }
+    catch (error) {
+        console.error("[PlanLimits] Error checking AI generation limit:", error);
+        return res.status(500).json({ error: "Failed to verify AI generation limit" });
+    }
+};
+exports.checkAiWorkoutGenerationLimit = checkAiWorkoutGenerationLimit;
 /**
  * Check if user can create another template (free tier limit: 3)
  */

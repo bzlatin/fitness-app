@@ -1,6 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
-import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useState } from "react";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import WorkoutTemplateCard from "../components/workouts/WorkoutTemplateCard";
 import {
@@ -10,7 +11,11 @@ import {
 import { colors } from "../theme/colors";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { canCreateAnotherTemplate } from "../utils/featureGating";
+import {
+  canCreateAnotherTemplate,
+  canGenerateAiWorkout,
+  getAiWorkoutGenerationsRemaining,
+} from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { fontFamilies } from "../theme/typography";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
@@ -21,8 +26,16 @@ const MyWorkoutsScreen = () => {
   const duplicateMutation = useDuplicateTemplate();
   const { user } = useCurrentUser();
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallTrigger, setPaywallTrigger] = useState<"templates" | "ai" | null>(
+    null
+  );
   const subscriptionAccess = useSubscriptionAccess();
   const hasProAccess = subscriptionAccess.hasProAccess;
+  const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+  const canUseAi = canGenerateAiWorkout(user, { hasProAccess });
+  const aiFreeAvailable = !hasProAccess && aiRemaining > 0;
+  const aiFreeUsed = !hasProAccess && aiRemaining === 0;
+  const [showAiTooltip, setShowAiTooltip] = useState(false);
 
   const templates = data ?? [];
   const templateLimitReached = user
@@ -31,8 +44,23 @@ const MyWorkoutsScreen = () => {
   const templateLimit = 3;
   const templatesUsed = templates.length;
 
+  useEffect(() => {
+    const load = async () => {
+      if (!aiFreeAvailable) {
+        setShowAiTooltip(false);
+        return;
+      }
+      const dismissed = await AsyncStorage.getItem(
+        "push-pull.ai-free-tooltip-dismissed"
+      );
+      setShowAiTooltip(!dismissed);
+    };
+    void load();
+  }, [aiFreeAvailable]);
+
   const handleCreateTemplate = () => {
     if (templateLimitReached) {
+      setPaywallTrigger("templates");
       setShowPaywallModal(true);
       return;
     }
@@ -40,7 +68,8 @@ const MyWorkoutsScreen = () => {
   };
 
   const handleGenerateWithAI = () => {
-    if (!hasProAccess) {
+    if (!canUseAi) {
+      setPaywallTrigger("ai");
       setShowPaywallModal(true);
       return;
     }
@@ -120,6 +149,83 @@ const MyWorkoutsScreen = () => {
         </View>
       )}
 
+      {/* AI Free-Tier Tooltip */}
+      {showAiTooltip && aiFreeAvailable && (
+        <Pressable
+          onPress={handleGenerateWithAI}
+          style={({ pressed }) => ({
+            backgroundColor: `${colors.primary}12`,
+            borderRadius: 14,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: `${colors.primary}35`,
+            marginBottom: 12,
+            opacity: pressed ? 0.95 : 1,
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 12,
+          })}
+        >
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: `${colors.primary}22`,
+              alignItems: "center",
+              justifyContent: "center",
+              marginTop: 2,
+            }}
+          >
+            <Text style={{ fontSize: 18 }}>✨</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.bold,
+                  fontSize: 14,
+                }}
+              >
+                Try a smart workout
+              </Text>
+              <Pressable
+                onPress={async () => {
+                  await AsyncStorage.setItem(
+                    "push-pull.ai-free-tooltip-dismissed",
+                    "1"
+                  );
+                  setShowAiTooltip(false);
+                }}
+                style={({ pressed }) => ({
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: pressed ? `${colors.primary}1F` : "transparent",
+                })}
+                hitSlop={10}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: 16 }}>✕</Text>
+              </Pressable>
+            </View>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+              Generate 1 workout made for you. Upgrade any time for unlimited.
+            </Text>
+          </View>
+        </Pressable>
+      )}
+
       {/* AI Generation Button (Pro Feature) */}
       <Pressable
         onPress={handleGenerateWithAI}
@@ -136,7 +242,7 @@ const MyWorkoutsScreen = () => {
       >
         <Text style={{ fontSize: 18, marginRight: 8 }}>🤖</Text>
         <Text style={{ color: "#0B1220", fontWeight: "700", fontSize: 16 }}>
-          Generate with AI
+          Generate for me
         </Text>
         {!hasProAccess && (
           <View
@@ -149,7 +255,7 @@ const MyWorkoutsScreen = () => {
             }}
           >
             <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700" }}>
-              PRO
+              {aiFreeAvailable ? "1 FREE" : "PRO"}
             </Text>
           </View>
         )}
@@ -242,7 +348,17 @@ const MyWorkoutsScreen = () => {
 
       <PaywallComparisonModal
         visible={showPaywallModal}
-        onClose={() => setShowPaywallModal(false)}
+        onClose={() => {
+          setShowPaywallModal(false);
+          setPaywallTrigger(null);
+        }}
+        triggeredBy={paywallTrigger ?? undefined}
+        aiFreeUsed={paywallTrigger === "ai" ? aiFreeUsed : undefined}
+        aiFreeRemaining={
+          paywallTrigger === "ai" && Number.isFinite(aiRemaining)
+            ? aiRemaining
+            : undefined
+        }
       />
     </ScreenContainer>
   );
