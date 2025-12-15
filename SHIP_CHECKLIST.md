@@ -6,6 +6,7 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 
 ## How to ship:
 
+- cd mobile
 - npx eas-cli build --platform ios --profile production --local
 - npx eas-cli submit --platform ios --profile production --path <path>
 
