@@ -1994,6 +1994,12 @@ const WorkoutSessionScreen = () => {
   };
 
   const startRestTimer = (seconds?: number) => {
+    // If timer is explicitly set to 0, skip the timer entirely
+    if (seconds === 0) {
+      setRestRemaining(null);
+      setRestEndsAt(null);
+      return;
+    }
     const duration = Math.max(10, seconds ?? DEFAULT_WORKING_REST_SECONDS);
     setRestRemaining(duration);
     setRestEndsAt(Date.now() + duration * 1000);

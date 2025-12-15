@@ -199,13 +199,13 @@ const TimerAdjustmentModal = ({
             <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
               QUICK PRESETS
             </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <Pressable
-                onPress={() => applyPreset(45)}
+                onPress={() => applyPreset(0)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
                   borderRadius: 10,
                   backgroundColor: colors.surfaceMuted,
                   borderWidth: 1,
@@ -214,11 +214,28 @@ const TimerAdjustmentModal = ({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Ionicons name="flame-outline" size={20} color={colors.secondary} />
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
-                  Warm-up
+                <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  Off
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(45)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="flame-outline" size={18} color={colors.secondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
                   0:45
                 </Text>
               </Pressable>
@@ -226,9 +243,9 @@ const TimerAdjustmentModal = ({
               <Pressable
                 onPress={() => applyPreset(90)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
                   borderRadius: 10,
                   backgroundColor: colors.surfaceMuted,
                   borderWidth: 1,
@@ -237,11 +254,8 @@ const TimerAdjustmentModal = ({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Ionicons name="barbell-outline" size={20} color={colors.primary} />
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
-                  Working
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                <Ionicons name="barbell-outline" size={18} color={colors.primary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
                   1:30
                 </Text>
               </Pressable>
@@ -249,9 +263,9 @@ const TimerAdjustmentModal = ({
               <Pressable
                 onPress={() => applyPreset(180)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
                   borderRadius: 10,
                   backgroundColor: colors.surfaceMuted,
                   borderWidth: 1,
@@ -260,11 +274,8 @@ const TimerAdjustmentModal = ({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Ionicons name="fitness-outline" size={20} color="#F97316" />
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
-                  Heavy
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                <Ionicons name="fitness-outline" size={18} color="#F97316" />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
                   3:00
                 </Text>
               </Pressable>
@@ -272,9 +283,9 @@ const TimerAdjustmentModal = ({
               <Pressable
                 onPress={() => applyPreset(300)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
                   borderRadius: 10,
                   backgroundColor: colors.surfaceMuted,
                   borderWidth: 1,
@@ -283,11 +294,8 @@ const TimerAdjustmentModal = ({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Ionicons name="body-outline" size={20} color="#A78BFA" />
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
-                  Stretch
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                <Ionicons name="body-outline" size={18} color="#A78BFA" />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
                   5:00
                 </Text>
               </Pressable>
