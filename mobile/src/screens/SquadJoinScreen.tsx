@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, Pressable, ActivityIndicator, Image } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import { CommonActions, useRoute, useNavigation } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
@@ -37,6 +37,38 @@ const SquadJoinScreen = () => {
   const [alreadyMember, setAlreadyMember] = useState(false);
   const [preview, setPreview] = useState<SquadInvitePreview | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
+
+  const resetToSquadTab = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "RootTabs", params: { screen: "Squad" } }],
+      })
+    );
+  }, [navigation]);
+
+  const resetToSquadDetail = useCallback(
+    (squadId: string) => {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 1,
+          routes: [
+            { name: "RootTabs", params: { screen: "Squad" } },
+            { name: "SquadDetail", params: { squadId } },
+          ],
+        })
+      );
+    },
+    [navigation]
+  );
+
+  const safeGoBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    resetToSquadTab();
+  }, [navigation, resetToSquadTab]);
 
   const loadPreview = useCallback(async () => {
     try {
@@ -148,7 +180,7 @@ const SquadJoinScreen = () => {
       ]);
 
       // Navigate to Squad tab on success
-      navigation.navigate("RootTabs", { screen: "Squad" });
+      resetToSquadTab();
     } catch (err) {
       console.error("Failed to join squad", err);
       setError("Failed to join squad");
@@ -238,7 +270,7 @@ const SquadJoinScreen = () => {
             ) : null}
             {alreadyMember && preview ? (
               <Pressable
-                onPress={() => navigation.navigate("SquadDetail", { squadId: preview.squadId })}
+                onPress={() => resetToSquadDetail(preview.squadId)}
                 style={({ pressed }) => ({
                   flex: 1,
                   paddingVertical: 14,
@@ -262,7 +294,7 @@ const SquadJoinScreen = () => {
               </Pressable>
             ) : null}
             <Pressable
-              onPress={() => navigation.goBack()}
+              onPress={safeGoBack}
               style={({ pressed }) => ({
                 flex: authRequired || alreadyMember ? 1 : undefined,
                 paddingVertical: 14,
@@ -409,7 +441,7 @@ const SquadJoinScreen = () => {
         </Pressable>
 
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={safeGoBack}
           disabled={joining}
           style={({ pressed }) => ({
             paddingVertical: 16,
