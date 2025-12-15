@@ -626,6 +626,9 @@ const WorkoutSessionScreen = () => {
   const [sessionRestTimes, setSessionRestTimes] = useState<
     Record<string, number>
   >({});
+  const [sessionWarmupRestTimes, setSessionWarmupRestTimes] = useState<
+    Record<string, number>
+  >({});
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [showTopGradient, setShowTopGradient] = useState(false);
   const [showBottomGradient, setShowBottomGradient] = useState(true);
@@ -659,6 +662,7 @@ const WorkoutSessionScreen = () => {
   const activeSetIdRef = useRef<string | null>(null);
   const setsRef = useRef<WorkoutSet[]>([]);
   const sessionRestTimesRef = useRef<Record<string, number>>({});
+  const sessionWarmupRestTimesRef = useRef<Record<string, number>>({});
   const loggedSetIdsRef = useRef<Set<string>>(new Set());
   // Lock to prevent duplicate processing of pending log set actions
   const isProcessingLogSetRef = useRef<boolean>(false);
@@ -695,6 +699,10 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     sessionRestTimesRef.current = sessionRestTimes;
   }, [sessionRestTimes]);
+
+  useEffect(() => {
+    sessionWarmupRestTimesRef.current = sessionWarmupRestTimes;
+  }, [sessionWarmupRestTimes]);
 
   useEffect(() => {
     loggedSetIdsRef.current = loggedSetIds;
@@ -2107,6 +2115,7 @@ const WorkoutSessionScreen = () => {
     const group = groupedSets.find((g) => g.key === groupKey);
     // Use ref to get current session rest times to avoid stale closure
     const currentSessionRestTimes = sessionRestTimesRef.current;
+    const currentWarmupRestTimes = sessionWarmupRestTimesRef.current;
     const isWarmupSet = (currentSet.setKind ?? "working") === "warmup";
 
     // Calculate smart default rest time based on set intensity and type
@@ -2119,7 +2128,7 @@ const WorkoutSessionScreen = () => {
     // Priority: user-adjusted session rest times > passed restSeconds (per-set) > smart defaults
     // Warm-up sets intentionally skip template rest to keep their timer shorter by default
     const fallbackRest = isWarmupSet
-      ? currentSessionRestTimes[groupKey] ?? restSeconds
+      ? currentWarmupRestTimes[groupKey] ?? restSeconds
       : currentSessionRestTimes[groupKey] ??
         restSeconds ??
         currentSet.targetRestSeconds;
@@ -2363,11 +2372,21 @@ const WorkoutSessionScreen = () => {
     setSwapExerciseKey(null);
   };
 
-  const handleAdjustTimer = (exerciseKey: string, newRestSeconds: number) => {
+  const handleAdjustTimer = (
+    exerciseKey: string,
+    newWorkingRestSeconds: number,
+    newWarmupRestSeconds?: number
+  ) => {
     setSessionRestTimes((prev) => ({
       ...prev,
-      [exerciseKey]: newRestSeconds,
+      [exerciseKey]: newWorkingRestSeconds,
     }));
+    if (newWarmupRestSeconds !== undefined) {
+      setSessionWarmupRestTimes((prev) => ({
+        ...prev,
+        [exerciseKey]: newWarmupRestSeconds,
+      }));
+    }
   };
 
   const handleAddExerciseToSession = (exerciseForm: any) => {
@@ -3236,10 +3255,22 @@ const WorkoutSessionScreen = () => {
         <TimerAdjustmentModal
           visible={!!timerAdjustExerciseKey}
           onClose={() => setTimerAdjustExerciseKey(null)}
-          currentSeconds={timerAdjustGroup.restSeconds ?? DEFAULT_WORKING_REST_SECONDS}
+          currentWorkingSeconds={
+            sessionRestTimes[timerAdjustGroup.key] ??
+            timerAdjustGroup.restSeconds ??
+            DEFAULT_WORKING_REST_SECONDS
+          }
+          currentWarmupSeconds={
+            sessionWarmupRestTimes[timerAdjustGroup.key] ?? DEFAULT_WARMUP_REST_SECONDS
+          }
+          showWarmupOption={showWarmupSets}
           exerciseName={timerAdjustGroup.name}
-          onSave={(seconds) => {
-            handleAdjustTimer(timerAdjustExerciseKey!, seconds);
+          onSave={({ workingSeconds, warmupSeconds }) => {
+            handleAdjustTimer(
+              timerAdjustExerciseKey!,
+              workingSeconds,
+              warmupSeconds
+            );
             setTimerAdjustExerciseKey(null);
           }}
         />
@@ -3398,6 +3429,7 @@ const WorkoutSessionScreen = () => {
                   restRemaining={restRemaining}
                   lastLoggedSetId={lastLoggedSetId}
                   sessionRestSeconds={sessionRestTimes[group.key]}
+                  warmupRestSeconds={sessionWarmupRestTimes[group.key]}
                   onUndo={undoSet}
                   onSwap={() => setSwapExerciseKey(group.key)}
                   onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
@@ -3879,6 +3911,7 @@ type ExerciseCardProps = {
   restRemaining: number | null;
   lastLoggedSetId: string | null;
   sessionRestSeconds?: number;
+  warmupRestSeconds?: number;
   onUndo: (setId: string) => void;
   onSwap: () => void;
   onAdjustTimer: () => void;
@@ -3909,6 +3942,7 @@ const ExerciseCard = ({
   restRemaining,
   lastLoggedSetId,
   sessionRestSeconds,
+  warmupRestSeconds,
   onUndo,
   onSwap,
   onAdjustTimer,
@@ -4237,7 +4271,7 @@ const ExerciseCard = ({
             // Use a shorter default rest for warm-ups unless the user explicitly set a session timer.
             const restSecondsForSet =
               set.setKind === "warmup"
-                ? sessionRestSeconds ?? DEFAULT_WARMUP_REST_SECONDS
+                ? warmupRestSeconds ?? DEFAULT_WARMUP_REST_SECONDS
                 : exerciseRestSeconds;
 
             return (
