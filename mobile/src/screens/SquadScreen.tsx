@@ -33,6 +33,7 @@ import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { RootTabParamList } from "../navigation/types";
+import { LANDING_BASE_URL } from "../config/legal";
 import {
   followUser,
   getConnections,
@@ -558,14 +559,14 @@ const {
 
   const handleCopyInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `push-pull://squad/join/${currentInviteCode}`;
+    const link = `${LANDING_BASE_URL}/squad/join/${currentInviteCode}`;
     await Clipboard.setStringAsync(link);
     Alert.alert("Copied!", "Invite link copied to clipboard");
   };
 
   const handleShareInviteLink = async () => {
     if (!currentInviteCode) return;
-    const link = `push-pull://squad/join/${currentInviteCode}`;
+    const link = `${LANDING_BASE_URL}/squad/join/${currentInviteCode}`;
     const selectedSquad = squads.find((s) => s.id === inviteSquadId);
 
     try {
@@ -2084,9 +2085,9 @@ const {
                                           color: colors.textPrimary,
                                           fontFamily: fontFamilies.regular,
                                         }}
+                                        numberOfLines={1}
                                       >
-                                        push-pull://squad/join/
-                                        {currentInviteCode}
+                                        {LANDING_BASE_URL}/squad/join/{currentInviteCode}
                                       </Text>
                                     </View>
                                     <View
