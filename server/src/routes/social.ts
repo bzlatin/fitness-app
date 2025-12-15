@@ -2571,6 +2571,7 @@ router.get("/squad-feed", async (req, res) => {
       ? req.query.squadId.trim()
       : undefined;
   let squadMembers: Set<string> | null = null;
+  let viewerSquadmates: Set<string> | null = null;
 
   try {
     if (squadId) {
@@ -2588,6 +2589,17 @@ router.get("/squad-feed", async (req, res) => {
         return res.status(403).json({ error: "Not a member of this squad" });
       }
       squadMembers = membersSet;
+    } else {
+      const squadmateRows = await query<{ user_id: string }>(
+        `
+          SELECT DISTINCT sm2.user_id
+          FROM squad_members sm1
+          JOIN squad_members sm2 ON sm2.squad_id = sm1.squad_id
+          WHERE sm1.user_id = $1
+        `,
+        [userId]
+      );
+      viewerSquadmates = new Set(squadmateRows.rows.map((row) => row.user_id));
     }
     const followingRows = await query<{ target_user_id: string }>(
       `SELECT target_user_id FROM follows WHERE user_id = $1`,
@@ -2629,6 +2641,13 @@ router.get("/squad-feed", async (req, res) => {
         if (squadMembers) {
           return row.visibility === "squad" && squadMembers.has(row.user_id);
         }
+        if (row.visibility === "squad") {
+          return (
+            row.user_id === userId ||
+            mutual.has(row.user_id) ||
+            Boolean(viewerSquadmates?.has(row.user_id))
+          );
+        }
         return canView(row.user_id, row.visibility, userId, following, mutual);
       })
       .map(mapStatus);
@@ -2637,6 +2656,13 @@ router.get("/squad-feed", async (req, res) => {
       .filter((row) => {
         if (squadMembers) {
           return row.visibility === "squad" && squadMembers.has(row.user_id);
+        }
+        if (row.visibility === "squad") {
+          return (
+            row.user_id === userId ||
+            mutual.has(row.user_id) ||
+            Boolean(viewerSquadmates?.has(row.user_id))
+          );
         }
         return canView(row.user_id, row.visibility, userId, following, mutual);
       })
