@@ -52,6 +52,8 @@ export interface WorkoutTemplate {
   progressiveOverloadEnabled?: boolean;
 }
 
+export type SetDifficultyRating = "too_easy" | "just_right" | "too_hard";
+
 export interface WorkoutSet {
   id: string;
   sessionId: string;
@@ -67,6 +69,7 @@ export interface WorkoutSet {
   actualReps?: number;
   actualWeight?: number;
   rpe?: number;
+  difficultyRating?: SetDifficultyRating;
   // Cardio-specific fields
   targetDistance?: number;
   actualDistance?: number;

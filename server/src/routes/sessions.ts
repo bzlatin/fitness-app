@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
 import { pool, query } from "../db";
-import { WorkoutSession, WorkoutSet, WorkoutSource } from "../types/workouts";
+import {
+  SetDifficultyRating,
+  WorkoutSession,
+  WorkoutSet,
+  WorkoutSource,
+} from "../types/workouts";
 import { generateId } from "../utils/id";
 import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
 
@@ -19,6 +24,15 @@ const formatExerciseId = (id: string) =>
 
 const normalizeSetKind = (value: unknown): SetKind =>
   value === "warmup" ? "warmup" : "working";
+
+const normalizeDifficultyRating = (
+  value: unknown
+): SetDifficultyRating | null => {
+  if (value === "too_easy") return "too_easy";
+  if (value === "just_right") return "just_right";
+  if (value === "too_hard") return "too_hard";
+  return null;
+};
 
 const roundToIncrement = (value: number, increment: number) => {
   if (!Number.isFinite(value)) return value;
@@ -106,6 +120,7 @@ type SetRow = {
   actual_reps: number | null;
   actual_weight: string | null;
   rpe: string | null;
+  difficulty_rating: string | null;
   // Cardio-specific fields
   target_distance: string | null;
   actual_distance: string | null;
@@ -130,6 +145,8 @@ const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet =>
     actualReps: row.actual_reps ?? undefined,
     actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
     rpe: row.rpe === null ? undefined : Number(row.rpe),
+    difficultyRating:
+      normalizeDifficultyRating(row.difficulty_rating) ?? undefined,
     exerciseName,
     exerciseImageUrl: exerciseMeta?.gifUrl,
     // Cardio-specific fields
@@ -813,6 +830,9 @@ router.patch("/:id", async (req, res) => {
         await client.query(`DELETE FROM workout_sets WHERE session_id = $1`, [req.params.id]);
         for (const set of sets) {
           const setKind = normalizeSetKind(set.setKind);
+          const difficultyRating = normalizeDifficultyRating(
+            (set as Partial<WorkoutSet>).difficultyRating
+          );
           await client.query(
             `
               INSERT INTO workout_sets (
@@ -827,6 +847,7 @@ router.patch("/:id", async (req, res) => {
                 actual_reps,
                 actual_weight,
                 rpe,
+                difficulty_rating,
                 target_distance,
                 actual_distance,
                 target_incline,
@@ -834,7 +855,7 @@ router.patch("/:id", async (req, res) => {
                 target_duration_minutes,
                 actual_duration_minutes
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             `,
             [
               set.id ?? generateId(),
@@ -848,6 +869,7 @@ router.patch("/:id", async (req, res) => {
               set.actualReps ?? null,
               set.actualWeight ?? null,
               set.rpe ?? null,
+              difficultyRating,
               set.targetDistance ?? null,
               set.actualDistance ?? null,
               set.targetIncline ?? null,
@@ -1056,6 +1078,9 @@ router.post("/manual", async (req, res) => {
       for (const [index, set] of sets.entries()) {
         if (!set.exerciseId) continue;
         const setKind = normalizeSetKind(set.setKind);
+        const difficultyRating = normalizeDifficultyRating(
+          (set as Partial<WorkoutSet>).difficultyRating
+        );
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1070,6 +1095,7 @@ router.post("/manual", async (req, res) => {
               actual_reps,
               actual_weight,
               rpe,
+              difficulty_rating,
               target_distance,
               actual_distance,
               target_incline,
@@ -1077,7 +1103,7 @@ router.post("/manual", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           `,
           [
             set.id ?? generateId(),
@@ -1091,6 +1117,7 @@ router.post("/manual", async (req, res) => {
             set.actualReps ?? null,
             set.actualWeight ?? null,
             set.rpe ?? null,
+            difficultyRating,
             set.targetDistance ?? null,
             set.actualDistance ?? null,
             set.targetIncline ?? null,
@@ -1174,6 +1201,7 @@ router.post("/:id/duplicate", async (req, res) => {
 
       for (const set of session.sets) {
         const setKind = normalizeSetKind(set.setKind);
+        const difficultyRating = normalizeDifficultyRating(set.difficultyRating);
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1188,6 +1216,7 @@ router.post("/:id/duplicate", async (req, res) => {
               actual_reps,
               actual_weight,
               rpe,
+              difficulty_rating,
               target_distance,
               actual_distance,
               target_incline,
@@ -1195,7 +1224,7 @@ router.post("/:id/duplicate", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           `,
           [
             generateId(),
@@ -1209,6 +1238,7 @@ router.post("/:id/duplicate", async (req, res) => {
             set.actualReps ?? null,
             set.actualWeight ?? null,
             set.rpe ?? null,
+            difficultyRating,
             set.targetDistance ?? null,
             set.actualDistance ?? null,
             set.targetIncline ?? null,

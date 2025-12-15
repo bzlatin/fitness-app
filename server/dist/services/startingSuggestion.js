@@ -25,7 +25,7 @@ const getStartingSuggestion = async (userId, exerciseId) => {
     if (!meta)
         return null;
     const latestSame = await (0, db_1.query)(`
-      SELECT ws.actual_weight, ws.actual_reps
+      SELECT ws.actual_weight, ws.actual_reps, ws.difficulty_rating
       FROM workout_sets ws
       JOIN workout_sessions s ON s.id = ws.session_id
       WHERE s.user_id = $1
@@ -47,11 +47,26 @@ const getStartingSuggestion = async (userId, exerciseId) => {
             ? Math.round(sameRow.actual_reps)
             : undefined;
         if (typeof weight === "number" && Number.isFinite(weight) && weight > 0) {
+            const difficulty = sameRow.difficulty_rating === "too_easy" ||
+                sameRow.difficulty_rating === "just_right" ||
+                sameRow.difficulty_rating === "too_hard"
+                ? sameRow.difficulty_rating
+                : null;
+            const baseWeight = roundToIncrement(weight, 2.5);
+            const adjustedWeight = difficulty === "too_easy"
+                ? roundToIncrement(baseWeight + 2.5, 2.5)
+                : difficulty === "too_hard"
+                    ? roundToIncrement(Math.max(2.5, baseWeight - 2.5), 2.5)
+                    : baseWeight;
             return {
                 exerciseId,
-                suggestedWeight: roundToIncrement(weight, 2.5),
+                suggestedWeight: adjustedWeight,
                 suggestedReps: reps ? Math.max(1, reps) : undefined,
-                reason: "Based on your last time doing this exercise",
+                reason: difficulty === "too_easy"
+                    ? "Based on last time (you said it felt too easy)"
+                    : difficulty === "too_hard"
+                        ? "Based on last time (you said it felt too hard)"
+                        : "Based on your last time doing this exercise",
                 confidence: "high",
             };
         }

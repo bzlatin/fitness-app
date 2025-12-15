@@ -34,7 +34,7 @@
 
 ### Exercise Instructions
 
-- [ ] Better exercise descriptions using instructions column in exercises table
+- [] Better exercise descriptions using instructions column in exercises table
   - Add more detailed instructions in a pop up hiding in an info icon or something (setup, execution, common mistakes)
 
 ### Post-Set Feedback
@@ -42,7 +42,7 @@
 - [ ] User difficulty feedback after each set
   - Quick rating: "Too Easy / Just Right / Too Hard"
   - Use feedback to improve next workout's weight suggestions
-  - Store difficulty ratings in workout_sets table
+  - Store difficulty ratings in workout_sets table and use this data when recommending weight/reps
 
 ### Rest Timer Improvements
 

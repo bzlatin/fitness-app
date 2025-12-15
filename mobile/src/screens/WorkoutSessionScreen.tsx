@@ -38,7 +38,7 @@ import {
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
-import { WorkoutSet } from "../types/workouts";
+import { SetDifficultyRating, WorkoutSet } from "../types/workouts";
 import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
@@ -3093,6 +3093,12 @@ const WorkoutSessionScreen = () => {
                   onImagePress={() =>
                     group.imageUrl && setImagePreviewUrl(group.imageUrl)
                   }
+                  onDifficultyFeedback={(setId, rating) => {
+                    const targetSet = setsRef.current.find((s) => s.id === setId);
+                    if (targetSet) {
+                      applySetUpdates([{ ...targetSet, difficultyRating: rating }]);
+                    }
+                  }}
                 />
               </ScaleDecorator>
             )}
@@ -3171,6 +3177,8 @@ type SetInputRowProps = {
   onUndo: () => void;
   onRemove: () => void;
   canRemove: boolean;
+  showDifficultyFeedback?: boolean;
+  onDifficultyFeedback?: (rating: SetDifficultyRating) => void;
 };
 
 const SetInputRow = ({
@@ -3186,6 +3194,8 @@ const SetInputRow = ({
   onUndo,
   onRemove,
   canRemove,
+  showDifficultyFeedback,
+  onDifficultyFeedback,
 }: SetInputRowProps) => {
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
@@ -3498,6 +3508,68 @@ const SetInputRow = ({
           </View>
         </View>
       )}
+      {/* Inline difficulty feedback - shows only for logged working sets when requested */}
+      {showDifficultyFeedback && logged && !isWarmup && onDifficultyFeedback && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingTop: 4,
+          }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 12, flex: 1 }}>
+            How did it feel?
+          </Text>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <Pressable
+              onPress={() => onDifficultyFeedback("too_easy")}
+              style={({ pressed }) => ({
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: pressed ? `${colors.secondary}30` : `${colors.secondary}15`,
+                borderWidth: 1,
+                borderColor: `${colors.secondary}40`,
+              })}
+            >
+              <Text style={{ color: colors.secondary, fontSize: 11, fontWeight: "700" }}>
+                Easy
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onDifficultyFeedback("just_right")}
+              style={({ pressed }) => ({
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: pressed ? `${colors.primary}30` : `${colors.primary}15`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}40`,
+              })}
+            >
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700" }}>
+                Good
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onDifficultyFeedback("too_hard")}
+              style={({ pressed }) => ({
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: pressed ? `${colors.error}30` : `${colors.error}15`,
+                borderWidth: 1,
+                borderColor: `${colors.error}40`,
+              })}
+            >
+              <Text style={{ color: colors.error, fontSize: 11, fontWeight: "700" }}>
+                Hard
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       <View
         style={{
           flexDirection: "row",
@@ -3541,6 +3613,7 @@ type ExerciseCardProps = {
   onRemoveSet: (setId: string) => void;
   onDeleteExercise: () => void;
   onImagePress: () => void;
+  onDifficultyFeedback: (setId: string, rating: SetDifficultyRating) => void;
 };
 
 const ExerciseCard = ({
@@ -3566,6 +3639,7 @@ const ExerciseCard = ({
   onRemoveSet,
   onDeleteExercise,
   onImagePress,
+  onDifficultyFeedback,
 }: ExerciseCardProps) => {
   const loggedSetsCount = group.sets.filter((s) =>
     loggedSetIds.has(s.id)
@@ -3853,7 +3927,13 @@ const ExerciseCard = ({
             </View>
           ) : null}
 
-          {group.sets.map((set, displayIndex) => (
+          {group.sets.map((set, displayIndex) => {
+            // Show difficulty feedback only for the last logged set that doesn't have a rating yet
+            const isLastLoggedInGroup = lastLoggedSetId === set.id;
+            const needsFeedback = !set.difficultyRating && set.setKind !== "warmup";
+            const showFeedback = isLastLoggedInGroup && needsFeedback && loggedSetIds.has(set.id);
+
+            return (
             <View key={set.id} style={{ gap: 8 }}>
               <SetInputRow
                 set={set}
@@ -3868,6 +3948,8 @@ const ExerciseCard = ({
                 onUndo={() => onUndo(set.id)}
                 onRemove={() => onRemoveSet(set.id)}
                 canRemove={group.sets.length > 1}
+                showDifficultyFeedback={showFeedback}
+                onDifficultyFeedback={(rating) => onDifficultyFeedback(set.id, rating)}
               />
               {restRemaining !== null && lastLoggedSetId === set.id ? (
                 <View
@@ -3908,7 +3990,8 @@ const ExerciseCard = ({
                 </View>
               ) : null}
             </View>
-          ))}
+            );
+          })}
 
           {/* Add Set button (disabled for cardio) */}
           {!isCardioGroup ? (
