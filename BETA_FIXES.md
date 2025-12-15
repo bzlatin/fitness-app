@@ -46,16 +46,16 @@
 
 ### Rest Timer Improvements
 
-- [ ] Customize rest timer for warm-ups vs working sets
+- [x] Customize rest timer for warm-ups vs working sets
 
-  - Shorter default rest for warm-up sets (60s)
-  - Longer rest for heavy sets (90-180s)
-  - Add stretch timer option
+  - Shorter default rest for warm-up sets (45s) ✅ Automatic detection
+  - Normal working sets (90s) ✅
+  - Longer rest for heavy sets (180s/3min) ✅ Smart detection based on weight and reps
+  - Add stretch timer option ✅ 5-minute preset in timer adjustment modal
+  - Added quick preset buttons: Warm-up (45s), Working (90s), Heavy (3min), Stretch (5min)
 
 - [ ] Fix rest timer chime sound
-  - **Issue**: Current low-tone chime sounds negative (like "wrong answer")
-  - **Desired**: Higher pitch, more positive/motivating sound
-  - Consider using system sounds or custom uplifting tone
+  - When music is playing it is hard to hear it - how can we fix this? Also should it play no matters users silent mode on/off? i think if headphones are in and music is playing it should play the sound no matter what.
 
 ### UI/Display Fixes
 

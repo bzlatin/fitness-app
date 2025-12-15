@@ -86,8 +86,9 @@ import { StartingSuggestion } from "../types/analytics";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const DEFAULT_WORKING_REST_SECONDS = 75;
-const DEFAULT_WARMUP_REST_SECONDS = 45;
+const DEFAULT_WORKING_REST_SECONDS = 90; // Increased from 75s to 90s for better recovery
+const DEFAULT_WARMUP_REST_SECONDS = 45; // Shorter rest for warm-up sets
+const DEFAULT_HEAVY_REST_SECONDS = 180; // 3 minutes for heavy sets (>85% estimated 1RM)
 
 const visibilityOptions: {
   value: Visibility;
@@ -1945,6 +1946,45 @@ const WorkoutSessionScreen = () => {
     return cleanup;
   }, [sessionId, activeSetId]);
 
+  /**
+   * Calculate intelligent rest time based on set intensity
+   * Uses weight progression and reps to estimate intensity
+   */
+  const calculateSmartRestTime = (
+    currentSet: WorkoutSet,
+    groupedSets: WorkoutSet[],
+    setKind: "warmup" | "working"
+  ): number => {
+    if (setKind === "warmup") {
+      return DEFAULT_WARMUP_REST_SECONDS;
+    }
+
+    // Get all completed sets with weight for this exercise
+    const completedSetsWithWeight = groupedSets
+      .filter((s) => s.actualReps != null && s.actualWeight != null && s.actualWeight > 0)
+      .sort((a, b) => (b.actualWeight ?? 0) - (a.actualWeight ?? 0));
+
+    if (completedSetsWithWeight.length === 0) {
+      return DEFAULT_WORKING_REST_SECONDS;
+    }
+
+    const currentWeight = currentSet.actualWeight ?? 0;
+    const maxWeight = completedSetsWithWeight[0].actualWeight ?? 0;
+
+    // If current set is close to max weight (within 10%), assume heavy set
+    const isHeavySet = maxWeight > 0 && currentWeight >= maxWeight * 0.9;
+
+    // Also consider low reps as indicator of heavy set
+    const currentReps = currentSet.actualReps ?? 0;
+    const isLowRep = currentReps > 0 && currentReps <= 5;
+
+    if (isHeavySet || isLowRep) {
+      return DEFAULT_HEAVY_REST_SECONDS; // 3 minutes for heavy sets
+    }
+
+    return DEFAULT_WORKING_REST_SECONDS; // 90 seconds for normal working sets
+  };
+
   const startRestTimer = (seconds?: number) => {
     const duration = Math.max(10, seconds ?? DEFAULT_WORKING_REST_SECONDS);
     setRestRemaining(duration);
@@ -2063,25 +2103,31 @@ const WorkoutSessionScreen = () => {
     }
 
     // Calculate rest duration (needed for both timer and widget sync)
-    // Priority: user-adjusted session rest times > passed restSeconds > template rest times
     const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
     const group = groupedSets.find((g) => g.key === groupKey);
     // Use ref to get current session rest times to avoid stale closure
     const currentSessionRestTimes = sessionRestTimesRef.current;
-    const fallbackRest =
-      currentSessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
-      restSeconds ??
-      currentSet.targetRestSeconds ??
-      restLookup[groupKey];
-    const defaultRestSeconds =
-      currentSet.setKind === "warmup"
-        ? DEFAULT_WARMUP_REST_SECONDS
-        : DEFAULT_WORKING_REST_SECONDS;
+    const isWarmupSet = (currentSet.setKind ?? "working") === "warmup";
+
+    // Calculate smart default rest time based on set intensity and type
+    const smartDefaultRestSeconds = calculateSmartRestTime(
+      updated,
+      group?.sets ?? [],
+      currentSet.setKind ?? "working"
+    );
+
+    // Priority: user-adjusted session rest times > passed restSeconds (per-set) > smart defaults
+    // Warm-up sets intentionally skip template rest to keep their timer shorter by default
+    const fallbackRest = isWarmupSet
+      ? currentSessionRestTimes[groupKey] ?? restSeconds
+      : currentSessionRestTimes[groupKey] ??
+        restSeconds ??
+        currentSet.targetRestSeconds;
 
     // Start rest timer and capture the end timestamp
     let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
-      const restDuration = fallbackRest ?? defaultRestSeconds;
+      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
       calculatedRestEndsAt = Date.now() + restDuration * 1000;
       startRestTimer(restDuration);
     } else {
@@ -2102,7 +2148,7 @@ const WorkoutSessionScreen = () => {
           : undefined;
 
       // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
-      const restDuration = fallbackRest ?? defaultRestSeconds;
+      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
       syncCurrentExerciseToWidget(
         groupKey,
         Math.max(0, currentSortedIndex),
@@ -3351,6 +3397,7 @@ const WorkoutSessionScreen = () => {
                   loggedSetIds={loggedSetIds}
                   restRemaining={restRemaining}
                   lastLoggedSetId={lastLoggedSetId}
+                  sessionRestSeconds={sessionRestTimes[group.key]}
                   onUndo={undoSet}
                   onSwap={() => setSwapExerciseKey(group.key)}
                   onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
@@ -3831,6 +3878,7 @@ type ExerciseCardProps = {
   loggedSetIds: Set<string>;
   restRemaining: number | null;
   lastLoggedSetId: string | null;
+  sessionRestSeconds?: number;
   onUndo: (setId: string) => void;
   onSwap: () => void;
   onAdjustTimer: () => void;
@@ -3860,6 +3908,7 @@ const ExerciseCard = ({
   loggedSetIds,
   restRemaining,
   lastLoggedSetId,
+  sessionRestSeconds,
   onUndo,
   onSwap,
   onAdjustTimer,
@@ -3884,6 +3933,8 @@ const ExerciseCard = ({
   const workingSetCount = group.sets.length - warmupSetCount;
   const primaryWorkingSet =
     group.sets.find((set) => set.setKind !== "warmup") ?? group.sets[0];
+  const exerciseRestSeconds =
+    sessionRestSeconds ?? group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
 
   const summaryLine = `${workingSetCount} working${
     warmupSetCount > 0 ? ` · ${warmupSetCount} warm-up` : ""
@@ -4134,7 +4185,7 @@ const ExerciseCard = ({
                   fontWeight: "600",
                 }}
               >
-                Rest: {group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS}s
+                Rest: {exerciseRestSeconds}s
               </Text>
             </Pressable>
           </View>
@@ -4182,62 +4233,70 @@ const ExerciseCard = ({
             </View>
           ) : null}
 
-          {group.sets.map((set, displayIndex) => (
-            <View key={set.id} style={{ gap: 8 }}>
-              <SetInputRow
-                set={set}
-                displayIndex={displayIndex}
-                isWarmup={set.setKind === "warmup"}
-                onChange={onChangeSet}
-                onLog={() => onLogSet(set.id, group.restSeconds)}
-                restSeconds={group.restSeconds}
-                isActive={activeSetId === set.id}
-                autoRestTimer={autoRestTimer}
-                logged={loggedSetIds.has(set.id)}
-                onUndo={() => onUndo(set.id)}
-                onRemove={() => onRemoveSet(set.id)}
-                canRemove={group.sets.length > 1}
-              />
-              {restRemaining !== null && lastLoggedSetId === set.id && !showExerciseDifficultyFeedback ? (
-                <View
-                  style={{
-                    padding: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceMuted,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
+          {group.sets.map((set, displayIndex) => {
+            // Use a shorter default rest for warm-ups unless the user explicitly set a session timer.
+            const restSecondsForSet =
+              set.setKind === "warmup"
+                ? sessionRestSeconds ?? DEFAULT_WARMUP_REST_SECONDS
+                : exerciseRestSeconds;
+
+            return (
+              <View key={set.id} style={{ gap: 8 }}>
+                <SetInputRow
+                  set={set}
+                  displayIndex={displayIndex}
+                  isWarmup={set.setKind === "warmup"}
+                  onChange={onChangeSet}
+                  onLog={() => onLogSet(set.id, restSecondsForSet)}
+                  restSeconds={restSecondsForSet}
+                  isActive={activeSetId === set.id}
+                  autoRestTimer={autoRestTimer}
+                  logged={loggedSetIds.has(set.id)}
+                  onUndo={() => onUndo(set.id)}
+                  onRemove={() => onRemoveSet(set.id)}
+                  canRemove={group.sets.length > 1}
+                />
+                {restRemaining !== null && lastLoggedSetId === set.id && !showExerciseDifficultyFeedback ? (
                   <View
                     style={{
+                      padding: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceMuted,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8,
+                      justifyContent: "space-between",
                     }}
                   >
-                    <Ionicons name='timer' size={18} color={colors.primary} />
-                    <Text
-                      style={{ color: colors.textPrimary, fontWeight: "700" }}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
                     >
-                      Rest
+                      <Ionicons name='timer' size={18} color={colors.primary} />
+                      <Text
+                        style={{ color: colors.textPrimary, fontWeight: "700" }}
+                      >
+                        Rest
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "800",
+                        fontSize: 16,
+                      }}
+                    >
+                      {formatSeconds(restRemaining)}
                     </Text>
                   </View>
-                  <Text
-                    style={{
-                      color: colors.primary,
-                      fontWeight: "800",
-                      fontSize: 16,
-                    }}
-                  >
-                    {formatSeconds(restRemaining)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ))}
+                ) : null}
+              </View>
+            );
+          })}
 
           {/* Exercise difficulty feedback - shown after all sets logged */}
           {showExerciseDifficultyFeedback && (

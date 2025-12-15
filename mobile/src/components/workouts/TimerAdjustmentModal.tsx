@@ -36,6 +36,14 @@ const TimerAdjustmentModal = ({
     onClose();
   };
 
+  // Quick preset handlers
+  const applyPreset = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    setMinutes(mins);
+    setSeconds(secs);
+  };
+
   // Generate options for minutes (0-10) and seconds (0-59 in 15s increments)
   const minuteOptions = Array.from({ length: 11 }, (_, i) => i);
   const secondOptions = [0, 15, 30, 45];
@@ -86,6 +94,106 @@ const TimerAdjustmentModal = ({
           <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
             {exerciseName}
           </Text>
+
+          {/* Quick Presets */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+              QUICK PRESETS
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={() => applyPreset(45)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="flame-outline" size={20} color={colors.secondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
+                  Warm-up
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  0:45
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(90)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="barbell-outline" size={20} color={colors.primary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
+                  Working
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  1:30
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(180)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="fitness-outline" size={20} color="#F97316" />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
+                  Heavy
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  3:00
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(300)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="body-outline" size={20} color="#A78BFA" />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
+                  Stretch
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  5:00
+                </Text>
+              </Pressable>
+            </View>
+          </View>
 
           {/* Picker Container */}
           <View
