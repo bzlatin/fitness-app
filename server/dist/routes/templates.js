@@ -20,6 +20,7 @@ const mapExercise = (row, metaMap) => {
         exerciseName: meta?.name ?? formatExerciseId(row.exercise_id),
         primaryMuscleGroup: meta?.primaryMuscleGroup ?? "other",
         exerciseImageUrl: meta?.gifUrl,
+        equipment: meta?.equipment ?? "other",
         defaultSets: row.default_sets,
         defaultReps: row.default_reps,
         defaultRestSeconds: row.default_rest_seconds ?? undefined,

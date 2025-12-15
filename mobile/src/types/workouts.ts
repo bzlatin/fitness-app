@@ -7,13 +7,28 @@ export type SplitType =
   | "full_body"
   | "custom";
 
+export type MuscleGroup =
+  | "chest"
+  | "back"
+  | "shoulders"
+  | "biceps"
+  | "triceps"
+  | "legs"
+  | "glutes"
+  | "core"
+  | "full_body"
+  | "cardio"
+  | "custom"
+  | "other";
+
 export interface WorkoutTemplateExercise {
   id: string;
   exerciseId: string;
   orderIndex: number;
   exerciseName?: string;
-  primaryMuscleGroup?: string;
+  primaryMuscleGroup?: MuscleGroup | string;
   exerciseImageUrl?: string;
+  equipment?: string;
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;
@@ -123,7 +138,7 @@ export interface ActiveSessionResponse {
 export interface Exercise {
   id: string;
   name: string;
-  primaryMuscleGroup: string;
+  primaryMuscleGroup: MuscleGroup | string;
   equipment: string;
   category?: string;
   gifUrl?: string;

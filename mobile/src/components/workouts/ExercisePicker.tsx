@@ -51,6 +51,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
   const [sets, setSets] = useState("3");
   const [reps, setReps] = useState("10");
   const [restSeconds, setRestSeconds] = useState("90");
+  const [weight, setWeight] = useState("");
   const [incline, setIncline] = useState("1");
   const [duration, setDuration] = useState("20");
   const [distance, setDistance] = useState("1.0");
@@ -135,6 +136,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
     setSets("3");
     setReps("10");
     setRestSeconds("90");
+    setWeight("");
     setIncline("1");
     setDuration("20");
     setDistance("1.0");
@@ -146,6 +148,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
     const parsedSets = Number(sets) || 3;
     const parsedReps = Number(reps) || 10;
     const parsedRest = restSeconds ? Number(restSeconds) : undefined;
+    const parsedWeight = weight ? Number(weight) : undefined;
     const parsedIncline = incline ? Number(incline) : undefined;
     const parsedDuration = duration ? Number(duration) : undefined;
     const parsedDistance = distance ? Number(distance) : undefined;
@@ -155,6 +158,10 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
       sets: parsedSets,
       reps: parsedReps,
       restSeconds: parsedRest,
+      weight:
+        !cardio && parsedWeight !== undefined && !Number.isNaN(parsedWeight)
+          ? String(parsedWeight)
+          : undefined,
       incline:
         cardio && parsedIncline !== undefined ? String(parsedIncline) : undefined,
       durationMinutes:
@@ -375,15 +382,25 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
                 />
               </View>
             ) : (
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <InputChip label="Sets" value={sets} onChangeText={setSets} />
-                <InputChip label="Reps" value={reps} onChangeText={setReps} />
-                <InputChip
-                  label="Rest (s)"
-                  value={restSeconds}
-                  onChangeText={setRestSeconds}
-                />
-              </View>
+              <>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <InputChip label="Sets" value={sets} onChangeText={setSets} />
+                  <InputChip label="Reps" value={reps} onChangeText={setReps} />
+                  <InputChip
+                    label="Rest (s)"
+                    value={restSeconds}
+                    onChangeText={setRestSeconds}
+                  />
+                </View>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <InputChip
+                    label="Weight (lb)"
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </>
             )}
             <Pressable
               onPress={confirmAdd}

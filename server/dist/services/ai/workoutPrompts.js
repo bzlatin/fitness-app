@@ -8,13 +8,16 @@ const determineNextInCycle = (recentWorkouts, preferredSplit) => {
     if (!preferredSplit || !recentWorkouts || recentWorkouts.length === 0) {
         return undefined;
     }
+    const canonicalPreferred = preferredSplit.toLowerCase().trim();
+    const normalizedPreferred = canonicalPreferred === "push_pull_legs" ? "ppl" : canonicalPreferred;
     // Define split cycles
     const splitCycles = {
         ppl: ["push", "pull", "legs"],
         upper_lower: ["upper", "lower"],
+        full_body: ["full_body"],
         bro_split: ["chest", "back", "legs", "shoulders", "arms"],
     };
-    const cycle = splitCycles[preferredSplit];
+    const cycle = splitCycles[normalizedPreferred];
     if (!cycle || cycle.length === 0) {
         return undefined;
     }
@@ -24,7 +27,13 @@ const determineNextInCycle = (recentWorkouts, preferredSplit) => {
         return cycle[0]; // Start with first in cycle
     }
     // Find where we are in the cycle
-    const lastIndex = cycle.findIndex((split) => lastSplit.includes(split) || split.includes(lastSplit));
+    const lastIndex = cycle.findIndex((split) => {
+        if (split === "full_body")
+            return lastSplit.includes("full");
+        if (split === "legs")
+            return lastSplit.includes("leg");
+        return lastSplit.includes(split) || split.includes(lastSplit);
+    });
     if (lastIndex === -1) {
         return cycle[0]; // Not found, start from beginning
     }

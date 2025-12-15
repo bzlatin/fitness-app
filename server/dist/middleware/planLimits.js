@@ -21,7 +21,7 @@ const requireProPlan = async (req, res, next) => {
         if (user.plan !== "pro" && user.plan !== "lifetime") {
             return res.status(403).json({
                 error: "Pro plan required",
-                message: "This feature requires a Pro subscription. Upgrade to access AI workout generation.",
+                message: "This feature requires a Pro subscription. Upgrade to access smart workout generation.",
                 requiresUpgrade: true,
             });
         }
@@ -91,8 +91,8 @@ const checkAiWorkoutGenerationLimit = async (_req, res, next) => {
         const used = Math.max(0, Number(user.ai_generations_used_count ?? 0));
         if (used >= FREE_AI_GENERATION_LIMIT) {
             return res.status(403).json({
-                error: "Free AI workout used",
-                message: "You've used your free AI workout. Upgrade for unlimited!",
+                error: "Free smart workout used",
+                message: "You've used your free smart workout. Upgrade for unlimited!",
                 requiresUpgrade: true,
             });
         }
@@ -106,8 +106,8 @@ const checkAiWorkoutGenerationLimit = async (_req, res, next) => {
       `, [userId, FREE_AI_GENERATION_LIMIT]);
         if (reserve.rows.length === 0) {
             return res.status(403).json({
-                error: "Free AI workout used",
-                message: "You've used your free AI workout. Upgrade for unlimited!",
+                error: "Free smart workout used",
+                message: "You've used your free smart workout. Upgrade for unlimited!",
                 requiresUpgrade: true,
             });
         }

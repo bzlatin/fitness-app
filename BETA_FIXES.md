@@ -127,7 +127,7 @@ _Priority: HIGH (User-reported issues from beta testing)_
 
 ### Monetization / Conversion Optimization
 
-- [ ] **Give free users 1 free AI workout generation**
+- [x] **Give free users 1 free AI workout generation**
   - **Goal**: Let users test AI feature before purchase, increase conversion
   - **Implementation**:
     - Update plan limits: Free tier gets 1 AI generation (lifetime)
