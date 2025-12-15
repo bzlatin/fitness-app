@@ -5,6 +5,7 @@ import {
   getProgressionSuggestions,
   applyProgressionSuggestions,
 } from "../services/progression";
+import { getStartingSuggestion } from "../services/startingSuggestion";
 import {
   getAdvancedAnalytics,
   getWeeklyVolumeByMuscleGroup,
@@ -513,6 +514,26 @@ router.post("/progression/:templateId/apply", requireProPlan, async (req, res) =
   } catch (err) {
     console.error("[Analytics] Failed to apply progression suggestions", err);
     return res.status(500).json({ error: "Failed to apply progression suggestions" });
+  }
+});
+
+router.get("/starting-suggestion/:exerciseId", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { exerciseId } = req.params;
+  if (!exerciseId) {
+    return res.status(400).json({ error: "Exercise ID is required" });
+  }
+
+  try {
+    const suggestion = await getStartingSuggestion(userId, exerciseId);
+    return res.json({ data: suggestion });
+  } catch (err) {
+    console.error("[Analytics] Failed to fetch starting suggestion", err);
+    return res.status(500).json({ error: "Failed to fetch starting suggestion" });
   }
 });
 

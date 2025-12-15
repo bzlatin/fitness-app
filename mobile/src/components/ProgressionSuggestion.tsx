@@ -84,7 +84,7 @@ const ProgressionSuggestionModal = ({
   const selectAll = () => {
     const allIds = new Set(
       data.suggestions
-        .filter((s) => s.increment > 0)
+        .filter((s) => s.increment !== 0)
         .map((s) => s.exerciseId)
     );
     setSelectedExercises(allIds);
@@ -107,7 +107,7 @@ const ProgressionSuggestionModal = ({
     }
   };
 
-  const weightedSuggestions = data.suggestions.filter((s) => s.increment > 0);
+  const weightedSuggestions = data.suggestions.filter((s) => s.increment !== 0);
   const bodyweightSuggestions = data.suggestions.filter((s) => s.increment === 0);
   const hasWeightedSuggestions = weightedSuggestions.length > 0;
   const hasBodyweightSuggestions = bodyweightSuggestions.length > 0;
@@ -641,25 +641,35 @@ const ProgressionSuggestionModal = ({
                               </Text>
                             </View>
 
-                            <View
+                              {(() => {
+                                const isDecrease = suggestion.increment < 0;
+                                const accent = isDecrease ? colors.error : colors.primary;
+                                const label = isDecrease
+                                  ? `${suggestion.increment}lb`
+                                  : `+${suggestion.increment}lb`;
+
+                                return (
+                                  <View
                               style={{
                                 marginLeft: "auto",
                                 paddingHorizontal: 10,
                                 paddingVertical: 6,
                                 borderRadius: 8,
-                                backgroundColor: `${colors.primary}15`,
+                                backgroundColor: `${accent}15`,
                               }}
                             >
                               <Text
                                 style={{
-                                  color: colors.primary,
+                                  color: accent,
                                   fontSize: 14,
                                   fontFamily: fontFamilies.bold,
                                 }}
                               >
-                                +{suggestion.increment}lb
+                                {label}
                               </Text>
                             </View>
+                                );
+                              })()}
                           </View>
                         </View>
                       </View>

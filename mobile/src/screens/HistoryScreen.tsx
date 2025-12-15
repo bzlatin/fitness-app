@@ -662,17 +662,19 @@ const HistoryScreen = () => {
         {session.exercises.slice(0, 4).map((exercise, idx) => (
           <View
             key={`${exercise.exerciseId}-${idx}`}
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
+            style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}
           >
             <Text
               style={{
                 color: colors.textPrimary,
                 fontFamily: fontFamilies.medium,
+                flex: 1,
               }}
+              numberOfLines={1}
             >
               {exercise.name}
             </Text>
-            <Text style={{ color: colors.textSecondary }}>
+            <Text style={{ color: colors.textSecondary, flexShrink: 0 }}>
               {exercise.sets} sets · {Math.round(exercise.volumeLbs)} lbs
             </Text>
           </View>
@@ -708,25 +710,16 @@ const HistoryScreen = () => {
           onPress={() => setManualOpen(true)}
           style={({ pressed }) => ({
             backgroundColor: colors.primary,
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 12,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
             opacity: pressed ? 0.92 : 1,
-            alignSelf: "flex-start",
+            flexShrink: 0,
+            alignItems: "center",
+            justifyContent: "center",
           })}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Ionicons name='add' color={colors.surface} size={18} />
-            <Text
-              style={{
-                color: colors.surface,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 14,
-              }}
-            >
-              Add past
-            </Text>
-          </View>
+          <Ionicons name='add' color={colors.surface} size={22} />
         </Pressable>
       </View>
 

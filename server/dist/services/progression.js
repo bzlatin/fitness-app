@@ -67,6 +67,14 @@ const calculateIncrement = (exerciseId, currentWeight) => {
     }
     return increment;
 };
+const normalizeDifficultyScore = (value) => {
+    const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+    return Number.isFinite(n) ? n : null;
+};
+const nudgeIncrement = (baseIncrement) => {
+    const raw = Math.max(2.5, baseIncrement / 2);
+    return Math.round(raw / 2.5) * 2.5;
+};
 /**
  * Analyze last 3 sessions for an exercise and determine progression readiness
  */
@@ -88,6 +96,16 @@ const analyzeExerciseProgression = async (userId, exerciseId, templateId) => {
           AND ws.actual_weight >= ws.target_weight
           THEN 1
         END) as hit_target_count
+        ,AVG(CASE
+          WHEN ws.difficulty_rating IS NULL THEN NULL
+          ELSE (CASE ws.difficulty_rating
+            WHEN 'too_easy' THEN 1
+            WHEN 'just_right' THEN 0
+            WHEN 'too_hard' THEN -1
+            ELSE NULL
+          END)
+        END) as difficulty_score
+        ,COUNT(ws.difficulty_rating) as rated_sets
       FROM workout_sessions s
       JOIN workout_sets ws ON ws.session_id = s.id
       WHERE s.user_id = $1
@@ -114,15 +132,27 @@ const analyzeExerciseProgression = async (userId, exerciseId, templateId) => {
         avgWeight: Math.round(parseFloat(s.avg_weight) || 0),
         targetReps: Math.round(parseFloat(s.target_reps)),
         hitTarget: parseInt(s.hit_target_count) >= parseInt(s.sets) * 0.75, // 75% of sets hit target
+        difficultyScore: normalizeDifficultyScore(s.difficulty_score),
+        ratedSets: parseInt(s.rated_sets),
     }));
     const latestSession = sessionData[0];
     const currentWeight = latestSession?.avgWeight || 0;
+    const latestDifficultyScore = latestSession?.difficultyScore ?? null;
+    const latestRatedSets = latestSession?.ratedSets ?? 0;
+    const hasDifficultySignal = typeof latestDifficultyScore === "number" &&
+        Number.isFinite(latestDifficultyScore) &&
+        latestRatedSets > 0;
+    const feltTooEasy = hasDifficultySignal && latestDifficultyScore >= 0.5;
+    const feltTooHard = hasDifficultySignal && latestDifficultyScore <= -0.5;
     // Check progression criteria
     const last2Sessions = sessionData.slice(0, 2);
     const allHitTarget = last2Sessions.every((s) => s.hitTarget);
     const allExceededReps = last2Sessions.every((s) => s.avgReps > s.targetReps + 1);
     // Bodyweight progression logic
     if (category === "bodyweight") {
+        if (feltTooHard) {
+            return null;
+        }
         if (allHitTarget) {
             return {
                 exerciseId,
@@ -130,7 +160,9 @@ const analyzeExerciseProgression = async (userId, exerciseId, templateId) => {
                 currentWeight: 0,
                 suggestedWeight: 0,
                 increment: 0,
-                reason: `Hit target reps for 2 sessions. Try adding 2-3 more reps per set.`,
+                reason: feltTooEasy
+                    ? `Hit target reps and it felt easy. Try adding 3-5 more reps per set.`
+                    : `Hit target reps for 2 sessions. Try adding 2-3 more reps per set.`,
                 confidence: "high",
                 lastSessionsData: sessionData,
             };
@@ -139,30 +171,59 @@ const analyzeExerciseProgression = async (userId, exerciseId, templateId) => {
     }
     // Weighted exercise progression logic
     let suggestion = null;
+    const baseIncrement = calculateIncrement(exerciseId, currentWeight);
+    const harderDeloadIncrement = -nudgeIncrement(baseIncrement);
+    if (feltTooHard && !allHitTarget) {
+        // If the last 2 sessions didn't reliably hit target and the latest session felt too hard,
+        // suggest a small deload to get back into a productive range.
+        suggestion = {
+            exerciseId,
+            exerciseName,
+            currentWeight,
+            suggestedWeight: Math.max(0, currentWeight + harderDeloadIncrement),
+            increment: harderDeloadIncrement,
+            reason: `Felt too hard last session — try a small deload`,
+            confidence: "medium",
+            lastSessionsData: sessionData,
+        };
+        return suggestion;
+    }
+    if (feltTooHard) {
+        // Avoid suggesting increases when the latest session felt too hard.
+        return null;
+    }
     if (allHitTarget && allExceededReps) {
         // Strong progression: exceeded reps for 2+ sessions
-        const increment = calculateIncrement(exerciseId, currentWeight);
+        const increment = feltTooEasy
+            ? baseIncrement + nudgeIncrement(baseIncrement)
+            : baseIncrement;
         suggestion = {
             exerciseId,
             exerciseName,
             currentWeight,
             suggestedWeight: currentWeight + increment,
             increment,
-            reason: `Exceeded target reps for 2 consecutive sessions`,
+            reason: feltTooEasy
+                ? `Exceeded target reps and it felt easy`
+                : `Exceeded target reps for 2 consecutive sessions`,
             confidence: "high",
             lastSessionsData: sessionData,
         };
     }
     else if (allHitTarget) {
         // Moderate progression: hit target for 2+ sessions
-        const increment = calculateIncrement(exerciseId, currentWeight);
+        const increment = feltTooEasy
+            ? baseIncrement + nudgeIncrement(baseIncrement)
+            : baseIncrement;
         suggestion = {
             exerciseId,
             exerciseName,
             currentWeight,
             suggestedWeight: currentWeight + increment,
             increment,
-            reason: `Consistently hit target reps for 2 sessions`,
+            reason: feltTooEasy
+                ? `Consistently hit target reps and it felt easy`
+                : `Consistently hit target reps for 2 sessions`,
             confidence: "medium",
             lastSessionsData: sessionData,
         };

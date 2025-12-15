@@ -450,6 +450,7 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 - [x] Template-level override option
 - [x] Support bodyweight exercises with rep progression suggestions
 - [x] Smart increment calculation based on exercise type and current weight
+- [x] Per-set difficulty feedback (Too Easy / Just Right / Too Hard) to improve next weight suggestions
 - [x] Confidence levels (high/medium/low) for each suggestion
 - [x] Modal blocks workout timer until dismissed
 
@@ -457,6 +458,8 @@ No new tables needed - calculate from existing `workout_sessions` and `workout_s
 
 - ✅ `/server/src/services/progression.ts` - Complete progression analysis logic
 - ✅ `/server/src/routes/analytics.ts` - Progression endpoints
+- ✅ `/server/src/routes/sessions.ts` - Persist difficulty ratings on workout sets
+- ✅ `/server/sql/migrations/008_set_difficulty_ratings.sql` - Store per-set difficulty feedback
 - ✅ `/mobile/src/components/ProgressionSuggestion.tsx` - Full-featured modal UI
 - ✅ `/mobile/src/screens/WorkoutSessionScreen.tsx` - Auto-check on workout start
 - ✅ `/mobile/src/screens/SettingsScreen.tsx` - Global toggle setting

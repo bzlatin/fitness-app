@@ -21,6 +21,8 @@ export type EquipmentType =
 
 export type WorkoutSource = "manual" | "ai" | "apple_health";
 
+export type SetDifficultyRating = "too_easy" | "just_right" | "too_hard";
+
 export interface Exercise {
   id: string;
   name: string;
@@ -74,12 +76,14 @@ export interface WorkoutSet {
   exerciseId: string;
   exerciseName?: string;
   exerciseImageUrl?: string;
+  setKind?: "warmup" | "working";
   setIndex: number;
   targetReps?: number;
   targetWeight?: number;
   actualReps?: number;
   actualWeight?: number;
   rpe?: number;
+  difficultyRating?: SetDifficultyRating;
   // Cardio-specific fields
   targetDistance?: number;
   actualDistance?: number;

@@ -41,6 +41,14 @@ export type TrainingRecommendation = {
   }>;
 };
 
+export type StartingSuggestion = {
+  exerciseId: string;
+  suggestedWeight?: number;
+  suggestedReps?: number;
+  reason: string;
+  confidence: "high" | "medium" | "low";
+} | null;
+
 // Advanced Analytics Types
 export type WeeklyVolumeData = {
   weekStartDate: string;

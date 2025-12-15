@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -12,28 +12,90 @@ import { colors } from '../../theme/colors';
 type TimerAdjustmentModalProps = {
   visible: boolean;
   onClose: () => void;
-  currentSeconds: number;
-  onSave: (seconds: number) => void;
+  currentWorkingSeconds: number;
+  currentWarmupSeconds?: number;
+  onSave: (params: { workingSeconds: number; warmupSeconds?: number }) => void;
   exerciseName: string;
+  showWarmupOption?: boolean;
 };
 
 const TimerAdjustmentModal = ({
   visible,
   onClose,
-  currentSeconds,
+  currentWorkingSeconds,
+  currentWarmupSeconds,
   onSave,
   exerciseName,
+  showWarmupOption = false,
 }: TimerAdjustmentModalProps) => {
-  const initialMinutes = Math.floor(currentSeconds / 60);
-  const initialSecs = currentSeconds % 60;
+  const [mode, setMode] = useState<'working' | 'warmup'>('working');
 
-  const [minutes, setMinutes] = useState(initialMinutes);
-  const [seconds, setSeconds] = useState(initialSecs);
+  const [workingSeconds, setWorkingSeconds] = useState(currentWorkingSeconds);
+  const [warmupSeconds, setWarmupSeconds] = useState(
+    currentWarmupSeconds ?? 45
+  );
+
+  const activeSeconds = mode === 'working' ? workingSeconds : warmupSeconds;
+  const [minutes, setMinutes] = useState(Math.floor(activeSeconds / 60));
+  const [seconds, setSeconds] = useState(activeSeconds % 60);
+
+  // Keep local pickers in sync when opening/closing or switching modes
+  useEffect(() => {
+    const freshSeconds = mode === 'working' ? workingSeconds : warmupSeconds;
+    setMinutes(Math.floor(freshSeconds / 60));
+    setSeconds(freshSeconds % 60);
+  }, [mode, workingSeconds, warmupSeconds]);
+
+  useEffect(() => {
+    if (!visible) return;
+    setWorkingSeconds(currentWorkingSeconds);
+    setWarmupSeconds(currentWarmupSeconds ?? 45);
+    setMode('working');
+    setMinutes(Math.floor(currentWorkingSeconds / 60));
+    setSeconds(currentWorkingSeconds % 60);
+  }, [visible, currentWorkingSeconds, currentWarmupSeconds]);
 
   const handleSave = () => {
     const totalSeconds = minutes * 60 + seconds;
-    onSave(totalSeconds);
+    const nextWorkingSeconds = mode === 'working' ? totalSeconds : workingSeconds;
+    const nextWarmupSeconds = mode === 'warmup' ? totalSeconds : warmupSeconds;
+    if (mode === 'working') {
+      setWorkingSeconds(nextWorkingSeconds);
+    } else {
+      setWarmupSeconds(nextWarmupSeconds);
+    }
+    onSave({
+      workingSeconds: nextWorkingSeconds,
+      warmupSeconds: showWarmupOption ? nextWarmupSeconds : undefined,
+    });
     onClose();
+  };
+
+  // Quick preset handlers
+  const applyPreset = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    setMinutes(mins);
+    setSeconds(secs);
+    if (mode === 'working') {
+      setWorkingSeconds(totalSeconds);
+    } else {
+      setWarmupSeconds(totalSeconds);
+    }
+  };
+
+  const handleModeChange = (nextMode: 'working' | 'warmup') => {
+    if (nextMode === mode) return;
+    const currentTotal = minutes * 60 + seconds;
+    if (mode === 'working') {
+      setWorkingSeconds(currentTotal);
+    } else {
+      setWarmupSeconds(currentTotal);
+    }
+    setMode(nextMode);
+    const nextSeconds = nextMode === 'working' ? workingSeconds : warmupSeconds;
+    setMinutes(Math.floor(nextSeconds / 60));
+    setSeconds(nextSeconds % 60);
   };
 
   // Generate options for minutes (0-10) and seconds (0-59 in 15s increments)
@@ -86,6 +148,159 @@ const TimerAdjustmentModal = ({
           <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
             {exerciseName}
           </Text>
+
+          {/* Mode toggles */}
+          {showWarmupOption ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 8,
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: 10,
+                padding: 4,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              {(['working', 'warmup'] as const).map((option) => {
+                const isActive = mode === option;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => handleModeChange(option)}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      backgroundColor: isActive ? colors.surface : "transparent",
+                      borderWidth: isActive ? 1 : 0,
+                      borderColor: isActive ? colors.border : "transparent",
+                      opacity: pressed ? 0.85 : 1,
+                      alignItems: 'center',
+                    })}
+                  >
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontWeight: '700',
+                        fontSize: 13,
+                      }}
+                    >
+                      {option === 'working' ? 'Working sets' : 'Warm-up sets'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {/* Quick Presets */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+              QUICK PRESETS
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Pressable
+                onPress={() => applyPreset(0)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  Off
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(45)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="flame-outline" size={18} color={colors.secondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  0:45
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(90)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="barbell-outline" size={18} color={colors.primary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  1:30
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(180)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="fitness-outline" size={18} color="#F97316" />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  3:00
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => applyPreset(300)}
+                style={({ pressed }) => ({
+                  width: '31%',
+                  paddingVertical: 10,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="body-outline" size={18} color="#A78BFA" />
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                  5:00
+                </Text>
+              </Pressable>
+            </View>
+          </View>
 
           {/* Picker Container */}
           <View

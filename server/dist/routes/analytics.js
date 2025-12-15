@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const fatigue_1 = require("../services/fatigue");
 const progression_1 = require("../services/progression");
+const startingSuggestion_1 = require("../services/startingSuggestion");
 const muscleAnalytics_1 = require("../services/muscleAnalytics");
 const recap_1 = require("../services/recap");
 const planLimits_1 = require("../middleware/planLimits");
@@ -349,6 +350,24 @@ router.post("/progression/:templateId/apply", planLimits_1.requireProPlan, async
     catch (err) {
         console.error("[Analytics] Failed to apply progression suggestions", err);
         return res.status(500).json({ error: "Failed to apply progression suggestions" });
+    }
+});
+router.get("/starting-suggestion/:exerciseId", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { exerciseId } = req.params;
+    if (!exerciseId) {
+        return res.status(400).json({ error: "Exercise ID is required" });
+    }
+    try {
+        const suggestion = await (0, startingSuggestion_1.getStartingSuggestion)(userId, exerciseId);
+        return res.json({ data: suggestion });
+    }
+    catch (err) {
+        console.error("[Analytics] Failed to fetch starting suggestion", err);
+        return res.status(500).json({ error: "Failed to fetch starting suggestion" });
     }
 });
 // Advanced Muscle Group Analytics (Pro feature)

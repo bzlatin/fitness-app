@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import {
   Exercise,
+  ExerciseDetails,
   CustomExercise,
   CreateCustomExerciseInput,
   UpdateCustomExerciseInput,
@@ -26,6 +27,14 @@ export const fetchExercisesByIds = async (ids: string[]) => {
   const res = await apiClient.get<Exercise[]>("/exercises/batch", {
     params: { ids: ids.join(",") },
   });
+  return res.data;
+};
+
+/**
+ * Fetch detailed exercise information including instructions
+ */
+export const fetchExerciseDetails = async (id: string): Promise<ExerciseDetails> => {
+  const res = await apiClient.get<ExerciseDetails>(`/exercises/details/${id}`);
   return res.data;
 };
 

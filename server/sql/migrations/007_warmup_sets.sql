@@ -1,0 +1,3 @@
+ALTER TABLE workout_sets
+  ADD COLUMN IF NOT EXISTS set_kind TEXT NOT NULL DEFAULT 'working';
+

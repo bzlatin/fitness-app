@@ -16,6 +16,7 @@ import {
   AppState,
   NativeModules,
   PanResponder,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,7 +39,8 @@ import {
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
-import { WorkoutSet } from "../types/workouts";
+import { SetDifficultyRating, WorkoutSet, ExerciseDetails } from "../types/workouts";
+import { fetchExerciseDetails } from "../api/exercises";
 import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
@@ -53,6 +55,7 @@ import ProgressionSuggestionModal, {
 import {
   fetchProgressionSuggestions,
   applyProgressionSuggestions,
+  fetchStartingSuggestion,
 } from "../api/analytics";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
@@ -72,8 +75,20 @@ import {
   endWorkoutLiveActivityWithSummary,
   addLogSetListener,
 } from "../services/liveActivity";
+import {
+  getStoredShowWarmupSets,
+  setStoredShowWarmupSets,
+} from "../utils/warmupPreference";
+import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution";
+import { formatMuscleGroup, getTopMuscleGroups } from "../utils/muscleGroupCalculations";
+import { getWarmupSuggestionsForMuscleGroups } from "../utils/warmupSuggestions";
+import { StartingSuggestion } from "../types/analytics";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const DEFAULT_WORKING_REST_SECONDS = 90; // Increased from 75s to 90s for better recovery
+const DEFAULT_WARMUP_REST_SECONDS = 45; // Shorter rest for warm-up sets
+const DEFAULT_HEAVY_REST_SECONDS = 180; // 3 minutes for heavy sets (>85% estimated 1RM)
 
 const visibilityOptions: {
   value: Visibility;
@@ -186,14 +201,252 @@ const VisibilityModal = ({
   </Modal>
 );
 
+// Exercise Instructions Modal
+const ExerciseInstructionsModal = ({
+  visible,
+  exerciseId,
+  exerciseName,
+  onClose,
+}: {
+  visible: boolean;
+  exerciseId: string | null;
+  exerciseName: string | null;
+  onClose: () => void;
+}) => {
+  const [details, setDetails] = useState<ExerciseDetails | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible && exerciseId) {
+      setLoading(true);
+      setError(null);
+      fetchExerciseDetails(exerciseId)
+        .then((data) => {
+          setDetails(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch exercise details:", err);
+          setError("Could not load instructions");
+          setLoading(false);
+        });
+    } else if (!visible) {
+      // Reset when modal closes
+      setDetails(null);
+      setError(null);
+    }
+  }, [visible, exerciseId]);
+
+  const formatMuscle = (muscle: string) =>
+    muscle.charAt(0).toUpperCase() + muscle.slice(1).replace(/_/g, " ");
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "flex-end",
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: "85%",
+            borderWidth: 1,
+            borderColor: colors.border,
+            width: "100%",
+            flexShrink: 1,
+          }}
+        >
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: "800",
+                }}
+                numberOfLines={2}
+              >
+                {exerciseName ?? "Exercise"}
+              </Text>
+              {details?.level && (
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  {details.level.charAt(0).toUpperCase() + details.level.slice(1)} •{" "}
+                  {details.mechanic ?? "—"} • {details.equipment ?? "—"}
+                </Text>
+              )}
+            </View>
+            <Pressable
+              onPress={onClose}
+              style={{
+                padding: 8,
+                borderRadius: 20,
+                backgroundColor: colors.surfaceMuted,
+              }}
+            >
+              <Ionicons name="close" color={colors.textSecondary} size={20} />
+            </Pressable>
+          </View>
+
+          {/* Content */}
+          <ScrollView
+            style={{ maxHeight: "100%" }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 0 }}
+            showsVerticalScrollIndicator
+            bounces
+          >
+            {loading ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
+                  Loading instructions...
+                </Text>
+              </View>
+            ) : error ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Ionicons name="alert-circle-outline" size={40} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
+                  {error}
+                </Text>
+              </View>
+            ) : details ? (
+              <View style={{ gap: 20 }}>
+                {/* Muscles */}
+                {(details.primaryMuscles.length > 0 || details.secondaryMuscles.length > 0) && (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                      Muscles Worked
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {details.primaryMuscles.map((muscle) => (
+                        <View
+                          key={muscle}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                            backgroundColor: `${colors.primary}20`,
+                            borderWidth: 1,
+                            borderColor: `${colors.primary}40`,
+                          }}
+                        >
+                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "600" }}>
+                            {formatMuscle(muscle)}
+                          </Text>
+                        </View>
+                      ))}
+                      {details.secondaryMuscles.map((muscle) => (
+                        <View
+                          key={muscle}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                            backgroundColor: colors.surfaceMuted,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                        >
+                          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}>
+                            {formatMuscle(muscle)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Instructions */}
+                {details.instructions.length > 0 ? (
+                  <View style={{ gap: 12 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                      How to Perform
+                    </Text>
+                    {details.instructions.map((instruction, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          flexDirection: "row",
+                          gap: 12,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: `${colors.primary}20`,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontSize: 12,
+                              fontWeight: "800",
+                            }}
+                          >
+                            {index + 1}
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            flex: 1,
+                            color: colors.textPrimary,
+                            fontSize: 14,
+                            lineHeight: 20,
+                          }}
+                        >
+                          {instruction}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                    <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, marginTop: 8, textAlign: "center" }}>
+                      No detailed instructions available for this exercise.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
 const summarizeSets = (sessionSets: WorkoutSet[]) => {
-  const totalSets = sessionSets.length;
-  const totalVolume = sessionSets.reduce((acc, cur) => {
+  const workingSets = sessionSets.filter((set) => set.setKind !== "warmup");
+  const totalSets = workingSets.length;
+  const totalVolume = workingSets.reduce((acc, cur) => {
     const reps = cur.actualReps ?? 0;
     const weight = cur.actualWeight ?? 0;
     return acc + reps * weight;
   }, 0);
-  const prCount = sessionSets.filter(
+  const prCount = workingSets.filter(
     (set) =>
       set.actualWeight !== undefined &&
       set.targetWeight !== undefined &&
@@ -364,12 +617,16 @@ const WorkoutSessionScreen = () => {
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [loggedSetIds, setLoggedSetIds] = useState<Set<string>>(new Set());
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
+  const [pendingDifficultyFeedbackKey, setPendingDifficultyFeedbackKey] = useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
   const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
   const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<
     string | null
   >(null);
   const [sessionRestTimes, setSessionRestTimes] = useState<
+    Record<string, number>
+  >({});
+  const [sessionWarmupRestTimes, setSessionWarmupRestTimes] = useState<
     Record<string, number>
   >({});
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -390,6 +647,13 @@ const WorkoutSessionScreen = () => {
     "progression" | "analytics"
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showWarmupSets, setShowWarmupSets] = useState(true);
+  const [instructionsExercise, setInstructionsExercise] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [hasHydratedWarmupPreference, setHasHydratedWarmupPreference] =
+    useState(false);
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
@@ -398,6 +662,7 @@ const WorkoutSessionScreen = () => {
   const activeSetIdRef = useRef<string | null>(null);
   const setsRef = useRef<WorkoutSet[]>([]);
   const sessionRestTimesRef = useRef<Record<string, number>>({});
+  const sessionWarmupRestTimesRef = useRef<Record<string, number>>({});
   const loggedSetIdsRef = useRef<Set<string>>(new Set());
   // Lock to prevent duplicate processing of pending log set actions
   const isProcessingLogSetRef = useRef<boolean>(false);
@@ -414,6 +679,13 @@ const WorkoutSessionScreen = () => {
   const timerLockedRef = useRef<boolean>(false);
   const previousRestEndsAtRef = useRef<number | null>(null);
   const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
+  const exercisesListRef = useRef<any>(null);
+  const shouldAutoScrollToActiveExerciseRef = useRef(false);
+  const hasUserChangedWarmupPreferenceRef = useRef(false);
+  const startingSuggestionFetchRef = useRef<Set<string>>(new Set());
+  const [startingSuggestions, setStartingSuggestions] = useState<
+    Record<string, StartingSuggestion>
+  >({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -427,6 +699,10 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     sessionRestTimesRef.current = sessionRestTimes;
   }, [sessionRestTimes]);
+
+  useEffect(() => {
+    sessionWarmupRestTimesRef.current = sessionWarmupRestTimes;
+  }, [sessionWarmupRestTimes]);
 
   useEffect(() => {
     loggedSetIdsRef.current = loggedSetIds;
@@ -443,6 +719,22 @@ const WorkoutSessionScreen = () => {
     () => templates?.find((t) => t.id === route.params.templateId),
     [templates, route.params.templateId]
   );
+
+  const { distribution: muscleDistribution } = useMuscleGroupDistribution(template);
+  const warmupSuggestions = useMemo(() => {
+    const topMuscles = getTopMuscleGroups(muscleDistribution, 2).map(
+      (group) => group.muscleGroup
+    );
+    return getWarmupSuggestionsForMuscleGroups(topMuscles, { maxSuggestions: 4 });
+  }, [muscleDistribution]);
+
+  const warmupTargetsLabel = useMemo(() => {
+    const topMuscles = getTopMuscleGroups(muscleDistribution, 2)
+      .map((group) => group.muscleGroup)
+      .filter(Boolean);
+    if (topMuscles.length === 0) return "Warm up";
+    return `Warm up ${topMuscles.map(formatMuscleGroup).join(" + ")}`;
+  }, [muscleDistribution]);
 
   const restLookup = useMemo(() => {
     if (!template) return {};
@@ -1215,10 +1507,94 @@ const WorkoutSessionScreen = () => {
     applySetUpdates([updated]);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const stored = await getStoredShowWarmupSets();
+      if (cancelled) return;
+      if (!hasUserChangedWarmupPreferenceRef.current) {
+        setShowWarmupSets(stored);
+      }
+      setHasHydratedWarmupPreference(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedWarmupPreference) return;
+    void setStoredShowWarmupSets(showWarmupSets);
+  }, [hasHydratedWarmupPreference, showWarmupSets]);
+
+  const visibleSets = useMemo(() => {
+    if (showWarmupSets) return sets;
+    return sets.filter((set) => set.setKind !== "warmup");
+  }, [sets, showWarmupSets]);
+
   const groupedSets = useMemo(
-    () => groupSetsByExercise(sets, restLookup, sessionRestTimes),
-    [sets, restLookup, sessionRestTimes]
+    () => groupSetsByExercise(visibleSets, restLookup, sessionRestTimes),
+    [visibleSets, restLookup, sessionRestTimes]
   );
+
+  useEffect(() => {
+    const missingExerciseIds = Array.from(
+      new Set(
+        groupedSets
+          .filter((group) => !isCardioExercise(group.exerciseId, group.name))
+          .filter((group) =>
+            group.sets.some(
+              (set) =>
+                set.setKind !== "warmup" &&
+                set.actualWeight === undefined &&
+                set.targetWeight === undefined
+            )
+          )
+          .map((group) => group.exerciseId)
+      )
+    );
+
+    if (missingExerciseIds.length === 0) return;
+
+    missingExerciseIds.forEach((exerciseId) => {
+      if (startingSuggestionFetchRef.current.has(exerciseId)) return;
+      startingSuggestionFetchRef.current.add(exerciseId);
+      void (async () => {
+        try {
+          const suggestion = await fetchStartingSuggestion(exerciseId);
+          setStartingSuggestions((prev) => ({
+            ...prev,
+            [exerciseId]: suggestion,
+          }));
+        } catch {
+          // ignore
+        }
+      })();
+    });
+  }, [groupedSets]);
+
+  useEffect(() => {
+    if (!activeExerciseKey) return;
+    if (!shouldAutoScrollToActiveExerciseRef.current) return;
+    const index = groupedSets.findIndex((group) => group.key === activeExerciseKey);
+    if (index < 0) return;
+
+    shouldAutoScrollToActiveExerciseRef.current = false;
+    const id = setTimeout(() => {
+      try {
+        exercisesListRef.current?.scrollToIndex?.({
+          index,
+          animated: true,
+          viewPosition: 0,
+          viewOffset: 70,
+        });
+      } catch {
+        // ignore
+      }
+    }, 50);
+
+    return () => clearTimeout(id);
+  }, [activeExerciseKey, groupedSets]);
 
   // Auto-focus logic - only runs when autoFocusEnabled is true
   // This should NOT override activeSetId that was just set by logSet
@@ -1254,6 +1630,24 @@ const WorkoutSessionScreen = () => {
     loggedSetIds,
     autoFocusEnabled,
   ]);
+
+  useEffect(() => {
+    if (showWarmupSets) return;
+    if (!activeSetId) return;
+    const activeSet = setsRef.current.find((set) => set.id === activeSetId);
+    if (!activeSet || activeSet.setKind !== "warmup") return;
+
+    const key = activeSet.templateExerciseId ?? activeSet.exerciseId;
+    const group = groupedSets.find((g) => g.key === key);
+    const fallback = group?.sets.find((s) => !loggedSetIds.has(s.id)) ?? group?.sets[0];
+    if (!fallback) {
+      setActiveSetId(null);
+      activeSetIdRef.current = null;
+      return;
+    }
+    setActiveSetId(fallback.id);
+    activeSetIdRef.current = fallback.id;
+  }, [activeSetId, groupedSets, loggedSetIds, showWarmupSets]);
 
   // Sync initial session state to widget AND start Live Activity when session loads
   useEffect(() => {
@@ -1560,8 +1954,53 @@ const WorkoutSessionScreen = () => {
     return cleanup;
   }, [sessionId, activeSetId]);
 
+  /**
+   * Calculate intelligent rest time based on set intensity
+   * Uses weight progression and reps to estimate intensity
+   */
+  const calculateSmartRestTime = (
+    currentSet: WorkoutSet,
+    groupedSets: WorkoutSet[],
+    setKind: "warmup" | "working"
+  ): number => {
+    if (setKind === "warmup") {
+      return DEFAULT_WARMUP_REST_SECONDS;
+    }
+
+    // Get all completed sets with weight for this exercise
+    const completedSetsWithWeight = groupedSets
+      .filter((s) => s.actualReps != null && s.actualWeight != null && s.actualWeight > 0)
+      .sort((a, b) => (b.actualWeight ?? 0) - (a.actualWeight ?? 0));
+
+    if (completedSetsWithWeight.length === 0) {
+      return DEFAULT_WORKING_REST_SECONDS;
+    }
+
+    const currentWeight = currentSet.actualWeight ?? 0;
+    const maxWeight = completedSetsWithWeight[0].actualWeight ?? 0;
+
+    // If current set is close to max weight (within 10%), assume heavy set
+    const isHeavySet = maxWeight > 0 && currentWeight >= maxWeight * 0.9;
+
+    // Also consider low reps as indicator of heavy set
+    const currentReps = currentSet.actualReps ?? 0;
+    const isLowRep = currentReps > 0 && currentReps <= 5;
+
+    if (isHeavySet || isLowRep) {
+      return DEFAULT_HEAVY_REST_SECONDS; // 3 minutes for heavy sets
+    }
+
+    return DEFAULT_WORKING_REST_SECONDS; // 90 seconds for normal working sets
+  };
+
   const startRestTimer = (seconds?: number) => {
-    const duration = Math.max(10, seconds ?? 90);
+    // If timer is explicitly set to 0, skip the timer entirely
+    if (seconds === 0) {
+      setRestRemaining(null);
+      setRestEndsAt(null);
+      return;
+    }
+    const duration = Math.max(10, seconds ?? DEFAULT_WORKING_REST_SECONDS);
     setRestRemaining(duration);
     setRestEndsAt(Date.now() + duration * 1000);
   };
@@ -1588,7 +2027,9 @@ const WorkoutSessionScreen = () => {
     // If restDuration is explicitly 0, pass 0 to clear the timer
     // If undefined, use the group's rest seconds as fallback
     const actualRestDuration =
-      restDuration !== undefined ? restDuration : group.restSeconds ?? 90;
+      restDuration !== undefined
+        ? restDuration
+        : group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
 
     // Calculate restEndsAt ISO string if we have a timestamp
     const restEndsAtISO =
@@ -1676,21 +2117,32 @@ const WorkoutSessionScreen = () => {
     }
 
     // Calculate rest duration (needed for both timer and widget sync)
-    // Priority: user-adjusted session rest times > passed restSeconds > template rest times
     const groupKey = currentSet.templateExerciseId ?? currentSet.exerciseId;
     const group = groupedSets.find((g) => g.key === groupKey);
     // Use ref to get current session rest times to avoid stale closure
     const currentSessionRestTimes = sessionRestTimesRef.current;
-    const fallbackRest =
-      currentSessionRestTimes[groupKey] ?? // Check user-adjusted rest times first
-      restSeconds ??
-      currentSet.targetRestSeconds ??
-      restLookup[groupKey];
+    const currentWarmupRestTimes = sessionWarmupRestTimesRef.current;
+    const isWarmupSet = (currentSet.setKind ?? "working") === "warmup";
+
+    // Calculate smart default rest time based on set intensity and type
+    const smartDefaultRestSeconds = calculateSmartRestTime(
+      updated,
+      group?.sets ?? [],
+      currentSet.setKind ?? "working"
+    );
+
+    // Priority: user-adjusted session rest times > passed restSeconds (per-set) > smart defaults
+    // Warm-up sets intentionally skip template rest to keep their timer shorter by default
+    const fallbackRest = isWarmupSet
+      ? currentWarmupRestTimes[groupKey] ?? restSeconds
+      : currentSessionRestTimes[groupKey] ??
+        restSeconds ??
+        currentSet.targetRestSeconds;
 
     // Start rest timer and capture the end timestamp
     let calculatedRestEndsAt: number | null = null;
     if (autoRestTimer) {
-      const restDuration = fallbackRest ?? 90;
+      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
       calculatedRestEndsAt = Date.now() + restDuration * 1000;
       startRestTimer(restDuration);
     } else {
@@ -1702,76 +2154,151 @@ const WorkoutSessionScreen = () => {
       const sorted = [...group.sets]
         .map((s) => (s.id === setId ? updated : s))
         .sort((a, b) => a.setIndex - b.setIndex);
-      const nextSet = sorted.find((s) => !updatedLoggedSetIds.has(s.id));
+      const currentSortedIndex = sorted.findIndex((s) => s.id === setId);
+      const nextSetAfterCurrent =
+        currentSortedIndex >= 0
+          ? sorted
+              .slice(currentSortedIndex + 1)
+              .find((s) => !updatedLoggedSetIds.has(s.id))
+          : undefined;
 
-      if (nextSet) {
-        // Immediately update activeSetId to the next unlogged set
-        const nextSetIndex = sorted.findIndex((s) => s.id === nextSet.id);
+      // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
+      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
+      syncCurrentExerciseToWidget(
+        groupKey,
+        Math.max(0, currentSortedIndex),
+        updated.actualReps,
+        updated.actualWeight,
+        autoRestTimer ? restDuration : 0,
+        autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
+      );
 
-        // CRITICAL: Disable auto-focus to prevent the useEffect from overriding our state
-        setAutoFocusEnabled(false);
+      // Auto-carry weight + reps to the next set (strength only, working sets only).
+      if (
+        nextSetAfterCurrent &&
+        updated.setKind !== "warmup" &&
+        !isCardioExercise(updated.exerciseId, updated.exerciseName) &&
+        nextSetAfterCurrent.setKind !== "warmup"
+      ) {
+        const carryWeight =
+          updated.actualWeight !== undefined &&
+          nextSetAfterCurrent.actualWeight === undefined;
+        const carryReps =
+          updated.actualReps !== undefined &&
+          nextSetAfterCurrent.actualReps === undefined;
 
-        // IMMEDIATELY update the ref BEFORE React state update
-        activeSetIdRef.current = nextSet.id;
-        setActiveSetId(nextSet.id);
-
-        // Sync next set to widget with rest timer
-        const restDuration = fallbackRest ?? 90;
-        syncCurrentExerciseToWidget(
-          groupKey,
-          nextSetIndex,
-          updated.actualReps,
-          updated.actualWeight,
-          autoRestTimer ? restDuration : 0, // Pass 0 to explicitly clear timer when disabled
-          autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
-        );
-      } else {
-        // All sets in this exercise are logged, move to next exercise
-        const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
-        if (allLogged) {
-          const currentIndex = groupedSets.findIndex(
-            (g) => g.key === group.key
+        if (carryWeight || carryReps) {
+          setSets((prev) =>
+            prev.map((set) => {
+              if (set.id !== nextSetAfterCurrent.id) return set;
+              return {
+                ...set,
+                actualWeight:
+                  carryWeight && set.actualWeight === undefined
+                    ? updated.actualWeight
+                    : set.actualWeight,
+                actualReps:
+                  carryReps && set.actualReps === undefined
+                    ? updated.actualReps
+                    : set.actualReps,
+              };
+            })
           );
-          const nextGroup = groupedSets[currentIndex + 1];
-          if (nextGroup) {
-            setAutoFocusEnabled(true);
-            setActiveExerciseKey(nextGroup.key);
-            const firstUnloggedInNextGroup = nextGroup.sets.find(
-              (s) => !updatedLoggedSetIds.has(s.id)
-            );
-            const nextSetId =
-              firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+        }
+      }
 
-            // IMMEDIATELY update the ref BEFORE React state update
-            activeSetIdRef.current = nextSetId;
-            setActiveSetId(nextSetId);
+      // All sets in this exercise are logged - show difficulty feedback before advancing
+      const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
+      if (allLogged) {
+        // Check if any working set in this exercise already has a difficulty rating
+        const workingSets = sorted.filter((s) => s.setKind !== "warmup");
+        const hasExistingRating = workingSets.some((s) => s.difficultyRating);
 
-            // Sync next exercise to widget
-            if (firstUnloggedInNextGroup) {
-              const nextSetIndex = nextGroup.sets.findIndex(
-                (s) => s.id === firstUnloggedInNextGroup.id
-              );
-              syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
-            }
-          } else {
-            // IMMEDIATELY update the ref BEFORE React state update
-            activeSetIdRef.current = null;
-            setActiveExerciseKey(null);
-            setActiveSetId(null);
-            // All exercises complete, keep showing last exercise with completed state
-            const lastSetIndex = sorted.length - 1;
-            syncCurrentExerciseToWidget(
-              groupKey,
-              lastSetIndex,
-              updated.actualReps,
-              updated.actualWeight,
-              0 // No rest timer after workout complete
-            );
-          }
+        if (!hasExistingRating && workingSets.length > 0) {
+          // Show difficulty feedback prompt - don't auto-advance yet
+          setPendingDifficultyFeedbackKey(group.key);
+          // Keep the exercise expanded and don't advance
+          const lastSetIndex = sorted.length - 1;
+          syncCurrentExerciseToWidget(
+            groupKey,
+            lastSetIndex,
+            updated.actualReps,
+            updated.actualWeight,
+            0
+          );
+        } else {
+          // Already has rating or no working sets, advance normally
+          advanceToNextExercise(group.key, updatedLoggedSetIds);
         }
       }
     }
   };
+
+  // Helper to advance to next exercise (extracted for reuse after difficulty feedback)
+  const advanceToNextExercise = useCallback(
+    (currentExerciseKey: string, currentLoggedSetIds: Set<string>) => {
+      const currentIndex = groupedSets.findIndex((g) => g.key === currentExerciseKey);
+      const nextGroup = groupedSets[currentIndex + 1];
+      if (nextGroup) {
+        setAutoFocusEnabled(true);
+        shouldAutoScrollToActiveExerciseRef.current = true;
+        setActiveExerciseKey(nextGroup.key);
+        const firstUnloggedInNextGroup = nextGroup.sets.find(
+          (s) => !currentLoggedSetIds.has(s.id)
+        );
+        const nextSetId =
+          firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+
+        activeSetIdRef.current = nextSetId;
+        setActiveSetId(nextSetId);
+
+        if (firstUnloggedInNextGroup) {
+          const nextSetIndex = nextGroup.sets.findIndex(
+            (s) => s.id === firstUnloggedInNextGroup.id
+          );
+          syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
+        }
+      } else {
+        activeSetIdRef.current = null;
+        setActiveExerciseKey(null);
+        setActiveSetId(null);
+      }
+    },
+    [groupedSets, syncCurrentExerciseToWidget]
+  );
+
+  const applyStartingSuggestionToGroup = useCallback(
+    (exerciseKey: string, suggestion: StartingSuggestion | undefined) => {
+      if (!suggestion) return;
+      setSets((prev) =>
+        prev.map((set) => {
+          const setKey = set.templateExerciseId ?? set.exerciseId;
+          if (setKey !== exerciseKey) return set;
+          if (set.setKind === "warmup") return set;
+          if (loggedSetIdsRef.current.has(set.id)) return set;
+
+          const shouldFillWeight =
+            suggestion.suggestedWeight !== undefined &&
+            set.actualWeight === undefined &&
+            set.targetWeight === undefined;
+          const shouldFillReps =
+            suggestion.suggestedReps !== undefined &&
+            set.actualReps === undefined &&
+            set.targetReps === undefined;
+          if (!shouldFillWeight && !shouldFillReps) return set;
+
+          return {
+            ...set,
+            targetWeight: shouldFillWeight ? suggestion.suggestedWeight : set.targetWeight,
+            actualWeight: shouldFillWeight ? suggestion.suggestedWeight : set.actualWeight,
+            targetReps: shouldFillReps ? suggestion.suggestedReps : set.targetReps,
+            actualReps: shouldFillReps ? suggestion.suggestedReps : set.actualReps,
+          };
+        })
+      );
+    },
+    []
+  );
 
   const undoSet = (setId: string) => {
     // Create updated loggedSetIds without the undone set
@@ -1835,6 +2362,14 @@ const WorkoutSessionScreen = () => {
             targetReps: newExercise.reps ?? set.targetReps,
             targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
             actualReps: newExercise.reps ?? set.actualReps,
+            targetWeight: undefined,
+            actualWeight: undefined,
+            targetDistance: undefined,
+            actualDistance: undefined,
+            targetIncline: undefined,
+            actualIncline: undefined,
+            targetDurationMinutes: undefined,
+            actualDurationMinutes: undefined,
           };
         }
         return set;
@@ -1843,11 +2378,21 @@ const WorkoutSessionScreen = () => {
     setSwapExerciseKey(null);
   };
 
-  const handleAdjustTimer = (exerciseKey: string, newRestSeconds: number) => {
+  const handleAdjustTimer = (
+    exerciseKey: string,
+    newWorkingRestSeconds: number,
+    newWarmupRestSeconds?: number
+  ) => {
     setSessionRestTimes((prev) => ({
       ...prev,
-      [exerciseKey]: newRestSeconds,
+      [exerciseKey]: newWorkingRestSeconds,
     }));
+    if (newWarmupRestSeconds !== undefined) {
+      setSessionWarmupRestTimes((prev) => ({
+        ...prev,
+        [exerciseKey]: newWarmupRestSeconds,
+      }));
+    }
   };
 
   const handleAddExerciseToSession = (exerciseForm: any) => {
@@ -1872,6 +2417,7 @@ const WorkoutSessionScreen = () => {
         exerciseId: exerciseForm.exercise.id,
         exerciseName: exerciseForm.exercise.name,
         exerciseImageUrl: exerciseForm.exercise.gifUrl,
+        setKind: "working",
         setIndex: baseIndex + i,
         targetReps: exerciseForm.reps || 10,
         targetWeight: undefined,
@@ -1917,10 +2463,19 @@ const WorkoutSessionScreen = () => {
   };
 
   const handleReorderExercises = (newGroupedSets: ExerciseGroup[]) => {
-    // Update all set indices based on new order
+    const allSets = setsRef.current;
+    const fullGroups = groupSetsByExercise(
+      allSets,
+      restLookup,
+      sessionRestTimesRef.current
+    );
+    const fullGroupMap = new Map(fullGroups.map((group) => [group.key, group]));
+
     const reorderedSets: WorkoutSet[] = [];
     newGroupedSets.forEach((group, groupIndex) => {
-      group.sets.forEach((set, setIndex) => {
+      const full = fullGroupMap.get(group.key);
+      const nextSets = full?.sets ?? group.sets;
+      nextSets.forEach((set, setIndex) => {
         reorderedSets.push({
           ...set,
           setIndex: groupIndex * 100 + setIndex,
@@ -1950,6 +2505,7 @@ const WorkoutSessionScreen = () => {
       exerciseId: lastSet.exerciseId,
       exerciseName: lastSet.exerciseName,
       exerciseImageUrl: lastSet.exerciseImageUrl,
+      setKind: "working",
       setIndex: lastSet.setIndex + 1,
       targetReps: lastSet.targetReps,
       targetWeight: lastSet.targetWeight,
@@ -2113,7 +2669,7 @@ const WorkoutSessionScreen = () => {
     const contentHeight = contentSize.height;
 
     // Show top gradient when scrolled down
-    setShowTopGradient(scrollY > 5);
+    setShowTopGradient(scrollY > 24);
 
     // Show bottom gradient when not at the bottom
     const isNearBottom = scrollY + scrollViewHeight >= contentHeight - 20;
@@ -2121,7 +2677,7 @@ const WorkoutSessionScreen = () => {
   };
 
   const renderHeader = () => (
-    <View style={{ gap: 12, marginBottom: 12 }}>
+    <View style={{ gap: 12, marginTop: 8, marginBottom: 12 }}>
       <View
         style={{
           flexDirection: "row",
@@ -2303,6 +2859,128 @@ const WorkoutSessionScreen = () => {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => {
+            hasUserChangedWarmupPreferenceRef.current = true;
+            setShowWarmupSets((prev) => !prev);
+          }}
+          style={({ pressed }) => ({
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: colors.border,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+              Warm-up sets
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {showWarmupSets ? "Shown before working sets" : "Hidden (working sets only)"}
+            </Text>
+          </View>
+          <View pointerEvents='none'>
+            <Switch
+              value={showWarmupSets}
+              onValueChange={setShowWarmupSets}
+              trackColor={{
+                false: colors.border,
+                true: "rgba(56,189,248,0.35)",
+              }}
+              thumbColor={showWarmupSets ? colors.secondary : "#6B7280"}
+            />
+          </View>
+        </Pressable>
+
+        {showWarmupSets && warmupSuggestions.length > 0 && (
+          <View
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: `${colors.secondary}15`,
+                  borderWidth: 1,
+                  borderColor: `${colors.secondary}25`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name='flash-outline' size={18} color={colors.secondary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  {warmupTargetsLabel}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Quick routine (2–4 min)
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {warmupSuggestions.map((item) => (
+                <View
+                  key={`${item.title}-${item.note ?? ""}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    paddingVertical: 8,
+                    paddingHorizontal: 10,
+                    borderRadius: 12,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
+                      backgroundColor: `${colors.secondary}12`,
+                      borderWidth: 1,
+                      borderColor: `${colors.secondary}25`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginTop: 1,
+                    }}
+                  >
+                    <Ionicons name='checkmark' size={14} color={colors.secondary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                      {item.title}
+                    </Text>
+                    {item.note ? (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                        {item.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <Pressable
           onPress={() => {
@@ -2583,14 +3261,32 @@ const WorkoutSessionScreen = () => {
         <TimerAdjustmentModal
           visible={!!timerAdjustExerciseKey}
           onClose={() => setTimerAdjustExerciseKey(null)}
-          currentSeconds={timerAdjustGroup.restSeconds ?? 90}
+          currentWorkingSeconds={
+            sessionRestTimes[timerAdjustGroup.key] ??
+            timerAdjustGroup.restSeconds ??
+            DEFAULT_WORKING_REST_SECONDS
+          }
+          currentWarmupSeconds={
+            sessionWarmupRestTimes[timerAdjustGroup.key] ?? DEFAULT_WARMUP_REST_SECONDS
+          }
+          showWarmupOption={showWarmupSets}
           exerciseName={timerAdjustGroup.name}
-          onSave={(seconds) => {
-            handleAdjustTimer(timerAdjustExerciseKey!, seconds);
+          onSave={({ workingSeconds, warmupSeconds }) => {
+            handleAdjustTimer(
+              timerAdjustExerciseKey!,
+              workingSeconds,
+              warmupSeconds
+            );
             setTimerAdjustExerciseKey(null);
           }}
         />
       )}
+      <ExerciseInstructionsModal
+        visible={!!instructionsExercise}
+        exerciseId={instructionsExercise?.id ?? null}
+        exerciseName={instructionsExercise?.name ?? null}
+        onClose={() => setInstructionsExercise(null)}
+      />
       <ExercisePicker
         visible={showExercisePicker}
         onClose={() => setShowExercisePicker(false)}
@@ -2665,12 +3361,25 @@ const WorkoutSessionScreen = () => {
       <View style={{ flex: 1, marginHorizontal: -18 }}>
         <View style={{ flex: 1, paddingTop: insets.top }}>
           <DraggableFlatList
+            ref={exercisesListRef}
             data={groupedSets}
             keyExtractor={(item) => item.key}
             onDragEnd={({ data }) => handleReorderExercises(data)}
             onScroll={handleScroll}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              const offset = Math.max(0, index * (averageItemLength || 180));
+              exercisesListRef.current?.scrollToOffset?.({ offset, animated: true });
+              setTimeout(() => {
+                exercisesListRef.current?.scrollToIndex?.({
+                  index,
+                  animated: true,
+                  viewPosition: 0,
+                  viewOffset: 70,
+                });
+              }, 50);
+            }}
             onScrollOffsetChange={(offset) => {
-              setShowTopGradient(offset > 5);
+              setShowTopGradient(offset > 24);
             }}
             scrollEventThrottle={16}
             ListHeaderComponent={renderHeader}
@@ -2711,6 +3420,13 @@ const WorkoutSessionScreen = () => {
                     });
                   }}
                   onChangeSet={updateSet}
+                  startingSuggestion={startingSuggestions[group.exerciseId]}
+                  onApplyStartingSuggestion={() =>
+                    applyStartingSuggestionToGroup(
+                      group.key,
+                      startingSuggestions[group.exerciseId]
+                    )
+                  }
                   onLogSet={logSet}
                   activeSetId={activeSetId}
                   onSelectSet={setActiveSetId}
@@ -2718,6 +3434,8 @@ const WorkoutSessionScreen = () => {
                   loggedSetIds={loggedSetIds}
                   restRemaining={restRemaining}
                   lastLoggedSetId={lastLoggedSetId}
+                  sessionRestSeconds={sessionRestTimes[group.key]}
+                  warmupRestSeconds={sessionWarmupRestTimes[group.key]}
                   onUndo={undoSet}
                   onSwap={() => setSwapExerciseKey(group.key)}
                   onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
@@ -2729,6 +3447,36 @@ const WorkoutSessionScreen = () => {
                   onImagePress={() =>
                     group.imageUrl && setImagePreviewUrl(group.imageUrl)
                   }
+                  onShowInstructions={() =>
+                    setInstructionsExercise({
+                      id: group.exerciseId,
+                      name: group.name,
+                    })
+                  }
+                  showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
+                  onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
+                    // Apply rating to all working sets in this exercise
+                    const workingSetsInGroup = setsRef.current.filter(
+                      (s) =>
+                        (s.templateExerciseId ?? s.exerciseId) === group.key &&
+                        s.setKind !== "warmup"
+                    );
+                    const updatedSets = workingSetsInGroup.map((s) => ({
+                      ...s,
+                      difficultyRating: rating,
+                    }));
+                    if (updatedSets.length > 0) {
+                      applySetUpdates(updatedSets);
+                    }
+                    // Clear pending state and advance to next exercise
+                    setPendingDifficultyFeedbackKey(null);
+                    advanceToNextExercise(group.key, loggedSetIds);
+                  }}
+                  onSkipDifficultyFeedback={() => {
+                    // Clear pending state and advance to next exercise without saving rating
+                    setPendingDifficultyFeedbackKey(null);
+                    advanceToNextExercise(group.key, loggedSetIds);
+                  }}
                 />
               </ScaleDecorator>
             )}
@@ -2797,6 +3545,7 @@ const WorkoutSessionScreen = () => {
 type SetInputRowProps = {
   set: WorkoutSet;
   displayIndex: number;
+  isWarmup?: boolean;
   onChange: (updated: WorkoutSet) => void;
   onLog: () => void;
   restSeconds?: number;
@@ -2811,6 +3560,7 @@ type SetInputRowProps = {
 const SetInputRow = ({
   set,
   displayIndex,
+  isWarmup,
   onChange,
   onLog,
   restSeconds,
@@ -2824,6 +3574,9 @@ const SetInputRow = ({
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
   const [isEditingWeight, setIsEditingWeight] = useState(false);
+  const restLabelSeconds =
+    restSeconds ??
+    (isWarmup ? DEFAULT_WARMUP_REST_SECONDS : DEFAULT_WORKING_REST_SECONDS);
 
   useEffect(() => {
     if (isEditingWeight) return;
@@ -2873,9 +3626,15 @@ const SetInputRow = ({
         padding: 10,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: isActive ? colors.primary : colors.border,
+        borderColor: isActive
+          ? colors.primary
+          : isWarmup
+          ? `${colors.secondary}35`
+          : colors.border,
         backgroundColor: isActive
           ? "rgba(34,197,94,0.12)"
+          : isWarmup
+          ? "rgba(56,189,248,0.08)"
           : colors.surfaceMuted,
       }}
     >
@@ -2888,9 +3647,34 @@ const SetInputRow = ({
         }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-            Set {displayIndex + 1}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+              Set {displayIndex + 1}
+            </Text>
+            {isWarmup ? (
+              <View
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                  backgroundColor: `${colors.secondary}20`,
+                  borderWidth: 1,
+                  borderColor: `${colors.secondary}35`,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.secondary,
+                    fontSize: 10,
+                    fontWeight: "900",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  WARM UP
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
             {targetLine ? `Target ${targetLine}` : "Log this effort"}
           </Text>
@@ -3106,7 +3890,7 @@ const SetInputRow = ({
         }}
       >
         <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-          Rest after set: {restSeconds ?? 90}s
+          Rest after set: {restLabelSeconds}s
         </Text>
         {!autoRestTimer ? (
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
@@ -3123,6 +3907,8 @@ type ExerciseCardProps = {
   expanded: boolean;
   onToggle: () => void;
   onChangeSet: (updated: WorkoutSet) => void;
+  startingSuggestion?: StartingSuggestion;
+  onApplyStartingSuggestion?: () => void;
   onLogSet: (setId: string, restSeconds?: number) => void;
   activeSetId: string | null;
   onSelectSet: (setId: string | null) => void;
@@ -3130,6 +3916,8 @@ type ExerciseCardProps = {
   loggedSetIds: Set<string>;
   restRemaining: number | null;
   lastLoggedSetId: string | null;
+  sessionRestSeconds?: number;
+  warmupRestSeconds?: number;
   onUndo: (setId: string) => void;
   onSwap: () => void;
   onAdjustTimer: () => void;
@@ -3139,6 +3927,10 @@ type ExerciseCardProps = {
   onRemoveSet: (setId: string) => void;
   onDeleteExercise: () => void;
   onImagePress: () => void;
+  onShowInstructions: () => void;
+  showExerciseDifficultyFeedback: boolean;
+  onExerciseDifficultyFeedback: (rating: SetDifficultyRating) => void;
+  onSkipDifficultyFeedback: () => void;
 };
 
 const ExerciseCard = ({
@@ -3146,6 +3938,8 @@ const ExerciseCard = ({
   expanded,
   onToggle,
   onChangeSet,
+  startingSuggestion,
+  onApplyStartingSuggestion,
   onLogSet,
   activeSetId,
   onSelectSet,
@@ -3153,6 +3947,8 @@ const ExerciseCard = ({
   loggedSetIds,
   restRemaining,
   lastLoggedSetId,
+  sessionRestSeconds,
+  warmupRestSeconds,
   onUndo,
   onSwap,
   onAdjustTimer,
@@ -3162,6 +3958,10 @@ const ExerciseCard = ({
   onRemoveSet,
   onDeleteExercise,
   onImagePress,
+  onShowInstructions,
+  showExerciseDifficultyFeedback,
+  onExerciseDifficultyFeedback,
+  onSkipDifficultyFeedback,
 }: ExerciseCardProps) => {
   const loggedSetsCount = group.sets.filter((s) =>
     loggedSetIds.has(s.id)
@@ -3169,11 +3969,47 @@ const ExerciseCard = ({
   const allSetsLogged = loggedSetsCount === group.sets.length;
   const isCardioGroup = isCardioExercise(group.exerciseId, group.name);
 
-  const summaryLine = `${group.sets.length} sets · ${
-    group.sets[0]?.targetReps
-      ? `${group.sets[0].targetReps} reps`
+  const warmupSetCount = group.sets.filter((set) => set.setKind === "warmup").length;
+  const workingSetCount = group.sets.length - warmupSetCount;
+  const primaryWorkingSet =
+    group.sets.find((set) => set.setKind !== "warmup") ?? group.sets[0];
+  const exerciseRestSeconds =
+    sessionRestSeconds ?? group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
+
+  const summaryLine = `${workingSetCount} working${
+    warmupSetCount > 0 ? ` · ${warmupSetCount} warm-up` : ""
+  } · ${
+    primaryWorkingSet?.targetReps
+      ? `${primaryWorkingSet.targetReps} reps`
       : "adjust as you go"
   }`;
+
+  const hasWeightSuggestion =
+    typeof startingSuggestion?.suggestedWeight === "number" &&
+    Number.isFinite(startingSuggestion.suggestedWeight);
+  const hasRepsSuggestion =
+    typeof startingSuggestion?.suggestedReps === "number" &&
+    Number.isFinite(startingSuggestion.suggestedReps);
+
+  const hasMissingWeight = group.sets.some(
+    (set) =>
+      set.setKind !== "warmup" &&
+      !loggedSetIds.has(set.id) &&
+      set.actualWeight === undefined &&
+      set.targetWeight === undefined
+  );
+  const hasMissingReps = group.sets.some(
+    (set) =>
+      set.setKind !== "warmup" &&
+      !loggedSetIds.has(set.id) &&
+      set.actualReps === undefined &&
+      set.targetReps === undefined
+  );
+
+  const canApplyStartingSuggestion =
+    Boolean(startingSuggestion) &&
+    ((hasWeightSuggestion && hasMissingWeight) ||
+      (hasRepsSuggestion && hasMissingReps));
 
   return (
     <View
@@ -3227,6 +4063,8 @@ const ExerciseCard = ({
                 fontSize: 16,
                 fontWeight: "700",
               }}
+              numberOfLines={1}
+              ellipsizeMode='tail'
             >
               {group.name}
             </Text>
@@ -3305,6 +4143,28 @@ const ExerciseCard = ({
           {/* Action buttons */}
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
+              onPress={onShowInstructions}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons
+                name='information-circle-outline'
+                size={18}
+                color={colors.secondary}
+              />
+            </Pressable>
+            <Pressable
               onPress={onSwap}
               style={({ pressed }) => ({
                 flex: 1,
@@ -3365,66 +4225,212 @@ const ExerciseCard = ({
                   fontWeight: "600",
                 }}
               >
-                Rest: {group.restSeconds ?? 90}s
+                Rest: {exerciseRestSeconds}s
               </Text>
             </Pressable>
           </View>
 
-          {group.sets.map((set, displayIndex) => (
-            <View key={set.id} style={{ gap: 8 }}>
-              <SetInputRow
-                set={set}
-                displayIndex={displayIndex}
-                onChange={onChangeSet}
-                onLog={() => onLogSet(set.id, group.restSeconds)}
-                restSeconds={group.restSeconds}
-                isActive={activeSetId === set.id}
-                autoRestTimer={autoRestTimer}
-                logged={loggedSetIds.has(set.id)}
-                onUndo={() => onUndo(set.id)}
-                onRemove={() => onRemoveSet(set.id)}
-                canRemove={group.sets.length > 1}
-              />
-              {restRemaining !== null && lastLoggedSetId === set.id ? (
-                <View
-                  style={{
-                    padding: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceMuted,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
+          {canApplyStartingSuggestion ? (
+            <View
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                gap: 10,
+              }}
+            >
+              <View style={{ gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  Suggested start
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {startingSuggestion?.suggestedWeight
+                    ? `${startingSuggestion.suggestedWeight} lb`
+                    : "—"}
+                  {startingSuggestion?.suggestedReps
+                    ? ` · ${startingSuggestion.suggestedReps} reps`
+                    : ""}
+                  {startingSuggestion?.reason ? ` · ${startingSuggestion.reason}` : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={onApplyStartingSuggestion}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ color: "#0B1220", fontWeight: "900" }}>
+                  Apply to working sets
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {group.sets.map((set, displayIndex) => {
+            // Use a shorter default rest for warm-ups unless the user explicitly set a session timer.
+            const restSecondsForSet =
+              set.setKind === "warmup"
+                ? warmupRestSeconds ?? DEFAULT_WARMUP_REST_SECONDS
+                : exerciseRestSeconds;
+
+            return (
+              <View key={set.id} style={{ gap: 8 }}>
+                <SetInputRow
+                  set={set}
+                  displayIndex={displayIndex}
+                  isWarmup={set.setKind === "warmup"}
+                  onChange={onChangeSet}
+                  onLog={() => onLogSet(set.id, restSecondsForSet)}
+                  restSeconds={restSecondsForSet}
+                  isActive={activeSetId === set.id}
+                  autoRestTimer={autoRestTimer}
+                  logged={loggedSetIds.has(set.id)}
+                  onUndo={() => onUndo(set.id)}
+                  onRemove={() => onRemoveSet(set.id)}
+                  canRemove={group.sets.length > 1}
+                />
+                {restRemaining !== null && lastLoggedSetId === set.id && !showExerciseDifficultyFeedback ? (
                   <View
                     style={{
+                      padding: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceMuted,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8,
+                      justifyContent: "space-between",
                     }}
                   >
-                    <Ionicons name='timer' size={18} color={colors.primary} />
-                    <Text
-                      style={{ color: colors.textPrimary, fontWeight: "700" }}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
                     >
-                      Rest
+                      <Ionicons name='timer' size={18} color={colors.primary} />
+                      <Text
+                        style={{ color: colors.textPrimary, fontWeight: "700" }}
+                      >
+                        Rest
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "800",
+                        fontSize: 16,
+                      }}
+                    >
+                      {formatSeconds(restRemaining)}
                     </Text>
                   </View>
-                  <Text
-                    style={{
-                      color: colors.primary,
-                      fontWeight: "800",
-                      fontSize: 16,
-                    }}
-                  >
-                    {formatSeconds(restRemaining)}
+                ) : null}
+              </View>
+            );
+          })}
+
+          {/* Exercise difficulty feedback - shown after all sets logged */}
+          {showExerciseDifficultyFeedback && (
+            <View
+              style={{
+                padding: 14,
+                borderRadius: 14,
+                backgroundColor: `${colors.primary}12`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}30`,
+                gap: 12,
+              }}
+            >
+              <View style={{ gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "800" }}>
+                  How did this exercise feel?
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  This helps personalize your weight suggestions
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("too_easy")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.secondary}35` : `${colors.secondary}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.secondary}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.secondary, fontSize: 13, fontWeight: "800" }}>
+                    Too Easy
                   </Text>
-                </View>
-              ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("just_right")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.primary}35` : `${colors.primary}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.primary}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>
+                    Just Right
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("too_hard")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.error}35` : `${colors.error}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.error}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.error, fontSize: 13, fontWeight: "800" }}>
+                    Too Hard
+                  </Text>
+                </Pressable>
+              </View>
+              <Pressable
+                onPress={onSkipDifficultyFeedback}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>
+                  Skip
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.textSecondary} />
+              </Pressable>
             </View>
-          ))}
+          )}
 
           {/* Add Set button (disabled for cardio) */}
           {!isCardioGroup ? (

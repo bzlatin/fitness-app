@@ -52,6 +52,8 @@ export interface WorkoutTemplate {
   progressiveOverloadEnabled?: boolean;
 }
 
+export type SetDifficultyRating = "too_easy" | "just_right" | "too_hard";
+
 export interface WorkoutSet {
   id: string;
   sessionId: string;
@@ -59,6 +61,7 @@ export interface WorkoutSet {
   exerciseId: string;
   exerciseName?: string;
   exerciseImageUrl?: string;
+  setKind?: "warmup" | "working";
   setIndex: number;
   targetReps?: number;
   targetWeight?: number;
@@ -66,6 +69,7 @@ export interface WorkoutSet {
   actualReps?: number;
   actualWeight?: number;
   rpe?: number;
+  difficultyRating?: SetDifficultyRating;
   // Cardio-specific fields
   targetDistance?: number;
   actualDistance?: number;
@@ -144,6 +148,15 @@ export interface Exercise {
   gifUrl?: string;
   isCustom?: boolean;
   createdBy?: string;
+}
+
+export interface ExerciseDetails extends Exercise {
+  instructions: string[];
+  level?: string;
+  force?: string;
+  mechanic?: string;
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
 }
 
 export interface CustomExercise {

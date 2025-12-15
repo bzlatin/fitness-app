@@ -12,6 +12,7 @@ import {
 } from "../types/analytics";
 import { ProgressionData } from "../components/ProgressionSuggestion";
 import { AppleHealthPermissions, AppleHealthSessionPayload } from "../types/health";
+import { StartingSuggestion } from "../types/analytics";
 
 export const fetchFatigue = async (): Promise<FatigueResult> => {
   const res = await apiClient.get<{ data: FatigueResult }>("/analytics/fatigue");
@@ -41,6 +42,13 @@ export const applyProgressionSuggestions = async (
   const res = await apiClient.post<{ data: { updated: number } }>(
     `/analytics/progression/${templateId}/apply`,
     { exerciseIds }
+  );
+  return res.data.data;
+};
+
+export const fetchStartingSuggestion = async (exerciseId: string) => {
+  const res = await apiClient.get<{ data: StartingSuggestion | null }>(
+    `/analytics/starting-suggestion/${exerciseId}`
   );
   return res.data.data;
 };
