@@ -377,6 +377,7 @@ const WorkoutSessionScreen = () => {
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [loggedSetIds, setLoggedSetIds] = useState<Set<string>>(new Set());
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
+  const [pendingDifficultyFeedbackKey, setPendingDifficultyFeedbackKey] = useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
   const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
   const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<
@@ -1902,34 +1903,17 @@ const WorkoutSessionScreen = () => {
         }
       }
 
-      // All sets in this exercise are logged, move to next exercise.
+      // All sets in this exercise are logged - show difficulty feedback before advancing
       const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
       if (allLogged) {
-        const currentIndex = groupedSets.findIndex((g) => g.key === group.key);
-        const nextGroup = groupedSets[currentIndex + 1];
-        if (nextGroup) {
-          setAutoFocusEnabled(true);
-          shouldAutoScrollToActiveExerciseRef.current = true;
-          setActiveExerciseKey(nextGroup.key);
-          const firstUnloggedInNextGroup = nextGroup.sets.find(
-            (s) => !updatedLoggedSetIds.has(s.id)
-          );
-          const nextSetId =
-            firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+        // Check if any working set in this exercise already has a difficulty rating
+        const workingSets = sorted.filter((s) => s.setKind !== "warmup");
+        const hasExistingRating = workingSets.some((s) => s.difficultyRating);
 
-          activeSetIdRef.current = nextSetId;
-          setActiveSetId(nextSetId);
-
-          if (firstUnloggedInNextGroup) {
-            const nextSetIndex = nextGroup.sets.findIndex(
-              (s) => s.id === firstUnloggedInNextGroup.id
-            );
-            syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
-          }
-        } else {
-          activeSetIdRef.current = null;
-          setActiveExerciseKey(null);
-          setActiveSetId(null);
+        if (!hasExistingRating && workingSets.length > 0) {
+          // Show difficulty feedback prompt - don't auto-advance yet
+          setPendingDifficultyFeedbackKey(group.key);
+          // Keep the exercise expanded and don't advance
           const lastSetIndex = sorted.length - 1;
           syncCurrentExerciseToWidget(
             groupKey,
@@ -1938,10 +1922,46 @@ const WorkoutSessionScreen = () => {
             updated.actualWeight,
             0
           );
+        } else {
+          // Already has rating or no working sets, advance normally
+          advanceToNextExercise(group.key, updatedLoggedSetIds);
         }
       }
     }
   };
+
+  // Helper to advance to next exercise (extracted for reuse after difficulty feedback)
+  const advanceToNextExercise = useCallback(
+    (currentExerciseKey: string, currentLoggedSetIds: Set<string>) => {
+      const currentIndex = groupedSets.findIndex((g) => g.key === currentExerciseKey);
+      const nextGroup = groupedSets[currentIndex + 1];
+      if (nextGroup) {
+        setAutoFocusEnabled(true);
+        shouldAutoScrollToActiveExerciseRef.current = true;
+        setActiveExerciseKey(nextGroup.key);
+        const firstUnloggedInNextGroup = nextGroup.sets.find(
+          (s) => !currentLoggedSetIds.has(s.id)
+        );
+        const nextSetId =
+          firstUnloggedInNextGroup?.id ?? nextGroup.sets[0]?.id ?? null;
+
+        activeSetIdRef.current = nextSetId;
+        setActiveSetId(nextSetId);
+
+        if (firstUnloggedInNextGroup) {
+          const nextSetIndex = nextGroup.sets.findIndex(
+            (s) => s.id === firstUnloggedInNextGroup.id
+          );
+          syncCurrentExerciseToWidget(nextGroup.key, nextSetIndex);
+        }
+      } else {
+        activeSetIdRef.current = null;
+        setActiveExerciseKey(null);
+        setActiveSetId(null);
+      }
+    },
+    [groupedSets, syncCurrentExerciseToWidget]
+  );
 
   const applyStartingSuggestionToGroup = useCallback(
     (exerciseKey: string, suggestion: StartingSuggestion | undefined) => {
@@ -3093,11 +3113,29 @@ const WorkoutSessionScreen = () => {
                   onImagePress={() =>
                     group.imageUrl && setImagePreviewUrl(group.imageUrl)
                   }
-                  onDifficultyFeedback={(setId, rating) => {
-                    const targetSet = setsRef.current.find((s) => s.id === setId);
-                    if (targetSet) {
-                      applySetUpdates([{ ...targetSet, difficultyRating: rating }]);
+                  showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
+                  onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
+                    // Apply rating to all working sets in this exercise
+                    const workingSetsInGroup = setsRef.current.filter(
+                      (s) =>
+                        (s.templateExerciseId ?? s.exerciseId) === group.key &&
+                        s.setKind !== "warmup"
+                    );
+                    const updatedSets = workingSetsInGroup.map((s) => ({
+                      ...s,
+                      difficultyRating: rating,
+                    }));
+                    if (updatedSets.length > 0) {
+                      applySetUpdates(updatedSets);
                     }
+                    // Clear pending state and advance to next exercise
+                    setPendingDifficultyFeedbackKey(null);
+                    advanceToNextExercise(group.key, loggedSetIds);
+                  }}
+                  onSkipDifficultyFeedback={() => {
+                    // Clear pending state and advance to next exercise without saving rating
+                    setPendingDifficultyFeedbackKey(null);
+                    advanceToNextExercise(group.key, loggedSetIds);
                   }}
                 />
               </ScaleDecorator>
@@ -3177,8 +3215,6 @@ type SetInputRowProps = {
   onUndo: () => void;
   onRemove: () => void;
   canRemove: boolean;
-  showDifficultyFeedback?: boolean;
-  onDifficultyFeedback?: (rating: SetDifficultyRating) => void;
 };
 
 const SetInputRow = ({
@@ -3194,8 +3230,6 @@ const SetInputRow = ({
   onUndo,
   onRemove,
   canRemove,
-  showDifficultyFeedback,
-  onDifficultyFeedback,
 }: SetInputRowProps) => {
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
@@ -3508,68 +3542,6 @@ const SetInputRow = ({
           </View>
         </View>
       )}
-      {/* Inline difficulty feedback - shows only for logged working sets when requested */}
-      {showDifficultyFeedback && logged && !isWarmup && onDifficultyFeedback && (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingTop: 4,
-          }}
-        >
-          <Text style={{ color: colors.textSecondary, fontSize: 12, flex: 1 }}>
-            How did it feel?
-          </Text>
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <Pressable
-              onPress={() => onDifficultyFeedback("too_easy")}
-              style={({ pressed }) => ({
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-                backgroundColor: pressed ? `${colors.secondary}30` : `${colors.secondary}15`,
-                borderWidth: 1,
-                borderColor: `${colors.secondary}40`,
-              })}
-            >
-              <Text style={{ color: colors.secondary, fontSize: 11, fontWeight: "700" }}>
-                Easy
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onDifficultyFeedback("just_right")}
-              style={({ pressed }) => ({
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-                backgroundColor: pressed ? `${colors.primary}30` : `${colors.primary}15`,
-                borderWidth: 1,
-                borderColor: `${colors.primary}40`,
-              })}
-            >
-              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700" }}>
-                Good
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onDifficultyFeedback("too_hard")}
-              style={({ pressed }) => ({
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 8,
-                backgroundColor: pressed ? `${colors.error}30` : `${colors.error}15`,
-                borderWidth: 1,
-                borderColor: `${colors.error}40`,
-              })}
-            >
-              <Text style={{ color: colors.error, fontSize: 11, fontWeight: "700" }}>
-                Hard
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
       <View
         style={{
           flexDirection: "row",
@@ -3613,7 +3585,9 @@ type ExerciseCardProps = {
   onRemoveSet: (setId: string) => void;
   onDeleteExercise: () => void;
   onImagePress: () => void;
-  onDifficultyFeedback: (setId: string, rating: SetDifficultyRating) => void;
+  showExerciseDifficultyFeedback: boolean;
+  onExerciseDifficultyFeedback: (rating: SetDifficultyRating) => void;
+  onSkipDifficultyFeedback: () => void;
 };
 
 const ExerciseCard = ({
@@ -3639,7 +3613,9 @@ const ExerciseCard = ({
   onRemoveSet,
   onDeleteExercise,
   onImagePress,
-  onDifficultyFeedback,
+  showExerciseDifficultyFeedback,
+  onExerciseDifficultyFeedback,
+  onSkipDifficultyFeedback,
 }: ExerciseCardProps) => {
   const loggedSetsCount = group.sets.filter((s) =>
     loggedSetIds.has(s.id)
@@ -3927,13 +3903,7 @@ const ExerciseCard = ({
             </View>
           ) : null}
 
-          {group.sets.map((set, displayIndex) => {
-            // Show difficulty feedback only for the last logged set that doesn't have a rating yet
-            const isLastLoggedInGroup = lastLoggedSetId === set.id;
-            const needsFeedback = !set.difficultyRating && set.setKind !== "warmup";
-            const showFeedback = isLastLoggedInGroup && needsFeedback && loggedSetIds.has(set.id);
-
-            return (
+          {group.sets.map((set, displayIndex) => (
             <View key={set.id} style={{ gap: 8 }}>
               <SetInputRow
                 set={set}
@@ -3948,10 +3918,8 @@ const ExerciseCard = ({
                 onUndo={() => onUndo(set.id)}
                 onRemove={() => onRemoveSet(set.id)}
                 canRemove={group.sets.length > 1}
-                showDifficultyFeedback={showFeedback}
-                onDifficultyFeedback={(rating) => onDifficultyFeedback(set.id, rating)}
               />
-              {restRemaining !== null && lastLoggedSetId === set.id ? (
+              {restRemaining !== null && lastLoggedSetId === set.id && !showExerciseDifficultyFeedback ? (
                 <View
                   style={{
                     padding: 10,
@@ -3990,8 +3958,101 @@ const ExerciseCard = ({
                 </View>
               ) : null}
             </View>
-            );
-          })}
+          ))}
+
+          {/* Exercise difficulty feedback - shown after all sets logged */}
+          {showExerciseDifficultyFeedback && (
+            <View
+              style={{
+                padding: 14,
+                borderRadius: 14,
+                backgroundColor: `${colors.primary}12`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}30`,
+                gap: 12,
+              }}
+            >
+              <View style={{ gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "800" }}>
+                  How did this exercise feel?
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  This helps personalize your weight suggestions
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("too_easy")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.secondary}35` : `${colors.secondary}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.secondary}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.secondary, fontSize: 13, fontWeight: "800" }}>
+                    Too Easy
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("just_right")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.primary}35` : `${colors.primary}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.primary}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>
+                    Just Right
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onExerciseDifficultyFeedback("too_hard")}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? `${colors.error}35` : `${colors.error}20`,
+                    borderWidth: 1,
+                    borderColor: `${colors.error}50`,
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ color: colors.error, fontSize: 13, fontWeight: "800" }}>
+                    Too Hard
+                  </Text>
+                </Pressable>
+              </View>
+              <Pressable
+                onPress={onSkipDifficultyFeedback}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>
+                  Skip
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          )}
 
           {/* Add Set button (disabled for cardio) */}
           {!isCardioGroup ? (
