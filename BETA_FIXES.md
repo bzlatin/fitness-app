@@ -59,9 +59,10 @@
 
 ### UI/Display Fixes
 
-- [ ] Fix text overflow issues
+- [x] Fix text overflow issues
   - **Issue**: Weight input/display bleeding off page
-  - Ensure proper text truncation or responsive sizing
-  - Test on smaller devices (iPhone SE, older Android)
+  - Fixed exercise name truncation with `numberOfLines={1}` and `flex: 1`
+  - Fixed stats column with `flexShrink: 0` to prevent wrapping
+  - Shortened "Add past" button to "Log" to prevent clipping on smaller screens
 
 ---
