@@ -39,9 +39,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importStar(require("express"));
 const path_1 = __importDefault(require("path"));
 const multer_1 = __importDefault(require("multer"));
-const nanoid_1 = require("nanoid");
 const db_1 = require("../db");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
+const id_1 = require("../utils/id");
 const auth_1 = require("../middleware/auth");
 const planLimits_1 = require("../middleware/planLimits");
 const cloudinary_1 = require("../services/cloudinary");
@@ -191,7 +191,7 @@ router.post("/custom", auth_1.maybeRequireAuth, auth_1.attachUser, planLimits_1.
         }
     }
     try {
-        const exerciseId = (0, nanoid_1.nanoid)();
+        const exerciseId = (0, id_1.generateId)();
         await (0, db_1.query)(`INSERT INTO user_exercises (
           id, user_id, name, primary_muscle_group, secondary_muscle_groups,
           equipment, notes, image_url, scope, squad_id

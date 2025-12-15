@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { PoolClient } from "pg";
-import { generateId } from "../utils/id";
-import { customAlphabet } from "nanoid";
+import { createIdGenerator, generateId } from "../utils/id";
 import { WorkoutTemplate, WorkoutTemplateExercise } from "../types/workouts";
 import { pool, query } from "../db";
 import { checkTemplateLimit } from "../middleware/planLimits";
@@ -57,6 +56,7 @@ const mapExercise = (
     exerciseName: meta?.name ?? formatExerciseId(row.exercise_id),
     primaryMuscleGroup: meta?.primaryMuscleGroup ?? "other",
     exerciseImageUrl: meta?.gifUrl,
+    equipment: meta?.equipment ?? "other",
     defaultSets: row.default_sets,
     defaultReps: row.default_reps,
     defaultRestSeconds: row.default_rest_seconds ?? undefined,
@@ -89,7 +89,7 @@ const mapTemplate = (
 });
 
 const SHARE_CODE_REGEX = /^[0-9a-z]{8}$/;
-const generateShareCode = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 8);
+const generateShareCode = createIdGenerator("0123456789abcdefghijklmnopqrstuvwxyz", 8);
 const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "https://push-pull.app").replace(
   /\/+$/,
   ""

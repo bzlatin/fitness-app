@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import {
   Modal,
   Pressable,
@@ -10,6 +10,7 @@ import {
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  ScrollView,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -26,7 +27,7 @@ import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutSession, WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
-import { generateWorkout } from "../api/ai";
+import { generateWorkout, recommendNextWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
 import { deleteSession, undoAutoEndSession } from "../api/sessions";
 import { fetchRecap } from "../api/analytics";
@@ -42,6 +43,10 @@ import RecoveryBodyMap from "../components/RecoveryBodyMap";
 import TrialBanner from "../components/premium/TrialBanner";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import {
+  canGenerateAiWorkout,
+  getAiWorkoutGenerationsRemaining,
+} from "../utils/featureGating";
 import RecapCard from "../components/RecapCard";
 import { RecapSlice } from "../types/analytics";
 
@@ -56,6 +61,8 @@ const HomeScreen = () => {
   const subscriptionAccess = useSubscriptionAccess();
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
+  const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+  const aiFreeUsed = !hasProAccess && aiRemaining === 0;
   const [paywallTrigger, setPaywallTrigger] = useState<
     "analytics" | "ai" | "templates" | "recovery" | "progression" | null
   >(null);
@@ -398,7 +405,7 @@ const HomeScreen = () => {
               marginTop: 4,
             }}
           >
-            Renew your plan to unlock AI workouts, analytics, and progression.
+            Renew your plan to unlock smart workouts, analytics, and progression.
           </Text>
         </Pressable>
       ) : null}
@@ -1084,6 +1091,12 @@ const HomeScreen = () => {
         visible={showPaywallModal}
         onClose={closePaywall}
         triggeredBy={paywallTrigger ?? undefined}
+        aiFreeUsed={paywallTrigger === "ai" ? aiFreeUsed : undefined}
+        aiFreeRemaining={
+          paywallTrigger === "ai" && Number.isFinite(aiRemaining)
+            ? aiRemaining
+            : undefined
+        }
       />
     </ScreenContainer>
   );
@@ -1135,18 +1148,33 @@ const MUSCLE_GROUPS = [
   { value: "chest", label: "Chest", emoji: "💪" },
   { value: "back", label: "Back", emoji: "🦾" },
   { value: "legs", label: "Legs", emoji: "🦵" },
+  { value: "glutes", label: "Glutes", emoji: "🍑" },
   { value: "shoulders", label: "Shoulders", emoji: "🏋️" },
   { value: "biceps", label: "Biceps", emoji: "💪" },
   { value: "triceps", label: "Triceps", emoji: "💪" },
 ];
 
-const SPLIT_OPTIONS = [
-  { value: "push", label: "Push", emoji: "💪" },
-  { value: "pull", label: "Pull", emoji: "🦾" },
-  { value: "legs", label: "Legs", emoji: "🦵" },
-  { value: "upper", label: "Upper", emoji: "🏅" },
-  { value: "lower", label: "Lower", emoji: "🔥" },
-  { value: "full_body", label: "Full Body", emoji: "⚡" },
+const SPLIT_EMOJIS: Record<string, string> = {
+  push: "💪",
+  pull: "🦾",
+  legs: "🦵",
+  upper: "🏅",
+  lower: "🔥",
+  full_body: "⚡",
+  chest: "💪",
+  back: "🦾",
+  shoulders: "🏋️",
+  arms: "💪",
+};
+
+const DURATION_OPTIONS = [30, 45, 60] as const;
+
+type EquipmentMode = "gym_full" | "home_limited" | "bodyweight";
+
+const EQUIPMENT_OPTIONS: Array<{ value: EquipmentMode; label: string }> = [
+  { value: "gym_full", label: "Gym" },
+  { value: "home_limited", label: "Home" },
+  { value: "bodyweight", label: "Bodyweight" },
 ];
 
 const SwapModal = ({
@@ -1163,54 +1191,126 @@ const SwapModal = ({
   onSelect: (template: WorkoutTemplate) => void;
   onOpenTemplate: (template: WorkoutTemplate) => void;
   showPaywallModal: () => void;
-}) => {
-  const navigation = useNavigation<RootNavigation>();
-  const queryClient = useQueryClient();
-  const { user } = useCurrentUser();
-  const { hasProAccess } = useSubscriptionAccess();
-  const insets = useSafeAreaInsets();
-  const [showSaved, setShowSaved] = useState(false);
-  const [showMuscleFocus, setShowMuscleFocus] = useState(false);
-  const [showAISplits, setShowAISplits] = useState(false);
+  }) => {
+    const navigation = useNavigation<RootNavigation>();
+    const queryClient = useQueryClient();
+    const { user, refresh } = useCurrentUser();
+    const { hasProAccess } = useSubscriptionAccess();
+    const insets = useSafeAreaInsets();
+    const smartScrollRef = useRef<ScrollView>(null);
+    const savedListRef = useRef<FlatList<WorkoutTemplate>>(null);
+    const [showSaved, setShowSaved] = useState(false);
+    const [showMuscleFocus, setShowMuscleFocus] = useState(false);
+    const [showSmartNext, setShowSmartNext] = useState(false);
   const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]);
-  const [savedIsNearBottom, setSavedIsNearBottom] = useState(false);
-  const [savedIsNearTop, setSavedIsNearTop] = useState(true);
+  const [smartSessionDuration, setSmartSessionDuration] = useState<number>(45);
+  const [smartEquipment, setSmartEquipment] = useState<EquipmentMode | null>(null);
+  const [smartAvoidMuscles, setSmartAvoidMuscles] = useState<string[]>([]);
+  const [manualSplitKey, setManualSplitKey] = useState<string | null>(null);
+  const [smartOptionsExpanded, setSmartOptionsExpanded] = useState(false);
+  const [smartSoreExpanded, setSmartSoreExpanded] = useState(false);
+    const [smartIsNearBottom, setSmartIsNearBottom] = useState(false);
+    const [smartIsNearTop, setSmartIsNearTop] = useState(true);
+    const [smartScrollContentHeight, setSmartScrollContentHeight] = useState(0);
+    const [smartScrollLayoutHeight, setSmartScrollLayoutHeight] = useState(1);
+    const [savedIsNearBottom, setSavedIsNearBottom] = useState(false);
+    const [savedIsNearTop, setSavedIsNearTop] = useState(true);
+    const [savedScrollContentHeight, setSavedScrollContentHeight] = useState(0);
+    const [savedScrollLayoutHeight, setSavedScrollLayoutHeight] = useState(1);
 
-  const isPro = hasProAccess;
-  const templateCount = templates?.length ?? 0;
-  const safeBottomPadding = Math.max(insets.bottom, 12);
+    const isPro = hasProAccess;
+    const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+    const canUseAi = canGenerateAiWorkout(user, { hasProAccess });
+  const aiFreeAvailable = !hasProAccess && aiRemaining > 0;
+    const templateCount = templates?.length ?? 0;
+    const safeBottomPadding = Math.max(insets.bottom, 12);
 
-  // Reset all state when modal is opened
-  const resetModalState = () => {
-    setShowSaved(false);
-    setShowMuscleFocus(false);
-    setShowAISplits(false);
-    setSelectedMuscles([]);
-    setSavedIsNearTop(true);
-    setSavedIsNearBottom(false);
-  };
+    const scrollSmartToTop = useCallback((animated = false) => {
+      smartScrollRef.current?.scrollTo({ y: 0, animated });
+    }, []);
 
-  // Reset state when modal visibility changes
-  useEffect(() => {
-    if (visible) {
-      resetModalState();
-    }
-  }, [visible]);
+    const scrollSavedToTop = useCallback((animated = false) => {
+      savedListRef.current?.scrollToOffset({ offset: 0, animated });
+    }, []);
 
-  useEffect(() => {
-    if (showSaved) {
+    // Reset all state when modal is opened
+    const resetModalState = () => {
+      setShowSaved(false);
+      setShowMuscleFocus(false);
+      setShowSmartNext(false);
+      setSelectedMuscles([]);
+      setSmartAvoidMuscles([]);
+      setManualSplitKey(null);
+      setSmartOptionsExpanded(false);
+      setSmartSoreExpanded(false);
+      setSmartIsNearTop(true);
+      setSmartIsNearBottom(false);
+      setSmartScrollContentHeight(0);
+      setSmartScrollLayoutHeight(1);
       setSavedIsNearTop(true);
       setSavedIsNearBottom(false);
-    }
-  }, [showSaved, templateCount]);
+      setSavedScrollContentHeight(0);
+      setSavedScrollLayoutHeight(1);
+
+      const durationFromOnboarding = user?.onboardingData?.sessionDuration ?? 45;
+    const preferredDuration = DURATION_OPTIONS.includes(
+      durationFromOnboarding as (typeof DURATION_OPTIONS)[number]
+    )
+      ? durationFromOnboarding
+      : 45;
+    setSmartSessionDuration(preferredDuration);
+
+    const equipment = user?.onboardingData?.availableEquipment ?? [];
+    const nextEquipment: EquipmentMode | null = equipment.includes("gym_full")
+      ? "gym_full"
+      : equipment.includes("home_limited")
+        ? "home_limited"
+        : equipment.includes("bodyweight")
+          ? "bodyweight"
+          : null;
+    setSmartEquipment(nextEquipment);
+  };
+
+    // Reset state when modal visibility changes
+    useEffect(() => {
+      if (visible) {
+        resetModalState();
+        requestAnimationFrame(() => {
+          scrollSmartToTop(false);
+          scrollSavedToTop(false);
+        });
+      }
+    }, [visible, scrollSavedToTop, scrollSmartToTop]);
+
+    useEffect(() => {
+      if (showSaved) {
+        setSavedIsNearTop(true);
+        setSavedIsNearBottom(false);
+        requestAnimationFrame(() => scrollSavedToTop(false));
+      }
+    }, [showSaved, templateCount, scrollSavedToTop]);
+
+    useEffect(() => {
+      if (showMuscleFocus || showSmartNext) {
+        setSmartIsNearTop(true);
+        setSmartIsNearBottom(false);
+        requestAnimationFrame(() => scrollSmartToTop(false));
+      }
+    }, [showMuscleFocus, showSmartNext, scrollSmartToTop]);
 
   const generateMutation = useMutation({
     mutationFn: async ({
       split,
       muscles,
+      overrides,
     }: {
       split?: string;
       muscles?: string[];
+      overrides?: {
+        sessionDuration?: number;
+        availableEquipment?: string[];
+        avoidMuscles?: string[];
+      };
     }) => {
       const workout = await generateWorkout({
         requestedSplit: split,
@@ -1218,14 +1318,22 @@ const SwapModal = ({
           muscles && muscles.length > 0
             ? `Focus on ${muscles.join(", ")}`
             : undefined,
+        overrides,
       });
       return workout;
     },
     onSuccess: (workout) => {
+      if (!hasProAccess) {
+        void refresh();
+      }
       onClose();
       navigation.navigate("WorkoutPreview", { workout });
     },
     onError: (error: any) => {
+      if (error?.response?.data?.requiresUpgrade) {
+        showPaywallModal();
+        return;
+      }
       Alert.alert(
         "Generation Failed",
         error?.response?.data?.message ||
@@ -1234,26 +1342,30 @@ const SwapModal = ({
     },
   });
 
-  const handleAIWorkout = (
-    type: "muscle" | "split",
-    showPaywallCallback: () => void
-  ) => {
-    if (!isPro) {
+    const handleAIWorkout = (
+      type: "muscle" | "smartNext",
+      showPaywallCallback: () => void
+    ) => {
+    if (!canUseAi) {
       showPaywallCallback();
       return;
     }
 
-    if (type === "muscle") {
-      setShowMuscleFocus(true);
-      setShowSaved(false);
-      setShowAISplits(false);
-      setSelectedMuscles([]);
-    } else {
-      setShowAISplits(true);
-      setShowSaved(false);
-      setShowMuscleFocus(false);
-    }
-  };
+      if (type === "muscle") {
+        setShowMuscleFocus(true);
+        setShowSaved(false);
+        setShowSmartNext(false);
+        setSelectedMuscles([]);
+        setSmartIsNearTop(true);
+        setSmartIsNearBottom(false);
+      } else {
+        setShowSmartNext(true);
+        setShowSaved(false);
+        setShowMuscleFocus(false);
+        setSmartIsNearTop(true);
+        setSmartIsNearBottom(false);
+      }
+    };
 
   const toggleMuscle = (muscle: string) => {
     setSelectedMuscles((prev) =>
@@ -1263,29 +1375,38 @@ const SwapModal = ({
     );
   };
 
-  // Determine next workout in split cycle based on recent history
-  const getNextInCycle = () => {
-    const preferredSplit = user?.onboardingData?.preferredSplit;
-
-    if (!preferredSplit) {
-      return "Smart AI-generated workout";
-    }
-
-    // Map splits to readable cycle names
-    const splitCycles: Record<string, string[]> = {
-      ppl: ["Push", "Pull", "Legs"],
-      upper_lower: ["Upper", "Lower"],
-      full_body: ["Full Body"],
-      bro_split: ["Chest", "Back", "Legs", "Shoulders", "Arms"],
-    };
-
-    const cycle = splitCycles[preferredSplit];
-    if (cycle && cycle.length > 1) {
-      return `Suggests next in ${cycle.join("/")} cycle`;
-    }
-
-    return "Optimized for your goals";
+  const toggleAvoidMuscle = (muscle: string) => {
+    setSmartAvoidMuscles((prev) =>
+      prev.includes(muscle)
+        ? prev.filter((m) => m !== muscle)
+        : [...prev, muscle]
+    );
   };
+
+  const smartNextQueryKey = useMemo(() => {
+    const avoidKey = [...smartAvoidMuscles].sort().join(",");
+    return ["ai", "recommend-next-workout", smartSessionDuration, smartEquipment, avoidKey];
+  }, [smartAvoidMuscles, smartSessionDuration, smartEquipment]);
+
+  const smartNextQuery = useQuery({
+    queryKey: smartNextQueryKey,
+    enabled: visible && showSmartNext,
+    staleTime: 30_000,
+    queryFn: async () => {
+      return recommendNextWorkout({
+        overrides: {
+          sessionDuration: smartSessionDuration,
+          availableEquipment: smartEquipment ? [smartEquipment] : undefined,
+          avoidMuscles: smartAvoidMuscles,
+        },
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!showSmartNext) return;
+    setManualSplitKey(null);
+  }, [showSmartNext, smartSessionDuration, smartEquipment, smartAvoidMuscles]);
 
   const handleSavedScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -1293,23 +1414,54 @@ const SwapModal = ({
     const distanceFromBottom =
       contentSize.height - layoutMeasurement.height - contentOffset.y;
 
-    setSavedIsNearTop(distanceFromTop < 10);
-    setSavedIsNearBottom(distanceFromBottom < 10);
+    const nextNearTop = distanceFromTop < 10;
+    const nextNearBottom = distanceFromBottom < 10;
+    setSavedIsNearTop((prev) => (prev === nextNearTop ? prev : nextNearTop));
+    setSavedIsNearBottom((prev) =>
+      prev === nextNearBottom ? prev : nextNearBottom
+    );
   };
 
-  const showSavedTopShadow = templateCount > 0 && !savedIsNearTop;
-  const showSavedBottomShadow = templateCount > 0 && !savedIsNearBottom;
+  const savedCanScroll = savedScrollContentHeight > savedScrollLayoutHeight + 8;
+  const showSavedTopShadow = templateCount > 0 && savedCanScroll && !savedIsNearTop;
+  const showSavedBottomShadow = templateCount > 0 && savedCanScroll && !savedIsNearBottom;
+  const smartCanScroll =
+    smartScrollContentHeight > smartScrollLayoutHeight + 8;
+  const showSmartTopShadow =
+    (showMuscleFocus || showSmartNext) && smartCanScroll && !smartIsNearTop;
+  const showSmartBottomShadow =
+    (showMuscleFocus || showSmartNext) && smartCanScroll && !smartIsNearBottom;
+
+  const handleSmartScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromTop = contentOffset.y;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+    const nextNearTop = distanceFromTop < 10;
+    const nextNearBottom = distanceFromBottom < 10;
+    setSmartIsNearTop((prev) => (prev === nextNearTop ? prev : nextNearTop));
+    setSmartIsNearBottom((prev) =>
+      prev === nextNearBottom ? prev : nextNearBottom
+    );
+  };
 
   const actionOptions = [
     {
       label: "Smart Next Workout",
-      helper: isPro ? getNextInCycle() : "AI-generated (Pro)",
-      action: "ai" as const,
+      helper: isPro
+        ? `Uses your ${user?.onboardingData?.preferredSplit ? TRAINING_SPLIT_LABELS[user.onboardingData.preferredSplit] : "split"} + recovery`
+        : "Made for you",
+      action: "smart" as const,
       icon: "🎯",
     },
     {
       label: "Muscle Focus",
-      helper: isPro ? "Target specific muscles" : "AI muscle focus (Pro)",
+      helper: isPro
+        ? "Target specific muscles"
+        : canUseAi
+        ? "Target specific muscles"
+        : "Muscle focus (Upgrade)",
       action: "muscle" as const,
       icon: "💪",
     },
@@ -1338,7 +1490,7 @@ const SwapModal = ({
         }}
       >
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={() => {}}
           style={{
             backgroundColor: colors.surface,
             borderTopLeftRadius: 20,
@@ -1346,12 +1498,24 @@ const SwapModal = ({
             padding: 16,
             paddingBottom: 16 + safeBottomPadding,
             maxHeight: "80%",
+            flex: 1,
             borderWidth: 1,
             borderColor: colors.border,
             gap: 12,
             marginBottom: -1,
           }}
         >
+          <View
+            style={{
+              alignSelf: "center",
+              width: 48,
+              height: 5,
+              borderRadius: 999,
+              backgroundColor: `${colors.textSecondary}35`,
+              marginTop: 2,
+              marginBottom: 6,
+            }}
+          />
           <View
             style={{
               flexDirection: "row",
@@ -1374,26 +1538,6 @@ const SwapModal = ({
             </Pressable>
           </View>
 
-          {generateMutation.isPending && (
-            <View
-              style={{
-                padding: 16,
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 12,
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <ActivityIndicator color={colors.primary} size='large' />
-              <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
-                Generating your personalized workout...
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                This may take 10-30 seconds
-              </Text>
-            </View>
-          )}
-
           <View
             style={{
               flexDirection: "row",
@@ -1406,7 +1550,7 @@ const SwapModal = ({
               const isActive =
                 (option.action === "saved" && showSaved) ||
                 (option.action === "muscle" && showMuscleFocus) ||
-                (option.action === "ai" && showAISplits);
+                (option.action === "smart" && showSmartNext);
 
               return (
                 <Pressable
@@ -1426,9 +1570,10 @@ const SwapModal = ({
                         // Toggle on, turn others off
                         setShowSaved(true);
                         setShowMuscleFocus(false);
-                        setShowAISplits(false);
+                        setShowSmartNext(false);
                         setSavedIsNearTop(true);
                         setSavedIsNearBottom(false);
+                        requestAnimationFrame(() => scrollSavedToTop(false));
                       }
                       return;
                     }
@@ -1442,18 +1587,19 @@ const SwapModal = ({
                       }
                       return;
                     }
-                    if (option.action === "ai") {
-                      if (showAISplits) {
+                    if (option.action === "smart") {
+                      if (showSmartNext) {
                         // Toggle off
-                        setShowAISplits(false);
+                        setShowSmartNext(false);
                       } else {
-                        handleAIWorkout("split", showPaywallModal);
+                        handleAIWorkout("smartNext", showPaywallModal);
+                        requestAnimationFrame(() => scrollSmartToTop(false));
                       }
                       return;
                     }
                   }}
                   style={({ pressed }) => ({
-                    width: "48%",
+                    width: "47%",
                     padding: 14,
                     borderRadius: 12,
                     borderWidth: 1,
@@ -1498,25 +1644,31 @@ const SwapModal = ({
                       >
                         {option.label}
                       </Text>
-                      {!isPro &&
+                      {!hasProAccess &&
                         (option.action === "muscle" ||
-                          option.action === "ai") && (
+                          option.action === "smart") && (
                           <View
                             style={{
                               backgroundColor: colors.primary,
-                              paddingHorizontal: 5,
-                              paddingVertical: 2,
+                              paddingHorizontal: aiFreeAvailable ? 7 : 5,
+                              paddingVertical: 3,
                               borderRadius: 4,
+                              minWidth: aiFreeAvailable ? 34 : 28,
+                              alignItems: "center",
                             }}
                           >
                             <Text
                               style={{
                                 color: "#0B1220",
-                                fontSize: 8,
+                                fontSize: aiFreeAvailable ? 8 : 8,
                                 fontWeight: "700",
+                                includeFontPadding: false,
                               }}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.85}
                             >
-                              PRO
+                              {aiFreeAvailable ? "FREE" : "PRO"}
                             </Text>
                           </View>
                         )}
@@ -1524,7 +1676,7 @@ const SwapModal = ({
                     <Text
                       style={{
                         color: colors.textSecondary,
-                        fontSize: 11,
+                        fontSize: 10,
                         marginTop: 4,
                         textAlign: "center",
                       }}
@@ -1538,6 +1690,74 @@ const SwapModal = ({
             })}
           </View>
 
+          {!showSaved && (
+            <View style={{ flex: 1, position: "relative" }}>
+              {showSmartTopShadow && (
+                <LinearGradient
+                  colors={[colors.surface, `${colors.surface}00`]}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 24,
+                    pointerEvents: "none",
+                    zIndex: 2,
+                  }}
+                />
+              )}
+              <ScrollView
+                ref={smartScrollRef}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                bounces={smartCanScroll}
+                alwaysBounceVertical={false}
+                overScrollMode='never'
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: safeBottomPadding + 12 }}
+                keyboardShouldPersistTaps='handled'
+                onScroll={handleSmartScroll}
+                scrollEventThrottle={16}
+                onLayout={(e) => setSmartScrollLayoutHeight(e.nativeEvent.layout.height)}
+                onContentSizeChange={(_, height) => setSmartScrollContentHeight(height)}
+              >
+              {!showMuscleFocus && !showSmartNext && (
+                <View
+                  style={{
+                    backgroundColor: colors.surfaceMuted,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 14,
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 15,
+                    }}
+                  >
+                    Pick how you want to start
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                    Use{" "}
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Smart Next
+                    </Text>{" "}
+                    for an auto-recommended session,{" "}
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Muscle Focus
+                    </Text>{" "}
+                    to target a specific area, or{" "}
+                    <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                      Saved Workouts
+                    </Text>{" "}
+                    to pick a template.
+                  </Text>
+                </View>
+              )}
           {/* Muscle Group Selection */}
           {showMuscleFocus && (
             <>
@@ -1628,9 +1848,15 @@ const SwapModal = ({
                     borderRadius: 12,
                     backgroundColor: colors.primary,
                     alignItems: "center",
-                    opacity: pressed || generateMutation.isPending ? 0.8 : 1,
+                    opacity: pressed || generateMutation.isPending ? 0.85 : 1,
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 10,
                   })}
                 >
+                  {generateMutation.isPending && (
+                    <ActivityIndicator color={colors.surface} />
+                  )}
                   <Text
                     style={{
                       color: colors.surface,
@@ -1638,15 +1864,15 @@ const SwapModal = ({
                       fontSize: 16,
                     }}
                   >
-                    Generate Workout
+                    {generateMutation.isPending ? "Generating..." : "Generate Workout"}
                   </Text>
                 </Pressable>
               )}
             </>
           )}
 
-          {/* AI Split Selection */}
-          {showAISplits && (
+          {/* Smart Next Workout */}
+          {showSmartNext && (
             <>
               <View
                 style={{
@@ -1659,46 +1885,386 @@ const SwapModal = ({
                 style={{
                   color: colors.textPrimary,
                   fontFamily: fontFamilies.semibold,
-                  marginBottom: 8,
+                  marginBottom: 6,
                 }}
               >
-                Select workout split
+                Smart Next Workout
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {SPLIT_OPTIONS.map((split) => (
+              <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 10 }}>
+                Next in your split, adjusted for recovery and today’s constraints.
+              </Text>
+
+              <View style={{ gap: 10 }}>
+                <View style={{ gap: 8 }}>
                   <Pressable
-                    key={split.value}
-                    onPress={() => {
-                      generateMutation.mutate({ split: split.value });
-                    }}
-                    disabled={generateMutation.isPending}
+                    onPress={() => setSmartOptionsExpanded((prev) => !prev)}
                     style={({ pressed }) => ({
-                      paddingHorizontal: 16,
-                      paddingVertical: 12,
-                      borderRadius: 12,
+                      padding: 12,
+                      borderRadius: 14,
                       borderWidth: 1,
-                      borderColor: colors.primary,
-                      backgroundColor: colors.surfaceMuted,
-                      opacity: pressed || generateMutation.isPending ? 0.6 : 1,
+                      borderColor: colors.border,
+                      backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8,
-                      minWidth: 100,
+                      justifyContent: "space-between",
                     })}
                   >
-                    <Text style={{ fontSize: 18 }}>{split.emoji}</Text>
-                    <Text
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+                        Options
+                      </Text>
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                        {smartSessionDuration} min •{" "}
+                        {(EQUIPMENT_OPTIONS.find((e) => e.value === smartEquipment)?.label ?? "Any equipment")}
+                        {smartAvoidMuscles.length > 0 ? ` • Sore: ${smartAvoidMuscles.length}` : ""}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={smartOptionsExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
+
+                  {smartOptionsExpanded && (
+                    <View
                       style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
+                        padding: 12,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceMuted,
+                        gap: 10,
                       }}
                     >
-                      {split.label}
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {DURATION_OPTIONS.map((minutes) => {
+                          const isSelected = smartSessionDuration === minutes;
+                          return (
+                            <Pressable
+                              key={minutes}
+                              onPress={() => setSmartSessionDuration(minutes)}
+                              disabled={generateMutation.isPending}
+                              style={({ pressed }) => ({
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: isSelected ? colors.primary : colors.border,
+                                backgroundColor: isSelected ? `${colors.primary}18` : colors.surface,
+                                opacity: pressed || generateMutation.isPending ? 0.7 : 1,
+                              })}
+                            >
+                              <Text
+                                style={{
+                                  color: isSelected ? colors.primary : colors.textPrimary,
+                                  fontFamily: fontFamilies.semibold,
+                                  fontSize: 13,
+                                }}
+                              >
+                                {minutes} min
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {EQUIPMENT_OPTIONS.map((option) => {
+                          const isSelected = smartEquipment === option.value;
+                          return (
+                            <Pressable
+                              key={option.value}
+                              onPress={() => setSmartEquipment(option.value)}
+                              disabled={generateMutation.isPending}
+                              style={({ pressed }) => ({
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: isSelected ? colors.primary : colors.border,
+                                backgroundColor: isSelected ? `${colors.primary}18` : colors.surface,
+                                opacity: pressed || generateMutation.isPending ? 0.7 : 1,
+                              })}
+                            >
+                              <Text
+                                style={{
+                                  color: isSelected ? colors.primary : colors.textPrimary,
+                                  fontFamily: fontFamilies.semibold,
+                                  fontSize: 13,
+                                }}
+                              >
+                                {option.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <Pressable
+                        onPress={() => setSmartSoreExpanded((prev) => !prev)}
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        })}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 13,
+                          }}
+                        >
+                          Sore today
+                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                            {smartAvoidMuscles.length > 0 ? `${smartAvoidMuscles.length} selected` : "None"}
+                          </Text>
+                          <Ionicons
+                            name={smartSoreExpanded ? "chevron-up" : "chevron-down"}
+                            size={18}
+                            color={colors.textSecondary}
+                          />
+                        </View>
+                      </Pressable>
+
+                      {smartSoreExpanded && (
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          {MUSCLE_GROUPS.map((muscle) => {
+                            const isSelected = smartAvoidMuscles.includes(muscle.value);
+                            return (
+                              <Pressable
+                                key={muscle.value}
+                                onPress={() => toggleAvoidMuscle(muscle.value)}
+                                disabled={generateMutation.isPending}
+                                style={({ pressed }) => ({
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 10,
+                                  borderRadius: 12,
+                                  borderWidth: 1,
+                                  borderColor: isSelected ? colors.primary : colors.border,
+                                  backgroundColor: isSelected ? `${colors.primary}18` : colors.surface,
+                                  opacity: pressed || generateMutation.isPending ? 0.7 : 1,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 6,
+                                })}
+                              >
+                                <Text style={{ fontSize: 14 }}>{muscle.emoji}</Text>
+                                <Text
+                                  style={{
+                                    color: isSelected ? colors.primary : colors.textPrimary,
+                                    fontFamily: fontFamilies.semibold,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {muscle.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                <View
+                  style={{
+                    padding: 14,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceMuted,
+                    gap: 6,
+                  }}
+                >
+                  {smartNextQuery.isLoading && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <ActivityIndicator color={colors.primary} />
+                      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                        Finding your best next session...
+                      </Text>
+                    </View>
+                  )}
+
+                  {smartNextQuery.isError && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                      Couldn’t load a recommendation. You can still use Muscle Focus.
                     </Text>
-                  </Pressable>
-                ))}
+                  )}
+
+                  {smartNextQuery.data && (() => {
+                    const options = [smartNextQuery.data.selected, ...smartNextQuery.data.alternates];
+                    const effectiveSplitKey = manualSplitKey ?? smartNextQuery.data.selected.splitKey;
+                    const effectiveLabel =
+                      options.find((c) => c.splitKey === effectiveSplitKey)?.label ??
+                      smartNextQuery.data.selected.label;
+                    const effectiveEmoji = SPLIT_EMOJIS[effectiveSplitKey] ?? "🎯";
+                    const effectiveReason =
+                      options.find((c) => c.splitKey === effectiveSplitKey)?.reason ??
+                      smartNextQuery.data.selected.reason;
+                    const effectiveTags =
+                      options.find((c) => c.splitKey === effectiveSplitKey)?.tags ??
+                      smartNextQuery.data.selected.tags;
+
+                    return (
+                      <>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <Text style={{ fontSize: 22 }}>{effectiveEmoji}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                color: colors.textPrimary,
+                                fontFamily: fontFamilies.semibold,
+                                fontSize: 16,
+                              }}
+                            >
+                              Next: {effectiveLabel}
+                            </Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                              {effectiveReason}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {effectiveTags.length > 0 && (
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                            {effectiveTags.map((tag) => (
+                              <View
+                                key={tag}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 999,
+                                  backgroundColor: `${colors.primary}15`,
+                                  borderWidth: 1,
+                                  borderColor: `${colors.primary}25`,
+                                }}
+                              >
+                                <Text style={{ color: colors.textPrimary, fontSize: 12 }}>
+                                  {tag}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {smartNextQuery.data.alternates.length > 0 && (
+                          <View style={{ marginTop: 10, gap: 8 }}>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              {smartNextQuery.data.alternates.map((alt) => {
+                                const isSelected = manualSplitKey === alt.splitKey;
+                                return (
+                                  <Pressable
+                                    key={alt.splitKey}
+                                    onPress={() => setManualSplitKey(alt.splitKey)}
+                                    style={({ pressed }) => ({
+                                      flex: 1,
+                                      padding: 12,
+                                      borderRadius: 12,
+                                      borderWidth: 1,
+                                      borderColor: isSelected ? colors.primary : colors.border,
+                                      backgroundColor: isSelected ? `${colors.primary}18` : colors.surface,
+                                      opacity: pressed ? 0.8 : 1,
+                                      gap: 2,
+                                    })}
+                                  >
+                                    <Text
+                                      style={{
+                                        color: colors.textPrimary,
+                                        fontFamily: fontFamilies.semibold,
+                                        fontSize: 13,
+                                      }}
+                                    >
+                                      {alt.label}
+                                    </Text>
+                                    <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                                      {alt.reason}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+
+                        <Pressable
+                          onPress={() => {
+                            generateMutation.mutate({
+                              split: effectiveSplitKey,
+                              overrides: {
+                                sessionDuration: smartSessionDuration,
+                                availableEquipment: smartEquipment ? [smartEquipment] : undefined,
+                                avoidMuscles: smartAvoidMuscles,
+                              },
+                            });
+                          }}
+                          disabled={generateMutation.isPending}
+                          style={({ pressed }) => ({
+                            marginTop: 12,
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            backgroundColor: colors.primary,
+                            alignItems: "center",
+                            opacity: pressed || generateMutation.isPending ? 0.85 : 1,
+                            flexDirection: "row",
+                            justifyContent: "center",
+                            gap: 10,
+                          })}
+                        >
+                          {generateMutation.isPending && (
+                            <ActivityIndicator color={colors.surface} />
+                          )}
+                          <Text
+                            style={{
+                              color: colors.surface,
+                              fontFamily: fontFamilies.semibold,
+                              fontSize: 16,
+                            }}
+                          >
+                            {generateMutation.isPending
+                              ? "Generating..."
+                              : `Generate ${effectiveLabel}`}
+                          </Text>
+                        </Pressable>
+                      </>
+                    );
+                  })()}
+                </View>
               </View>
             </>
+          )}
+
+              </ScrollView>
+              {showSmartBottomShadow && (
+                <LinearGradient
+                  colors={[
+                    "transparent",
+                    `${colors.surface}40`,
+                    `${colors.surface}90`,
+                    colors.surface,
+                  ]}
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 42,
+                    pointerEvents: "none",
+                    zIndex: 2,
+                  }}
+                />
+              )}
+            </View>
           )}
 
           {/* Saved Workouts */}
@@ -1736,7 +2302,7 @@ const SwapModal = ({
               <View
                 style={{
                   position: "relative",
-                  height: 420 + safeBottomPadding,
+                  flex: 1,
                 }}
               >
                 {showSavedTopShadow && (
@@ -1754,6 +2320,7 @@ const SwapModal = ({
                   />
                 )}
                 <FlatList
+                  ref={savedListRef}
                   data={templates}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item: template }) => (
@@ -1844,23 +2411,27 @@ const SwapModal = ({
                     </View>
                   )}
                   contentContainerStyle={{
-                    paddingBottom: 48 + safeBottomPadding,
-                    paddingTop: templateCount > 3 ? 12 : 4,
+                    paddingBottom: 12,
+                    paddingTop: templateCount > 3 ? 12 : 6,
                     paddingHorizontal: 2,
                   }}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
-                  style={{ maxHeight: 420 + safeBottomPadding }}
+                  scrollEnabled={savedCanScroll}
+                  bounces={savedCanScroll}
+                  alwaysBounceVertical={false}
+                  overScrollMode='never'
+                  keyboardShouldPersistTaps='handled'
+                  style={{ flex: 1 }}
                   onScroll={handleSavedScroll}
                   scrollEventThrottle={16}
+                  onLayout={(e) => setSavedScrollLayoutHeight(e.nativeEvent.layout.height)}
+                  onContentSizeChange={(_, height) => setSavedScrollContentHeight(height)}
                   scrollIndicatorInsets={{
                     right: 1,
                     bottom: safeBottomPadding,
                   }}
                   ListHeaderComponent={<View style={{ height: 4 }} />}
-                  ListFooterComponent={
-                    <View style={{ height: safeBottomPadding + 64 }} />
-                  }
                   ListEmptyComponent={
                     <View
                       style={{

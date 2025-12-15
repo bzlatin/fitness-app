@@ -16,7 +16,8 @@ export const useSquads = () => {
   });
 
   const createSquadMutation = useMutation({
-    mutationFn: (name: string) => createSquadApi(name),
+    mutationFn: (params: { name: string; description?: string; isPublic?: boolean }) =>
+      createSquadApi(params),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["social", "squads"] }),
   });
 

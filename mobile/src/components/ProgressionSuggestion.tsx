@@ -202,7 +202,7 @@ const ProgressionSuggestionModal = ({
                   paddingHorizontal: 20,
                 }}
               >
-                Get AI-powered weight progression suggestions based on your training history. Upgrade to Pro to unlock this feature.
+                Get smart weight progression suggestions based on your training history. Upgrade to Pro to unlock this feature.
               </Text>
               <View
                 style={{

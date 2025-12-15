@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -31,7 +32,9 @@ import {
   useNavigation,
   useRoute,
 } from "@react-navigation/native";
+import { UNSTABLE_usePreventRemove as usePreventRemove } from "@react-navigation/core";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies } from "../theme/typography";
@@ -83,6 +86,7 @@ const SettingsScreen = () => {
   const queryClient = useQueryClient();
   const navigation = useNavigation<RootNavigation>();
   const route = useRoute<RootRoute<"Settings">>();
+  const insets = useSafeAreaInsets();
   const { logout, isAuthorizing } = useAuth();
   const { user, updateProfile, deleteAccount, refresh, isLoading } =
     useCurrentUser();
@@ -106,6 +110,7 @@ const SettingsScreen = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const pendingLeaveActionRef = useRef<any | null>(null);
   const [selectedConnection, setSelectedConnection] =
     useState<SocialUserSummary | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
@@ -212,6 +217,121 @@ const SettingsScreen = () => {
       hour: "2-digit",
       minute: "2-digit",
     }) ?? "Not synced yet";
+
+  const hasProfileChanges = useMemo(() => {
+    if (!user) return false;
+    return (
+      draftName !== (user.name ?? "") ||
+      draftHandle !== (user.handle ?? "") ||
+      draftBio !== (user.bio ?? "") ||
+      draftTraining !== (user.trainingStyle ?? "") ||
+      draftGym !== (user.gymName ?? "") ||
+      draftWeeklyGoal !== String(user.weeklyGoal ?? 4) ||
+      showGym !== ((user.gymVisibility ?? "hidden") === "shown") ||
+      (avatarUri ?? undefined) !== (user.avatarUrl ?? undefined)
+    );
+  }, [
+    user,
+    draftName,
+    draftHandle,
+    draftBio,
+    draftTraining,
+    draftGym,
+    draftWeeklyGoal,
+    showGym,
+    avatarUri,
+  ]);
+
+  const preventRemove = isEditing && hasProfileChanges && !isSaving;
+
+  const resetProfileDraftsToUser = useCallback(() => {
+    if (!user) return;
+    setDraftName(user.name ?? "");
+    setDraftHandle(user.handle ?? "");
+    setDraftBio(user.bio ?? "");
+    setDraftTraining(user.trainingStyle ?? "");
+    setDraftGym(user.gymName ?? "");
+    setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
+    setShowGym((user.gymVisibility ?? "hidden") === "shown");
+    setAvatarUri(user.avatarUrl ?? undefined);
+  }, [user]);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerBackButtonMenuEnabled: false,
+      headerRight: isEditing
+        ? () => (
+            <Pressable
+              onPress={() => handleSave()}
+              disabled={!hasProfileChanges || isSaving || isProcessingAvatar}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                backgroundColor:
+                  !hasProfileChanges || isSaving || isProcessingAvatar
+                    ? colors.border
+                    : pressed
+                    ? `${colors.primary}CC`
+                    : colors.primary,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.surface,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {isSaving ? "Saving…" : hasProfileChanges ? "Save" : "Saved"}
+              </Text>
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [
+    navigation,
+    isEditing,
+    hasProfileChanges,
+    isSaving,
+    isProcessingAvatar,
+  ]);
+
+  // Warn on back/swipe-out when editing profile with unsaved changes.
+  usePreventRemove(preventRemove, (event) => {
+    const actionType = event.data.action.type;
+    if (
+      actionType !== "GO_BACK" &&
+      actionType !== "POP" &&
+      actionType !== "POP_TO_TOP"
+    ) {
+      return;
+    }
+
+    Alert.alert(
+      "Unsaved changes",
+      "You have unsaved profile changes. Save before leaving?",
+      [
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            pendingLeaveActionRef.current = null;
+            setIsEditing(false);
+            resetProfileDraftsToUser();
+            setTimeout(() => navigation.dispatch(event.data.action), 0);
+          },
+        },
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Save",
+          onPress: () => {
+            pendingLeaveActionRef.current = event.data.action;
+            handleSave({ leaveAfterSave: true });
+          },
+        },
+      ]
+    );
+  });
 
   useEffect(() => {
     if (
@@ -922,6 +1042,7 @@ const SettingsScreen = () => {
         quality: 0.75,
         base64: false,
         aspect: [1, 1],
+        mediaTypes: ['images'], // Only allow images, no videos
         presentationStyle:
           ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
       });
@@ -946,7 +1067,8 @@ const SettingsScreen = () => {
     }
   };
 
-  const handleSave = async () => {
+  async function handleSave(options?: { leaveAfterSave?: boolean }) {
+    if (!user) return;
     if (isProcessingAvatar) {
       Alert.alert(
         "Processing photo",
@@ -995,19 +1117,27 @@ const SettingsScreen = () => {
       await updateProfile(payload);
       Alert.alert("Saved", "Profile updated.");
       setIsEditing(false);
+      if (options?.leaveAfterSave && pendingLeaveActionRef.current) {
+        const action = pendingLeaveActionRef.current;
+        pendingLeaveActionRef.current = null;
+        setTimeout(() => navigation.dispatch(action), 0);
+      }
     } catch (err) {
+      if (options?.leaveAfterSave) {
+        pendingLeaveActionRef.current = null;
+      }
       const status = (err as { status?: number }).status;
       const message =
         err instanceof Error && err.message.includes("Handle already taken")
           ? "That handle is taken. Try another."
-          : status === 429
+        : status === 429
           ? "You can only change your handle once every 30 days."
           : (err as Error)?.message ?? "Please try again.";
       Alert.alert("Could not save", message);
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
   const preferencesSubtitle = `${
     isPro
@@ -1041,10 +1171,165 @@ const SettingsScreen = () => {
             }`
           : ""
       }`
-    : "Free · Upgrade for unlimited templates and AI";
+    : "Free · Upgrade for unlimited templates and smart workouts";
 
   return (
-    <ScreenContainer scroll includeTopInset={false} paddingTop={12}>
+    <ScreenContainer
+      scroll
+      includeTopInset={false}
+      paddingTop={12}
+      bottomOverlay={
+        isEditing ? (
+          <View pointerEvents="box-none">
+            <LinearGradient
+              colors={["transparent", `${colors.background}CC`, colors.background]}
+              locations={[0, 0.45, 1]}
+              style={{ height: 36 }}
+              pointerEvents="none"
+            />
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 10,
+                paddingBottom: Math.max(insets.bottom, 12),
+                backgroundColor: colors.background,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.12,
+                shadowRadius: 10,
+                elevation: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 99,
+                      backgroundColor: hasProfileChanges ? colors.primary : colors.border,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    {hasProfileChanges ? "Unsaved changes" : "All changes saved"}
+                  </Text>
+                </View>
+                {isProcessingAvatar ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Processing photo…
+                  </Text>
+                ) : isSaving ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Saving…
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    if (!hasProfileChanges) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    Alert.alert(
+                      "Discard changes?",
+                      "Your edits will be lost.",
+                      [
+                        { text: "Keep editing", style: "cancel" },
+                        {
+                          text: "Discard",
+                          style: "destructive",
+                          onPress: () => {
+                            resetProfileDraftsToUser();
+                            setIsEditing(false);
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 14,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isSaving ? 0.6 : 1,
+                  })}
+                  disabled={isSaving}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    {hasProfileChanges ? "Discard" : "Done"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleSave()}
+                  disabled={!hasProfileChanges || isSaving || isProcessingAvatar}
+                  style={({ pressed }) => ({
+                    flex: 2,
+                    paddingVertical: 16,
+                    borderRadius: 16,
+                    backgroundColor:
+                      !hasProfileChanges || isSaving || isProcessingAvatar
+                        ? colors.border
+                        : colors.primary,
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 8,
+                    opacity: pressed ? 0.92 : 1,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity:
+                      !hasProfileChanges || isSaving || isProcessingAvatar ? 0 : 0.28,
+                    shadowRadius: 10,
+                    elevation:
+                      !hasProfileChanges || isSaving || isProcessingAvatar ? 0 : 5,
+                  })}
+                >
+                  <Ionicons
+                    name={isSaving ? "sync" : "checkmark-circle"}
+                    size={20}
+                    color={colors.surface}
+                  />
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.bold,
+                      fontSize: 16,
+                    }}
+                  >
+                    {isSaving ? "Saving…" : "Save changes"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null
+      }
+    >
       <>
         {/* Hide settings content if opened just to show connections modal */}
         {!route.params?.openConnections && (
@@ -1372,65 +1657,9 @@ const SettingsScreen = () => {
                       thumbColor={showGym ? "#fff" : "#f4f3f4"}
                     />
                   </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Pressable
-                      onPress={handleSave}
-                      disabled={isSaving}
-                      style={({ pressed }) => ({
-                        flex: 2,
-                        paddingVertical: 12,
-                        borderRadius: 12,
-                        backgroundColor: colors.primary,
-                        borderWidth: 1,
-                        borderColor: colors.primary,
-                        alignItems: "center",
-                        opacity: pressed || isSaving ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: colors.surface,
-                          fontFamily: fontFamilies.semibold,
-                        }}
-                      >
-                        {isSaving ? "Saving..." : "Save"}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setIsEditing(false);
-                        setDraftName(user.name ?? "");
-                        setDraftHandle(user.handle ?? "");
-                        setDraftBio(user.bio ?? "");
-                        setDraftTraining(user.trainingStyle ?? "");
-                        setDraftGym(user.gymName ?? "");
-                        setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
-                        setShowGym(
-                          (user.gymVisibility ?? "hidden") === "shown"
-                        );
-                        setAvatarUri(user.avatarUrl ?? undefined);
-                      }}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surfaceMuted,
-                        alignItems: "center",
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontFamily: fontFamilies.semibold,
-                        }}
-                      >
-                        Cancel
-                      </Text>
-                    </Pressable>
-                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 8 }}>
+                    Use the sticky Save button below to commit changes.
+                  </Text>
                 </View>
               ) : null}
 

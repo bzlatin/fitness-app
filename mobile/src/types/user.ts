@@ -9,6 +9,7 @@ export interface User {
   name: string;
   plan: Plan;
   planExpiresAt?: string | null;
+  aiGenerationsUsedCount?: number;
   handle?: string | null;
   handleLastChangedAt?: string | null;
   avatarUrl?: string;

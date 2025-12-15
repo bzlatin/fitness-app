@@ -16,14 +16,19 @@ export const determineNextInCycle = (
     return undefined;
   }
 
+  const canonicalPreferred = preferredSplit.toLowerCase().trim();
+  const normalizedPreferred =
+    canonicalPreferred === "push_pull_legs" ? "ppl" : canonicalPreferred;
+
   // Define split cycles
   const splitCycles: Record<string, string[]> = {
     ppl: ["push", "pull", "legs"],
     upper_lower: ["upper", "lower"],
+    full_body: ["full_body"],
     bro_split: ["chest", "back", "legs", "shoulders", "arms"],
   };
 
-  const cycle = splitCycles[preferredSplit];
+  const cycle = splitCycles[normalizedPreferred];
   if (!cycle || cycle.length === 0) {
     return undefined;
   }
@@ -36,9 +41,11 @@ export const determineNextInCycle = (
   }
 
   // Find where we are in the cycle
-  const lastIndex = cycle.findIndex(
-    (split) => lastSplit.includes(split) || split.includes(lastSplit)
-  );
+  const lastIndex = cycle.findIndex((split) => {
+    if (split === "full_body") return lastSplit.includes("full");
+    if (split === "legs") return lastSplit.includes("leg");
+    return lastSplit.includes(split) || split.includes(lastSplit);
+  });
 
   if (lastIndex === -1) {
     return cycle[0]; // Not found, start from beginning

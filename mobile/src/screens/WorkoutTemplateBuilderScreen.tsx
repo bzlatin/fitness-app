@@ -12,6 +12,9 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Dimensions,
+  Image,
+  Modal,
   Pressable,
   Text,
   TextInput,
@@ -46,6 +49,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
 import type { ApiClientError } from "../api/client";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import ExerciseListItem from "../components/workouts/ExerciseListItem";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -67,12 +71,18 @@ const formatExerciseName = (id: string) =>
 
 const createFallbackExercise = (
   exerciseId: string,
-  options?: { name?: string; primaryMuscleGroup?: Exercise["primaryMuscleGroup"] }
+  options?: {
+    name?: string;
+    primaryMuscleGroup?: Exercise["primaryMuscleGroup"];
+    equipment?: Exercise["equipment"];
+    gifUrl?: Exercise["gifUrl"];
+  }
 ): Exercise => ({
   id: exerciseId,
   name: options?.name ?? formatExerciseName(exerciseId),
   primaryMuscleGroup: options?.primaryMuscleGroup ?? "custom",
-  equipment: "custom",
+  equipment: options?.equipment ?? "custom",
+  gifUrl: options?.gifUrl,
 });
 
 const generateFormId = () =>
@@ -86,6 +96,8 @@ const mapPersistedExercise = (
   exercise: createFallbackExercise(exercise.exerciseId, {
     name: exercise.exerciseName,
     primaryMuscleGroup: exercise.primaryMuscleGroup as Exercise["primaryMuscleGroup"],
+    equipment: exercise.equipment as Exercise["equipment"],
+    gifUrl: exercise.exerciseImageUrl,
   }),
   sets: exercise.defaultSets,
   reps: exercise.defaultReps,
@@ -120,6 +132,7 @@ const WorkoutTemplateBuilderScreen = () => {
   const isProPlan = subscriptionAccess.hasProPlan;
   const [isNearTop, setIsNearTop] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
   const existingTemplate = useMemo(
     () => listData?.find((t) => t.id === route.params?.templateId),
@@ -393,6 +406,24 @@ const WorkoutTemplateBuilderScreen = () => {
   const removeExerciseByFormId = (formId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.formId !== formId));
   };
+
+  const confirmRemoveExercise = useCallback(
+    (formId: string, exerciseName: string) => {
+      Alert.alert(
+        "Remove exercise?",
+        `Remove "${exerciseName}" from this workout template?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () => removeExerciseByFormId(formId),
+          },
+        ]
+      );
+    },
+    []
+  );
 
   const removeExerciseByExerciseId = (exerciseId: string) => {
     setExercises((prev) => {
@@ -780,63 +811,13 @@ const WorkoutTemplateBuilderScreen = () => {
           marginBottom: 12,
         }}
       >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <Pressable
-            onLongPress={drag}
-            style={({ pressed }) => ({
-              padding: 6,
-              borderRadius: 999,
-              backgroundColor: pressed ? colors.surface : "transparent",
-            })}
-          >
-            <Ionicons
-              name='reorder-three'
-              size={24}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              {item.exercise.name}
-            </Text>
-            <Text
-              style={{ ...typography.caption, color: colors.textSecondary }}
-            >
-              {item.exercise.primaryMuscleGroup} • {item.exercise.equipment}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => setSwapExerciseFormId(item.formId)}
-            hitSlop={8}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.7 : 1,
-              marginRight: 8,
-            })}
-          >
-            <Ionicons
-              name='swap-horizontal-outline'
-              color={colors.primary}
-              size={20}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => removeExerciseByFormId(item.formId)}
-            hitSlop={8}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-          >
-            <Ionicons
-              name='trash-outline'
-              color={colors.textSecondary}
-              size={20}
-            />
-          </Pressable>
-        </View>
+        <ExerciseListItem
+          exercise={item.exercise}
+          onDrag={drag}
+          onSwap={() => setSwapExerciseFormId(item.formId)}
+          onRemove={() => confirmRemoveExercise(item.formId, item.exercise.name)}
+          onPreviewImage={(uri) => setImagePreviewUrl(uri)}
+        />
 
         {cardio ? (
           <View style={{ flexDirection: "row", gap: 10 }}>
@@ -987,6 +968,49 @@ const WorkoutTemplateBuilderScreen = () => {
             onSwap={handleSwapExercise}
           />
         )}
+
+        <Modal
+          visible={!!imagePreviewUrl}
+          transparent
+          animationType='fade'
+          onRequestClose={() => setImagePreviewUrl(null)}
+        >
+          <Pressable
+            onPress={() => setImagePreviewUrl(null)}
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.9)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            {imagePreviewUrl ? (
+              <Image
+                source={{ uri: imagePreviewUrl }}
+                style={{
+                  width: Dimensions.get("window").width - 40,
+                  height: Dimensions.get("window").width - 40,
+                  borderRadius: 16,
+                  backgroundColor: colors.surface,
+                }}
+                resizeMode='contain'
+              />
+            ) : null}
+            <Pressable
+              onPress={() => setImagePreviewUrl(null)}
+              style={{
+                position: "absolute",
+                top: 60,
+                right: 20,
+                backgroundColor: colors.surface,
+                borderRadius: 20,
+                padding: 8,
+              }}
+            >
+              <Ionicons name='close' size={24} color={colors.textPrimary} />
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
       <PaywallComparisonModal
         visible={showPaywallModal}

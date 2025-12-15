@@ -20,6 +20,8 @@ interface PaywallComparisonModalProps {
   onClose: () => void;
   onUpgrade?: (planType: "monthly" | "yearly") => void;
   triggeredBy?: string; // "recovery" | "templates" | "ai" | "progression"
+  aiFreeUsed?: boolean;
+  aiFreeRemaining?: number;
 }
 
 interface FeatureRow {
@@ -31,7 +33,7 @@ interface FeatureRow {
 const features: FeatureRow[] = [
   { name: "Workout logging", free: true, pro: true },
   { name: "Saved workout templates", free: "Up to 3", pro: "Unlimited" },
-  { name: "AI workout generation", free: false, pro: true },
+  { name: "Smart workout generator", free: "1 free workout", pro: "Unlimited" },
   { name: "Smart workout suggestions", free: false, pro: true },
   { name: "Muscle focus targeting", free: false, pro: true },
   { name: "Recovery & fatigue tracking", free: false, pro: true },
@@ -45,6 +47,8 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
   onClose,
   onUpgrade,
   triggeredBy,
+  aiFreeUsed,
+  aiFreeRemaining,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">(
     "yearly"
@@ -98,6 +102,23 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
       selectedPlan === "yearly" ? "annual" : "monthly";
     startCheckout.mutate(planChoice);
   };
+
+  const isAiTrigger = triggeredBy === "ai";
+  const showAiFreeUsedMessage = Boolean(isAiTrigger && aiFreeUsed);
+  const showAiFreeRemainingMessage =
+    Boolean(isAiTrigger) && !showAiFreeUsedMessage && (aiFreeRemaining ?? 0) > 0;
+
+  const modalTitle = showAiFreeUsedMessage
+    ? "Upgrade for unlimited smart workouts"
+    : showAiFreeRemainingMessage
+    ? "Try smart workouts"
+    : "Unlock Your Full Potential";
+
+  const modalSubtitle = showAiFreeUsedMessage
+    ? "You've used your free smart workout. Upgrade for unlimited!"
+    : showAiFreeRemainingMessage
+    ? "You have 1 free smart workout. Upgrade any time for unlimited generation."
+    : "Get smart workouts, unlimited templates, and advanced recovery insights to achieve your fitness goals faster";
 
   return (
     <Modal
@@ -193,7 +214,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                 marginBottom: 6,
               }}
             >
-              Unlock Your Full Potential
+              {modalTitle}
             </Text>
 
             {/* Subtitle */}
@@ -205,8 +226,7 @@ const PaywallComparisonModal: React.FC<PaywallComparisonModalProps> = ({
                 lineHeight: 20,
               }}
             >
-              Get AI-powered workouts, unlimited templates, and advanced
-              recovery insights to achieve your fitness goals faster
+              {modalSubtitle}
             </Text>
 
             {/* Comparison Table */}

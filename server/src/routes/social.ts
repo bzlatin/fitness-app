@@ -36,6 +36,7 @@ type UserRow = {
   apple_health_enabled: boolean | null;
   apple_health_permissions: unknown;
   apple_health_last_sync_at: string | null;
+  ai_generations_used_count: number | null;
 };
 
 type SocialProfile = {
@@ -66,6 +67,7 @@ type SocialProfile = {
   appleHealthEnabled?: boolean;
   appleHealthPermissions?: AppleHealthPermissions;
   appleHealthLastSyncAt?: string | null;
+  aiGenerationsUsedCount?: number;
   friendsPreview?: {
     id: string;
     name: string;
@@ -333,7 +335,10 @@ const normalizeHandle = (value?: string | null) => {
   return `@${cleaned}`;
 };
 
-const mapUserRow = (row: UserRow): SocialProfile => ({
+const mapUserRow = (
+  row: UserRow,
+  options?: { includePrivateFields?: boolean }
+): SocialProfile => ({
   id: row.id,
   name: row.name ?? "Athlete",
   email: row.email ?? undefined,
@@ -354,6 +359,9 @@ const mapUserRow = (row: UserRow): SocialProfile => ({
   appleHealthEnabled: row.apple_health_enabled ?? false,
   appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
   appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
+  aiGenerationsUsedCount: options?.includePrivateFields
+    ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
+    : undefined,
 });
 
 const fetchUserSummary = async (userId: string) => {
@@ -547,8 +555,9 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
   );
   const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
 
+  const includePrivateFields = viewerId === targetUserId;
   return {
-    ...mapUserRow(user),
+    ...mapUserRow(user, { includePrivateFields }),
     ...counts,
     ...stats,
     workoutsThisWeek,
@@ -798,7 +807,7 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
     const counts = await fetchRelationshipCounts(userId);
     const stats = await fetchWorkoutStats(userId);
     return res.json({
-      ...mapUserRow(updated),
+      ...mapUserRow(updated, { includePrivateFields: true }),
       ...counts,
       ...stats,
       friendsPreview: await fetchMutualFriends(userId, 12),
@@ -915,6 +924,36 @@ router.get("/connections", async (_req, res) => {
   }
 });
 
+// Get pending friend requests count (for notification badge)
+router.get("/pending-requests-count", async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Count followers who the user is not following back (pending friend requests)
+    const result = await query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text as count
+        FROM follows f
+        WHERE f.target_user_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM follows f2
+            WHERE f2.user_id = $1 AND f2.target_user_id = f.user_id
+          )
+      `,
+      [userId]
+    );
+
+    const count = parseInt(result.rows[0]?.count ?? "0", 10);
+    return res.json({ count });
+  } catch (err) {
+    console.error("Failed to get pending requests count", err);
+    return res.status(500).json({ error: "Failed to get pending requests count" });
+  }
+});
+
 router.get("/squads", async (_req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
@@ -930,12 +969,113 @@ router.get("/squads", async (_req, res) => {
   }
 });
 
+// Discover public squads
+router.get("/squads/discover", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const searchQuery = (req.query.q as string)?.trim() || "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+  try {
+    let squads;
+
+    if (searchQuery) {
+      // Search public squads by name
+      squads = await query<{
+        id: string;
+        name: string;
+        description: string | null;
+        member_count: string;
+        max_members: number;
+        created_by: string;
+        is_member: string;
+      }>(
+        `
+          SELECT
+            s.id,
+            s.name,
+            s.description,
+            COUNT(DISTINCT sm.user_id)::text as member_count,
+            s.max_members,
+            s.created_by,
+            CASE WHEN EXISTS(
+              SELECT 1 FROM squad_members sm2
+              WHERE sm2.squad_id = s.id AND sm2.user_id = $1
+            ) THEN '1' ELSE '0' END as is_member
+          FROM squads s
+          LEFT JOIN squad_members sm ON sm.squad_id = s.id
+          WHERE s.is_public = true
+            AND LOWER(s.name) LIKE LOWER($2)
+          GROUP BY s.id, s.name, s.description, s.max_members, s.created_by
+          ORDER BY member_count DESC, s.name ASC
+          LIMIT $3
+        `,
+        [userId, `%${searchQuery}%`, limit]
+      );
+    } else {
+      // Get popular public squads
+      squads = await query<{
+        id: string;
+        name: string;
+        description: string | null;
+        member_count: string;
+        max_members: number;
+        created_by: string;
+        is_member: string;
+      }>(
+        `
+          SELECT
+            s.id,
+            s.name,
+            s.description,
+            COUNT(DISTINCT sm.user_id)::text as member_count,
+            s.max_members,
+            s.created_by,
+            CASE WHEN EXISTS(
+              SELECT 1 FROM squad_members sm2
+              WHERE sm2.squad_id = s.id AND sm2.user_id = $1
+            ) THEN '1' ELSE '0' END as is_member
+          FROM squads s
+          LEFT JOIN squad_members sm ON sm.squad_id = s.id
+          WHERE s.is_public = true
+          GROUP BY s.id, s.name, s.description, s.max_members, s.created_by
+          ORDER BY member_count DESC, s.created_at DESC
+          LIMIT $2
+        `,
+        [userId, limit]
+      );
+    }
+
+    const formattedSquads = squads.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      memberCount: parseInt(row.member_count),
+      maxMembers: row.max_members,
+      createdBy: row.created_by,
+      isMember: row.is_member === '1',
+    }));
+
+    return res.json({ squads: formattedSquads });
+  } catch (err) {
+    console.error("Failed to discover squads", err);
+    return res.status(500).json({ error: "Failed to discover squads" });
+  }
+});
+
 router.post("/squads", async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const { name } = req.body as { name?: string };
+  const { name, description, isPublic } = req.body as {
+    name?: string;
+    description?: string;
+    isPublic?: boolean;
+  };
   if (!name?.trim()) {
     return res.status(400).json({ error: "Squad name required" });
   }
@@ -943,8 +1083,9 @@ router.post("/squads", async (req, res) => {
 
   try {
     await query(
-      `INSERT INTO squads (id, name, created_by) VALUES ($1, $2, $3)`,
-      [squadId, name.trim(), userId]
+      `INSERT INTO squads (id, name, description, created_by, is_public)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [squadId, name.trim(), description?.trim() || null, userId, isPublic ?? false]
     );
     await query(
       `
@@ -962,6 +1103,74 @@ router.post("/squads", async (req, res) => {
   } catch (err) {
     console.error("Failed to create squad", err);
     return res.status(500).json({ error: "Failed to create squad" });
+  }
+});
+
+// Join a public squad directly
+router.post("/squads/:squadId/join", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { squadId } = req.params;
+
+  try {
+    // Check if squad exists and is public
+    const squadResult = await query<{ is_public: boolean; max_members: number }>(
+      `SELECT is_public, max_members FROM squads WHERE id = $1 LIMIT 1`,
+      [squadId]
+    );
+
+    if (squadResult.rowCount === 0) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+
+    const squad = squadResult.rows[0];
+    if (!squad.is_public) {
+      return res.status(403).json({ error: "This squad is private. Use an invite link to join." });
+    }
+
+    // Check if already a member
+    const membershipCheck = await query(
+      `SELECT 1 FROM squad_members WHERE squad_id = $1 AND user_id = $2 LIMIT 1`,
+      [squadId, userId]
+    );
+
+    if (membershipCheck.rowCount && membershipCheck.rowCount > 0) {
+      return res.status(400).json({ error: "Already a member of this squad" });
+    }
+
+    // Check if squad is full
+    const memberCount = await query<{ count: string }>(
+      `SELECT COUNT(*)::text as count FROM squad_members WHERE squad_id = $1`,
+      [squadId]
+    );
+    const currentCount = parseInt(memberCount.rows[0]?.count || '0');
+
+    if (currentCount >= squad.max_members) {
+      return res.status(400).json({ error: "Squad is full" });
+    }
+
+    // Join the squad
+    await query(
+      `
+        INSERT INTO squad_members (squad_id, user_id, role)
+        VALUES ($1, $2, 'member')
+        ON CONFLICT (squad_id, user_id) DO NOTHING
+      `,
+      [squadId, userId]
+    );
+
+    const updatedSquad = await fetchSquadById(userId, squadId);
+    if (!updatedSquad) {
+      return res.status(404).json({ error: "Squad not found" });
+    }
+
+    return res.json({ squad: updatedSquad });
+  } catch (err) {
+    console.error("Failed to join squad", err);
+    return res.status(500).json({ error: "Failed to join squad" });
   }
 });
 
@@ -1762,10 +1971,53 @@ router.post("/follow", async (req, res) => {
     return res.status(400).json({ error: "Invalid follow target" });
   }
   try {
-    await query(
-      `INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    // Insert the follow relationship
+    const result = await query(
+      `INSERT INTO follows (user_id, target_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`,
       [userId, targetUserId]
     );
+
+    // Only send notifications if this was a new follow (not a duplicate)
+    if (result.rowCount && result.rowCount > 0) {
+      // Get current user info to send in notification
+      const currentUserResult = await query<UserRow>(
+        `SELECT name, handle FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      const currentUser = currentUserResult.rows[0];
+
+      // Check if target user was already following current user (mutual follow)
+      const isMutualResult = await query(
+        `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
+        [targetUserId, userId]
+      );
+      const isMutual = (isMutualResult.rowCount ?? 0) > 0;
+
+      if (isMutual) {
+        // This is a friend acceptance - notify the original requester (target user)
+        const { sendFriendAcceptanceNotification } = await import("../jobs/notifications");
+        sendFriendAcceptanceNotification(
+          targetUserId,
+          userId,
+          currentUser?.name ?? "Someone",
+          currentUser?.handle ?? undefined
+        ).catch((err) =>
+          console.error("[Social] Failed to send friend acceptance notification:", err)
+        );
+      } else {
+        // This is a new friend request - notify the target user
+        const { sendFriendRequestNotification } = await import("../jobs/notifications");
+        sendFriendRequestNotification(
+          targetUserId,
+          userId,
+          currentUser?.name ?? "Someone",
+          currentUser?.handle ?? undefined
+        ).catch((err) =>
+          console.error("[Social] Failed to send friend request notification:", err)
+        );
+      }
+    }
+
     return res.status(204).send();
   } catch (err) {
     console.error("Failed to follow user", err);

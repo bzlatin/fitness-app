@@ -3,6 +3,11 @@ import { apiClient } from "./client";
 export interface GenerateWorkoutRequest {
   requestedSplit?: string;
   specificRequest?: string;
+  overrides?: {
+    sessionDuration?: number;
+    availableEquipment?: string[];
+    avoidMuscles?: string[];
+  };
 }
 
 export interface GeneratedExercise {
@@ -28,6 +33,33 @@ export interface GeneratedWorkout {
 export interface GenerateWorkoutResponse {
   success: boolean;
   workout: GeneratedWorkout;
+}
+
+export interface SmartNextWorkoutCandidate {
+  splitKey: string;
+  label: string;
+  tags: string[];
+  reason: string;
+  score: number;
+}
+
+export interface SmartNextWorkoutRecommendation {
+  preferredSplit: string;
+  selected: SmartNextWorkoutCandidate;
+  alternates: SmartNextWorkoutCandidate[];
+}
+
+export interface RecommendNextWorkoutRequest {
+  overrides?: {
+    sessionDuration?: number;
+    availableEquipment?: string[];
+    avoidMuscles?: string[];
+  };
+}
+
+export interface RecommendNextWorkoutResponse {
+  success: boolean;
+  recommendation: SmartNextWorkoutRecommendation;
 }
 
 export interface AIUsageResponse {
@@ -64,6 +96,20 @@ export const generateWorkout = async (
     params
   );
   return response.data.workout;
+};
+
+/**
+ * Recommend the next workout in the user's split cycle, adjusted for recovery/constraints.
+ * Does not consume an AI generation.
+ */
+export const recommendNextWorkout = async (
+  params: RecommendNextWorkoutRequest
+): Promise<SmartNextWorkoutRecommendation> => {
+  const response = await apiClient.post<RecommendNextWorkoutResponse>(
+    "ai/recommend-next-workout",
+    params
+  );
+  return response.data.recommendation;
 };
 
 /**

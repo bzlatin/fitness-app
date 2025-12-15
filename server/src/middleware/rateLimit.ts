@@ -45,6 +45,12 @@ export const aiSwapLimiter = createLimiter({
   message: 'Too many swap requests. Please wait a minute and try again.',
 });
 
+export const aiRecommendLimiter = createLimiter({
+  windowMs: 60_000,
+  max: 30,
+  message: 'Too many recommendation requests. Please wait a minute and try again.',
+});
+
 export const subscriptionWriteLimiter = createLimiter({
   windowMs: 60_000,
   max: 10,

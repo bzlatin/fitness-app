@@ -15,6 +15,13 @@ import { colors } from "../theme/colors";
 import { generateWorkout, GeneratedWorkout } from "../api/ai";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { createTemplate } from "../api/templates";
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import {
+  canGenerateAiWorkout,
+  getAiWorkoutGenerationsRemaining,
+} from "../utils/featureGating";
+import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
 
 const SPLIT_OPTIONS = [
   { value: "push", label: "Push", emoji: "💪" },
@@ -28,20 +35,39 @@ const SPLIT_OPTIONS = [
 const WorkoutGeneratorScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
+  const { user, refresh } = useCurrentUser();
+  const subscriptionAccess = useSubscriptionAccess();
+  const hasProAccess = subscriptionAccess.hasProAccess;
+  const aiRemaining = getAiWorkoutGenerationsRemaining(user, { hasProAccess });
+  const canUseAi = canGenerateAiWorkout(user, { hasProAccess });
+  const aiFreeAvailable = !hasProAccess && aiRemaining > 0;
+  const aiFreeUsed = !hasProAccess && aiRemaining === 0;
+
   const [selectedSplit, setSelectedSplit] = useState<string | null>(null);
   const [specificRequest, setSpecificRequest] = useState("");
   const [generatedWorkout, setGeneratedWorkout] = useState<GeneratedWorkout | null>(null);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallFreeUsed, setPaywallFreeUsed] = useState(false);
 
   const generateMutation = useMutation({
     mutationFn: generateWorkout,
     onSuccess: (data) => {
       setGeneratedWorkout(data);
+      if (!hasProAccess) {
+        void refresh();
+      }
     },
     onError: (error: any) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
         "Failed to generate workout";
+
+      if (error?.response?.data?.requiresUpgrade) {
+        setPaywallFreeUsed(error?.response?.data?.error === "Free smart workout used");
+        setShowPaywallModal(true);
+        return;
+      }
 
       Alert.alert("Generation Failed", errorMessage);
     },
@@ -94,6 +120,12 @@ const WorkoutGeneratorScreen = () => {
       return;
     }
 
+    if (!canUseAi) {
+      setPaywallFreeUsed(aiFreeUsed);
+      setShowPaywallModal(true);
+      return;
+    }
+
     generateMutation.mutate({
       requestedSplit: selectedSplit,
       specificRequest: specificRequest.trim() || undefined,
@@ -112,6 +144,10 @@ const WorkoutGeneratorScreen = () => {
 
   const isLoading = generateMutation.isPending;
   const isSaving = saveMutation.isPending;
+  const closePaywall = () => {
+    setShowPaywallModal(false);
+    setPaywallFreeUsed(false);
+  };
 
   // Show generated workout preview
   if (generatedWorkout) {
@@ -294,6 +330,14 @@ const WorkoutGeneratorScreen = () => {
             </Text>
           </Pressable>
         </View>
+
+        <PaywallComparisonModal
+          visible={showPaywallModal}
+          onClose={closePaywall}
+          triggeredBy="ai"
+          aiFreeUsed={paywallFreeUsed || aiFreeUsed}
+          aiFreeRemaining={Number.isFinite(aiRemaining) ? aiRemaining : undefined}
+        />
       </ScreenContainer>
     );
   }
@@ -301,6 +345,35 @@ const WorkoutGeneratorScreen = () => {
   // Show generation form
   return (
     <ScreenContainer scroll>
+      {!hasProAccess && (
+        <View
+          style={{
+            backgroundColor: aiFreeAvailable ? `${colors.primary}12` : colors.surface,
+            borderRadius: 14,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: aiFreeAvailable ? `${colors.primary}35` : colors.border,
+            marginBottom: 14,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 14,
+              fontWeight: "700",
+              marginBottom: 4,
+            }}
+          >
+            {aiFreeAvailable ? "1 free smart workout" : "Smart workouts are a Pro feature"}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+            {aiFreeAvailable
+              ? "Try it once—then upgrade for unlimited generation."
+              : "You've used your free smart workout. Upgrade for unlimited!"}
+          </Text>
+        </View>
+      )}
+
       <View style={{ marginBottom: 20 }}>
         <Text
           style={{
@@ -310,11 +383,10 @@ const WorkoutGeneratorScreen = () => {
             marginBottom: 8,
           }}
         >
-          AI Workout Generator
+          Smart Workout Generator
         </Text>
         <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>
-          Let AI create a personalized workout based on your profile and recent
-          training history.
+          Get a made-for-you workout based on your profile and recent training history.
         </Text>
       </View>
 
@@ -431,6 +503,14 @@ const WorkoutGeneratorScreen = () => {
           </Text>
         </View>
       )}
+
+      <PaywallComparisonModal
+        visible={showPaywallModal}
+        onClose={closePaywall}
+        triggeredBy="ai"
+        aiFreeUsed={paywallFreeUsed || aiFreeUsed}
+        aiFreeRemaining={Number.isFinite(aiRemaining) ? aiRemaining : undefined}
+      />
     </ScreenContainer>
   );
 };

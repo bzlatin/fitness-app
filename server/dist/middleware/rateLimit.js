@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.feedbackReportLimiter = exports.feedbackCreateLimiter = exports.waitlistLimiter = exports.subscriptionWriteLimiter = exports.aiSwapLimiter = exports.aiGenerateLimiter = void 0;
+exports.feedbackReportLimiter = exports.feedbackCreateLimiter = exports.waitlistLimiter = exports.subscriptionWriteLimiter = exports.aiRecommendLimiter = exports.aiSwapLimiter = exports.aiGenerateLimiter = void 0;
 const express_rate_limit_1 = __importStar(require("express-rate-limit"));
 const hasValue = (value) => typeof value === 'string' && value.trim().length > 0;
 const userOrIpKeyGenerator = (req, res) => {
@@ -66,6 +66,11 @@ exports.aiSwapLimiter = createLimiter({
     windowMs: 60000,
     max: 20,
     message: 'Too many swap requests. Please wait a minute and try again.',
+});
+exports.aiRecommendLimiter = createLimiter({
+    windowMs: 60000,
+    max: 30,
+    message: 'Too many recommendation requests. Please wait a minute and try again.',
 });
 exports.subscriptionWriteLimiter = createLimiter({
     windowMs: 60000,

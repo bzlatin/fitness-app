@@ -4,9 +4,10 @@ const express_1 = require("express");
 const ai_1 = require("../services/ai");
 const fatigue_1 = require("../services/fatigue");
 const workoutPrompts_1 = require("../services/ai/workoutPrompts");
+const smartNextWorkout_1 = require("../services/smartNextWorkout");
 const planLimits_1 = require("../middleware/planLimits");
 const db_1 = require("../db");
-const nanoid_1 = require("nanoid");
+const id_1 = require("../utils/id");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const exerciseData_1 = require("../utils/exerciseData");
 const logger_1 = require("../utils/logger");
@@ -19,6 +20,26 @@ const generateWorkoutBodySchema = zod_1.z
     .object({
     requestedSplit: zod_1.z.string().trim().min(1).max(80).optional(),
     specificRequest: zod_1.z.string().trim().min(1).max(2000).optional(),
+    overrides: zod_1.z
+        .object({
+        sessionDuration: zod_1.z.number().int().min(10).max(180).optional(),
+        availableEquipment: zod_1.z.array(zod_1.z.string().trim().min(1).max(60)).max(30).optional(),
+        avoidMuscles: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(20).optional(),
+    })
+        .strip()
+        .optional(),
+})
+    .strip();
+const recommendNextWorkoutBodySchema = zod_1.z
+    .object({
+    overrides: zod_1.z
+        .object({
+        sessionDuration: zod_1.z.number().int().min(10).max(180).optional(),
+        availableEquipment: zod_1.z.array(zod_1.z.string().trim().min(1).max(60)).max(30).optional(),
+        avoidMuscles: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(20).optional(),
+    })
+        .strip()
+        .optional(),
 })
     .strip();
 const swapExerciseBodySchema = zod_1.z
@@ -138,22 +159,74 @@ const deriveFocusName = (specificRequest) => {
     const limitedParts = parts.slice(0, 3);
     return limitedParts.join(" & ");
 };
+const normalizeOnboardingEquipment = (raw, custom) => {
+    const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+    if (values.length === 0)
+        return undefined;
+    const customList = Array.isArray(custom)
+        ? custom.filter((item) => typeof item === "string" && item.trim().length > 0)
+        : [];
+    const mapped = values
+        .map((value) => String(value).toLowerCase().trim())
+        .flatMap((value) => {
+        if (value === "gym_full")
+            return ["gym"];
+        if (value === "home_limited")
+            return ["dumbbell", "bodyweight"];
+        if (value === "bodyweight")
+            return ["bodyweight"];
+        if (value === "custom")
+            return customList.length > 0 ? customList : [];
+        return [value];
+    })
+        .filter(Boolean);
+    const unique = Array.from(new Set(mapped));
+    return unique.length > 0 ? unique : undefined;
+};
+const readOnboardingField = (onboardingData, keys) => {
+    for (const key of keys) {
+        const value = onboardingData?.[key];
+        if (value !== undefined && value !== null)
+            return value;
+    }
+    return undefined;
+};
+const normalizePreferredSplit = (value) => {
+    if (!value)
+        return undefined;
+    const raw = String(value).toLowerCase().trim();
+    if (!raw)
+        return undefined;
+    if (raw === "push_pull_legs")
+        return "ppl";
+    return raw;
+};
+const uniqStrings = (items) => Array.from(new Set(items.map((item) => item.toLowerCase().trim()).filter((item) => item.length > 0)));
 /**
  * POST /api/ai/generate-workout
  * Generate a personalized workout using AI
  * Requires Pro plan
  */
-router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGenerateLimiter, (0, validate_1.validateBody)(generateWorkoutBodySchema), async (req, res) => {
+router.post("/generate-workout", rateLimit_1.aiGenerateLimiter, (0, validate_1.validateBody)(generateWorkoutBodySchema), planLimits_1.checkAiWorkoutGenerationLimit, async (req, res) => {
     const userId = res.locals.userId;
+    const reservedFreeGeneration = Boolean(res.locals.aiFreeWorkoutGenerationReserved);
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     try {
-        const { requestedSplit, specificRequest } = req.body;
+        const { requestedSplit, specificRequest, overrides } = req.body;
         // Get user profile data
         const userResult = await (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
         const user = userResult.rows[0];
         const onboardingData = user?.onboarding_data || {};
+        const preferredSplit = normalizePreferredSplit(readOnboardingField(onboardingData, ["preferredSplit", "preferred_split"]));
+        const goals = readOnboardingField(onboardingData, ["goals"]);
+        const experienceLevel = readOnboardingField(onboardingData, ["experienceLevel", "experience_level"]);
+        const weeklyFrequency = readOnboardingField(onboardingData, ["weeklyFrequency", "weekly_frequency"]);
+        const baseSessionDuration = readOnboardingField(onboardingData, ["sessionDuration", "session_duration"]);
+        const injuryNotes = readOnboardingField(onboardingData, ["injuryNotes", "injury_notes"]);
+        const equipment = normalizeOnboardingEquipment(overrides?.availableEquipment ??
+            readOnboardingField(onboardingData, ["availableEquipment", "available_equipment"]), readOnboardingField(onboardingData, ["customEquipment", "custom_equipment"]));
         // Fetch recent workout history and muscle fatigue
         const [recentWorkouts, fatigueResult] = await Promise.all([
             (0, fatigue_1.getRecentWorkouts)(userId, 5),
@@ -167,26 +240,40 @@ router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGene
         // Determine the next workout in cycle if no specific split requested
         let finalRequestedSplit = requestedSplit;
         if (!requestedSplit && !specificRequest) {
-            const nextInCycle = (0, workoutPrompts_1.determineNextInCycle)(recentWorkouts, onboardingData.preferred_split);
+            const nextInCycle = (0, workoutPrompts_1.determineNextInCycle)(recentWorkouts, preferredSplit);
             if (nextInCycle) {
                 finalRequestedSplit = nextInCycle;
                 log.debug("Auto-detected next in cycle", { nextInCycle, userId });
             }
+            else if (preferredSplit === "custom") {
+                finalRequestedSplit = (0, smartNextWorkout_1.recommendSmartNextWorkout)({
+                    preferredSplit,
+                    recentWorkouts,
+                    fatigue: fatigueResult,
+                    overrides: {
+                        sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+                        avoidMuscles: overrides?.avoidMuscles,
+                    },
+                }).selected.splitKey;
+            }
         }
         const fatigueTargets = {
             prioritize: recommendations.targetMuscles,
-            avoid: fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+            avoid: uniqStrings([
+                ...fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+                ...(overrides?.avoidMuscles ?? []),
+            ]),
         };
         const params = {
             userId,
             userProfile: {
-                goals: onboardingData.goals,
-                experienceLevel: onboardingData.experience_level,
-                availableEquipment: onboardingData.available_equipment,
-                weeklyFrequency: onboardingData.weekly_frequency,
-                sessionDuration: onboardingData.session_duration,
-                injuryNotes: onboardingData.injury_notes,
-                preferredSplit: onboardingData.preferred_split,
+                goals,
+                experienceLevel,
+                availableEquipment: equipment,
+                weeklyFrequency,
+                sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+                injuryNotes,
+                preferredSplit: preferredSplit === "custom" ? "full_body" : preferredSplit,
             },
             recentWorkouts,
             muscleFatigue,
@@ -310,10 +397,10 @@ router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGene
       INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
-            (0, nanoid_1.nanoid)(),
+            (0, id_1.generateId)(),
             userId,
             "workout",
-            JSON.stringify({ requestedSplit, specificRequest }),
+            JSON.stringify({ requestedSplit, specificRequest, overrides }),
             JSON.stringify(enrichedWorkout),
         ]);
         log.info("Successfully generated workout", {
@@ -327,11 +414,23 @@ router.post("/generate-workout", planLimits_1.requireProPlan, rateLimit_1.aiGene
     }
     catch (error) {
         log.error("Error generating workout", { error, userId });
+        if (reservedFreeGeneration) {
+            (0, db_1.query)(`
+          UPDATE users
+          SET ai_generations_used_count = GREATEST(ai_generations_used_count - 1, 0)
+          WHERE id = $1
+        `, [userId]).catch((rollbackError) => {
+                log.warn("Failed to roll back reserved AI generation", {
+                    rollbackError,
+                    userId,
+                });
+            });
+        }
         // Check if it's an OpenAI API error
         if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
             return res.status(500).json({
-                error: "AI service not configured",
-                message: "The AI workout generation service is not properly configured. Please contact support.",
+                error: "Workout service not configured",
+                message: "The smart workout generation service is not properly configured. Please contact support.",
             });
         }
         return res.status(500).json({
@@ -373,7 +472,7 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, rateLimit_1.aiSwapLim
         if (!result || !result.exerciseId) {
             return res.status(404).json({
                 error: "No suitable alternative found",
-                message: "AI could not find a suitable replacement for this exercise",
+                message: "Could not find a suitable replacement for this exercise",
             });
         }
         // Track usage
@@ -381,7 +480,7 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, rateLimit_1.aiSwapLim
       INSERT INTO ai_generations (id, user_id, generation_type, input_params, output_data, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
-            (0, nanoid_1.nanoid)(),
+            (0, id_1.generateId)(),
             userId,
             "exercise_swap",
             JSON.stringify({ exerciseId, exerciseName, reason }),
@@ -400,8 +499,8 @@ router.post("/swap-exercise", planLimits_1.requireProPlan, rateLimit_1.aiSwapLim
         log.error("Error swapping exercise", { error, userId });
         if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
             return res.status(500).json({
-                error: "AI service not configured",
-                message: "The AI exercise swap service is not properly configured. Please contact support.",
+                error: "Workout service not configured",
+                message: "The smart exercise swap service is not properly configured. Please contact support.",
             });
         }
         return res.status(500).json({
@@ -436,6 +535,45 @@ router.get("/usage", planLimits_1.requireProPlan, async (req, res) => {
     catch (error) {
         log.error("Error fetching usage", { error, userId });
         return res.status(500).json({ error: "Failed to fetch usage stats" });
+    }
+});
+/**
+ * POST /api/ai/recommend-next-workout
+ * Recommend the next session in a user's split, adjusted by recovery/constraints.
+ * Does not consume an AI generation.
+ */
+router.post("/recommend-next-workout", rateLimit_1.aiRecommendLimiter, (0, validate_1.validateBody)(recommendNextWorkoutBodySchema), async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const { overrides } = req.body;
+        const userResult = await (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+        const onboardingData = userResult.rows[0]?.onboarding_data || {};
+        const preferredSplit = normalizePreferredSplit(readOnboardingField(onboardingData, ["preferredSplit", "preferred_split"]));
+        const baseSessionDuration = readOnboardingField(onboardingData, ["sessionDuration", "session_duration"]);
+        const [recentWorkouts, fatigueResult] = await Promise.all([
+            (0, fatigue_1.getRecentWorkouts)(userId, 5),
+            (0, fatigue_1.getFatigueScores)(userId),
+        ]);
+        const recommendation = (0, smartNextWorkout_1.recommendSmartNextWorkout)({
+            preferredSplit,
+            recentWorkouts,
+            fatigue: fatigueResult,
+            overrides: {
+                sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+                avoidMuscles: overrides?.avoidMuscles,
+            },
+        });
+        return res.json({ success: true, recommendation });
+    }
+    catch (error) {
+        log.error("Error recommending next workout", { error, userId });
+        return res.status(500).json({
+            error: "Failed to recommend next workout",
+            message: error instanceof Error ? error.message : "An unexpected error occurred",
+        });
     }
 });
 exports.default = router;

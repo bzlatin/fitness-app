@@ -155,7 +155,7 @@ const UpgradeScreen = () => {
       ? "Manage your Pro subscription from your Apple ID subscriptions."
       : "Subscriptions are managed through the app store on iOS. Android billing is coming soon."
     : isIOS
-    ? "Unlock AI workouts, analytics, and premium templates. First-time upgrades get a 7-day trial."
+    ? "Unlock smart workouts, analytics, and premium templates. First-time upgrades get a 7-day trial."
     : "Subscriptions are currently available on iOS only. Android billing is coming soon.";
 
   const openLegal = async (url: string) => {
@@ -276,7 +276,7 @@ const UpgradeScreen = () => {
               fontFamily: fontFamilies.regular,
             }}
           >
-            Your 7-day trial ends {trialEnds}. Keep Pro to retain AI workouts and analytics.
+            Your 7-day trial ends {trialEnds}. Keep Pro to retain smart workouts and analytics.
           </Text>
         </View>
       ) : null}
@@ -349,7 +349,7 @@ const UpgradeScreen = () => {
               fontFamily: fontFamilies.regular,
             }}
           >
-            Renew your plan to regain access to AI workouts, progression, and advanced analytics.
+            Renew your plan to regain access to smart workouts, progression, and advanced analytics.
           </Text>
         </View>
       ) : null}
@@ -591,7 +591,7 @@ const UpgradeScreen = () => {
           >
             What's included
           </Text>
-          <FeatureRow title='AI workout generator' />
+          <FeatureRow title='Smart workout generator' />
           <FeatureRow title='Progression analytics' />
           <FeatureRow title='Premium templates & swaps' />
           <FeatureRow title='Priority support' />

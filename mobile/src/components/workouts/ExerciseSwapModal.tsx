@@ -133,7 +133,7 @@ const ExerciseSwapModal = ({
       if (!result.exerciseId) {
         Alert.alert(
           "No Alternative Found",
-          "AI couldn't find a suitable alternative for this exercise."
+          "Couldn't find a suitable alternative for this exercise."
         );
         setIsSwapping(false);
         return;
@@ -298,7 +298,7 @@ const ExerciseSwapModal = ({
       <UpgradePrompt
         visible={showUpgradePrompt}
         onClose={() => setShowUpgradePrompt(false)}
-        feature="AI Exercise Swap"
+        feature="Smart Exercise Swap"
       />
 
       <Modal visible={visible && swapMode !== "manual"} animationType="slide" transparent>
@@ -367,7 +367,7 @@ const ExerciseSwapModal = ({
                   Choose how you'd like to swap this exercise:
                 </Text>
 
-                {/* AI Swap Option */}
+                {/* Smart Swap Option */}
                 <Pressable
                   onPress={() => setSwapMode("ai")}
                   style={({ pressed }) => ({
@@ -404,7 +404,7 @@ const ExerciseSwapModal = ({
                           fontSize: 16,
                         }}
                       >
-                        AI Swap
+                        Smart Swap
                       </Text>
                       {!isPro && (
                         <View
@@ -424,7 +424,7 @@ const ExerciseSwapModal = ({
                       )}
                     </View>
                     <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                      Let AI find the best alternative based on your goals
+                      Find the best alternative based on your goals
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -475,7 +475,7 @@ const ExerciseSwapModal = ({
               </View>
             )}
 
-            {/* AI Swap Confirmation */}
+            {/* Smart Swap Confirmation */}
             {swapMode === "ai" && (
               <View style={{ padding: 16, gap: 16 }}>
                 <Pressable
@@ -510,10 +510,10 @@ const ExerciseSwapModal = ({
                           fontSize: 16,
                         }}
                       >
-                        AI Exercise Swap
+                        Smart Exercise Swap
                       </Text>
                       <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                        AI will analyze your profile and find the best alternative
+                        We'll use your profile to find the best alternative
                       </Text>
                     </View>
                   </View>
@@ -540,7 +540,7 @@ const ExerciseSwapModal = ({
                         fontSize: 16,
                       }}
                     >
-                      Find Alternative with AI
+                      Find Alternative
                     </Text>
                   )}
                 </Pressable>

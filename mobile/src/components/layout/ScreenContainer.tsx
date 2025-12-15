@@ -24,6 +24,7 @@ type Props = {
   includeTopInset?: boolean; // Disable top safe area when native header already provides it
   refreshControl?: ReactNode;
   adjustScrollInsets?: boolean; // Disable automatic nav inset adjustments when header already offsets content
+  bottomOverlay?: ReactNode; // Fixed overlay rendered above content (e.g. sticky save bar)
 };
 
 const ScreenContainer = forwardRef<ScrollView, Props>(({
@@ -35,6 +36,7 @@ const ScreenContainer = forwardRef<ScrollView, Props>(({
   includeTopInset = true,
   refreshControl,
   adjustScrollInsets = true,
+  bottomOverlay,
 }, ref) => {
   const insets = useSafeAreaInsets();
   const [contentHeight, setContentHeight] = useState(0);
@@ -97,6 +99,20 @@ const ScreenContainer = forwardRef<ScrollView, Props>(({
             {children}
           </View>
         )}
+        {bottomOverlay ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 20,
+            }}
+          >
+            {bottomOverlay}
+          </View>
+        ) : null}
         {shouldShowTopGradient && (
           <LinearGradient
             colors={[

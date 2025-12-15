@@ -59,7 +59,7 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
       <View style={{ gap: 4, marginBottom: 24 }}>
         <Text style={styles.title}>Unlock Your Full Potential</Text>
         <Text style={styles.subtitle}>
-          Choose between Free or unlock everything with Pro to get AI-powered workouts, unlimited templates, and advanced analytics
+          Choose between Free or unlock everything with Pro to get smart workouts, unlimited templates, and advanced analytics
         </Text>
       </View>
 
@@ -82,6 +82,7 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
           <View style={styles.featureList}>
             <FeatureItem text="Workout logging" />
             <FeatureItem text="Up to 3 templates" />
+            <FeatureItem text="1 free smart workout" highlight />
             <FeatureItem text="Squad features" />
             <FeatureItem text="Workout history" />
             <FeatureItem text="Basic body heatmap" />
@@ -111,7 +112,7 @@ const PlanSelectionStep: React.FC<PlanSelectionStepProps> = ({
 
           <View style={styles.featureList}>
             <FeatureItem text="Unlimited templates" highlight />
-            <FeatureItem text="AI workout generation" highlight />
+            <FeatureItem text="Smart workout generator" highlight />
             <FeatureItem text="Smart suggestions" highlight />
             <FeatureItem text="Recovery tracking" highlight />
             <FeatureItem text="Progressive overload" highlight />

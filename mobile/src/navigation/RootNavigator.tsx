@@ -147,7 +147,7 @@ const RootNavigator = () => (
     <Stack.Screen
       name='WorkoutGenerator'
       component={WorkoutGeneratorScreen}
-      options={{ title: "AI Workout Generator" }}
+      options={{ title: "Smart Workout Generator" }}
     />
     <Stack.Screen
       name='WorkoutSession'
@@ -202,7 +202,7 @@ const RootNavigator = () => (
     <Stack.Screen
       name='WorkoutPreview'
       component={WorkoutPreviewScreen}
-      options={{ title: "AI Workout Preview", headerShown: false }}
+      options={{ title: "Workout Preview", headerShown: false }}
     />
     <Stack.Screen
       name='Upgrade'

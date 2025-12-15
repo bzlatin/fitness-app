@@ -38,6 +38,9 @@ import {
   getConnections,
   searchUsers,
   unfollowUser,
+  discoverSquads,
+  joinPublicSquad,
+  PublicSquad,
 } from "../api/social";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { formatHandle } from "../utils/formatHandle";
@@ -157,16 +160,18 @@ const buildFeedItems = (
     (share) => share.user.id !== excludeUserId
   );
   const defaultLiveTitle = titles?.liveTitle ?? "Active friends";
-  const emptyLiveTitle =
-    titles?.liveEmptyTitle ??
-    (titles?.liveTitle ? titles.liveTitle : "No active friends");
   const items: FeedItem[] = [];
-  items.push({
-    kind: "section",
-    title: filteredActive.length ? defaultLiveTitle : emptyLiveTitle,
-    subtitle: titles?.liveSubtitle,
-  });
-  filteredActive.forEach((status) => items.push({ kind: "active", status }));
+
+  // Only show "Squad live" / "Active friends" section if there are actually active members
+  if (filteredActive.length > 0) {
+    items.push({
+      kind: "section",
+      title: defaultLiveTitle,
+      subtitle: titles?.liveSubtitle,
+    });
+    filteredActive.forEach((status) => items.push({ kind: "active", status }));
+  }
+
   items.push({
     kind: "section",
     title: titles?.recentTitle ?? "Recent sessions",
@@ -375,6 +380,10 @@ const {
   const hasOpenedFromParams = useRef(false);
   const route = useRoute<RouteProp<RootTabParamList, "Squad">>();
   const [showSquadModal, setShowSquadModal] = useState(false);
+  const [showDiscoverSquadsModal, setShowDiscoverSquadsModal] = useState(false);
+  const [squadSearchTerm, setSquadSearchTerm] = useState("");
+  const [debouncedSquadSearch, setDebouncedSquadSearch] = useState("");
+
   const closeSocialModal = () => {
     setShowSocialModal(false);
     setSearchTerm("");
@@ -420,6 +429,26 @@ const {
   }, [searchTerm]);
 
   useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSquadSearch(squadSearchTerm.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [squadSearchTerm]);
+
+  const squadDiscoveryQuery = useQuery({
+    queryKey: ["squads", "discover", debouncedSquadSearch],
+    queryFn: () => discoverSquads(debouncedSquadSearch || undefined),
+    enabled: showDiscoverSquadsModal,
+  });
+
+  const joinSquadMutation = useMutation({
+    mutationFn: (squadId: string) => joinPublicSquad(squadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["social", "squads"] });
+      queryClient.invalidateQueries({ queryKey: ["squads", "discover"] });
+      queryClient.invalidateQueries({ queryKey: ["squadFeed"] });
+    },
+  });
+
+  useEffect(() => {
     if (!inviteSquadId && squads.length > 0) {
       setInviteSquadId(squads[0].id);
     }
@@ -445,7 +474,7 @@ const {
     const trimmed = squadName.trim();
     if (!trimmed) return;
     try {
-      const squad = await createSquadAction(trimmed);
+      const squad = await createSquadAction({ name: trimmed });
       setSelectedSquadId(squad.id);
       setInviteSquadId(squad.id);
       setSquadName("");
@@ -770,7 +799,6 @@ const {
               onPress={() => setSelectedSquadId(undefined)}
               style={({ pressed }) => ({
                 marginTop: 4,
-                alignSelf: "flex-start",
                 paddingVertical: 6,
                 paddingHorizontal: 10,
                 borderRadius: 10,
@@ -779,7 +807,7 @@ const {
                 backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6,
+                gap: 10,
               })}
             >
               <Ionicons
@@ -787,11 +815,33 @@ const {
                 size={16}
                 color={colors.textSecondary}
               />
-              <Text
-                style={{ color: colors.textSecondary, ...typography.caption }}
-              >
-                Viewing {selectedSquad?.name ?? "Squad"} — tap to switch back
-              </Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    ...typography.caption,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  Viewing{" "}
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                    }}
+                  >
+                    {selectedSquad?.name ?? "Squad"}
+                  </Text>
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Tap to switch back
+                </Text>
+              </View>
+              <Ionicons
+                name='arrow-undo-outline'
+                size={16}
+                color={colors.textSecondary}
+              />
             </Pressable>
           ) : null}
           {squadsError ? (
@@ -1126,6 +1176,7 @@ const {
                             placeholder='Search by name or handle'
                             placeholderTextColor={colors.textSecondary}
                             style={inputStyle}
+                            autoFocus={true}
                           />
                           <View style={{ gap: 8 }}>
                             {debouncedTerm.length <= 1 ? (
@@ -1696,6 +1747,299 @@ const {
                           </Pressable>
                         </CollapsibleSection>
 
+                        <CollapsibleSection
+                          title='Discover squads'
+                          subtitle='Browse and join public squads'
+                          open={showDiscoverSquadsModal}
+                          onToggle={() => setShowDiscoverSquadsModal((prev) => !prev)}
+                          iconName='compass-outline'
+                        >
+                          {/* Search Bar */}
+                          <View
+                            style={{
+                              backgroundColor: colors.surface,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              marginBottom: 12,
+                            }}
+                          >
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingHorizontal: 10,
+                                paddingVertical: 8,
+                                gap: 8,
+                              }}
+                            >
+                              <Ionicons
+                                name='search'
+                                size={18}
+                                color={colors.textSecondary}
+                              />
+                              <TextInput
+                                value={squadSearchTerm}
+                                onChangeText={setSquadSearchTerm}
+                                placeholder='Search squads by name...'
+                                placeholderTextColor={colors.textSecondary}
+                                style={{
+                                  flex: 1,
+                                  color: colors.textPrimary,
+                                  fontFamily: fontFamilies.regular,
+                                  fontSize: 15,
+                                  padding: 0,
+                                }}
+                              />
+                              {squadSearchTerm ? (
+                                <Pressable onPress={() => setSquadSearchTerm("")}>
+                                  <Ionicons
+                                    name='close-circle'
+                                    size={18}
+                                    color={colors.textSecondary}
+                                  />
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          </View>
+
+                          {/* Squad List */}
+                          {squadDiscoveryQuery.isLoading ? (
+                            <View style={{ padding: 16, alignItems: "center" }}>
+                              <ActivityIndicator size="small" color={colors.primary} />
+                              <Text
+                                style={{
+                                  ...typography.caption,
+                                  color: colors.textSecondary,
+                                  marginTop: 8,
+                                }}
+                              >
+                                Discovering squads...
+                              </Text>
+                            </View>
+                          ) : squadDiscoveryQuery.isError ? (
+                            <View style={{ padding: 16, alignItems: "center" }}>
+                              <Ionicons
+                                name='alert-circle-outline'
+                                size={32}
+                                color={colors.error}
+                              />
+                              <Text
+                                style={{
+                                  ...typography.caption,
+                                  color: colors.textPrimary,
+                                  marginTop: 8,
+                                  textAlign: "center",
+                                }}
+                              >
+                                Failed to load squads
+                              </Text>
+                            </View>
+                          ) : !squadDiscoveryQuery.data?.length ? (
+                            <View style={{ padding: 16, alignItems: "center" }}>
+                              <Ionicons
+                                name='search-outline'
+                                size={32}
+                                color={colors.textSecondary}
+                              />
+                              <Text
+                                style={{
+                                  ...typography.caption,
+                                  color: colors.textPrimary,
+                                  marginTop: 12,
+                                  textAlign: "center",
+                                }}
+                              >
+                                {debouncedSquadSearch
+                                  ? "No squads found"
+                                  : "No public squads yet"}
+                              </Text>
+                              <Text
+                                style={{
+                                  ...typography.caption,
+                                  color: colors.textSecondary,
+                                  marginTop: 4,
+                                  textAlign: "center",
+                                }}
+                              >
+                                {debouncedSquadSearch
+                                  ? "Try a different search term"
+                                  : "Be the first to create a public squad"}
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={{ gap: 8, maxHeight: 300 }}>
+                              <ScrollView
+                                showsVerticalScrollIndicator={false}
+                                style={{ maxHeight: 300 }}
+                              >
+                                {squadDiscoveryQuery.data.map((squad: PublicSquad) => {
+                                  const isJoining = joinSquadMutation.isPending;
+                                  const isFull = squad.memberCount >= squad.maxMembers;
+
+                                  return (
+                                    <View
+                                      key={squad.id}
+                                      style={{
+                                        backgroundColor: colors.surface,
+                                        borderRadius: 10,
+                                        padding: 12,
+                                        borderWidth: 1,
+                                        borderColor: squad.isMember ? colors.primary : colors.border,
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      <View
+                                        style={{
+                                          flexDirection: "row",
+                                          alignItems: "flex-start",
+                                          justifyContent: "space-between",
+                                        }}
+                                      >
+                                        <View style={{ flex: 1, marginRight: 10 }}>
+                                          <Text
+                                            style={{
+                                              ...typography.title,
+                                              color: colors.textPrimary,
+                                              marginBottom: 2,
+                                            }}
+                                          >
+                                            {squad.name}
+                                          </Text>
+                                          {squad.description ? (
+                                            <Text
+                                              style={{
+                                                ...typography.caption,
+                                                color: colors.textSecondary,
+                                                marginBottom: 6,
+                                              }}
+                                              numberOfLines={2}
+                                            >
+                                              {squad.description}
+                                            </Text>
+                                          ) : null}
+                                          <View
+                                            style={{
+                                              flexDirection: "row",
+                                              alignItems: "center",
+                                              gap: 10,
+                                            }}
+                                          >
+                                            <View
+                                              style={{
+                                                flexDirection: "row",
+                                                alignItems: "center",
+                                                gap: 4,
+                                              }}
+                                            >
+                                              <Ionicons
+                                                name='people-outline'
+                                                size={13}
+                                                color={colors.textSecondary}
+                                              />
+                                              <Text
+                                                style={{
+                                                  ...typography.caption,
+                                                  color: colors.textSecondary,
+                                                }}
+                                              >
+                                                {squad.memberCount}/{squad.maxMembers}
+                                              </Text>
+                                            </View>
+                                            {isFull && !squad.isMember ? (
+                                              <View
+                                                style={{
+                                                  backgroundColor: "rgba(239,68,68,0.12)",
+                                                  paddingHorizontal: 6,
+                                                  paddingVertical: 2,
+                                                  borderRadius: 6,
+                                                }}
+                                              >
+                                                <Text
+                                                  style={{
+                                                    ...typography.caption,
+                                                    color: colors.error,
+                                                    fontFamily: fontFamilies.semibold,
+                                                    fontSize: 11,
+                                                  }}
+                                                >
+                                                  Full
+                                                </Text>
+                                              </View>
+                                            ) : null}
+                                          </View>
+                                        </View>
+
+                                        {squad.isMember ? (
+                                          <View
+                                            style={{
+                                              backgroundColor: "rgba(34,197,94,0.12)",
+                                              paddingHorizontal: 10,
+                                              paddingVertical: 6,
+                                              borderRadius: 8,
+                                              borderWidth: 1,
+                                              borderColor: colors.primary,
+                                            }}
+                                          >
+                                            <Text
+                                              style={{
+                                                color: colors.primary,
+                                                fontFamily: fontFamilies.semibold,
+                                                fontSize: 13,
+                                              }}
+                                            >
+                                              Joined
+                                            </Text>
+                                          </View>
+                                        ) : (
+                                          <Pressable
+                                            onPress={async () => {
+                                              try {
+                                                await joinSquadMutation.mutateAsync(squad.id);
+                                                Alert.alert(
+                                                  "Joined!",
+                                                  `You've joined ${squad.name}`,
+                                                  [{ text: "OK" }]
+                                                );
+                                              } catch (err: any) {
+                                                Alert.alert(
+                                                  "Failed to join",
+                                                  err?.message || "Unable to join squad",
+                                                  [{ text: "OK" }]
+                                                );
+                                              }
+                                            }}
+                                            disabled={isJoining || isFull}
+                                            style={({ pressed }) => ({
+                                              backgroundColor: isFull
+                                                ? colors.surfaceMuted
+                                                : colors.primary,
+                                              paddingHorizontal: 12,
+                                              paddingVertical: 6,
+                                              borderRadius: 8,
+                                              opacity: pressed || isJoining || isFull ? 0.7 : 1,
+                                            })}
+                                          >
+                                            <Text
+                                              style={{
+                                                color: isFull ? colors.textSecondary : colors.surface,
+                                                fontFamily: fontFamilies.semibold,
+                                                fontSize: 13,
+                                              }}
+                                            >
+                                              {isJoining ? "Joining..." : "Join"}
+                                            </Text>
+                                          </Pressable>
+                                        )}
+                                      </View>
+                                    </View>
+                                  );
+                                })}
+                              </ScrollView>
+                            </View>
+                          )}
+                        </CollapsibleSection>
+
                         {squads.length ? (
                           <>
                             <CollapsibleSection
@@ -2065,12 +2409,13 @@ const {
             user={profilePreview}
             onClose={() => setProfilePreview(null)}
             onView={() => {
-              navigation.navigate("UserProfile", { userId: profilePreview.id });
+              navigation.navigate("UserProfile", { userId: profilePreview.id});
               setProfilePreview(null);
               closeSocialModal();
             }}
           />
         ) : null}
+
       </View>
     </ScreenContainer>
   );

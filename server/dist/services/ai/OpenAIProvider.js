@@ -26,13 +26,54 @@ class OpenAIProvider {
      */
     async generateWorkout(params, availableExercises) {
         try {
+            const normalizeToken = (value) => value.toLowerCase().trim();
+            const normalizeEquipmentToken = (value) => {
+                const token = normalizeToken(value);
+                if (!token)
+                    return "";
+                if (token.includes("gym"))
+                    return "gym";
+                if (token.includes("body"))
+                    return "bodyweight";
+                if (token.includes("dumbbell"))
+                    return "dumbbell";
+                if (token.includes("barbell"))
+                    return "barbell";
+                if (token.includes("kettlebell"))
+                    return "kettlebell";
+                if (token.includes("cable"))
+                    return "cable";
+                if (token.includes("machine"))
+                    return "machine";
+                return token;
+            };
+            const normalizeNameKey = (value) => value
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
             // Filter exercises based on available equipment if specified
             let filteredExercises = availableExercises;
             if (params.userProfile?.availableEquipment) {
-                const equipment = params.userProfile.availableEquipment;
-                // If user has gym access, include all equipment
-                if (!equipment.includes("gym") && !equipment.includes("full_gym")) {
-                    filteredExercises = availableExercises.filter((ex) => equipment.includes(ex.equipment));
+                const equipment = params.userProfile.availableEquipment
+                    .map(normalizeEquipmentToken)
+                    .filter(Boolean);
+                const hasGymAccess = equipment.some((token) => token === "gym");
+                if (!hasGymAccess) {
+                    const supported = new Set([
+                        "bodyweight",
+                        "machine",
+                        "cable",
+                        "dumbbell",
+                        "barbell",
+                        "kettlebell",
+                        "other",
+                    ]);
+                    const allowed = new Set(equipment.filter((token) => supported.has(token)));
+                    // If we can't confidently map equipment, don't filter the catalog.
+                    if (allowed.size > 0) {
+                        filteredExercises = availableExercises.filter((ex) => allowed.has(normalizeEquipmentToken(ex.equipment)));
+                    }
                 }
             }
             const prompt = (0, workoutPrompts_1.buildWorkoutGenerationPrompt)(params, filteredExercises.map((ex) => ({
@@ -69,13 +110,56 @@ class OpenAIProvider {
             const generatedWorkout = JSON.parse(content);
             // Validate that all exercise IDs exist in our database
             const validExerciseIds = new Set(filteredExercises.map((ex) => ex.id));
+            const idToExercise = new Map(filteredExercises.map((ex) => [ex.id, ex]));
+            const nameToId = new Map(filteredExercises.map((ex) => [normalizeNameKey(ex.name), ex.id]));
+            const resolveByName = (exerciseName) => {
+                if (!exerciseName)
+                    return undefined;
+                const key = normalizeNameKey(exerciseName);
+                if (!key)
+                    return undefined;
+                const direct = nameToId.get(key);
+                if (direct)
+                    return direct;
+                // Fuzzy: all words present (handles "Incline DB Press" vs "Incline Dumbbell Press")
+                const words = key.split(" ").filter(Boolean);
+                if (words.length === 0)
+                    return undefined;
+                for (const [catalogKey, id] of nameToId.entries()) {
+                    if (words.every((w) => catalogKey.includes(w)))
+                        return id;
+                }
+                return undefined;
+            };
             const invalidExercises = generatedWorkout.exercises.filter((ex) => !validExerciseIds.has(ex.exerciseId));
             if (invalidExercises.length > 0) {
                 this.log.warn("AI generated invalid exercise IDs", {
                     invalidExerciseIds: invalidExercises.map((ex) => ex.exerciseId),
                 });
-                // Filter out invalid exercises
-                generatedWorkout.exercises = generatedWorkout.exercises.filter((ex) => validExerciseIds.has(ex.exerciseId));
+                let resolvedCount = 0;
+                generatedWorkout.exercises = generatedWorkout.exercises
+                    .map((exercise) => {
+                    if (validExerciseIds.has(exercise.exerciseId))
+                        return exercise;
+                    const resolvedId = resolveByName(exercise.exerciseName);
+                    if (!resolvedId)
+                        return null;
+                    const meta = idToExercise.get(resolvedId);
+                    resolvedCount += 1;
+                    return {
+                        ...exercise,
+                        exerciseId: resolvedId,
+                        exerciseName: meta?.name ?? exercise.exerciseName,
+                        primaryMuscleGroup: meta?.primaryMuscleGroup ?? exercise.primaryMuscleGroup,
+                    };
+                })
+                    .filter(Boolean);
+                if (resolvedCount > 0) {
+                    this.log.info("Resolved invalid exercise IDs by name", {
+                        resolvedCount,
+                        remainingInvalid: generatedWorkout.exercises.filter((ex) => !validExerciseIds.has(ex.exerciseId)).length,
+                    });
+                }
             }
             if (generatedWorkout.exercises.length === 0) {
                 throw new Error("No valid exercises generated");

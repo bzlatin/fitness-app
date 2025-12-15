@@ -51,10 +51,45 @@ export const getSquads = async (): Promise<SquadDetail[]> => {
   }
 };
 
-export const createSquad = async (name: string): Promise<SquadDetail> => {
-  const res = await apiClient.post<{ squad: SquadDetail }>("/social/squads", { name });
+export const createSquad = async (params: {
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+}): Promise<SquadDetail> => {
+  const res = await apiClient.post<{ squad: SquadDetail }>("/social/squads", params);
   if (!res.data?.squad) {
     throw new Error("Failed to create squad");
+  }
+  return res.data.squad;
+};
+
+export type PublicSquad = {
+  id: string;
+  name: string;
+  description: string | null;
+  memberCount: number;
+  maxMembers: number;
+  createdBy: string;
+  isMember: boolean;
+};
+
+export const discoverSquads = async (searchQuery?: string): Promise<PublicSquad[]> => {
+  try {
+    const params = searchQuery ? { q: searchQuery } : {};
+    const res = await apiClient.get<{ squads: PublicSquad[] }>("/social/squads/discover", { params });
+    return res.data?.squads ?? [];
+  } catch (err) {
+    if (isNotFound(err)) {
+      return [];
+    }
+    throw err;
+  }
+};
+
+export const joinPublicSquad = async (squadId: string): Promise<SquadDetail> => {
+  const res = await apiClient.post<{ squad: SquadDetail }>(`/social/squads/${squadId}/join`);
+  if (!res.data?.squad) {
+    throw new Error("Failed to join squad");
   }
   return res.data.squad;
 };
@@ -244,6 +279,16 @@ export const getConnections = async () => {
     pendingInvites: res.data?.pendingInvites ?? [],
     outgoingInvites: res.data?.outgoingInvites ?? [],
   };
+};
+
+export const getPendingRequestsCount = async (): Promise<number> => {
+  try {
+    const res = await apiClient.get<{ count: number }>("/social/pending-requests-count");
+    return res.data?.count ?? 0;
+  } catch (err) {
+    console.error("Failed to get pending requests count:", err);
+    return 0;
+  }
 };
 
 // Squad Management

@@ -1,9 +1,9 @@
 import { Router, Request, Response } from "express";
 import { query } from "../db";
-import { customAlphabet } from "nanoid";
+import { createIdGenerator } from "../utils/id";
 
 const router = Router();
-const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 12);
+const nanoid = createIdGenerator("0123456789abcdefghijklmnopqrstuvwxyz", 12);
 
 /**
  * Register/update user's push notification token

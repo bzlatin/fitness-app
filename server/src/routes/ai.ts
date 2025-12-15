@@ -2,15 +2,16 @@ import { Router } from "express";
 import { getAIProvider, MuscleFatigueData, WorkoutGenerationParams } from "../services/ai";
 import { getFatigueScores, getRecentWorkouts, getTrainingRecommendations } from "../services/fatigue";
 import { determineNextInCycle } from "../services/ai/workoutPrompts";
-import { requireProPlan } from "../middleware/planLimits";
+import { recommendSmartNextWorkout } from "../services/smartNextWorkout";
+import { checkAiWorkoutGenerationLimit, requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
-import { nanoid } from "nanoid";
+import { generateId } from "../utils/id";
 import { fetchExerciseCatalog, ExerciseMeta } from "../utils/exerciseCatalog";
 import { loadExercisesJson } from "../utils/exerciseData";
 import { createLogger } from "../utils/logger";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
-import { aiGenerateLimiter, aiSwapLimiter } from "../middleware/rateLimit";
+import { aiGenerateLimiter, aiRecommendLimiter, aiSwapLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 const log = createLogger("AI");
@@ -19,6 +20,27 @@ const generateWorkoutBodySchema = z
   .object({
     requestedSplit: z.string().trim().min(1).max(80).optional(),
     specificRequest: z.string().trim().min(1).max(2000).optional(),
+    overrides: z
+      .object({
+        sessionDuration: z.number().int().min(10).max(180).optional(),
+        availableEquipment: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+        avoidMuscles: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+      })
+      .strip()
+      .optional(),
+  })
+  .strip();
+
+const recommendNextWorkoutBodySchema = z
+  .object({
+    overrides: z
+      .object({
+        sessionDuration: z.number().int().min(10).max(180).optional(),
+        availableEquipment: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+        avoidMuscles: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+      })
+      .strip()
+      .optional(),
   })
   .strip();
 
@@ -166,6 +188,53 @@ const deriveFocusName = (specificRequest?: string) => {
   return limitedParts.join(" & ");
 };
 
+const normalizeOnboardingEquipment = (
+  raw?: unknown,
+  custom?: unknown
+): string[] | undefined => {
+  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  if (values.length === 0) return undefined;
+
+  const customList = Array.isArray(custom)
+    ? custom.filter((item) => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  const mapped = values
+    .map((value) => String(value).toLowerCase().trim())
+    .flatMap((value) => {
+      if (value === "gym_full") return ["gym"];
+      if (value === "home_limited") return ["dumbbell", "bodyweight"];
+      if (value === "bodyweight") return ["bodyweight"];
+      if (value === "custom") return customList.length > 0 ? customList : [];
+      return [value];
+    })
+    .filter(Boolean);
+
+  const unique = Array.from(new Set(mapped));
+  return unique.length > 0 ? unique : undefined;
+};
+
+const readOnboardingField = <T,>(onboardingData: any, keys: string[]): T | undefined => {
+  for (const key of keys) {
+    const value = onboardingData?.[key];
+    if (value !== undefined && value !== null) return value as T;
+  }
+  return undefined;
+};
+
+const normalizePreferredSplit = (value?: unknown): string | undefined => {
+  if (!value) return undefined;
+  const raw = String(value).toLowerCase().trim();
+  if (!raw) return undefined;
+  if (raw === "push_pull_legs") return "ppl";
+  return raw;
+};
+
+const uniqStrings = (items: string[]) =>
+  Array.from(
+    new Set(items.map((item) => item.toLowerCase().trim()).filter((item) => item.length > 0))
+  );
+
 /**
  * POST /api/ai/generate-workout
  * Generate a personalized workout using AI
@@ -173,18 +242,21 @@ const deriveFocusName = (specificRequest?: string) => {
  */
 router.post(
   "/generate-workout",
-  requireProPlan,
   aiGenerateLimiter,
   validateBody(generateWorkoutBodySchema),
+  checkAiWorkoutGenerationLimit,
   async (req, res) => {
   const userId = res.locals.userId;
+  const reservedFreeGeneration = Boolean(
+    res.locals.aiFreeWorkoutGenerationReserved
+  );
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const { requestedSplit, specificRequest } =
+    const { requestedSplit, specificRequest, overrides } =
       req.body as z.infer<typeof generateWorkoutBodySchema>;
 
     // Get user profile data
@@ -194,6 +266,20 @@ router.post(
 
     const user = userResult.rows[0];
     const onboardingData = user?.onboarding_data || {};
+
+    const preferredSplit = normalizePreferredSplit(
+      readOnboardingField<string>(onboardingData, ["preferredSplit", "preferred_split"])
+    );
+    const goals = readOnboardingField<string[]>(onboardingData, ["goals"]);
+    const experienceLevel = readOnboardingField<string>(onboardingData, ["experienceLevel", "experience_level"]);
+    const weeklyFrequency = readOnboardingField<number>(onboardingData, ["weeklyFrequency", "weekly_frequency"]);
+    const baseSessionDuration = readOnboardingField<number>(onboardingData, ["sessionDuration", "session_duration"]);
+    const injuryNotes = readOnboardingField<string>(onboardingData, ["injuryNotes", "injury_notes"]);
+    const equipment = normalizeOnboardingEquipment(
+      overrides?.availableEquipment ??
+        readOnboardingField(onboardingData, ["availableEquipment", "available_equipment"]),
+      readOnboardingField(onboardingData, ["customEquipment", "custom_equipment"])
+    );
 
     // Fetch recent workout history and muscle fatigue
     const [recentWorkouts, fatigueResult] = await Promise.all([
@@ -215,29 +301,42 @@ router.post(
     if (!requestedSplit && !specificRequest) {
       const nextInCycle = determineNextInCycle(
         recentWorkouts,
-        onboardingData.preferred_split
+        preferredSplit
       );
       if (nextInCycle) {
         finalRequestedSplit = nextInCycle;
         log.debug("Auto-detected next in cycle", { nextInCycle, userId });
+      } else if (preferredSplit === "custom") {
+        finalRequestedSplit = recommendSmartNextWorkout({
+          preferredSplit,
+          recentWorkouts,
+          fatigue: fatigueResult,
+          overrides: {
+            sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+            avoidMuscles: overrides?.avoidMuscles,
+          },
+        }).selected.splitKey;
       }
     }
 
     const fatigueTargets = {
       prioritize: recommendations.targetMuscles,
-      avoid: fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+      avoid: uniqStrings([
+        ...fatigueResult.perMuscle.filter((m) => m.fatigued).map((m) => m.muscleGroup),
+        ...(overrides?.avoidMuscles ?? []),
+      ]),
     };
 
     const params: WorkoutGenerationParams = {
       userId,
       userProfile: {
-        goals: onboardingData.goals,
-        experienceLevel: onboardingData.experience_level,
-        availableEquipment: onboardingData.available_equipment,
-        weeklyFrequency: onboardingData.weekly_frequency,
-        sessionDuration: onboardingData.session_duration,
-        injuryNotes: onboardingData.injury_notes,
-        preferredSplit: onboardingData.preferred_split,
+        goals,
+        experienceLevel,
+        availableEquipment: equipment,
+        weeklyFrequency,
+        sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+        injuryNotes,
+        preferredSplit: preferredSplit === "custom" ? "full_body" : preferredSplit,
       },
       recentWorkouts,
       muscleFatigue,
@@ -376,10 +475,10 @@ router.post(
       VALUES ($1, $2, $3, $4, $5, NOW())
     `,
       [
-        nanoid(),
+        generateId(),
         userId,
         "workout",
-        JSON.stringify({ requestedSplit, specificRequest }),
+        JSON.stringify({ requestedSplit, specificRequest, overrides }),
         JSON.stringify(enrichedWorkout),
       ]
     );
@@ -396,11 +495,28 @@ router.post(
   } catch (error) {
     log.error("Error generating workout", { error, userId });
 
+    if (reservedFreeGeneration) {
+      query(
+        `
+          UPDATE users
+          SET ai_generations_used_count = GREATEST(ai_generations_used_count - 1, 0)
+          WHERE id = $1
+        `,
+        [userId]
+      ).catch((rollbackError) => {
+        log.warn("Failed to roll back reserved AI generation", {
+          rollbackError,
+          userId,
+        });
+      });
+    }
+
     // Check if it's an OpenAI API error
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
       return res.status(500).json({
-        error: "AI service not configured",
-        message: "The AI workout generation service is not properly configured. Please contact support.",
+        error: "Workout service not configured",
+        message:
+          "The smart workout generation service is not properly configured. Please contact support.",
       });
     }
 
@@ -472,7 +588,7 @@ router.post(
     if (!result || !result.exerciseId) {
       return res.status(404).json({
         error: "No suitable alternative found",
-        message: "AI could not find a suitable replacement for this exercise",
+        message: "Could not find a suitable replacement for this exercise",
       });
     }
 
@@ -483,7 +599,7 @@ router.post(
       VALUES ($1, $2, $3, $4, $5, NOW())
     `,
       [
-        nanoid(),
+        generateId(),
         userId,
         "exercise_swap",
         JSON.stringify({ exerciseId, exerciseName, reason }),
@@ -505,8 +621,9 @@ router.post(
 
     if (error instanceof Error && error.message.includes("OPENAI_API_KEY")) {
       return res.status(500).json({
-        error: "AI service not configured",
-        message: "The AI exercise swap service is not properly configured. Please contact support.",
+        error: "Workout service not configured",
+        message:
+          "The smart exercise swap service is not properly configured. Please contact support.",
       });
     }
 
@@ -555,5 +672,60 @@ router.get("/usage", requireProPlan, async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch usage stats" });
   }
 });
+
+/**
+ * POST /api/ai/recommend-next-workout
+ * Recommend the next session in a user's split, adjusted by recovery/constraints.
+ * Does not consume an AI generation.
+ */
+router.post(
+  "/recommend-next-workout",
+  aiRecommendLimiter,
+  validateBody(recommendNextWorkoutBodySchema),
+  async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const { overrides } = req.body as z.infer<typeof recommendNextWorkoutBodySchema>;
+
+      const userResult = await query<{ onboarding_data: any }>(
+        `SELECT onboarding_data FROM users WHERE id = $1`,
+        [userId]
+      );
+      const onboardingData = userResult.rows[0]?.onboarding_data || {};
+
+      const preferredSplit = normalizePreferredSplit(
+        readOnboardingField<string>(onboardingData, ["preferredSplit", "preferred_split"])
+      );
+      const baseSessionDuration = readOnboardingField<number>(onboardingData, ["sessionDuration", "session_duration"]);
+
+      const [recentWorkouts, fatigueResult] = await Promise.all([
+        getRecentWorkouts(userId, 5),
+        getFatigueScores(userId),
+      ]);
+
+      const recommendation = recommendSmartNextWorkout({
+        preferredSplit,
+        recentWorkouts,
+        fatigue: fatigueResult,
+        overrides: {
+          sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+          avoidMuscles: overrides?.avoidMuscles,
+        },
+      });
+
+      return res.json({ success: true, recommendation });
+    } catch (error) {
+      log.error("Error recommending next workout", { error, userId });
+      return res.status(500).json({
+        error: "Failed to recommend next workout",
+        message: error instanceof Error ? error.message : "An unexpected error occurred",
+      });
+    }
+  }
+);
 
 export default router;

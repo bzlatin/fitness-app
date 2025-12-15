@@ -36,6 +36,7 @@ export interface WorkoutTemplateExercise {
   exerciseName?: string;
   primaryMuscleGroup?: string;
   exerciseImageUrl?: string;
+  equipment?: string;
   defaultSets: number;
   defaultReps: number;
   defaultRestSeconds?: number;
