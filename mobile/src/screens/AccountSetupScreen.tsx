@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -48,6 +49,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [name, setName] = useState(user?.name ?? 'Athlete');
+  const nameRef = useRef(name);
   const [handle, setHandle] = useState(user?.handle ?? '');
   const [avatarUri, setAvatarUri] = useState<string | undefined>(user?.avatarUrl ?? undefined);
 
@@ -127,12 +129,19 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     return name.trim().length > 0 && normalized.trim().length > 0;
   }, [name, handle]);
 
+  const handleNameChange = (next: string) => {
+    nameRef.current = next;
+    setName(next);
+  };
+
   const saveProfileDetails = async () => {
     if (!canProceedProfile) {
       setError('Add a name and handle to continue.');
       return false;
     }
 
+    Keyboard.dismiss();
+    const nameToSave = nameRef.current.trim();
     const normalized = normalizeHandle(handle);
     if (!normalized) {
       setError('Pick a handle so friends can find you.');
@@ -153,7 +162,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
         }
       }
       await updateProfile({
-        name: name.trim(),
+        name: nameToSave,
         handle: normalized,
         avatarUrl: uploadReadyAvatar,
         ...(pendingOnboardingData && !user?.onboardingData
@@ -330,7 +339,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                   name={name}
                   handle={handle}
                   avatarUri={avatarUri}
-                  onNameChange={setName}
+                  onNameChange={handleNameChange}
                   onHandleChange={setHandle}
                   onAvatarChange={setAvatarUri}
                   isRetake={false}

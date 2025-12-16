@@ -200,7 +200,33 @@ User swapped "Bent Over Barbell Row" → "Bent Over Two Dumbbell Row" via AI, bu
 
 ---
 
-## 3. Notification Permission Prompt (MEDIUM PRIORITY) - COMPLETE
+## 3. Comment Management & Profile Navigation (MEDIUM PRIORITY) ✅ COMPLETE
+
+**Status**: ✅ Implemented on 2024-12-17  
+**Effort**: Medium (1-2 hours)  
+**Impact**: Medium - Social feature improvement
+
+### Problem A: Cannot Delete Comments on Your Workouts
+
+- **Fix**: Workout owners now see a trash icon on the right of each comment; authors keep delete rights. Deletes are soft (mark `deleted_at`) and allowed for either the comment author or the workout owner.
+- **API**: Added `DELETE /api/social/comments/:commentId` with auth/ownership checks; comments list filters out deleted entries; notifications exclude deleted reactions.
+- **Files**: `server/src/routes/social.ts`, `server/src/jobs/notifications.ts`, `server/sql/migrations/009_workout_reactions_deleted_at.sql`, `mobile/src/components/social/WorkoutReactions.tsx`, `mobile/src/screens/SquadScreen.tsx`.
+- **Testing**: [ ] Delete as author; [ ] Delete as workout owner; [ ] Verify comment disappears without breaking reactions.
+
+### Problem B: Cannot View User Profiles from Comments
+
+- **Fix**: Comment avatars/usernames are tappable; long-press offers “View Profile” (and “Delete” if permitted). Navigating to a profile now closes and reopens the comments modal cleanly.
+- **Files**: `mobile/src/components/social/WorkoutReactions.tsx`.
+- **Testing**: [ ] Tap avatar/name to open profile; [ ] Long-press menu shows “View Profile”; [ ] Return and reopen comments without glitch.
+
+### UX Polish
+
+- **Pull-to-refresh**: Added pull-to-refresh on the feed list to reload comments/reactions alongside squad/general feed data.
+- **Files**: `mobile/src/screens/SquadScreen.tsx`.
+
+---
+
+## 3. Notification Permission Prompt (MEDIUM PRIORITY) - ✅ COMPLETE
 
 **Status**: 🐛 BUG
 **Effort**: Low (20 mins)
@@ -246,7 +272,7 @@ It SHOULD appear during onboarding for all users.
 
 ---
 
-## 4. Comment Management & User Profiles (MEDIUM PRIORITY)
+## 4. Comment Management & User Profiles (MEDIUM PRIORITY) ✅ COMPLETE
 
 **Status**: 🚀 FEATURE
 **Effort**: Medium (1-2 hours)
@@ -326,9 +352,9 @@ When editing profile name, only one letter changes. Name doesn't update properly
 
 **Example**:
 
-- Current name: "John Doe"
-- Edit to: "Jane Smith"
-- Saves as: "Jone Doe" (only first letter changes)
+- Current name: "Ben"
+- Edit to: "Benjamin"
+- Saves as: "Benj" (only one letter changes)
 
 **Root Cause** (Suspected):
 

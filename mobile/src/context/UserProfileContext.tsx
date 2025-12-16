@@ -88,12 +88,19 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = async (payload: Partial<UserProfile>) => {
     const updated = await updateCurrentUserProfile(payload);
-    await persist(updated as UserProfile);
+    // Respect the server response but ensure client keeps the freshly edited name immediately.
+    const merged = {
+      ...(updated as UserProfile),
+      ...(payload.name !== undefined
+        ? { name: payload.name.trim() }
+        : null),
+    } as UserProfile;
+    await persist(merged);
     queryClient.setQueryData<SocialProfile>(
       ["profile", updated.id],
       (prev) => ({
         ...(prev ?? {}),
-        ...(updated as SocialProfile),
+        ...(merged as SocialProfile),
         isFollowing: prev?.isFollowing ?? false,
       })
     );
