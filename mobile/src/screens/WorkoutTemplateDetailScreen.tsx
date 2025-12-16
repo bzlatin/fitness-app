@@ -11,6 +11,7 @@ import { startSessionFromTemplate } from "../api/sessions";
 import {
   useDeleteTemplate,
   useDuplicateTemplate,
+  templateDetailQueryKey,
   templatesKey,
   useWorkoutTemplates,
 } from "../hooks/useWorkoutTemplates";
@@ -34,7 +35,7 @@ const WorkoutTemplateDetailScreen = () => {
   const deleteMutation = useDeleteTemplate();
   const queryClient = useQueryClient();
 
-  const detailQueryKey = [...templatesKey, route.params.templateId];
+  const detailQueryKey = templateDetailQueryKey(route.params.templateId);
 
   const templateQuery = useQuery({
     queryKey: detailQueryKey,
@@ -84,7 +85,7 @@ const WorkoutTemplateDetailScreen = () => {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: templatesKey });
       queryClient.invalidateQueries({
-        queryKey: [...templatesKey, route.params.templateId],
+        queryKey: detailQueryKey,
       });
       setIsRenaming(false);
       setDraftName(updated.name);

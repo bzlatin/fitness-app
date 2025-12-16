@@ -12,7 +12,7 @@ import SwiftUI
 struct WidgetsBundle: WidgetBundle {
     var body: some Widget {
         PushPullWidgets()
-        QuickSetLoggerWidget()
+        // Temporarily disable the quick logging home screen widget; keep goals + Live Activity.
         if #available(iOS 16.1, *) {
             WorkoutLiveActivity()
         }

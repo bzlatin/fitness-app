@@ -9,6 +9,7 @@ import {
   VolumePR,
   FrequencyHeatmapData,
   RecapSlice,
+  UpNextRecommendation,
 } from "../types/analytics";
 import { ProgressionData } from "../components/ProgressionSuggestion";
 import { AppleHealthPermissions, AppleHealthSessionPayload } from "../types/health";
@@ -16,6 +17,15 @@ import { StartingSuggestion } from "../types/analytics";
 
 export const fetchFatigue = async (): Promise<FatigueResult> => {
   const res = await apiClient.get<{ data: FatigueResult }>("/analytics/fatigue");
+  return res.data.data;
+};
+
+/**
+ * Fetch Up Next workout recommendation
+ * Returns intelligent recommendation based on split rotation, fatigue, and saved templates
+ */
+export const fetchUpNextRecommendation = async (): Promise<UpNextRecommendation> => {
+  const res = await apiClient.get<{ data: UpNextRecommendation }>("/analytics/up-next");
   return res.data.data;
 };
 

@@ -1,6 +1,9 @@
 import { apiClient } from "./client";
 import { WorkoutTemplate } from "../types/workouts";
 
+export const templatesQueryKey = ["templates"] as const;
+export const templateDetailQueryKey = (templateId: string) => [...templatesQueryKey, templateId] as const;
+
 export type TemplateShareLink = {
   shareCode: string;
   webUrl: string;
@@ -64,6 +67,8 @@ export const createTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultRepsMin?: number | null;
+      defaultRepsMax?: number | null;
       defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;
@@ -81,6 +86,8 @@ export const updateTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultRepsMin?: number | null;
+      defaultRepsMax?: number | null;
       defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;

@@ -78,6 +78,8 @@ export interface SwappedExercise {
   exerciseId: string | null;
   exerciseName?: string;
   reasoning?: string;
+  primaryMuscleGroup?: string;
+  gifUrl?: string;
 }
 
 export interface SwapExerciseResponse {

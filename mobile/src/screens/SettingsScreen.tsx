@@ -14,6 +14,7 @@ import {
   View,
   Pressable,
   TextInput,
+  Keyboard,
   Alert,
   Modal,
   Image,
@@ -92,6 +93,7 @@ const SettingsScreen = () => {
     useCurrentUser();
   const lastUserIdRef = useRef<string | null>(null);
   const [draftName, setDraftName] = useState(user?.name ?? "");
+  const draftNameRef = useRef(draftName);
   const [draftHandle, setDraftHandle] = useState(user?.handle ?? "");
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
   const [draftTraining, setDraftTraining] = useState(user?.trainingStyle ?? "");
@@ -244,9 +246,16 @@ const SettingsScreen = () => {
 
   const preventRemove = isEditing && hasProfileChanges && !isSaving;
 
+  const handleDraftNameChange = useCallback((text: string) => {
+    draftNameRef.current = text;
+    setDraftName(text);
+  }, []);
+
   const resetProfileDraftsToUser = useCallback(() => {
     if (!user) return;
-    setDraftName(user.name ?? "");
+    const nextName = user.name ?? "";
+    draftNameRef.current = nextName;
+    setDraftName(nextName);
     setDraftHandle(user.handle ?? "");
     setDraftBio(user.bio ?? "");
     setDraftTraining(user.trainingStyle ?? "");
@@ -354,7 +363,9 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     if (!user || isEditing) return;
-    setDraftName(user.name ?? "");
+    const nextName = user.name ?? "";
+    draftNameRef.current = nextName;
+    setDraftName(nextName);
     setDraftHandle(user.handle ?? "");
     setDraftBio(user.bio ?? "");
     setDraftTraining(user.trainingStyle ?? "");
@@ -1077,6 +1088,7 @@ const SettingsScreen = () => {
       return;
     }
 
+    Keyboard.dismiss();
     setIsSaving(true);
     try {
       let uploadReadyAvatar = isRemoteAvatarUrl(avatarUri)
@@ -1096,8 +1108,9 @@ const SettingsScreen = () => {
           uploadReadyAvatar = undefined;
         }
       }
+      const nameToSave = draftNameRef.current.trim();
       const payload: Partial<UserProfile> = {
-        name: draftName.trim() || user.name,
+        name: nameToSave || user.name,
         bio: draftBio.trim() || undefined,
         trainingStyle: draftTraining.trim() || undefined,
         gymName: draftGym.trim() ? draftGym.trim() : null,
@@ -1553,7 +1566,7 @@ const SettingsScreen = () => {
                   </Text>
                   <TextInput
                     value={draftName}
-                    onChangeText={setDraftName}
+                    onChangeText={handleDraftNameChange}
                     placeholder='Name'
                     placeholderTextColor={colors.textSecondary}
                     style={inputStyle}

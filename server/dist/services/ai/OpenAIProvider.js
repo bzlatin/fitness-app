@@ -52,6 +52,32 @@ class OpenAIProvider {
                 .replace(/[^a-z0-9\s]/g, " ")
                 .replace(/\s+/g, " ")
                 .trim();
+            const normalizeWord = (word) => {
+                const raw = word.toLowerCase().trim();
+                if (!raw)
+                    return "";
+                if (raw === "squad" || raw === "squads")
+                    return "squat";
+                if (raw.length > 3 && raw.endsWith("s") && !raw.endsWith("ss"))
+                    return raw.slice(0, -1);
+                return raw;
+            };
+            const tokenize = (value) => normalizeNameKey(value)
+                .split(" ")
+                .map(normalizeWord)
+                .filter(Boolean);
+            const excludedPatterns = (params.excludedExercises ?? [])
+                .map((item) => tokenize(String(item)))
+                .filter((tokens) => tokens.length > 0);
+            const isExcluded = (value) => {
+                if (!value)
+                    return false;
+                const candidateWords = tokenize(value);
+                if (candidateWords.length === 0)
+                    return false;
+                const candidateSet = new Set(candidateWords);
+                return excludedPatterns.some((pattern) => pattern.every((token) => candidateSet.has(token)));
+            };
             // Filter exercises based on available equipment if specified
             let filteredExercises = availableExercises;
             if (params.userProfile?.availableEquipment) {
@@ -75,6 +101,13 @@ class OpenAIProvider {
                         filteredExercises = availableExercises.filter((ex) => allowed.has(normalizeEquipmentToken(ex.equipment)));
                     }
                 }
+            }
+            filteredExercises = filteredExercises.filter((ex) => !isExcluded(ex.id) && !isExcluded(ex.name));
+            if (filteredExercises.length === 0) {
+                filteredExercises = availableExercises.filter((ex) => !isExcluded(ex.id) && !isExcluded(ex.name));
+            }
+            if (filteredExercises.length === 0) {
+                throw new Error("No available exercises after applying equipment and exclusion filters");
             }
             const prompt = (0, workoutPrompts_1.buildWorkoutGenerationPrompt)(params, filteredExercises.map((ex) => ({
                 id: ex.id,
@@ -161,9 +194,57 @@ class OpenAIProvider {
                     });
                 }
             }
-            if (generatedWorkout.exercises.length === 0) {
-                throw new Error("No valid exercises generated");
+            const usedExerciseIds = new Set();
+            const pickReplacement = (primaryMuscleGroup) => {
+                const normalizedGroup = primaryMuscleGroup?.toLowerCase().trim();
+                const candidates = filteredExercises.filter((ex) => !usedExerciseIds.has(ex.id) &&
+                    !isExcluded(ex.id) &&
+                    (!normalizedGroup || ex.primaryMuscleGroup === normalizedGroup));
+                if (candidates.length > 0)
+                    return candidates[0];
+                return filteredExercises.find((ex) => !usedExerciseIds.has(ex.id) && !isExcluded(ex.id));
+            };
+            const cleanedExercises = generatedWorkout.exercises
+                .map((exercise) => {
+                const meta = idToExercise.get(exercise.exerciseId);
+                const exerciseExcluded = isExcluded(exercise.exerciseId) ||
+                    isExcluded(exercise.exerciseName) ||
+                    (meta ? isExcluded(meta.name) : false);
+                if (!meta || exerciseExcluded || usedExerciseIds.has(exercise.exerciseId)) {
+                    const replacement = pickReplacement(exercise.primaryMuscleGroup);
+                    if (!replacement) {
+                        this.log.warn("Dropping generated exercise with no valid replacement", {
+                            exerciseId: exercise.exerciseId,
+                            exerciseName: exercise.exerciseName,
+                        });
+                        return null;
+                    }
+                    usedExerciseIds.add(replacement.id);
+                    if (exerciseExcluded) {
+                        this.log.info("Replaced excluded exercise", {
+                            originalExercise: exercise.exerciseName || exercise.exerciseId,
+                            replacementId: replacement.id,
+                        });
+                    }
+                    return {
+                        ...exercise,
+                        exerciseId: replacement.id,
+                        exerciseName: replacement.name,
+                        primaryMuscleGroup: replacement.primaryMuscleGroup,
+                    };
+                }
+                usedExerciseIds.add(exercise.exerciseId);
+                return {
+                    ...exercise,
+                    exerciseName: meta?.name ?? exercise.exerciseName,
+                    primaryMuscleGroup: meta?.primaryMuscleGroup ?? exercise.primaryMuscleGroup,
+                };
+            })
+                .filter(Boolean);
+            if (cleanedExercises.length === 0) {
+                throw new Error("No valid exercises generated after applying exclusions");
             }
+            generatedWorkout.exercises = cleanedExercises;
             // Enforce concise naming (max 3 words, no filler words)
             let workoutName = generatedWorkout.name;
             // Remove emojis and special characters except & and -
@@ -235,6 +316,29 @@ class OpenAIProvider {
      */
     async swapExercise(exerciseName, primaryMuscleGroup, reason, availableEquipment, availableExercises) {
         try {
+            const normalizeNameKey = (value) => value
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+            const idToExercise = new Map(availableExercises.map((ex) => [ex.id, ex]));
+            const nameToId = new Map(availableExercises.map((ex) => [normalizeNameKey(ex.name), ex.id]));
+            const resolveByName = (name) => {
+                if (!name)
+                    return undefined;
+                const key = normalizeNameKey(name);
+                if (!key)
+                    return undefined;
+                const direct = nameToId.get(key);
+                if (direct)
+                    return direct;
+                const words = key.split(" ").filter(Boolean);
+                for (const [candidate, id] of nameToId.entries()) {
+                    if (words.every((w) => candidate.includes(w)))
+                        return id;
+                }
+                return undefined;
+            };
             const prompt = (0, workoutPrompts_1.buildSubstitutionPrompt)(exerciseName, primaryMuscleGroup, reason, availableEquipment, availableExercises);
             this.log.debug("Swapping exercise", {
                 exerciseName,
@@ -263,6 +367,19 @@ class OpenAIProvider {
                 throw new Error("OpenAI returned empty response");
             }
             const result = JSON.parse(content);
+            const resolvedId = (result.exerciseId && idToExercise.has(result.exerciseId)
+                ? result.exerciseId
+                : undefined) || resolveByName(result.exerciseName);
+            const resolvedMeta = resolvedId ? idToExercise.get(resolvedId) : availableExercises[0];
+            if (resolvedMeta) {
+                result.exerciseId = resolvedMeta.id;
+                result.exerciseName = resolvedMeta.name;
+                result.primaryMuscleGroup = resolvedMeta.primaryMuscleGroup;
+                result.gifUrl = resolvedMeta.gifUrl;
+            }
+            else {
+                result.exerciseId = null;
+            }
             if (result.exerciseId) {
                 this.log.info("Successfully swapped exercise", {
                     fromExerciseName: exerciseName,

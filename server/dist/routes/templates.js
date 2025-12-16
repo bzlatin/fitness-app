@@ -11,6 +11,48 @@ const formatExerciseId = (id) => id
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 const numberOrUndefined = (value) => value === null || value === undefined ? undefined : Number(value);
+const normalizeReps = (exercise, exerciseIndex) => {
+    const repValue = exercise.defaultReps === undefined || exercise.defaultReps === null
+        ? null
+        : Number(exercise.defaultReps);
+    const repMin = exercise.defaultRepsMin === undefined || exercise.defaultRepsMin === null
+        ? null
+        : Number(exercise.defaultRepsMin);
+    const repMax = exercise.defaultRepsMax === undefined || exercise.defaultRepsMax === null
+        ? null
+        : Number(exercise.defaultRepsMax);
+    const baseReps = repValue ?? repMin ?? repMax;
+    if (baseReps === null || Number.isNaN(baseReps) || baseReps < 1) {
+        return {
+            ok: false,
+            message: `Exercise ${exerciseIndex + 1}: defaultReps must be at least 1`,
+        };
+    }
+    if (repMin !== null && (Number.isNaN(repMin) || repMin < 1)) {
+        return {
+            ok: false,
+            message: `Exercise ${exerciseIndex + 1}: minimum reps must be at least 1`,
+        };
+    }
+    if (repMax !== null && (Number.isNaN(repMax) || repMax < 1)) {
+        return {
+            ok: false,
+            message: `Exercise ${exerciseIndex + 1}: maximum reps must be at least 1`,
+        };
+    }
+    if (repMin !== null && repMax !== null && repMax < repMin) {
+        return {
+            ok: false,
+            message: `Exercise ${exerciseIndex + 1}: maximum reps must be greater than or equal to minimum reps`,
+        };
+    }
+    return {
+        ok: true,
+        defaultReps: baseReps,
+        defaultRepsMin: repMin,
+        defaultRepsMax: repMax,
+    };
+};
 const mapExercise = (row, metaMap) => {
     const meta = metaMap.get(row.exercise_id);
     return {
@@ -22,7 +64,9 @@ const mapExercise = (row, metaMap) => {
         exerciseImageUrl: meta?.gifUrl,
         equipment: meta?.equipment ?? "other",
         defaultSets: row.default_sets,
-        defaultReps: row.default_reps,
+        defaultReps: row.default_reps_min ?? row.default_reps,
+        defaultRepsMin: numberOrUndefined(row.default_reps_min),
+        defaultRepsMax: numberOrUndefined(row.default_reps_max),
         defaultRestSeconds: row.default_rest_seconds ?? undefined,
         defaultWeight: numberOrUndefined(row.default_weight),
         defaultIncline: numberOrUndefined(row.default_incline),
@@ -139,6 +183,20 @@ router.post("/", planLimits_1.checkTemplateLimit, (req, res) => {
     if (!exercises || exercises.length < 1) {
         return res.status(400).json({ error: "At least one exercise required" });
     }
+    const normalizedExercises = [];
+    for (let index = 0; index < exercises.length; index += 1) {
+        const ex = exercises[index];
+        const reps = normalizeReps(ex, index);
+        if (!reps.ok) {
+            return res.status(400).json({ error: reps.message });
+        }
+        normalizedExercises.push({
+            ...ex,
+            defaultReps: reps.defaultReps,
+            defaultRepsMin: reps.defaultRepsMin,
+            defaultRepsMax: reps.defaultRepsMax,
+        });
+    }
     withTransaction(async (client) => {
         const templateId = (0, id_1.generateId)();
         const now = new Date().toISOString();
@@ -153,18 +211,20 @@ router.post("/", planLimits_1.checkTemplateLimit, (req, res) => {
             splitType ?? null,
             now,
         ])).rows[0];
-        for (let index = 0; index < exercises.length; index += 1) {
-            const ex = exercises[index];
+        for (let index = 0; index < normalizedExercises.length; index += 1) {
+            const ex = normalizedExercises[index];
             await client.query(`INSERT INTO workout_template_exercises
-          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
             default_weight, default_incline, default_distance, default_duration_minutes, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, [
                 (0, id_1.generateId)(),
                 templateId,
                 index,
                 ex.exerciseId,
                 ex.defaultSets,
                 ex.defaultReps,
+                ex.defaultRepsMin ?? null,
+                ex.defaultRepsMax ?? null,
                 ex.defaultRestSeconds ?? null,
                 ex.defaultWeight ?? null,
                 ex.defaultIncline ?? null,
@@ -195,6 +255,29 @@ router.put("/:id", (req, res) => {
     }
     if (exercises && exercises.length < 1) {
         return res.status(400).json({ error: "At least one exercise required" });
+    }
+    const normalizedExercises = [];
+    if (exercises) {
+        for (let index = 0; index < exercises.length; index += 1) {
+            const ex = exercises[index];
+            const reps = normalizeReps(ex, index);
+            if (!reps.ok) {
+                return res.status(400).json({ error: reps.message });
+            }
+            normalizedExercises.push({
+                exerciseId: ex.exerciseId,
+                defaultSets: ex.defaultSets,
+                defaultReps: reps.defaultReps,
+                defaultRepsMin: reps.defaultRepsMin,
+                defaultRepsMax: reps.defaultRepsMax,
+                defaultRestSeconds: ex.defaultRestSeconds,
+                defaultWeight: ex.defaultWeight,
+                defaultIncline: ex.defaultIncline,
+                defaultDistance: ex.defaultDistance,
+                defaultDurationMinutes: ex.defaultDurationMinutes,
+                notes: ex.notes,
+            });
+        }
     }
     withTransaction(async (client) => {
         const updates = [];
@@ -238,18 +321,20 @@ router.put("/:id", (req, res) => {
         }
         if (exercises) {
             await client.query(`DELETE FROM workout_template_exercises WHERE template_id = $1`, [templateId]);
-            for (let index = 0; index < exercises.length; index += 1) {
-                const ex = exercises[index];
+            for (let index = 0; index < normalizedExercises.length; index += 1) {
+                const ex = normalizedExercises[index];
                 await client.query(`INSERT INTO workout_template_exercises
-            (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+            (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
               default_weight, default_incline, default_distance, default_duration_minutes, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, [
                     (0, id_1.generateId)(),
                     templateId,
                     index,
                     ex.exerciseId,
                     ex.defaultSets,
                     ex.defaultReps,
+                    ex.defaultRepsMin ?? null,
+                    ex.defaultRepsMax ?? null,
                     ex.defaultRestSeconds ?? null,
                     ex.defaultWeight ?? null,
                     ex.defaultIncline ?? null,
@@ -446,15 +531,17 @@ router.post("/:id/duplicate", async (req, res) => {
         for (let index = 0; index < original.exercises.length; index += 1) {
             const ex = original.exercises[index];
             await client.query(`INSERT INTO workout_template_exercises
-          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+          (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
             default_weight, default_incline, default_distance, default_duration_minutes, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, [
                 (0, id_1.generateId)(),
                 templateId,
                 index,
                 ex.exerciseId,
                 ex.defaultSets,
                 ex.defaultReps,
+                ex.defaultRepsMin ?? null,
+                ex.defaultRepsMax ?? null,
                 ex.defaultRestSeconds ?? null,
                 ex.defaultWeight ?? null,
                 ex.defaultIncline ?? null,

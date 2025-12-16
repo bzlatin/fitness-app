@@ -428,12 +428,27 @@ const SquadDetailScreen = () => {
                   marginVertical: 4,
                 }}
               />
-              <View style={{ alignItems: "center" }}>
-                <Text style={{ ...typography.title, color: colors.textPrimary }}>
-                  {recentCount}
-                </Text>
+              <View style={{ alignItems: "center", gap: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                    {recentCount}
+                  </Text>
+                  <Pressable
+                    hitSlop={8}
+                    accessibilityLabel="What does workout shares mean?"
+                    accessibilityHint="Opens an explanation for the workout share count"
+                    onPress={() =>
+                      Alert.alert(
+                        "Workout shares",
+                        "Count of workout summaries recently shared to this squad feed (latest 20 posts you can view)."
+                      )
+                    }
+                  >
+                    <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
                 <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                  This Week
+                  Workout shares
                 </Text>
               </View>
             </View>

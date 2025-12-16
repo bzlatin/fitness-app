@@ -1,7 +1,48 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkCustomExerciseLimit = exports.checkTemplateLimit = exports.checkAiWorkoutGenerationLimit = exports.requireProPlan = void 0;
+exports.checkCustomExerciseLimit = exports.checkTemplateLimit = exports.checkAiWorkoutGenerationLimit = exports.requireProPlan = exports.attachProStatus = void 0;
 const db_1 = require("../db");
+/**
+ * Middleware to attach Pro status to res.locals without blocking
+ * Sets res.locals.hasProAccess = true/false
+ */
+const attachProStatus = async (_req, res, next) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        res.locals.hasProAccess = false;
+        return next();
+    }
+    try {
+        const result = await (0, db_1.query)(`SELECT plan, plan_expires_at FROM users WHERE id = $1`, [userId]);
+        if (result.rows.length === 0) {
+            res.locals.hasProAccess = false;
+            return next();
+        }
+        const user = result.rows[0];
+        // Check if user has pro or lifetime plan
+        if (user.plan !== "pro" && user.plan !== "lifetime") {
+            res.locals.hasProAccess = false;
+            return next();
+        }
+        // Check if plan has expired (if expiration is set)
+        if (user.plan_expires_at) {
+            const expiresAt = new Date(user.plan_expires_at);
+            if (expiresAt < new Date()) {
+                res.locals.hasProAccess = false;
+                return next();
+            }
+        }
+        // User has valid Pro plan
+        res.locals.hasProAccess = true;
+        return next();
+    }
+    catch (error) {
+        console.error("[PlanLimits] Error checking plan:", error);
+        res.locals.hasProAccess = false;
+        return next();
+    }
+};
+exports.attachProStatus = attachProStatus;
 /**
  * Middleware to enforce Pro plan requirement
  * Returns 403 if user is not on a Pro plan

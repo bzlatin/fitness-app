@@ -27,6 +27,18 @@ const ExerciseRow = ({ item, exerciseName }: Props) => {
     cardioParts.push(`Incline ${item.defaultIncline}%`);
   }
 
+  // Determine if this is a rep range
+  const hasRepRange =
+    item.defaultRepsMin !== undefined &&
+    item.defaultRepsMin !== null &&
+    item.defaultRepsMax !== undefined &&
+    item.defaultRepsMax !== null &&
+    item.defaultRepsMin !== item.defaultRepsMax;
+
+  const repsDisplay = hasRepRange
+    ? `${item.defaultRepsMin}–${item.defaultRepsMax} reps`
+    : `${item.defaultReps} reps`;
+
   return (
     <View
       style={{
@@ -42,7 +54,7 @@ const ExerciseRow = ({ item, exerciseName }: Props) => {
         {title}
       </Text>
       <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
-        {item.defaultSets} x {item.defaultReps} reps
+        {item.defaultSets} x {repsDisplay}
         {item.defaultRestSeconds ? ` • ${item.defaultRestSeconds}s rest` : ""}
       </Text>
       {item.defaultWeight ? (

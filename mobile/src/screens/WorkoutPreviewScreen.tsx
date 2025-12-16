@@ -74,6 +74,8 @@ const WorkoutPreviewScreen = () => {
     sets?: number;
     reps?: number;
     restSeconds?: number;
+    gifUrl?: string;
+    primaryMuscleGroup?: string;
   }) => {
     if (swapExerciseIndex === null) return;
 
@@ -82,6 +84,10 @@ const WorkoutPreviewScreen = () => {
       ...updatedExercises[swapExerciseIndex],
       exerciseId: newExercise.exerciseId,
       exerciseName: newExercise.exerciseName,
+      gifUrl: newExercise.gifUrl ?? updatedExercises[swapExerciseIndex].gifUrl,
+      primaryMuscleGroup:
+        newExercise.primaryMuscleGroup ??
+        updatedExercises[swapExerciseIndex].primaryMuscleGroup,
     };
 
     setWorkout({
@@ -110,8 +116,8 @@ const WorkoutPreviewScreen = () => {
     const newExercise = {
       exerciseId: exerciseForm.exercise.id,
       exerciseName: exerciseForm.exercise.name,
-      sets: exerciseForm.sets,
-      reps: exerciseForm.reps,
+      sets: exerciseForm.sets ?? 1,
+      reps: exerciseForm.reps ?? 1,
       restSeconds: exerciseForm.restSeconds,
       orderIndex: workout.exercises.length,
       notes: exerciseForm.notes,
@@ -439,7 +445,9 @@ const WorkoutPreviewScreen = () => {
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                             <Ionicons name="repeat-outline" size={16} color={colors.textSecondary} />
                             <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-                              {ex.reps} reps
+                              {ex.repsMin && ex.repsMax && ex.repsMin !== ex.repsMax
+                                ? `${ex.repsMin}–${ex.repsMax} reps`
+                                : `${ex.reps} reps`}
                             </Text>
                           </View>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -561,6 +569,7 @@ const WorkoutPreviewScreen = () => {
           },
           sets: ex.sets,
           reps: ex.reps,
+          repMode: "single" as const,
           restSeconds: ex.restSeconds,
           notes: ex.notes,
         }))}

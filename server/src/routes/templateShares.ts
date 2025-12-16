@@ -24,6 +24,8 @@ type ExerciseRow = {
   exercise_id: string;
   default_sets: number;
   default_reps: number;
+  default_reps_min: number | null;
+  default_reps_max: number | null;
   default_rest_seconds: number | null;
   default_weight: string | null;
   default_incline: string | null;
@@ -75,7 +77,9 @@ const mapExercise = (
     exerciseImageUrl: meta?.gifUrl,
     equipment: meta?.equipment ?? 'other',
     defaultSets: row.default_sets,
-    defaultReps: row.default_reps,
+    defaultReps: row.default_reps_min ?? row.default_reps,
+    defaultRepsMin: numberOrUndefined(row.default_reps_min),
+    defaultRepsMax: numberOrUndefined(row.default_reps_max),
     defaultRestSeconds: row.default_rest_seconds ?? undefined,
     defaultWeight: numberOrUndefined(row.default_weight),
     defaultIncline: numberOrUndefined(row.default_incline),
@@ -426,9 +430,9 @@ templateSharesAuthedRouter.post('/:code/copy', async (req, res) => {
         await client.query(
           `
             INSERT INTO workout_template_exercises
-              (id, template_id, order_index, exercise_id, default_sets, default_reps, default_rest_seconds,
+              (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
                default_weight, default_incline, default_distance, default_duration_minutes, notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `,
           [
             generateId(),
@@ -437,6 +441,8 @@ templateSharesAuthedRouter.post('/:code/copy', async (req, res) => {
             ex.exercise_id,
             ex.default_sets,
             ex.default_reps,
+            ex.default_reps_min ?? null,
+            ex.default_reps_max ?? null,
             ex.default_rest_seconds ?? null,
             ex.default_weight ?? null,
             ex.default_incline ?? null,

@@ -34,7 +34,7 @@ import {
   updateTemplate,
   deleteTemplate,
 } from "../api/templates";
-import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { templateDetailQueryKey, templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -100,7 +100,33 @@ const mapPersistedExercise = (
     gifUrl: exercise.exerciseImageUrl,
   }),
   sets: exercise.defaultSets,
-  reps: exercise.defaultReps,
+  reps:
+    exercise.defaultRepsMin !== undefined &&
+    exercise.defaultRepsMin !== null &&
+    exercise.defaultRepsMax !== undefined &&
+    exercise.defaultRepsMax !== null &&
+    exercise.defaultRepsMin !== exercise.defaultRepsMax
+      ? null
+      : exercise.defaultReps,
+  repMode:
+    exercise.defaultRepsMin !== undefined &&
+    exercise.defaultRepsMin !== null &&
+    exercise.defaultRepsMax !== undefined &&
+    exercise.defaultRepsMax !== null &&
+    exercise.defaultRepsMin !== exercise.defaultRepsMax
+      ? "range"
+      : "single",
+  repRange:
+    exercise.defaultRepsMin !== undefined &&
+    exercise.defaultRepsMin !== null &&
+    exercise.defaultRepsMax !== undefined &&
+    exercise.defaultRepsMax !== null &&
+    exercise.defaultRepsMin !== exercise.defaultRepsMax
+      ? {
+          min: exercise.defaultRepsMin,
+          max: exercise.defaultRepsMax,
+        }
+      : undefined,
   restSeconds: exercise.defaultRestSeconds,
   weight:
     exercise.defaultWeight !== undefined
@@ -255,6 +281,9 @@ const WorkoutTemplateBuilderScreen = () => {
     onSuccess: (template) => {
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: templatesKey });
+      queryClient.invalidateQueries({
+        queryKey: templateDetailQueryKey(template.id),
+      });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
     onError: () =>
@@ -313,6 +342,21 @@ const WorkoutTemplateBuilderScreen = () => {
       }
     }
 
+    const hasMissingCounts = exercises.some((ex) => {
+      if (ex.sets === null) return true;
+      if (ex.repMode === "range") {
+        return ex.repRange?.min === null || ex.repRange?.max === null;
+      }
+      return ex.reps === null;
+    });
+    if (hasMissingCounts) {
+      Alert.alert(
+        "Add sets and reps",
+        "Please enter sets and reps (or rep range) for every exercise."
+      );
+      return;
+    }
+
     const parseDecimal = (input?: string) => {
       if (input === undefined) return undefined;
       const normalized = input.replace(",", ".");
@@ -326,8 +370,10 @@ const WorkoutTemplateBuilderScreen = () => {
       splitType,
       exercises: exercises.map((ex) => ({
         exerciseId: ex.exercise.id,
-        defaultSets: ex.sets,
-        defaultReps: ex.reps,
+        defaultSets: ex.sets ?? 1,
+        defaultReps: ex.repMode === "range" ? (ex.repRange?.min ?? 1) : (ex.reps ?? 1),
+        defaultRepsMin: ex.repMode === "range" ? (ex.repRange?.min ?? null) : null,
+        defaultRepsMax: ex.repMode === "range" ? (ex.repRange?.max ?? null) : null,
         defaultRestSeconds: ex.restSeconds,
         defaultWeight: parseDecimal(ex.weight),
         defaultIncline: parseDecimal(ex.incline),
@@ -451,9 +497,17 @@ const WorkoutTemplateBuilderScreen = () => {
       prev.map((ex) => {
         if (ex.formId !== formId) return ex;
         if (field === "sets" || field === "reps") {
+          if (field === "reps" && ex.repMode === "range") {
+            return ex;
+          }
+          if (value === "") {
+            return { ...ex, [field]: null };
+          }
           const parsed = Number(value);
-          const nextValue =
-            value === "" ? 1 : Math.max(1, Math.round(parsed || 1));
+          if (Number.isNaN(parsed)) {
+            return ex;
+          }
+          const nextValue = Math.max(1, Math.round(parsed || 1));
           return { ...ex, [field]: nextValue };
         }
         if (field === "restSeconds") {
@@ -474,23 +528,79 @@ const WorkoutTemplateBuilderScreen = () => {
     );
   };
 
+  const toggleRepMode = (formId: string, mode: "single" | "range") => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.formId !== formId) return ex;
+        if (mode === ex.repMode) return ex;
+        if (mode === "range") {
+          const fallbackMin = ex.repRange?.min ?? ex.reps ?? 8;
+          const fallbackMax = ex.repRange?.max ?? Math.max(fallbackMin, (ex.reps ?? 10) + 2);
+          return {
+            ...ex,
+            repMode: "range",
+            reps: null,
+            repRange: { min: fallbackMin, max: fallbackMax },
+          };
+        }
+        const fallback = ex.repRange?.min ?? ex.reps ?? 10;
+        return { ...ex, repMode: "single", reps: fallback, repRange: undefined };
+      })
+    );
+  };
+
+  const updateRepRangeField = (
+    formId: string,
+    field: "min" | "max",
+    value: string
+  ) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.formId !== formId) return ex;
+        if (ex.repMode !== "range") return ex;
+        if (value === "") {
+          return {
+            ...ex,
+            repRange: { ...(ex.repRange ?? { min: null, max: null }), [field]: null },
+          };
+        }
+        const parsed = Number(value);
+        if (Number.isNaN(parsed)) {
+          return ex;
+        }
+        const safeValue = Math.max(1, Math.round(parsed));
+        const currentRange = ex.repRange ?? { min: null, max: null };
+        return {
+          ...ex,
+          repRange: { ...currentRange, [field]: safeValue },
+        };
+      })
+    );
+  };
+
   const handleSwapExercise = (newExercise: {
     exerciseId: string;
     exerciseName: string;
     sets?: number;
     reps?: number;
     restSeconds?: number;
+    gifUrl?: string;
+    primaryMuscleGroup?: Exercise["primaryMuscleGroup"];
   }) => {
     if (!swapExerciseFormId) return;
 
     setExercises((prev) =>
       prev.map((ex) => {
         if (ex.formId !== swapExerciseFormId) return ex;
+        const nextExercise = createFallbackExercise(newExercise.exerciseId, {
+          name: newExercise.exerciseName,
+          primaryMuscleGroup: newExercise.primaryMuscleGroup ?? ex.exercise.primaryMuscleGroup,
+          equipment: ex.exercise.equipment,
+          gifUrl: newExercise.gifUrl ?? ex.exercise.gifUrl,
+        });
         return {
           ...ex,
-          exercise: createFallbackExercise(newExercise.exerciseId, {
-            name: newExercise.exerciseName,
-          }),
+          exercise: nextExercise,
         };
       })
     );
@@ -851,16 +961,13 @@ const WorkoutTemplateBuilderScreen = () => {
             <View style={{ flexDirection: "row", gap: 10 }}>
               <InlineNumberInput
                 label='Sets'
-                value={String(item.sets)}
+                value={
+                  item.sets !== null && item.sets !== undefined
+                    ? String(item.sets)
+                    : ""
+                }
                 onChangeText={(val) =>
                   updateExerciseField(item.formId, "sets", val)
-                }
-              />
-              <InlineNumberInput
-                label='Reps'
-                value={String(item.reps)}
-                onChangeText={(val) =>
-                  updateExerciseField(item.formId, "reps", val)
                 }
               />
               <InlineNumberInput
@@ -871,6 +978,116 @@ const WorkoutTemplateBuilderScreen = () => {
                 }
               />
             </View>
+
+            {/* Rep Mode Toggle */}
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                  Reps
+                </Text>
+                <Pressable
+                  onPress={() => toggleRepMode(item.formId, item.repMode === "single" ? "range" : "single")}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: item.repMode === "range" ? colors.secondary : colors.border,
+                    backgroundColor: item.repMode === "range" ? "rgba(56,189,248,0.12)" : colors.surface,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontFamily: fontFamilies.medium,
+                      color: item.repMode === "range" ? colors.secondary : colors.textSecondary,
+                    }}
+                  >
+                    Range
+                  </Text>
+                </Pressable>
+              </View>
+
+              {item.repMode === "single" ? (
+                <TextInput
+                  keyboardType="numeric"
+                  value={
+                    item.reps !== null && item.reps !== undefined
+                      ? String(item.reps)
+                      : ""
+                  }
+                  onChangeText={(val) =>
+                    updateExerciseField(item.formId, "reps", val)
+                  }
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 10,
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.medium,
+                  }}
+                />
+              ) : (
+                <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+                  <TextInput
+                    placeholder="Min"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={
+                      item.repRange?.min !== null && item.repRange?.min !== undefined
+                        ? String(item.repRange.min)
+                        : ""
+                    }
+                    onChangeText={(val) =>
+                      updateRepRangeField(item.formId, "min", val)
+                    }
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      borderRadius: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 10,
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                    }}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.medium }}>
+                    –
+                  </Text>
+                  <TextInput
+                    placeholder="Max"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={
+                      item.repRange?.max !== null && item.repRange?.max !== undefined
+                        ? String(item.repRange.max)
+                        : ""
+                    }
+                    onChangeText={(val) =>
+                      updateRepRangeField(item.formId, "max", val)
+                    }
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      borderRadius: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 10,
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.medium,
+                    }}
+                  />
+                </View>
+              )}
+            </View>
+
             <InlineNumberInput
               label='Weight (lb)'
               value={item.weight ?? ""}
@@ -961,8 +1178,8 @@ const WorkoutTemplateBuilderScreen = () => {
               exerciseName: currentSwapExercise.exercise.name,
               primaryMuscleGroup:
                 currentSwapExercise.exercise.primaryMuscleGroup,
-              sets: currentSwapExercise.sets,
-              reps: currentSwapExercise.reps,
+              sets: currentSwapExercise.sets ?? undefined,
+              reps: currentSwapExercise.reps ?? undefined,
               restSeconds: currentSwapExercise.restSeconds,
             }}
             onSwap={handleSwapExercise}

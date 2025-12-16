@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import WelcomeStep from '../components/onboarding/WelcomeStep';
 import PlanSelectionStep from '../components/onboarding/PlanSelectionStep';
+import NotificationsStep from '../components/onboarding/NotificationsStep';
 import { useAuth } from '../context/AuthContext';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { colors } from '../theme/colors';
@@ -27,12 +29,13 @@ import type { OnboardingData } from '../types/onboarding';
 import { startSubscription } from '../services/payments';
 import { loadPreAuthOnboarding, markPreAuthOnboardingLinked } from '../services/preAuthOnboarding';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
+import { registerForPushNotificationsAsync } from '../services/notifications';
 
 type Props = {
   onFinished: () => void;
 };
 
-const TOTAL_STEPS = 2;
+const TOTAL_STEPS = 3;
 
 const AccountSetupScreen = ({ onFinished }: Props) => {
   const insets = useSafeAreaInsets();
@@ -46,6 +49,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [name, setName] = useState(user?.name ?? 'Athlete');
+  const nameRef = useRef(name);
   const [handle, setHandle] = useState(user?.handle ?? '');
   const [avatarUri, setAvatarUri] = useState<string | undefined>(user?.avatarUrl ?? undefined);
 
@@ -53,6 +57,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
 
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro'>('pro');
   const [selectedBilling, setSelectedBilling] = useState<'monthly' | 'yearly'>('yearly');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   const handlePlanChange = (plan: 'free' | 'pro') => {
     if (plan === 'pro' && Platform.OS !== 'ios') {
@@ -124,12 +129,19 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     return name.trim().length > 0 && normalized.trim().length > 0;
   }, [name, handle]);
 
+  const handleNameChange = (next: string) => {
+    nameRef.current = next;
+    setName(next);
+  };
+
   const saveProfileDetails = async () => {
     if (!canProceedProfile) {
       setError('Add a name and handle to continue.');
       return false;
     }
 
+    Keyboard.dismiss();
+    const nameToSave = nameRef.current.trim();
     const normalized = normalizeHandle(handle);
     if (!normalized) {
       setError('Pick a handle so friends can find you.');
@@ -150,7 +162,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
         }
       }
       await updateProfile({
-        name: name.trim(),
+        name: nameToSave,
         handle: normalized,
         avatarUrl: uploadReadyAvatar,
         ...(pendingOnboardingData && !user?.onboardingData
@@ -176,6 +188,25 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     }
   };
 
+  const finishSetup = async () => {
+    try {
+      if (notificationsEnabled) {
+        await registerForPushNotificationsAsync();
+      }
+    } catch (err) {
+      console.error('[AccountSetup] Failed to register notifications', err);
+    }
+
+    await completeOnboarding({});
+    onFinished();
+  };
+
+  const handleContinueFromProfile = async () => {
+    const ok = await saveProfileDetails();
+    if (!ok) return;
+    setCurrentStep(2);
+  };
+
   const startCheckout = useMutation({
     mutationFn: (plan: PlanChoice) =>
       startSubscription({
@@ -193,27 +224,14 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['subscription', 'status'] });
-      await completeOnboarding({});
-      onFinished();
+      await finishSetup();
     },
   });
-
-  const handleContinueFromProfile = async () => {
-    const ok = await saveProfileDetails();
-    if (!ok) return;
-    if (subscriptionAccess.hasProAccess) {
-      await completeOnboarding({});
-      onFinished();
-      return;
-    }
-    setCurrentStep(2);
-  };
 
   const handleContinueFree = async () => {
     setError(null);
     try {
-      await completeOnboarding({});
-      onFinished();
+      await finishSetup();
     } catch (err) {
       console.error('[AccountSetup] Failed to complete onboarding', err);
       setError('Could not finish setup. Please try again.');
@@ -221,6 +239,10 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
   };
 
   const handleStartTrial = async (planType: 'monthly' | 'yearly') => {
+    if (subscriptionAccess.hasProAccess) {
+      await finishSetup();
+      return;
+    }
     if (Platform.OS !== 'ios') {
       Alert.alert(
         'Not available',
@@ -317,13 +339,13 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                   name={name}
                   handle={handle}
                   avatarUri={avatarUri}
-                  onNameChange={setName}
+                  onNameChange={handleNameChange}
                   onHandleChange={setHandle}
                   onAvatarChange={setAvatarUri}
                   isRetake={false}
                 />
               </View>
-            ) : (
+            ) : currentStep === 2 ? (
               <PlanSelectionStep
                 selectedPlan={selectedPlan}
                 onPlanChange={handlePlanChange}
@@ -333,6 +355,11 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                 selectedBilling={selectedBilling}
                 onBillingChange={setSelectedBilling}
                 hideCta
+              />
+            ) : (
+              <NotificationsStep
+                notificationsEnabled={notificationsEnabled}
+                onNotificationsEnabledChange={setNotificationsEnabled}
               />
             )}
           </ScrollView>
@@ -361,6 +388,41 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                 )}
               </Pressable>
             </View>
+          ) : currentStep === 2 ? (
+            <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
+              <Pressable
+                onPress={() => setCurrentStep(3)}
+                disabled={isBusy}
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: isBusy ? colors.border : colors.primary,
+                  alignItems: 'center',
+                  opacity: pressed || isBusy ? 0.85 : 1,
+                })}
+              >
+                <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
+                  Continue
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setCurrentStep(1)}
+                disabled={isBusy}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  opacity: pressed || isBusy ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 15 }}>
+                  Back
+                </Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
               <Pressable
@@ -384,12 +446,12 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                   <Text style={{ color: colors.surface, fontFamily: fontFamilies.semibold, fontSize: 16 }}>
                     {selectedPlan === 'pro' && Platform.OS === 'ios'
                       ? 'Start 7-Day Trial'
-                      : 'Continue with Free'}
+                      : 'Finish'}
                   </Text>
                 )}
               </Pressable>
               <Pressable
-                onPress={() => setCurrentStep(1)}
+                onPress={() => setCurrentStep(2)}
                 disabled={isBusy}
                 style={({ pressed }) => ({
                   paddingVertical: 12,

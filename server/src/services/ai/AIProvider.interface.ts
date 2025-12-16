@@ -63,6 +63,7 @@ export interface WorkoutGenerationParams {
   fatigueTargets?: FatigueTargets;
   requestedSplit?: string; // e.g., "upper", "push", "legs", "full_body"
   specificRequest?: string; // Optional: "focus on chest", "leg day with glutes"
+  excludedExercises?: string[];
 }
 
 /**
@@ -98,6 +99,8 @@ export interface ExerciseSwapResult {
   exerciseId: string | null;
   exerciseName?: string;
   reasoning?: string;
+  primaryMuscleGroup?: string;
+  gifUrl?: string;
 }
 
 /**

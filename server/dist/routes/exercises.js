@@ -108,6 +108,38 @@ router.get("/batch", async (req, res) => {
         return res.status(500).json({ error: "Failed to load exercises" });
     }
 });
+router.get("/details/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await (0, db_1.query)(`SELECT id, name, primary_muscle_group, equipment, category, image_paths,
+              instructions, level, force, mechanic, primary_muscles, secondary_muscles
+       FROM exercises
+       WHERE id = $1`, [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Exercise not found" });
+        }
+        const row = result.rows[0];
+        const imagePath = row.image_paths?.[0];
+        return res.json({
+            id: row.id,
+            name: row.name,
+            primaryMuscleGroup: (row.primary_muscle_group ?? "other").toLowerCase(),
+            equipment: (row.equipment ?? "bodyweight").toLowerCase(),
+            category: row.category ?? undefined,
+            gifUrl: imagePath ? `/api/exercises/assets/${imagePath}` : undefined,
+            instructions: row.instructions ?? [],
+            level: row.level ?? undefined,
+            force: row.force ?? undefined,
+            mechanic: row.mechanic ?? undefined,
+            primaryMuscles: row.primary_muscles ?? [],
+            secondaryMuscles: row.secondary_muscles ?? [],
+        });
+    }
+    catch (err) {
+        console.error("Failed to fetch exercise details", err);
+        return res.status(500).json({ error: "Failed to fetch exercise details" });
+    }
+});
 const mapCustomExerciseRow = (row) => ({
     id: row.id,
     userId: row.user_id,

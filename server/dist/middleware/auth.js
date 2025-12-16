@@ -75,7 +75,8 @@ const ensureUser = async (req, res, next) => {
             await (0, db_1.query)(`
           UPDATE users
           SET email = COALESCE($2, users.email),
-              name = COALESCE($3, users.name),
+              -- Keep user-updated names; do not overwrite with auth profile once set
+              name = COALESCE(users.name, $3),
               plan = COALESCE(users.plan, 'free'),
               updated_at = NOW()
           WHERE id = $1
