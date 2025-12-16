@@ -156,6 +156,7 @@ type ReactionRow = {
   emoji: string | null;
   comment: string | null;
   created_at: string;
+  deleted_at: string | null;
   name: string | null;
   handle: string | null;
   avatar_url: string | null;
@@ -1840,10 +1841,50 @@ router.delete("/comments/:commentId", async (req, res) => {
   }
 
   try {
-    // Only allow deleting own comments
+    const commentResult = await query<{
+      id: string;
+      user_id: string;
+      target_type: "status" | "share";
+      target_id: string;
+    }>(
+      `
+        SELECT id, user_id, target_type, target_id
+        FROM workout_reactions
+        WHERE id = $1 AND reaction_type = 'comment' AND deleted_at IS NULL
+        LIMIT 1
+      `,
+      [req.params.commentId]
+    );
+
+    const comment = commentResult.rows[0];
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    let ownerId: string | null = null;
+    if (comment.target_type === "share") {
+      const share = await query<{ user_id: string }>(
+        `SELECT user_id FROM workout_shares WHERE id = $1 LIMIT 1`,
+        [comment.target_id]
+      );
+      ownerId = share.rows[0]?.user_id ?? null;
+    } else if (comment.target_type === "status") {
+      const status = await query<{ user_id: string }>(
+        `SELECT user_id FROM active_workout_statuses WHERE session_id = $1 LIMIT 1`,
+        [comment.target_id]
+      );
+      ownerId = status.rows[0]?.user_id ?? null;
+    }
+
+    const isAuthor = comment.user_id === userId;
+    const isOwner = ownerId === userId;
+    if (!isAuthor && !isOwner) {
+      return res.status(403).json({ error: "Not authorized to delete this comment" });
+    }
+
     await query(
-      `DELETE FROM workout_reactions WHERE id = $1 AND user_id = $2 AND reaction_type = 'comment'`,
-      [req.params.commentId, userId]
+      `UPDATE workout_reactions SET deleted_at = NOW() WHERE id = $1 AND reaction_type = 'comment'`,
+      [comment.id]
     );
     return res.status(204).send();
   } catch (err) {
@@ -1893,7 +1934,10 @@ router.get("/reactions/:targetType/:targetId", async (req, res) => {
         SELECT r.*, u.name, u.handle, u.avatar_url
         FROM workout_reactions r
         JOIN users u ON u.id = r.user_id
-        WHERE r.target_type = $1 AND r.target_id = $2 AND r.reaction_type = 'comment'
+        WHERE r.target_type = $1
+          AND r.target_id = $2
+          AND r.reaction_type = 'comment'
+          AND r.deleted_at IS NULL
         ORDER BY r.created_at ASC
         LIMIT 50
       `,

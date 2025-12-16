@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  ActionSheetIOS,
+  Alert,
   Pressable,
   Text,
   TextInput,
@@ -12,6 +14,7 @@ import {
   Image,
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../../theme/colors";
 import { typography, fontFamilies } from "../../theme/typography";
@@ -23,8 +26,8 @@ import {
   getReactions,
 } from "../../api/social";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
-import { SocialUserSummary, EmojiReaction, WorkoutComment } from "../../types/social";
-import { formatHandle } from "../../utils/formatHandle";
+import { EmojiReaction, WorkoutComment } from "../../types/social";
+import { RootNavigation } from "../../navigation/RootNavigator";
 
 const EMOJI_OPTIONS = ["🔥", "💪", "🚀", "🙌", "❤️", "👏"];
 
@@ -51,11 +54,18 @@ type Props = {
   targetType: "status" | "share";
   targetId: string;
   compact?: boolean;
+  ownerUserId?: string;
 };
 
-export const WorkoutReactions = ({ targetType, targetId, compact = true }: Props) => {
+export const WorkoutReactions = ({
+  targetType,
+  targetId,
+  compact = true,
+  ownerUserId,
+}: Props) => {
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
+  const navigation = useNavigation<RootNavigation>();
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [newComment, setNewComment] = useState("");
 
@@ -173,6 +183,29 @@ export const WorkoutReactions = ({ targetType, targetId, compact = true }: Props
     },
   });
 
+  const handleViewProfile = useCallback(
+    (profileUserId: string) => {
+      if (!profileUserId) return;
+      setShowCommentsModal(false);
+      navigation.navigate("UserProfile", { userId: profileUserId });
+    },
+    [navigation]
+  );
+
+  const requestDeleteComment = useCallback(
+    (commentId: string) => {
+      Alert.alert("Delete this comment?", undefined, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteCommentMutation.mutate({ commentId }),
+        },
+      ]);
+    },
+    [deleteCommentMutation]
+  );
+
   const handleEmojiPress = useCallback(
     (emoji: string, hasReacted: boolean) => {
       if (hasReacted) {
@@ -272,10 +305,12 @@ export const WorkoutReactions = ({ targetType, targetId, compact = true }: Props
           newComment={newComment}
           onChangeComment={setNewComment}
           onSubmitComment={handleSubmitComment}
-          onDeleteComment={(commentId) => deleteCommentMutation.mutate({ commentId })}
+          onRequestDelete={requestDeleteComment}
+          onPressProfile={handleViewProfile}
           isSubmitting={addCommentMutation.isPending}
           isDeleting={deleteCommentMutation.isPending}
           currentUserId={user?.id}
+          ownerUserId={ownerUserId}
         />
       </View>
     );
@@ -386,8 +421,10 @@ export const WorkoutReactions = ({ targetType, targetId, compact = true }: Props
             key={comment.id}
             comment={comment}
             currentUserId={user?.id}
-            onDelete={() => deleteCommentMutation.mutate({ commentId: comment.id })}
+            onDelete={requestDeleteComment}
             isDeleting={deleteCommentMutation.isPending}
+            onPressProfile={handleViewProfile}
+            ownerUserId={ownerUserId}
           />
         ))}
       </View>
@@ -402,10 +439,12 @@ type CommentsModalProps = {
   newComment: string;
   onChangeComment: (text: string) => void;
   onSubmitComment: () => void;
-  onDeleteComment: (commentId: string) => void;
+  onRequestDelete: (commentId: string) => void;
+  onPressProfile: (userId: string) => void;
   isSubmitting: boolean;
   isDeleting: boolean;
   currentUserId?: string;
+  ownerUserId?: string;
 };
 
 const CommentsModal = ({
@@ -415,10 +454,12 @@ const CommentsModal = ({
   newComment,
   onChangeComment,
   onSubmitComment,
-  onDeleteComment,
+  onRequestDelete,
+  onPressProfile,
   isSubmitting,
   isDeleting,
   currentUserId,
+  ownerUserId,
 }: CommentsModalProps) => (
   <Modal
     visible={visible}
@@ -486,8 +527,10 @@ const CommentsModal = ({
                   key={comment.id}
                   comment={comment}
                   currentUserId={currentUserId}
-                  onDelete={() => onDeleteComment(comment.id)}
+                  onDelete={onRequestDelete}
                   isDeleting={isDeleting}
+                  onPressProfile={onPressProfile}
+                  ownerUserId={ownerUserId}
                 />
               ))
             )}
@@ -550,16 +593,71 @@ const CommentsModal = ({
 type CommentItemProps = {
   comment: WorkoutComment;
   currentUserId?: string;
-  onDelete: () => void;
+  onDelete: (commentId: string) => void;
+  onPressProfile: (userId: string) => void;
   isDeleting: boolean;
+  ownerUserId?: string;
 };
 
-const CommentItem = ({ comment, currentUserId, onDelete, isDeleting }: CommentItemProps) => {
-  const isOwn = comment.user.id === currentUserId;
+const CommentItem = ({
+  comment,
+  currentUserId,
+  onDelete,
+  onPressProfile,
+  isDeleting,
+  ownerUserId,
+}: CommentItemProps) => {
+  const canDelete =
+    currentUserId !== undefined &&
+    (comment.user.id === currentUserId || ownerUserId === currentUserId);
+
+  const handleLongPress = () => {
+    const options = ["Cancel", "View Profile"];
+    const actions: Array<(() => void) | undefined> = [
+      undefined,
+      () => onPressProfile(comment.user.id),
+    ];
+
+    if (canDelete) {
+      options.push("Delete");
+      actions.push(() => onDelete(comment.id));
+    }
+
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: canDelete ? options.length - 1 : undefined,
+        },
+        (buttonIndex) => {
+          const action = actions[buttonIndex];
+          action?.();
+        }
+      );
+      return;
+    }
+
+    Alert.alert("Comment options", undefined, [
+      { text: "View Profile", onPress: () => onPressProfile(comment.user.id) },
+      ...(canDelete
+        ? [
+            {
+              text: "Delete",
+              style: "destructive" as const,
+              onPress: () => onDelete(comment.id),
+            },
+          ]
+        : []),
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   return (
-    <View
-      style={{
+    <Pressable
+      onLongPress={handleLongPress}
+      delayLongPress={220}
+      style={({ pressed }) => ({
         flexDirection: "row",
         gap: 10,
         padding: 10,
@@ -567,62 +665,92 @@ const CommentItem = ({ comment, currentUserId, onDelete, isDeleting }: CommentIt
         borderRadius: 12,
         borderWidth: 1,
         borderColor: colors.border,
-      }}
+        opacity: pressed ? 0.95 : 1,
+      })}
     >
-      {comment.user.avatarUrl ? (
-        <Image
-          source={{ uri: comment.user.avatarUrl }}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            backgroundColor: colors.surface,
-          }}
-        />
-      ) : (
+      <Pressable
+        onPress={() => onPressProfile(comment.user.id)}
+        hitSlop={6}
+        style={{ alignSelf: "flex-start" }}
+      >
+        {comment.user.avatarUrl ? (
+          <Image
+            source={{ uri: comment.user.avatarUrl }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              backgroundColor: colors.surface,
+            }}
+          />
+        ) : (
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              backgroundColor: colors.surface,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {initialsForName(comment.user.name)}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+      <View style={{ flex: 1 }}>
         <View
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            backgroundColor: colors.surface,
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: colors.border,
+            gap: 6,
+            flexWrap: "wrap",
           }}
         >
-          <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: fontFamilies.semibold }}>
-            {initialsForName(comment.user.name)}
-          </Text>
-        </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 13 }}>
-            {comment.user.name}
-          </Text>
+          <Pressable
+            onPress={() => onPressProfile(comment.user.id)}
+            hitSlop={4}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+          >
+            <Text
+              style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold, fontSize: 13 }}
+              numberOfLines={1}
+            >
+              {comment.user.name}
+            </Text>
+          </Pressable>
           <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
             {formatRelativeTime(comment.createdAt)}
           </Text>
+          {canDelete ? (
+            <Pressable
+              onPress={() => onDelete(comment.id)}
+              disabled={isDeleting}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                marginLeft: "auto",
+                opacity: pressed || isDeleting ? 0.5 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 12 }}>🗑️</Text>
+            </Pressable>
+          ) : null}
         </View>
         <Text style={{ color: colors.textPrimary, marginTop: 2 }}>
           {comment.comment}
         </Text>
       </View>
-      {isOwn && (
-        <Pressable
-          onPress={onDelete}
-          disabled={isDeleting}
-          style={({ pressed }) => ({
-            padding: 4,
-            opacity: pressed || isDeleting ? 0.5 : 1,
-          })}
-        >
-          <Ionicons name="trash-outline" size={16} color={colors.textSecondary} />
-        </Pressable>
-      )}
-    </View>
+    </Pressable>
   );
 };
 

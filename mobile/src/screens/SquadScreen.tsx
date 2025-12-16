@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef, ReactNode, useCallback } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LegendList } from "../components/feed/LegendList";
@@ -235,7 +235,12 @@ const ActiveCard = ({
         ) : null}
       </View>
     </Pressable>
-    <WorkoutReactions targetType='status' targetId={status.id} compact />
+    <WorkoutReactions
+      targetType='status'
+      targetId={status.id}
+      ownerUserId={status.user.id}
+      compact
+    />
   </View>
 );
 
@@ -327,7 +332,12 @@ const ShareCard = ({
         ) : null}
       </View>
     </Pressable>
-    <WorkoutReactions targetType='share' targetId={share.id} compact />
+    <WorkoutReactions
+      targetType='share'
+      targetId={share.id}
+      ownerUserId={share.user.id}
+      compact
+    />
   </View>
 );
 
@@ -335,7 +345,12 @@ const SquadScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
-  const { data: generalFeed, isLoading, isError } = useSquadFeed();
+  const {
+    data: generalFeed,
+    isLoading,
+    isError,
+    refetch: refetchGeneralFeed,
+  } = useSquadFeed();
   const {
     data: squads = [],
     isLoading: squadsLoading,
@@ -372,10 +387,12 @@ const SquadScreen = () => {
   const [currentInviteCode, setCurrentInviteCode] = useState<string | null>(
     null
   );
-const {
+  const [refreshing, setRefreshing] = useState(false);
+  const {
     data: selectedSquadData,
     isLoading: selectedSquadLoading,
     isError: selectedSquadError,
+    refetch: refetchSelectedSquad,
   } = useSquadFeed(selectedSquadId, { enabled: Boolean(selectedSquadId) });
   const [showSocialModal, setShowSocialModal] = useState(false);
   const hasOpenedFromParams = useRef(false);
@@ -384,6 +401,19 @@ const {
   const [showDiscoverSquadsModal, setShowDiscoverSquadsModal] = useState(false);
   const [squadSearchTerm, setSquadSearchTerm] = useState("");
   const [debouncedSquadSearch, setDebouncedSquadSearch] = useState("");
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const promises = [refetchGeneralFeed()];
+      if (selectedSquadId) {
+        promises.push(refetchSelectedSquad());
+      }
+      await Promise.all(promises);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchGeneralFeed, refetchSelectedSquad, selectedSquadId]);
 
   const closeSocialModal = () => {
     setShowSocialModal(false);
@@ -979,6 +1009,8 @@ const {
                 paddingBottom: 60 + insets.bottom,
               }}
               showsVerticalScrollIndicator={false}
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
               onScroll={(event) => {
                 const { contentOffset, contentSize, layoutMeasurement } =
                   event.nativeEvent;
