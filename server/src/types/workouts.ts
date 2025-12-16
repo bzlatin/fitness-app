@@ -41,6 +41,8 @@ export interface WorkoutTemplateExercise {
   equipment?: string;
   defaultSets: number;
   defaultReps: number;
+  defaultRepsMin?: number;
+  defaultRepsMax?: number;
   defaultRestSeconds?: number;
   defaultWeight?: number;
   defaultIncline?: number;
@@ -79,6 +81,8 @@ export interface WorkoutSet {
   setKind?: "warmup" | "working";
   setIndex: number;
   targetReps?: number;
+  targetRepsMin?: number;
+  targetRepsMax?: number;
   targetWeight?: number;
   actualReps?: number;
   actualWeight?: number;

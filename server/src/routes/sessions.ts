@@ -85,6 +85,8 @@ type TemplateExerciseRow = {
   exercise_id: string;
   default_sets: number;
   default_reps: number;
+  default_reps_min: number | null;
+  default_reps_max: number | null;
   default_weight: string | null;
 };
 
@@ -116,6 +118,8 @@ type SetRow = {
   set_index: number;
   set_kind: string | null;
   target_reps: number | null;
+  target_reps_min: number | null;
+  target_reps_max: number | null;
   target_weight: string | null;
   actual_reps: number | null;
   actual_weight: string | null;
@@ -141,6 +145,8 @@ const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet =>
     setIndex: row.set_index,
     setKind: normalizeSetKind(row.set_kind),
     targetReps: row.target_reps ?? undefined,
+    targetRepsMin: row.target_reps_min ?? undefined,
+    targetRepsMax: row.target_reps_max ?? undefined,
     targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
     actualReps: row.actual_reps ?? undefined,
     actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
@@ -392,7 +398,7 @@ router.post("/from-template/:templateId", async (req, res) => {
 
     const templateExercises = await query<TemplateExerciseRow>(
       `
-        SELECT id, template_id, exercise_id, default_sets, default_reps, default_weight
+        SELECT id, template_id, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_weight
         FROM workout_template_exercises
         WHERE template_id = $1
         ORDER BY order_index ASC
@@ -428,8 +434,8 @@ router.post("/from-template/:templateId", async (req, res) => {
         for (const warmup of warmupSpecs) {
           await client.query(
             `
-              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_weight)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_reps_min, target_reps_max, target_weight)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             `,
             [
               generateId(),
@@ -439,6 +445,8 @@ router.post("/from-template/:templateId", async (req, res) => {
               setIndex,
               "warmup",
               warmup.targetReps,
+              null,
+              null,
               warmup.targetWeight,
             ]
           );
@@ -448,8 +456,8 @@ router.post("/from-template/:templateId", async (req, res) => {
         for (let index = 0; index < templateExercise.default_sets; index += 1) {
           await client.query(
             `
-              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_weight)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              INSERT INTO workout_sets (id, session_id, template_exercise_id, exercise_id, set_index, set_kind, target_reps, target_reps_min, target_reps_max, target_weight)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             `,
             [
               generateId(),
@@ -459,6 +467,8 @@ router.post("/from-template/:templateId", async (req, res) => {
               setIndex,
               "working",
               templateExercise.default_reps,
+              templateExercise.default_reps_min,
+              templateExercise.default_reps_max,
               templateExercise.default_weight,
             ]
           );

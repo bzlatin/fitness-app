@@ -254,6 +254,7 @@ const checkSquadActivity = async (user) => {
     WHERE ws.user_id = $1
       AND wr.user_id != $1
       AND wr.created_at >= NOW() - INTERVAL '24 hours'
+      AND wr.deleted_at IS NULL
       AND NOT EXISTS (
         SELECT 1 FROM notification_events ne
         WHERE ne.user_id = $1

@@ -3586,6 +3586,19 @@ const SetInputRow = ({
     setWeightText(set.actualWeight?.toString() ?? "");
   }, [isEditingWeight, set.actualWeight, set.id]);
 
+  const hasRepRange =
+    set.targetRepsMin !== undefined &&
+    set.targetRepsMin !== null &&
+    set.targetRepsMax !== undefined &&
+    set.targetRepsMax !== null &&
+    set.targetRepsMin !== set.targetRepsMax;
+
+  const repsLabel = hasRepRange
+    ? `${set.targetRepsMin}–${set.targetRepsMax} reps`
+    : set.targetReps !== undefined
+    ? `${set.targetReps} reps`
+    : undefined;
+
   const targetLine = isCardio
     ? [
         set.targetDistance !== undefined
@@ -3602,7 +3615,7 @@ const SetInputRow = ({
         .join(" · ")
     : [
         set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
-        set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
+        repsLabel,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -3979,13 +3992,22 @@ const ExerciseCard = ({
   const exerciseRestSeconds =
     sessionRestSeconds ?? group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
 
+  const hasRepRangeSummary =
+    primaryWorkingSet?.targetRepsMin !== undefined &&
+    primaryWorkingSet?.targetRepsMin !== null &&
+    primaryWorkingSet?.targetRepsMax !== undefined &&
+    primaryWorkingSet?.targetRepsMax !== null &&
+    primaryWorkingSet.targetRepsMin !== primaryWorkingSet.targetRepsMax;
+
+  const repsDisplaySummary = hasRepRangeSummary
+    ? `${primaryWorkingSet.targetRepsMin}–${primaryWorkingSet.targetRepsMax} reps`
+    : primaryWorkingSet?.targetReps
+    ? `${primaryWorkingSet.targetReps} reps`
+    : "adjust as you go";
+
   const summaryLine = `${workingSetCount} working${
     warmupSetCount > 0 ? ` · ${warmupSetCount} warm-up` : ""
-  } · ${
-    primaryWorkingSet?.targetReps
-      ? `${primaryWorkingSet.targetReps} reps`
-      : "adjust as you go"
-  }`;
+  } · ${repsDisplaySummary}`;
 
   const hasWeightSuggestion =
     typeof startingSuggestion?.suggestedWeight === "number" &&

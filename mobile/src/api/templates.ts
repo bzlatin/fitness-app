@@ -67,6 +67,8 @@ export const createTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultRepsMin?: number | null;
+      defaultRepsMax?: number | null;
       defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;
@@ -84,6 +86,8 @@ export const updateTemplate = async (
       exerciseId: string;
       defaultSets: number;
       defaultReps: number;
+      defaultRepsMin?: number | null;
+      defaultRepsMax?: number | null;
       defaultWeight?: number;
       defaultRestSeconds?: number;
       notes?: string;

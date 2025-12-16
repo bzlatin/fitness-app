@@ -157,6 +157,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
       exercise: activeExercise,
       sets: parsedSets,
       reps: parsedReps,
+      repMode: "single",
       restSeconds: parsedRest,
       weight:
         !cardio && parsedWeight !== undefined && !Number.isNaN(parsedWeight)
