@@ -148,3 +148,47 @@ export type RecapSlice = {
       }
     | null;
 };
+
+// Up Next Intelligence Types
+export type UpNextTemplate = {
+  templateId: string;
+  templateName: string;
+  splitType: string | null;
+  exerciseCount: number;
+  muscleGroups: string[];
+  lastUsedAt: string | null;
+  matchScore: number;
+  matchReason: string;
+};
+
+export type UpNextRecommendation = {
+  // The recommended split type (push, pull, legs, upper, lower, full_body)
+  recommendedSplit: {
+    splitKey: string;
+    label: string;
+    reason: string;
+    tags: string[];
+  };
+  // Alternate split options
+  alternateSplits: Array<{
+    splitKey: string;
+    label: string;
+    reason: string;
+  }>;
+  // Best matching template from user's saved templates (if any)
+  matchedTemplate: UpNextTemplate | null;
+  // Other templates that could work
+  alternateTemplates: UpNextTemplate[];
+  // Recovery status for the recommended split
+  fatigueStatus: "fresh" | "ready" | "moderate-fatigue" | "high-fatigue" | "no-data";
+  // Overall readiness score (0-100)
+  readinessScore: number;
+  // Whether user has Pro access (affects what actions are available)
+  canGenerateAI: boolean;
+  // Reasoning for the recommendation
+  reasoning: string;
+  // Last workout info
+  lastWorkoutAt: string | null;
+  // How long since last workout of this split type
+  daysSinceLastSplit: number | null;
+};

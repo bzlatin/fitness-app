@@ -15,7 +15,8 @@ import {
   getFrequencyHeatmap,
 } from "../services/muscleAnalytics";
 import { getRecapSlice } from "../services/recap";
-import { requireProPlan } from "../middleware/planLimits";
+import { getUpNextRecommendation } from "../services/upNextIntelligence";
+import { requireProPlan, attachProStatus } from "../middleware/planLimits";
 import { pool } from "../db";
 import { generateId } from "../utils/id";
 
@@ -456,6 +457,34 @@ router.get("/fatigue", async (_req, res) => {
   } catch (err) {
     console.error("[Analytics] Failed to fetch fatigue scores", err);
     return res.status(500).json({ error: "Failed to fetch fatigue scores" });
+  }
+});
+
+/**
+ * GET /api/analytics/up-next
+ * Get intelligent "Up Next" workout recommendation based on:
+ * - User's training split (PPL, Upper/Lower, etc.)
+ * - Recent workout history
+ * - Muscle fatigue/recovery status
+ * - Saved templates that match the recommended split
+ *
+ * Available to all users. Pro users get more detailed recovery analysis.
+ */
+router.get("/up-next", attachProStatus, async (_req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Check if user has Pro access (set by attachProStatus middleware)
+    const hasProAccess = res.locals.hasProAccess ?? false;
+
+    const data = await getUpNextRecommendation(userId, hasProAccess);
+    return res.json({ data });
+  } catch (err) {
+    console.error("[Analytics] Failed to fetch up-next recommendation", err);
+    return res.status(500).json({ error: "Failed to fetch recommendation" });
   }
 });
 

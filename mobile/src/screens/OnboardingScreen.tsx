@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { NavigationContext } from "@react-navigation/native";
+import { NavigationContext, useRoute, type RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -42,6 +42,7 @@ import { registerForPushNotificationsAsync } from "../services/notifications";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { isRemoteAvatarUrl } from "../utils/avatarImage";
 import { uploadCurrentUserAvatar } from "../api/social";
+import type { RootStackParamList } from "../navigation/types";
 
 const OnboardingScreen = () => {
   const { completeOnboarding, updateProfile, user } = useCurrentUser();
@@ -50,10 +51,12 @@ const OnboardingScreen = () => {
   const queryClient = useQueryClient();
   // Get navigation - will be undefined if rendered outside NavigationContainer (OnboardingGate)
   const navigation = useContext(NavigationContext);
+  const route = useRoute<RouteProp<RootStackParamList, "Onboarding">>();
   const subscriptionAccess = useSubscriptionAccess();
   // Determine if this is a retake by checking if user has existing onboarding data
   // This works for both navigation contexts (OnboardingGate and Onboarding screen in navigator)
-  const isRetake = Boolean(user?.onboardingData);
+  const isRetakeParam = route?.params?.isRetake ?? false;
+  const isRetake = isRetakeParam || Boolean(user?.onboardingData);
   const isProUser = subscriptionAccess.hasProAccess;
 
   // Calculate total steps dynamically based on what we skip
@@ -61,7 +64,7 @@ const OnboardingScreen = () => {
   // Skip PlanSelectionStep if user is already Pro
   // Skip NotificationsStep if retaking (they can manage in Settings)
   const skipWelcome = isRetake;
-  const skipPlanSelection = isRetake && isProUser;
+  const skipPlanSelection = isRetake || isProUser;
   const skipNotifications = isRetake;
   const TOTAL_STEPS = 10 - (skipWelcome ? 1 : 0) - (skipPlanSelection ? 1 : 0) - (skipNotifications ? 1 : 0);
   const [currentStep, setCurrentStep] = useState(1);
@@ -105,6 +108,10 @@ const OnboardingScreen = () => {
 
   // Step 10: Plan Selection
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("free");
+
+  useEffect(() => {
+    setCurrentStep((prev) => Math.min(prev, TOTAL_STEPS));
+  }, [TOTAL_STEPS]);
 
   const handlePlanChange = (plan: "free" | "pro") => {
     if (plan === "pro" && !isIOS) {

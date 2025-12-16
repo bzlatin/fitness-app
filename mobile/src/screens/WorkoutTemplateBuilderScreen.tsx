@@ -34,7 +34,7 @@ import {
   updateTemplate,
   deleteTemplate,
 } from "../api/templates";
-import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { templateDetailQueryKey, templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -255,6 +255,9 @@ const WorkoutTemplateBuilderScreen = () => {
     onSuccess: (template) => {
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: templatesKey });
+      queryClient.invalidateQueries({
+        queryKey: templateDetailQueryKey(template.id),
+      });
       navigation.replace("WorkoutTemplateDetail", { templateId: template.id });
     },
     onError: () =>
@@ -480,17 +483,23 @@ const WorkoutTemplateBuilderScreen = () => {
     sets?: number;
     reps?: number;
     restSeconds?: number;
+    gifUrl?: string;
+    primaryMuscleGroup?: Exercise["primaryMuscleGroup"];
   }) => {
     if (!swapExerciseFormId) return;
 
     setExercises((prev) =>
       prev.map((ex) => {
         if (ex.formId !== swapExerciseFormId) return ex;
+        const nextExercise = createFallbackExercise(newExercise.exerciseId, {
+          name: newExercise.exerciseName,
+          primaryMuscleGroup: newExercise.primaryMuscleGroup ?? ex.exercise.primaryMuscleGroup,
+          equipment: ex.exercise.equipment,
+          gifUrl: newExercise.gifUrl ?? ex.exercise.gifUrl,
+        });
         return {
           ...ex,
-          exercise: createFallbackExercise(newExercise.exerciseId, {
-            name: newExercise.exerciseName,
-          }),
+          exercise: nextExercise,
         };
       })
     );

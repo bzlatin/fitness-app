@@ -74,6 +74,8 @@ const WorkoutPreviewScreen = () => {
     sets?: number;
     reps?: number;
     restSeconds?: number;
+    gifUrl?: string;
+    primaryMuscleGroup?: string;
   }) => {
     if (swapExerciseIndex === null) return;
 
@@ -82,6 +84,10 @@ const WorkoutPreviewScreen = () => {
       ...updatedExercises[swapExerciseIndex],
       exerciseId: newExercise.exerciseId,
       exerciseName: newExercise.exerciseName,
+      gifUrl: newExercise.gifUrl ?? updatedExercises[swapExerciseIndex].gifUrl,
+      primaryMuscleGroup:
+        newExercise.primaryMuscleGroup ??
+        updatedExercises[swapExerciseIndex].primaryMuscleGroup,
     };
 
     setWorkout({

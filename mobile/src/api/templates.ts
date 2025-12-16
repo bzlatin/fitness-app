@@ -1,6 +1,9 @@
 import { apiClient } from "./client";
 import { WorkoutTemplate } from "../types/workouts";
 
+export const templatesQueryKey = ["templates"] as const;
+export const templateDetailQueryKey = (templateId: string) => [...templatesQueryKey, templateId] as const;
+
 export type TemplateShareLink = {
   shareCode: string;
   webUrl: string;

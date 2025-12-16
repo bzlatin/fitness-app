@@ -1,43 +1,45 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from 'react';
 import {
-  Modal,
-  Pressable,
-  Text,
-  View,
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
+  Modal,
+  Pressable,
+  Text,
   TextInput,
-} from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { colors } from "../../theme/colors";
-import { fontFamilies, typography } from "../../theme/typography";
-import { swapExercise } from "../../api/ai";
-import { searchAllExercises } from "../../api/exercises";
-import { API_BASE_URL } from "../../api/client";
-import { useSubscriptionAccess } from "../../hooks/useSubscriptionAccess";
-import UpgradePrompt from "../premium/UpgradePrompt";
-import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import { Exercise } from "../../types/workouts";
+  View,
+} from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { swapExercise } from '../../api/ai';
+import { API_BASE_URL } from '../../api/client';
+import { searchAllExercises } from '../../api/exercises';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useSubscriptionAccess } from '../../hooks/useSubscriptionAccess';
+import { colors } from '../../theme/colors';
+import { fontFamilies, typography } from '../../theme/typography';
+import { Exercise } from '../../types/workouts';
+import UpgradePrompt from '../premium/UpgradePrompt';
+import CreateCustomExerciseModal from './CreateCustomExerciseModal';
 
 const muscleGroups = [
-  "all",
-  "chest",
-  "back",
-  "shoulders",
-  "biceps",
-  "triceps",
-  "legs",
-  "glutes",
-  "core",
+  'all',
+  'chest',
+  'back',
+  'shoulders',
+  'biceps',
+  'triceps',
+  'legs',
+  'glutes',
+  'core',
 ];
 
 const getValidMuscleGroup = (primaryMuscleGroup?: string): string => {
-  if (!primaryMuscleGroup) return "all";
+  if (!primaryMuscleGroup) return 'all';
   const normalized = primaryMuscleGroup.toLowerCase();
-  return muscleGroups.includes(normalized) ? normalized : "all";
+  return muscleGroups.includes(normalized) ? normalized : 'all';
 };
 
 interface ExerciseSwapModalProps {
@@ -57,63 +59,84 @@ interface ExerciseSwapModalProps {
     sets?: number;
     reps?: number;
     restSeconds?: number;
+    gifUrl?: string;
+    primaryMuscleGroup?: string;
   }) => void;
 }
 
-const ExerciseSwapModal = ({
-  visible,
-  onClose,
-  exercise,
-  onSwap,
-}: ExerciseSwapModalProps) => {
+const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapModalProps) => {
+  const insets = useSafeAreaInsets();
   const subscriptionAccess = useSubscriptionAccess();
-  const [swapMode, setSwapMode] = useState<"choose" | "ai" | "manual">("choose");
-  const [isSwapping, setIsSwapping] = useState(false);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [query, setQuery] = useState("");
-  const [muscleGroup, setMuscleGroup] = useState(
-    getValidMuscleGroup(exercise.primaryMuscleGroup)
-  );
-
-  const debouncedQuery = useDebouncedValue(query, 350);
-
   const isPro = subscriptionAccess.hasProAccess;
 
-  // Reset state when modal opens or when switching to manual mode
+  const [swapMode, setSwapMode] = useState<'choose' | 'ai' | 'manual' | 'create_custom'>(
+    'choose'
+  );
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [query, setQuery] = useState('');
+  const [muscleGroup, setMuscleGroup] = useState(getValidMuscleGroup(exercise.primaryMuscleGroup));
+  const [returnToManualAfterCreateClose, setReturnToManualAfterCreateClose] = useState(true);
+
+  const debouncedQuery = useDebouncedValue(query, 350);
+  const apiHost = API_BASE_URL.replace(/\/api$/, '');
+
   useEffect(() => {
-    if (visible) {
-      setMuscleGroup(getValidMuscleGroup(exercise.primaryMuscleGroup));
-      setQuery("");
+    if (!visible) {
+      setSwapMode('choose');
+      setIsSwapping(false);
+      setShowUpgradePrompt(false);
+      setQuery('');
+      setReturnToManualAfterCreateClose(true);
+      return;
     }
+
+    setSwapMode('choose');
+    setIsSwapping(false);
+    setShowUpgradePrompt(false);
+    setQuery('');
+    setReturnToManualAfterCreateClose(true);
+    setMuscleGroup(getValidMuscleGroup(exercise.primaryMuscleGroup));
   }, [visible, exercise.primaryMuscleGroup]);
 
-  // Reset muscle group when switching to manual swap mode
-  useEffect(() => {
-    if (swapMode === "manual") {
-      const validGroup = getValidMuscleGroup(exercise.primaryMuscleGroup);
-      console.log("Setting muscle group:", validGroup, "from", exercise.primaryMuscleGroup);
-      setMuscleGroup(validGroup);
-      setQuery("");
-    }
-  }, [swapMode, exercise.primaryMuscleGroup]);
-
-  // Query for manual exercise selection
   const manualExercisesQuery = useQuery({
-    queryKey: ["exercises-all", debouncedQuery, muscleGroup],
+    queryKey: ['exercises-all', debouncedQuery, muscleGroup],
     queryFn: () =>
       searchAllExercises({
         query: debouncedQuery || undefined,
-        muscleGroup: muscleGroup === "all" ? undefined : muscleGroup,
+        muscleGroup: muscleGroup === 'all' ? undefined : muscleGroup,
       }),
-    enabled: swapMode === "manual",
+    enabled: visible && swapMode === 'manual',
     staleTime: 1000 * 60 * 5,
   });
 
-  // Combine library and custom exercises
   const allExercises = [
     ...(manualExercisesQuery.data?.library ?? []),
     ...(manualExercisesQuery.data?.custom ?? []),
   ];
+
+  const resetAndClose = () => {
+    setSwapMode('choose');
+    setIsSwapping(false);
+    onClose();
+  };
+
+  const applySwap = (selectedExercise: Exercise, options?: { showAlert?: boolean }) => {
+    onSwap({
+      exerciseId: selectedExercise.id,
+      exerciseName: selectedExercise.name,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      restSeconds: exercise.restSeconds,
+      gifUrl: selectedExercise.gifUrl,
+      primaryMuscleGroup: selectedExercise.primaryMuscleGroup,
+    });
+
+    if (options?.showAlert !== false) {
+      Alert.alert('Exercise Swapped!', `Swapped to ${selectedExercise.name}`);
+    }
+    resetAndClose();
+  };
 
   const handleAISwap = async () => {
     if (!isPro) {
@@ -126,81 +149,62 @@ const ExerciseSwapModal = ({
       const result = await swapExercise({
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.exerciseName,
-        primaryMuscleGroup: exercise.primaryMuscleGroup || "chest",
-        reason: "User requested alternative exercise",
+        primaryMuscleGroup: exercise.primaryMuscleGroup || 'chest',
+        reason: 'User requested alternative exercise',
       });
 
       if (!result.exerciseId) {
-        Alert.alert(
-          "No Alternative Found",
-          "Couldn't find a suitable alternative for this exercise."
-        );
+        Alert.alert('No Alternative Found', "Couldn't find a suitable alternative for this exercise.");
         setIsSwapping(false);
         return;
       }
 
       onSwap({
         exerciseId: result.exerciseId,
-        exerciseName: result.exerciseName || "Unknown Exercise",
+        exerciseName: result.exerciseName || 'Unknown Exercise',
         sets: exercise.sets,
         reps: exercise.reps,
         restSeconds: exercise.restSeconds,
+        gifUrl: result.gifUrl,
+        primaryMuscleGroup: result.primaryMuscleGroup,
       });
 
       Alert.alert(
-        "Exercise Swapped!",
-        `Swapped to ${result.exerciseName}${
-          result.reasoning ? `\n\n${result.reasoning}` : ""
-        }`
+        'Exercise Swapped!',
+        `Swapped to ${result.exerciseName}${result.reasoning ? `\n\n${result.reasoning}` : ''}`
       );
 
       resetAndClose();
     } catch (error: any) {
       Alert.alert(
-        "Swap Failed",
-        error?.response?.data?.message ||
-          "Failed to swap exercise. Please try again."
+        'Swap Failed',
+        error?.response?.data?.message || 'Failed to swap exercise. Please try again.'
       );
       setIsSwapping(false);
     }
   };
 
-  const resetAndClose = () => {
-    setSwapMode("choose");
-    setIsSwapping(false);
-    onClose();
+  const handleCreateCustom = () => {
+    setReturnToManualAfterCreateClose(true);
+    setSwapMode('create_custom');
   };
 
-  const apiHost = API_BASE_URL.replace(/\/api$/, "");
-
-  const getImageUrl = (exerciseId: string) => {
-    return `${API_BASE_URL}/exercises/${exerciseId}/image/0`;
-  };
-
-  const handleManualSwapSelect = (selectedExercise: Exercise) => {
-    onSwap({
-      exerciseId: selectedExercise.id,
-      exerciseName: selectedExercise.name,
-      sets: exercise.sets,
-      reps: exercise.reps,
-      restSeconds: exercise.restSeconds,
-    });
-
-    Alert.alert("Exercise Swapped!", `Swapped to ${selectedExercise.name}`);
-    resetAndClose();
+  const handleCustomCreated = (created: Exercise) => {
+    setReturnToManualAfterCreateClose(false);
+    applySwap(created, { showAlert: false });
   };
 
   const renderManualExercise = ({ item }: { item: Exercise }) => {
     const imageUri =
-      item.gifUrl && item.gifUrl.startsWith("http")
+      item.gifUrl && item.gifUrl.startsWith('http')
         ? item.gifUrl
         : item.gifUrl
-        ? `${apiHost}${item.gifUrl}`
-        : undefined;
+          ? `${apiHost}${item.gifUrl}`
+          : undefined;
 
     return (
       <Pressable
-        onPress={() => handleManualSwapSelect(item)}
+        onPress={() => applySwap(item)}
         style={({ pressed }) => ({
           backgroundColor: colors.surface,
           borderRadius: 14,
@@ -211,7 +215,7 @@ const ExerciseSwapModal = ({
           opacity: pressed ? 0.7 : 1,
         })}
       >
-        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           {imageUri ? (
             <Image
               source={{ uri: imageUri }}
@@ -230,15 +234,15 @@ const ExerciseSwapModal = ({
                 height: 68,
                 borderRadius: 12,
                 backgroundColor: colors.surfaceMuted,
-                alignItems: "center",
-                justifyContent: "center",
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               <Ionicons name="fitness-outline" color={colors.textSecondary} size={28} />
             </View>
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
               <Text
                 style={{
                   ...typography.title,
@@ -249,10 +253,10 @@ const ExerciseSwapModal = ({
               >
                 {item.name}
               </Text>
-              {item.isCustom && (
+              {item.isCustom ? (
                 <View
                   style={{
-                    backgroundColor: "rgba(34,197,94,0.15)",
+                    backgroundColor: 'rgba(34,197,94,0.15)',
                     paddingHorizontal: 6,
                     paddingVertical: 2,
                     borderRadius: 4,
@@ -271,23 +275,13 @@ const ExerciseSwapModal = ({
                     CUSTOM
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
-            <Text
-              style={{
-                ...typography.caption,
-                color: colors.textSecondary,
-                marginTop: 4,
-              }}
-            >
-              {item.primaryMuscleGroup} • {item.equipment || "Bodyweight"}
+            <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
+              {item.primaryMuscleGroup} • {item.equipment || 'Bodyweight'}
             </Text>
           </View>
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
-          />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </View>
       </Pressable>
     );
@@ -301,282 +295,13 @@ const ExerciseSwapModal = ({
         feature="Smart Exercise Swap"
       />
 
-      <Modal visible={visible && swapMode !== "manual"} animationType="slide" transparent>
-        <Pressable
-          onPress={resetAndClose}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              maxHeight: "85%",
-              borderWidth: 1,
-              borderColor: colors.border,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {/* Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-                  Swap Exercise
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 2 }}>
-                  {exercise.exerciseName}
-                </Text>
-              </View>
-              <Pressable
-                onPress={resetAndClose}
-                style={({ pressed }) => ({
-                  padding: 8,
-                  borderRadius: 8,
-                  backgroundColor: pressed ? colors.surfaceMuted : "transparent",
-                })}
-              >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            {/* Content */}
-            {swapMode === "choose" && (
-              <View style={{ padding: 16, gap: 12 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 14,
-                    marginBottom: 4,
-                  }}
-                >
-                  Choose how you'd like to swap this exercise:
-                </Text>
-
-                {/* Smart Swap Option */}
-                <Pressable
-                  onPress={() => setSwapMode("ai")}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 14,
-                    padding: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: colors.primary,
-                    backgroundColor: pressed
-                      ? `${colors.primary}10`
-                      : colors.surfaceMuted,
-                  })}
-                >
-                  <View
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 12,
-                      backgroundColor: `${colors.primary}20`,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 28 }}>🎯</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 16,
-                        }}
-                      >
-                        Smart Swap
-                      </Text>
-                      {!isPro && (
-                        <View
-                          style={{
-                            backgroundColor: colors.primary,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 4,
-                          }}
-                        >
-                          <Text
-                            style={{ color: "#0B1220", fontSize: 9, fontWeight: "700" }}
-                          >
-                            PRO
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                      Find the best alternative based on your goals
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </Pressable>
-
-                {/* Manual Swap Option */}
-                <Pressable
-                  onPress={() => setSwapMode("manual")}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 14,
-                    padding: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-                  })}
-                >
-                  <View
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 12,
-                      backgroundColor: `${colors.secondary}20`,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 28 }}>📋</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 16,
-                      }}
-                    >
-                      Manual Swap
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                      Browse and choose from available exercises
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Smart Swap Confirmation */}
-            {swapMode === "ai" && (
-              <View style={{ padding: 16, gap: 16 }}>
-                <Pressable
-                  onPress={() => setSwapMode("choose")}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    opacity: pressed ? 0.6 : 1,
-                    alignSelf: "flex-start",
-                  })}
-                >
-                  <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Back</Text>
-                </Pressable>
-
-                <View
-                  style={{
-                    backgroundColor: colors.surfaceMuted,
-                    padding: 16,
-                    borderRadius: 14,
-                    gap: 10,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 32 }}>🎯</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 16,
-                        }}
-                      >
-                        Smart Exercise Swap
-                      </Text>
-                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-                        We'll use your profile to find the best alternative
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <Pressable
-                  onPress={handleAISwap}
-                  disabled={isSwapping}
-                  style={({ pressed }) => ({
-                    paddingVertical: 16,
-                    borderRadius: 14,
-                    backgroundColor: colors.primary,
-                    alignItems: "center",
-                    opacity: pressed || isSwapping ? 0.7 : 1,
-                  })}
-                >
-                  {isSwapping ? (
-                    <ActivityIndicator color={colors.surface} />
-                  ) : (
-                    <Text
-                      style={{
-                        color: colors.surface,
-                        fontFamily: fontFamilies.semibold,
-                        fontSize: 16,
-                      }}
-                    >
-                      Find Alternative
-                    </Text>
-                  )}
-                </Pressable>
-
-                {isSwapping && (
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      textAlign: "center",
-                    }}
-                  >
-                    This may take a few seconds...
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {/* Manual Swap - Not rendered in bottom sheet, handled separately */}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Manual Swap Full-Screen Modal */}
       <Modal
-        visible={swapMode === "manual"}
+        visible={visible && swapMode !== 'create_custom'}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setSwapMode("choose")}
+        onRequestClose={resetAndClose}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.background,
-          }}
-        >
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
           <View
             style={{
               paddingHorizontal: 16,
@@ -589,150 +314,381 @@ const ExerciseSwapModal = ({
           >
             <View
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
               }}
             >
-              <Text
-                style={{
-                  ...typography.heading2,
-                  color: colors.textPrimary,
-                }}
-              >
-                Swap Exercise
-              </Text>
-              <Pressable onPress={() => setSwapMode("choose")} hitSlop={8}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                {swapMode !== 'choose' ? (
+                  <Pressable
+                    onPress={() => setSwapMode('choose')}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      padding: 8,
+                      borderRadius: 10,
+                      backgroundColor: pressed ? colors.surfaceMuted : 'transparent',
+                    })}
+                  >
+                    <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
+                  </Pressable>
+                ) : null}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+                    Swap exercise
+                  </Text>
+                  <Text
+                    style={{ color: colors.textSecondary, fontSize: 14, marginTop: 2 }}
+                    numberOfLines={1}
+                  >
+                    {exercise.exerciseName}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable onPress={resetAndClose} hitSlop={8}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 14,
-                marginTop: 4,
-                marginBottom: 12,
-              }}
-            >
-              Swapping: {exercise.exerciseName}
-            </Text>
-
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 14,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 12,
-                backgroundColor: colors.surfaceMuted,
-              }}
-            >
-              <Ionicons name="search" color={colors.textSecondary} size={18} />
-              <TextInput
-                placeholder="Search by name"
-                placeholderTextColor={colors.textSecondary}
-                style={{
-                  flex: 1,
-                  paddingVertical: 10,
-                  paddingHorizontal: 10,
-                  color: colors.textPrimary,
-                  fontFamily: fontFamilies.regular,
-                }}
-                value={query}
-                onChangeText={setQuery}
-              />
-            </View>
-
-            <FlatList
-              data={muscleGroups}
-              keyExtractor={(item) => item}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
-              renderItem={({ item }) => {
-                const isActive = item === muscleGroup;
-                return (
-                  <Pressable
-                    onPress={() => setMuscleGroup(item)}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 999,
-                      backgroundColor: isActive ? colors.primary : colors.surfaceMuted,
-                      borderWidth: 1,
-                      borderColor: isActive ? colors.primary : colors.border,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fontFamilies.semibold,
-                        color: isActive ? colors.surface : colors.textPrimary,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {item}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-
-          <FlatList
-            data={allExercises.filter(
-              (ex) => ex.id !== exercise.exerciseId
-            )}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 12,
-              paddingBottom: 120,
-            }}
-            renderItem={renderManualExercise}
-            keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={
-              manualExercisesQuery.isFetching ? (
-                <View style={{ paddingVertical: 8 }}>
-                  <ActivityIndicator color={colors.primary} />
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              !manualExercisesQuery.isFetching ? (
+            {swapMode === 'manual' ? (
+              <>
                 <View
                   style={{
-                    padding: 20,
-                    alignItems: "center",
-                    gap: 6,
+                    marginTop: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 12,
+                    backgroundColor: colors.surfaceMuted,
                   }}
                 >
-                  <Text
+                  <Ionicons name="search" color={colors.textSecondary} size={18} />
+                  <TextInput
+                    placeholder="Search by name"
+                    placeholderTextColor={colors.textSecondary}
                     style={{
-                      ...typography.title,
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 10,
                       color: colors.textPrimary,
+                      fontFamily: fontFamilies.regular,
                     }}
-                  >
-                    No exercises found
-                  </Text>
-                  <Text
-                    style={{
-                      ...typography.caption,
-                      color: colors.textSecondary,
-                    }}
-                  >
-                    Try another muscle group or a simpler search.
+                    value={query}
+                    onChangeText={setQuery}
+                  />
+                </View>
+
+                <FlatList
+                  data={muscleGroups}
+                  keyExtractor={(item) => item}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
+                  renderItem={({ item }) => {
+                    const isActive = item === muscleGroup;
+                    return (
+                      <Pressable
+                        onPress={() => setMuscleGroup(item)}
+                        style={({ pressed }) => ({
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 999,
+                          backgroundColor: isActive ? colors.primary : colors.surfaceMuted,
+                          borderWidth: 1,
+                          borderColor: isActive ? colors.primary : colors.border,
+                          opacity: pressed ? 0.9 : 1,
+                        })}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: fontFamilies.semibold,
+                            color: isActive ? colors.surface : colors.textPrimary,
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {item}
+                        </Text>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </>
+            ) : null}
+          </View>
+
+          {swapMode === 'choose' ? (
+            <View style={{ padding: 16, gap: 12, paddingBottom: 16 + Math.max(0, insets.bottom) }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 4 }}>
+                Choose how you&apos;d like to swap this exercise:
+              </Text>
+
+              <Pressable
+                onPress={() => setSwapMode('ai')}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  padding: 16,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  backgroundColor: pressed ? `${colors.primary}10` : colors.surfaceMuted,
+                })}
+              >
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 12,
+                    backgroundColor: `${colors.primary}20`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 28 }}>🎯</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 16,
+                      }}
+                    >
+                      Smart Swap
+                    </Text>
+                    {!isPro ? (
+                      <View
+                        style={{
+                          backgroundColor: colors.primary,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text style={{ color: '#0B1220', fontSize: 9, fontWeight: '700' }}>
+                          PRO
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                    Find the best alternative based on your goals
                   </Text>
                 </View>
-              ) : null
-            }
-          />
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => setSwapMode('manual')}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  padding: 16,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? `${colors.secondary}10` : colors.surfaceMuted,
+                })}
+              >
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 12,
+                    backgroundColor: `${colors.secondary}20`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 28 }}>📋</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 16,
+                    }}
+                  >
+                    Manual Swap
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                    Browse and choose from available exercises
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
+
+          {swapMode === 'ai' ? (
+            <View style={{ padding: 16, gap: 16, paddingBottom: 16 + Math.max(0, insets.bottom) }}>
+              <View
+                style={{
+                  backgroundColor: colors.surfaceMuted,
+                  padding: 16,
+                  borderRadius: 14,
+                  gap: 10,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ fontSize: 32 }}>🎯</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 16,
+                      }}
+                    >
+                      Smart Exercise Swap
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                      We&apos;ll use your profile to find the best alternative
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={handleAISwap}
+                disabled={isSwapping}
+                style={({ pressed }) => ({
+                  paddingVertical: 16,
+                  borderRadius: 14,
+                  backgroundColor: colors.primary,
+                  alignItems: 'center',
+                  opacity: pressed || isSwapping ? 0.7 : 1,
+                })}
+              >
+                {isSwapping ? (
+                  <ActivityIndicator color={colors.surface} />
+                ) : (
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 16,
+                    }}
+                  >
+                    Find Alternative
+                  </Text>
+                )}
+              </Pressable>
+
+              {isSwapping ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center' }}>
+                  This may take a few seconds...
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {swapMode === 'manual' ? (
+            <FlatList
+              data={allExercises.filter((ex) => ex.id !== exercise.exerciseId)}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: 120 + Math.max(0, insets.bottom),
+              }}
+              renderItem={renderManualExercise}
+              keyboardShouldPersistTaps="handled"
+              ListHeaderComponent={
+                manualExercisesQuery.isFetching ? (
+                  <View style={{ paddingVertical: 8 }}>
+                    <ActivityIndicator color={colors.primary} />
+                  </View>
+                ) : null
+              }
+              ListFooterComponent={
+                <Pressable
+                  onPress={handleCreateCustom}
+                  style={({ pressed }) => ({
+                    marginTop: 8,
+                    backgroundColor: colors.surface,
+                    borderRadius: 14,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.9 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: `${colors.primary}18`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="add" size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...typography.body, color: colors.textPrimary }}>
+                      Create custom exercise
+                    </Text>
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                      {debouncedQuery ? `Add "${debouncedQuery}" to your library` : 'Use your own movement'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </Pressable>
+              }
+              ListEmptyComponent={
+                !manualExercisesQuery.isFetching ? (
+                  <View style={{ padding: 20, alignItems: 'center', gap: 6 }}>
+                    <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                      No exercises found
+                    </Text>
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                      Try another muscle group or a simpler search.
+                    </Text>
+                    <Pressable
+                      onPress={handleCreateCustom}
+                      style={({ pressed }) => ({
+                        marginTop: 10,
+                        backgroundColor: colors.primary,
+                        paddingVertical: 12,
+                        paddingHorizontal: 20,
+                        borderRadius: 12,
+                        opacity: pressed ? 0.92 : 1,
+                      })}
+                    >
+                      <Text style={{ fontFamily: fontFamilies.semibold, color: colors.surface }}>
+                        Create custom exercise
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null
+              }
+            />
+          ) : null}
         </View>
       </Modal>
+
+      <CreateCustomExerciseModal
+        visible={visible && swapMode === 'create_custom'}
+        onClose={() => setSwapMode(returnToManualAfterCreateClose ? 'manual' : 'choose')}
+        onCreated={handleCustomCreated}
+        initialName={debouncedQuery || exercise.exerciseName}
+      />
     </>
   );
 };
 
 export default ExerciseSwapModal;
+

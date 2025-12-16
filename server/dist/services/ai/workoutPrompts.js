@@ -112,8 +112,46 @@ const buildWorkoutGenerationPrompt = (params, availableExercises) => {
             .replace(/target|emphasize|please/gi, "")
             .trim()
         : "";
+    const normalizeWord = (word) => {
+        const raw = word.toLowerCase().trim();
+        if (!raw)
+            return "";
+        if (raw === "squad" || raw === "squads")
+            return "squat";
+        if (raw.length > 3 && raw.endsWith("s") && !raw.endsWith("ss"))
+            return raw.slice(0, -1);
+        return raw;
+    };
+    const tokenize = (value) => value
+        .toLowerCase()
+        .replace(/[_-]/g, " ")
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .map(normalizeWord)
+        .filter(Boolean);
+    const excluded = (params.excludedExercises || [])
+        .map((item) => tokenize(String(item)))
+        .filter((tokens) => tokens.length > 0)
+        .map((tokens) => tokens.join(" "));
+    const excludedPatterns = excluded
+        .map((item) => item.split(" ").map(normalizeWord).filter(Boolean))
+        .filter((tokens) => tokens.length > 0);
+    const isExcluded = (value) => {
+        if (!value)
+            return false;
+        const candidateWords = tokenize(value);
+        if (candidateWords.length === 0)
+            return false;
+        const candidateSet = new Set(candidateWords);
+        return excludedPatterns.some((pattern) => pattern.every((token) => candidateSet.has(token)));
+    };
+    const exclusionNotice = excluded.length > 0
+        ? `\n\n🚫 CRITICAL: Never include these exercises under any circumstances: ${excluded.join(", ")}. If an excluded exercise appears in history or fatigue data, substitute it with a different movement for the same muscle group.`
+        : "";
     // Filter exercises if specific muscle groups are requested
-    let exercisesToUse = availableExercises;
+    let exercisesToUse = availableExercises.filter((ex) => !isExcluded(ex.id) && !isExcluded(ex.name));
     let muscleGroupFilter = "";
     if (params.specificRequest &&
         params.specificRequest.toLowerCase().includes("focus on")) {
@@ -169,7 +207,7 @@ ${(0, exports.formatFatigueScores)(params.muscleFatigue)}
 # WORKOUT REQUEST
 Split Type: ${requestedSplit}${params.specificRequest
         ? `\nSpecific Request: ${params.specificRequest}`
-        : ""}${muscleGroupFilter}
+        : ""}${muscleGroupFilter}${exclusionNotice}
 
 # RECOVERY-BASED GUIDANCE
 ${formatFatigueTargets(params.fatigueTargets)}
@@ -190,6 +228,9 @@ ${exercisesToUse
    - Use the human-friendly exercise name from the list (never the ID/slug) so photos and labels render correctly
    - Respect equipment limitations (only select exercises matching available equipment)
    - Avoid exercises that conflict with stated injuries/limitations
+   - ${excluded.length > 0
+        ? `Absolutely exclude these exercises and their close variants: ${excluded.join(", ")}`
+        : "If the user mentions any exclusions, never include them"}
    - ${params.specificRequest
         ? "⚠️ CRITICAL: ALL exercises must target the specified muscle groups - do NOT include exercises for other muscle groups"
         : "Follow the split type guidelines strictly"}
@@ -283,6 +324,7 @@ Find the best alternative exercise that:
 2. Works with available equipment
 3. Addresses the reason for substitution
 4. Is biomechanically similar if possible
+5. Must be chosen **only** from the provided database entries above (no custom exercises)
 
 Respond with ONLY valid JSON:
 {

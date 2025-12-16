@@ -3,6 +3,7 @@ import {
   Modal,
   Pressable,
   Platform,
+  StyleSheet,
   Text,
   View,
   ActivityIndicator,
@@ -21,12 +22,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useActiveSession } from "../hooks/useActiveSession";
+import { useUpNextRecommendation } from "../hooks/useUpNextRecommendation";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { WorkoutSession, WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
+import UpNextCard from "../components/workout/UpNextCard";
 import { generateWorkout, recommendNextWorkout } from "../api/ai";
 import { deleteTemplate } from "../api/templates";
 import { deleteSession, undoAutoEndSession } from "../api/sessions";
@@ -89,6 +92,15 @@ const HomeScreen = () => {
   // Fetch fatigue data for all users (free users can see heatmap)
   const { data: fatigue, isLoading: fatigueLoading, refetch: refetchFatigue } =
     useFatigue(true);
+
+  // Fetch Up Next intelligent recommendation
+  const {
+    data: upNextRecommendation,
+    isLoading: upNextLoading,
+    isError: upNextError,
+    refetch: refetchUpNext,
+  } = useUpNextRecommendation();
+
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
@@ -146,7 +158,8 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       void refetchFatigue();
-    }, [refetchFatigue])
+      void refetchUpNext();
+    }, [refetchFatigue, refetchUpNext])
   );
 
   const closePaywall = () => {
@@ -166,6 +179,30 @@ const HomeScreen = () => {
     if (!template) return;
     navigation.navigate("WorkoutSession", { templateId: template.id });
   };
+
+  // Generate workout mutation for Up Next card
+  const generateUpNextMutation = useMutation({
+    mutationFn: async (splitKey: string) => {
+      const workout = await generateWorkout({
+        requestedSplit: splitKey,
+      });
+      return workout;
+    },
+    onSuccess: (workout) => {
+      navigation.navigate("WorkoutPreview", { workout });
+    },
+    onError: (error: any) => {
+      if (error?.response?.data?.requiresUpgrade) {
+        openPaywall("ai");
+        return;
+      }
+      Alert.alert(
+        "Generation Failed",
+        error?.response?.data?.message ||
+          "Failed to generate workout. Please try again."
+      );
+    },
+  });
 
   const cancelActiveWorkout = useMutation({
     mutationFn: async (sessionId: string) => {
@@ -592,7 +629,9 @@ const HomeScreen = () => {
               Up Next
             </Text>
             <Text style={{ ...typography.body, color: colors.textSecondary }}>
-              Built from your history. Swap for another saved workout anytime.
+              {upNextRecommendation?.recommendedSplit
+                ? `Based on your ${user?.onboardingData?.preferredSplit ? TRAINING_SPLIT_LABELS[user.onboardingData.preferredSplit] : "training"} split`
+                : "Built from your history"}
             </Text>
           </View>
           <Pressable
@@ -618,153 +657,37 @@ const HomeScreen = () => {
           </Pressable>
         </View>
 
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 12,
+        <UpNextCard
+          recommendation={upNextRecommendation ?? null}
+          isLoading={upNextLoading || generateUpNextMutation.isPending}
+          isError={upNextError}
+          isPro={isPro}
+          onStartTemplate={(templateId) => {
+            navigation.navigate("WorkoutSession", { templateId });
           }}
-        >
-          {upNext ? (
-            <>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      ...typography.heading2,
-                      color: colors.textPrimary,
-                    }}
-                  >
-                    {upNext.name}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    {upNext.exercises.length} exercises ·{" "}
-                    {upNext.splitType ?? "Custom"}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setSwapOpen(true)}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.secondary,
-                    backgroundColor: colors.surfaceMuted,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: colors.secondary,
-                      fontFamily: fontFamilies.semibold,
-                    }}
-                  >
-                    Swap
-                  </Text>
-                </Pressable>
-              </View>
+          onGenerate={(splitKey) => {
+            // Auto-generate workout for the recommended split
+            generateUpNextMutation.mutate(splitKey);
+          }}
+          onCreate={() => {
+            // Go directly to manual workout builder
+            navigation.navigate("WorkoutTemplateBuilder", {});
+          }}
+          onSwap={() => setSwapOpen(true)}
+          onEditTemplate={(templateId) => {
+            navigation.navigate("WorkoutTemplateBuilder", { templateId });
+          }}
+          onUpgrade={() => openPaywall("ai")}
+        />
 
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                <Chip label='Duration · 60-75m' />
-                <Chip label={upNext.splitType ?? "Custom"} />
-                <Chip label='Hypertrophy' />
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <Pressable
-                  onPress={() => startWorkout(upNext)}
-                  style={({ pressed }) => ({
-                    backgroundColor: colors.primary,
-                    paddingVertical: 16,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    flex: 1,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: colors.surface,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 16,
-                    }}
-                  >
-                    Start workout
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate("WorkoutTemplateBuilder", {
-                      templateId: upNext.id,
-                    })
-                  }
-                  style={({ pressed }) => ({
-                    paddingVertical: 16,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceMuted,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 16,
-                    }}
-                  >
-                    Edit
-                  </Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <View style={{ gap: 10 }}>
-              <Text style={{ ...typography.title, color: colors.textPrimary }}>
-                No saved workouts yet
-              </Text>
-              <Text style={{ color: colors.textSecondary }}>
-                Choose how to get started with your first workout.
-              </Text>
-              <Pressable
-                onPress={() => setSwapOpen(true)}
-                style={({ pressed }) => ({
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                  backgroundColor: colors.primary,
-                  alignItems: "center",
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text
-                  style={{
-                    color: colors.surface,
-                    fontFamily: fontFamilies.semibold,
-                  }}
-                >
-                  Get Started
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        <MuscleGroupBreakdown template={upNext} />
+        {/* Show muscle breakdown for matched template or first template */}
+        <MuscleGroupBreakdown
+          template={
+            upNextRecommendation?.matchedTemplate
+              ? templates?.find((t) => t.id === upNextRecommendation.matchedTemplate?.templateId) ?? upNext
+              : upNext
+          }
+        />
 
         {user?.onboardingData && (
           <View
@@ -1482,15 +1405,23 @@ const SwapModal = ({
   ];
 
   return (
-    <Modal visible={visible} animationType='slide' transparent>
-      <Pressable
-        onPress={onClose}
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.6)",
-          justifyContent: "flex-end",
-        }}
-      >
+    <Modal
+      visible={visible}
+      animationType='slide'
+      transparent
+      presentationStyle='overFullScreen'
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole='button'
+          accessibilityLabel='Close workout chooser'
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "rgba(0,0,0,0.6)" },
+          ]}
+        />
         <View
           style={{
             backgroundColor: colors.surface,
@@ -2490,7 +2421,7 @@ const SwapModal = ({
             </>
           )}
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 };

@@ -2349,6 +2349,8 @@ const WorkoutSessionScreen = () => {
       sets?: number;
       reps?: number;
       restSeconds?: number;
+      gifUrl?: string;
+      primaryMuscleGroup?: string;
     }
   ) => {
     setSets((prev) =>
@@ -2362,6 +2364,7 @@ const WorkoutSessionScreen = () => {
             targetReps: newExercise.reps ?? set.targetReps,
             targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
             actualReps: newExercise.reps ?? set.actualReps,
+            exerciseImageUrl: newExercise.gifUrl ?? set.exerciseImageUrl,
             targetWeight: undefined,
             actualWeight: undefined,
             targetDistance: undefined,

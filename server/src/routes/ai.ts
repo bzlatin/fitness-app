@@ -235,6 +235,43 @@ const uniqStrings = (items: string[]) =>
     new Set(items.map((item) => item.toLowerCase().trim()).filter((item) => item.length > 0))
   );
 
+const normalizeExcludedExercises = (value?: unknown): string[] | undefined => {
+  const normalizeWord = (word: string) => {
+    const raw = word.toLowerCase().trim();
+    if (!raw) return "";
+    if (raw === "squad" || raw === "squads") return "squat";
+    if (raw.length > 3 && raw.endsWith("s") && !raw.endsWith("ss")) return raw.slice(0, -1);
+    return raw;
+  };
+  const normalizePhrase = (phrase: string) =>
+    phrase
+      .toLowerCase()
+      .replace(/[_-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .map(normalizeWord)
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;]+/)
+      : [];
+
+  const normalized = list
+    .flatMap((item) =>
+      typeof item === "string" && item.includes("/") ? item.split("/") : item
+    )
+    .map((item) => normalizePhrase(String(item || "")))
+    .filter((item) => item.length > 0);
+
+  const unique = Array.from(new Set(normalized));
+  return unique.length > 0 ? unique : undefined;
+};
+
 /**
  * POST /api/ai/generate-workout
  * Generate a personalized workout using AI
@@ -280,6 +317,17 @@ router.post(
         readOnboardingField(onboardingData, ["availableEquipment", "available_equipment"]),
       readOnboardingField(onboardingData, ["customEquipment", "custom_equipment"])
     );
+    const excludedExercises =
+      normalizeExcludedExercises(
+        readOnboardingField(onboardingData, [
+          "excludedExercises",
+          "excluded_exercises",
+          "avoidExercises",
+          "avoid_exercises",
+          "movementsToAvoid",
+          "movements_to_avoid",
+        ])
+      ) ?? [];
 
     // Fetch recent workout history and muscle fatigue
     const [recentWorkouts, fatigueResult] = await Promise.all([
@@ -343,6 +391,7 @@ router.post(
       fatigueTargets,
       requestedSplit: finalRequestedSplit,
       specificRequest,
+      excludedExercises,
     };
 
     log.debug("Generating workout", {
@@ -352,6 +401,7 @@ router.post(
       hasFatigueData: Object.keys(muscleFatigue).length > 0,
       targetMuscles: fatigueTargets.prioritize,
       avoidMuscles: fatigueTargets.avoid,
+      excludedExercises,
     });
 
     const { catalog: exerciseCatalog, lookup: exerciseLookup } = await buildExerciseLookup();
@@ -478,7 +528,7 @@ router.post(
         generateId(),
         userId,
         "workout",
-        JSON.stringify({ requestedSplit, specificRequest, overrides }),
+        JSON.stringify({ requestedSplit, specificRequest, overrides, excludedExercises }),
         JSON.stringify(enrichedWorkout),
       ]
     );
@@ -558,7 +608,7 @@ router.post(
     const onboardingData = user?.onboarding_data || {};
     const availableEquipment = onboardingData.available_equipment || ["barbell", "dumbbell", "machine"];
 
-    const { catalog: exerciseCatalog } = await buildExerciseLookup();
+    const { catalog: exerciseCatalog, lookup: exerciseLookup } = await buildExerciseLookup();
 
     // Filter exercises by same muscle group
     const similarExercises = exerciseCatalog.filter(
@@ -612,9 +662,63 @@ router.post(
       toExerciseName: result.exerciseName,
     });
 
+    const resolveExerciseMeta = (id?: string, name?: string) => {
+      if (id) {
+        const direct = exerciseLookup.get(id);
+        if (direct) return direct;
+
+        const normalizedId = id.toLowerCase();
+        for (const [key, value] of exerciseLookup.entries()) {
+          if (key.toLowerCase() === normalizedId) return value;
+        }
+      }
+
+      if (name) {
+        const normalizedName = name.toLowerCase().trim();
+        for (const value of exerciseLookup.values()) {
+          if (value.name.toLowerCase().trim() === normalizedName) return value;
+        }
+      }
+
+      return null;
+    };
+
+    const resolvedMeta = resolveExerciseMeta(result.exerciseId ?? undefined, result.exerciseName);
+
+    if (!resolvedMeta) {
+      return res.status(404).json({
+        error: "No alternatives found",
+        message: "Could not resolve swapped exercise metadata",
+      });
+    }
+
+    const resolvedExercise = {
+      ...result,
+      exerciseId: resolvedMeta.id,
+      exerciseName: resolvedMeta.name,
+      primaryMuscleGroup: resolvedMeta.primaryMuscleGroup,
+      gifUrl: resolvedMeta.gifUrl,
+    };
+
+    if (resolvedExercise.exerciseId === exerciseId) {
+      const fallback = similarExercises.find((ex) => ex.id !== exerciseId);
+      if (fallback) {
+        resolvedExercise.exerciseId = fallback.id;
+        resolvedExercise.exerciseName = fallback.name;
+        resolvedExercise.primaryMuscleGroup = fallback.primaryMuscleGroup;
+        resolvedExercise.gifUrl = fallback.gifUrl;
+      }
+    }
+    if (resolvedExercise.exerciseId === exerciseId) {
+      return res.status(404).json({
+        error: "No alternatives found",
+        message: "Swap returned the original exercise; no change applied",
+      });
+    }
+
     return res.json({
       success: true,
-      exercise: result,
+      exercise: resolvedExercise,
     });
   } catch (error) {
     log.error("Error swapping exercise", { error, userId });
