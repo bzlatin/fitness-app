@@ -52,6 +52,13 @@ type UpNextCardProps = {
   onEditTemplate: (templateId: string) => void;
   onUpgrade: () => void;
   isPro: boolean;
+  // Optional override to display a manually selected template
+  overrideTemplate?: {
+    templateId: string;
+    templateName: string;
+    exerciseCount: number;
+    splitType: string | null;
+  } | null;
 };
 
 /**
@@ -77,6 +84,7 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
   onEditTemplate,
   onUpgrade,
   isPro,
+  overrideTemplate,
 }) => {
   // Loading state
   if (isLoading) {
@@ -102,6 +110,158 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
           }}
         >
           Finding your next workout...
+        </Text>
+      </View>
+    );
+  }
+
+  // Override template - user manually selected a different workout
+  if (overrideTemplate) {
+    const splitEmoji = overrideTemplate.splitType
+      ? SPLIT_EMOJIS[overrideTemplate.splitType] ?? "🎯"
+      : "📋";
+
+    return (
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          gap: 14,
+        }}
+      >
+        {/* Header: Selected template */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: `${colors.primary}15`,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 24 }}>{splitEmoji}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                ...typography.heading2,
+                color: colors.textPrimary,
+                fontSize: 18,
+              }}
+              numberOfLines={1}
+            >
+              {overrideTemplate.templateName}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+              {overrideTemplate.exerciseCount} exercises
+              {overrideTemplate.splitType ? ` • ${overrideTemplate.splitType}` : ""}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onSwap}
+            style={({ pressed }) => ({
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.secondary,
+              backgroundColor: colors.surfaceMuted,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.secondary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              Swap
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Selected template card */}
+        <View
+          style={{
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: colors.surfaceMuted,
+            borderWidth: 1,
+            borderColor: `${colors.primary}30`,
+            gap: 10,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 15,
+                }}
+                numberOfLines={1}
+              >
+                {overrideTemplate.templateName}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                {overrideTemplate.exerciseCount} exercises • Manually selected
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => onEditTemplate(overrideTemplate.templateId)}
+              style={({ pressed }) => ({
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: pressed ? colors.surface : "transparent",
+              })}
+            >
+              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={() => onStartTemplate(overrideTemplate.templateId)}
+            style={({ pressed }) => ({
+              backgroundColor: colors.primary,
+              paddingVertical: 14,
+              borderRadius: 12,
+              alignItems: "center",
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.surface,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
+            >
+              Start workout
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Footer */}
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: 12,
+            textAlign: "center",
+            marginTop: 4,
+          }}
+        >
+          Tap Swap to choose a different workout
         </Text>
       </View>
     );

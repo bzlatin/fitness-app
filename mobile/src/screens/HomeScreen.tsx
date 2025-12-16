@@ -131,6 +131,25 @@ const HomeScreen = () => {
     return templates.find((t) => t.id === selectedTemplateId) ?? templates[0];
   }, [templates, selectedTemplateId]);
 
+  // Compute override template for UpNextCard when user manually selects a different workout
+  const overrideTemplate = useMemo(() => {
+    if (!selectedTemplateId || !templates) return null;
+
+    // Check if the selected template is different from the AI recommendation's matched template
+    const matchedTemplateId = upNextRecommendation?.matchedTemplate?.templateId;
+    if (selectedTemplateId === matchedTemplateId) return null;
+
+    const selected = templates.find((t) => t.id === selectedTemplateId);
+    if (!selected) return null;
+
+    return {
+      templateId: selected.id,
+      templateName: selected.name,
+      exerciseCount: selected.exercises.length,
+      splitType: selected.splitType ?? null,
+    };
+  }, [selectedTemplateId, templates, upNextRecommendation?.matchedTemplate?.templateId]);
+
   const overallRecoveryLabel = useMemo(() => {
     if (!fatigue) return "Recovery calibrating";
     if (fatigue.totals.baselineVolume === null) return "Building baseline";
@@ -662,6 +681,7 @@ const HomeScreen = () => {
           isLoading={upNextLoading || generateUpNextMutation.isPending}
           isError={upNextError}
           isPro={isPro}
+          overrideTemplate={overrideTemplate}
           onStartTemplate={(templateId) => {
             navigation.navigate("WorkoutSession", { templateId });
           }}
