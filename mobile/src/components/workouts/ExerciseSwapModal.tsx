@@ -205,6 +205,8 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
     return (
       <Pressable
         onPress={() => applySwap(item)}
+        onLongPress={() => Alert.alert('Exercise name', item.name)}
+        delayLongPress={300}
         style={({ pressed }) => ({
           backgroundColor: colors.surface,
           borderRadius: 14,
@@ -242,17 +244,25 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
             </View>
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <Text
-                style={{
-                  ...typography.title,
-                  color: colors.textPrimary,
-                  flexShrink: 1,
-                }}
-                numberOfLines={1}
-              >
-                {item.name}
-              </Text>
+            <Text
+              style={{
+                ...typography.title,
+                color: colors.textPrimary,
+              }}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {item.name}
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginTop: 4,
+              }}
+            >
               {item.isCustom ? (
                 <View
                   style={{
@@ -262,7 +272,6 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
                     borderRadius: 4,
                     borderWidth: 1,
                     borderColor: colors.primary,
-                    flexShrink: 0,
                   }}
                 >
                   <Text
@@ -276,10 +285,10 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
                   </Text>
                 </View>
               ) : null}
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                {item.primaryMuscleGroup} • {item.equipment || 'Bodyweight'}
+              </Text>
             </View>
-            <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
-              {item.primaryMuscleGroup} • {item.equipment || 'Bodyweight'}
-            </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </View>
@@ -334,18 +343,19 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
                     <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
                   </Pressable>
                 ) : null}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
-                    Swap exercise
-                  </Text>
-                  <Text
-                    style={{ color: colors.textSecondary, fontSize: 14, marginTop: 2 }}
-                    numberOfLines={1}
-                  >
-                    {exercise.exerciseName}
-                  </Text>
-                </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ ...typography.heading2, color: colors.textPrimary }}>
+                  Swap exercise
+                </Text>
+                <Text
+                  style={{ color: colors.textSecondary, fontSize: 14, marginTop: 2 }}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {exercise.exerciseName}
+                </Text>
               </View>
+            </View>
 
               <Pressable onPress={resetAndClose} hitSlop={8}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
@@ -691,4 +701,3 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
 };
 
 export default ExerciseSwapModal;
-

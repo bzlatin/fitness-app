@@ -340,7 +340,7 @@ CREATE INDEX idx_workout_comments_deleted_at ON workout_comments(deleted_at);
 
 ---
 
-## 5. Edit Profile Name Bug (HIGH PRIORITY)
+## 5. Edit Profile Name Bug (HIGH PRIORITY) ✅ COMPLETE
 
 **Status**: 🐛 BUG - CRITICAL
 **Effort**: Low (30 mins)
@@ -390,9 +390,9 @@ When editing profile name, only one letter changes. Name doesn't update properly
 
 ---
 
-## 6. Long Exercise Names Truncation (LOW PRIORITY)
+## 6. Long Exercise Names Truncation (LOW PRIORITY) ✅ COMPLETE
 
-**Status**: 🐛 UI BUG
+**Status**: ✅ FIXED (2025-12-16)
 **Effort**: Low (15 mins)
 **Impact**: Low - Minor UX annoyance
 
@@ -407,18 +407,19 @@ When manually adding exercises with long names, full name isn't visible.
 **Solution**:
 
 - Use `numberOfLines={2}` on exercise name Text component
-- Add tooltip/long-press to show full name
+- Add tooltip/long-press to show full name (Alert)
 - OR: Increase modal width slightly
 
 **Files to Modify**:
 
-- `/mobile/src/components/workout/ExercisePickerModal.tsx` - Update Text styling
-- Use ellipsis mode: `ellipsizeMode="tail"` with `numberOfLines={2}`
+- `/mobile/src/components/workouts/ExercisePicker.tsx` - Exercise list item name now uses `numberOfLines={2}` + `ellipsizeMode="tail"` + long-press Alert
+- `/mobile/src/components/workouts/ExerciseSwapModal.tsx` - Same treatment for manual swap list + modal header
 
 **Testing**:
 
 - [ ] Long exercise names wrap to 2 lines
 - [ ] Very long names truncate with "..."
+- [ ] Long-press shows full name
 - [ ] Short names don't have extra spacing
 
 ---

@@ -257,18 +257,35 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
             </View>
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <Pressable
+              onLongPress={() => Alert.alert("Exercise name", item.name)}
+              delayLongPress={300}
+              hitSlop={6}
+              style={{ minWidth: 0 }}
+              accessibilityHint="Long press to view the full exercise name"
+            >
               <Text
                 style={{
                   ...typography.title,
                   color: colors.textPrimary,
-                  flexShrink: 1,
                 }}
-                numberOfLines={1}
+                numberOfLines={2}
+                ellipsizeMode="tail"
               >
                 {item.name}
               </Text>
-              {item.isCustom && (
+            </Pressable>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 4,
+              }}
+            >
+              {item.isCustom ? (
                 <View
                   style={{
                     backgroundColor: "rgba(34,197,94,0.15)",
@@ -277,7 +294,6 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
                     borderRadius: 4,
                     borderWidth: 1,
                     borderColor: colors.primary,
-                    flexShrink: 0,
                   }}
                 >
                   <Text
@@ -290,17 +306,11 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
                     CUSTOM
                   </Text>
                 </View>
-              )}
+              ) : null}
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                {item.primaryMuscleGroup} • {item.equipment || "Bodyweight"}
+              </Text>
             </View>
-            <Text
-              style={{
-                ...typography.caption,
-                color: colors.textSecondary,
-                marginTop: 4,
-              }}
-            >
-              {item.primaryMuscleGroup} • {item.equipment || "Bodyweight"}
-            </Text>
           </View>
           {isCustomCategory && item.isCustom ? (
             <Pressable
