@@ -27,6 +27,37 @@ const timingSafeEqual = (a: string, b: string) => {
   return crypto.timingSafeEqual(aBuf, bBuf);
 };
 
+const stripBase64Padding = (value: string) => value.replace(/=+$/g, "");
+
+const base64ToBase64Url = (value: string) =>
+  stripBase64Padding(value).replace(/\+/g, "-").replace(/\//g, "_");
+
+const extractSignatureCandidates = (header: string) => {
+  const raw = header.trim();
+  if (!raw) return [];
+
+  // Accept common patterns:
+  // - "sha256=<sig>"
+  // - "<sig>"
+  // - "t=...,v1=<sig>" (stripe-style)
+  // - comma/semicolon separated lists
+  const parts = raw.split(/[,;]+/).map((part) => part.trim()).filter(Boolean);
+  const candidates: string[] = [];
+
+  for (const part of parts) {
+    const withoutPrefix = part.replace(/^sha256=/i, "").trim();
+    if (withoutPrefix) candidates.push(withoutPrefix);
+
+    const eqIdx = part.indexOf("=");
+    if (eqIdx >= 0 && eqIdx < part.length - 1) {
+      const afterEq = part.slice(eqIdx + 1).trim();
+      if (afterEq) candidates.push(afterEq);
+    }
+  }
+
+  return Array.from(new Set(candidates.map((c) => c.trim()).filter(Boolean)));
+};
+
 const maybeVerifyAppStoreConnectSignature = (req: RawBodyRequest) => {
   const secret = process.env.APPSTORE_WEBHOOK_SECRET?.trim();
   if (!secret) return { ok: true as const };
@@ -43,22 +74,36 @@ const maybeVerifyAppStoreConnectSignature = (req: RawBodyRequest) => {
       error: "Missing signature header",
     };
 
-  const provided = header.replace(/^sha256=/i, "").trim();
+  const providedCandidates = extractSignatureCandidates(header);
+  if (providedCandidates.length === 0) {
+    return { ok: false as const, status: 401, error: "Missing signature value" };
+  }
+
   const raw = req.rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
   const computedBase64 = crypto
     .createHmac("sha256", secret)
     .update(raw)
     .digest("base64");
+  const computedBase64NoPad = stripBase64Padding(computedBase64);
+  const computedBase64Url = base64ToBase64Url(computedBase64);
   const computedHex = crypto
     .createHmac("sha256", secret)
     .update(raw)
     .digest("hex");
 
-  const matches =
-    timingSafeEqual(provided, computedBase64) ||
-    timingSafeEqual(provided, computedHex) ||
-    timingSafeEqual(provided, `sha256=${computedBase64}`) ||
-    timingSafeEqual(provided, `sha256=${computedHex}`);
+  const matches = providedCandidates.some((provided) => {
+    const normalized = provided.replace(/^sha256=/i, "").trim();
+    const normalizedHex = /^[0-9a-fA-F]+$/.test(normalized)
+      ? normalized.toLowerCase()
+      : normalized;
+
+    return (
+      timingSafeEqual(normalized, computedBase64) ||
+      timingSafeEqual(normalized, computedBase64NoPad) ||
+      timingSafeEqual(normalized, computedBase64Url) ||
+      timingSafeEqual(normalizedHex, computedHex)
+    );
+  });
 
   if (!matches)
     return { ok: false as const, status: 401, error: "Invalid signature" };
