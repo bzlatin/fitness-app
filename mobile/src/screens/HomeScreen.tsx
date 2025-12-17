@@ -211,13 +211,14 @@ const HomeScreen = () => {
       navigation.navigate("WorkoutPreview", { workout });
     },
     onError: (error: any) => {
-      if (error?.response?.data?.requiresUpgrade) {
+      if (error?.response?.data?.requiresUpgrade || error?.requiresUpgrade) {
         openPaywall("ai");
         return;
       }
       Alert.alert(
         "Generation Failed",
         error?.response?.data?.message ||
+          error?.message ||
           "Failed to generate workout. Please try again."
       );
     },
@@ -1275,13 +1276,14 @@ const SwapModal = ({
       navigation.navigate("WorkoutPreview", { workout });
     },
     onError: (error: any) => {
-      if (error?.response?.data?.requiresUpgrade) {
+      if (error?.response?.data?.requiresUpgrade || error?.requiresUpgrade) {
         showPaywallModal();
         return;
       }
       Alert.alert(
         "Generation Failed",
         error?.response?.data?.message ||
+          error?.message ||
           "Failed to generate workout. Please try again."
       );
     },

@@ -95,7 +95,8 @@ export const generateWorkout = async (
 ): Promise<GeneratedWorkout> => {
   const response = await apiClient.post<GenerateWorkoutResponse>(
     "ai/generate-workout",
-    params
+    params,
+    { timeoutMs: 60000 }
   );
   return response.data.workout;
 };
@@ -122,7 +123,8 @@ export const swapExercise = async (
 ): Promise<SwappedExercise> => {
   const response = await apiClient.post<SwapExerciseResponse>(
     "ai/swap-exercise",
-    params
+    params,
+    { timeoutMs: 30000 }
   );
   return response.data.exercise;
 };

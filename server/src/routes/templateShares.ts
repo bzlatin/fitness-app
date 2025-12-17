@@ -432,7 +432,7 @@ templateSharesAuthedRouter.post('/:code/copy', async (req, res) => {
             INSERT INTO workout_template_exercises
               (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
                default_weight, default_incline, default_distance, default_duration_minutes, notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           `,
           [
             generateId(),

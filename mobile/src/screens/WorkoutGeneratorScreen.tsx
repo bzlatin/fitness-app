@@ -63,7 +63,7 @@ const WorkoutGeneratorScreen = () => {
         error?.message ||
         "Failed to generate workout";
 
-      if (error?.response?.data?.requiresUpgrade) {
+      if (error?.response?.data?.requiresUpgrade || error?.requiresUpgrade) {
         setPaywallFreeUsed(error?.response?.data?.error === "Free smart workout used");
         setShowPaywallModal(true);
         return;
