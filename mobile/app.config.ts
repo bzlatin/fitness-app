@@ -29,6 +29,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios?.infoPlist,
       ITSAppUsesNonExemptEncryption: false,
       ReactNativeReleaseLevel: "canary",
+      NSPhotoLibraryUsageDescription:
+        "Push/Pull needs access to your photo library to let you choose a profile picture and add a progress photo to a workout share. For example, you can pick a photo from your library to personalize your profile or attach a progress pic when sharing a workout with your squad.",
       NSHealthShareUsageDescription:
         "Allow Push/Pull to read your Apple Health workouts, calories, and heart rate to keep your streak accurate.",
       NSHealthUpdateUsageDescription:

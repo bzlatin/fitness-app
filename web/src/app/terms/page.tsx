@@ -96,7 +96,52 @@ export default function TermsOfService() {
             </p>
           </Section>
 
-          <Section title='7. Disclaimers'>
+          <Section title='7. Subscriptions and Purchases'>
+            <p className='mb-4'>
+              Push/Pull may offer optional auto-renewing subscriptions (for
+              example, a monthly or annual Pro plan) that unlock additional
+              features.
+            </p>
+            <ul className='list-disc list-inside space-y-2 text-text-secondary'>
+              <li>
+                <strong className='text-text-primary'>Duration:</strong>{" "}
+                Subscription terms may be monthly or annual, as shown at the
+                time of purchase.
+              </li>
+              <li>
+                <strong className='text-text-primary'>Auto-renewal:</strong>{" "}
+                Subscriptions automatically renew unless cancelled at least 24
+                hours before the end of the current period.
+              </li>
+              <li>
+                <strong className='text-text-primary'>Cancellation:</strong>{" "}
+                You can manage or cancel your subscription in your Apple ID / App
+                Store account settings.
+              </li>
+              <li>
+                <strong className='text-text-primary'>Refunds:</strong>{" "}
+                Purchases and refunds are handled by Apple in accordance with
+                their policies.
+              </li>
+              <li>
+                <strong className='text-text-primary'>Price changes:</strong>{" "}
+                Pricing may vary by region and may change over time. Any price
+                changes and renewal terms are handled by Apple and will be
+                presented to you as required.
+              </li>
+              <li>
+                <strong className='text-text-primary'>Payment:</strong>{" "}
+                Payment is processed by Apple for purchases made on iOS. We do
+                not collect or store your payment card details.
+              </li>
+            </ul>
+            <p className='mt-4'>
+              If a free trial is offered, the trial terms will be displayed at
+              the time of purchase.
+            </p>
+          </Section>
+
+          <Section title='8. Disclaimers'>
             <p className='mb-4'>Important disclaimers:</p>
             <ul className='list-disc list-inside space-y-2 text-text-secondary'>
               <li>
@@ -120,7 +165,7 @@ export default function TermsOfService() {
             </ul>
           </Section>
 
-          <Section title='8. Limitation of Liability'>
+          <Section title='9. Limitation of Liability'>
             <p>
               To the maximum extent permitted by law, Push/Pull shall not be
               liable for any indirect, incidental, special, consequential, or
@@ -128,7 +173,7 @@ export default function TermsOfService() {
             </p>
           </Section>
 
-          <Section title='9. Termination'>
+          <Section title='10. Termination'>
             <p>
               We may terminate or suspend your account at any time for
               violations of these terms. Upon termination, your right to use the
@@ -137,7 +182,7 @@ export default function TermsOfService() {
             </p>
           </Section>
 
-          <Section title='10. Changes to Terms'>
+          <Section title='11. Changes to Terms'>
             <p>
               We reserve the right to modify these terms at any time. We will
               notify you of material changes. Continued use of the service after
@@ -145,7 +190,7 @@ export default function TermsOfService() {
             </p>
           </Section>
 
-          <Section title='11. Contact Us'>
+          <Section title='12. Contact Us'>
             <p>
               If you have questions about these Terms, please contact us at:{" "}
               <a

@@ -694,6 +694,60 @@ const UpgradeScreen = () => {
         )}
       </TouchableOpacity>
 
+      {/* Legal + subscription terms (must be visible before purchase) */}
+      <View
+        style={{
+          marginTop: -6,
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: 12,
+            textAlign: "center",
+            lineHeight: 18,
+          }}
+        >
+          Subscriptions auto-renew unless cancelled at least 24 hours before the
+          end of the current period. Manage and cancel in your Apple ID
+          subscriptions.
+        </Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <TouchableOpacity
+            accessibilityRole='link'
+            accessibilityLabel='Open Terms of Use'
+            onPress={() => openLegal(TERMS_URL)}
+          >
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 12,
+              }}
+            >
+              Terms of Use
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole='link'
+            accessibilityLabel='Open Privacy Policy'
+            onPress={() => openLegal(PRIVACY_URL)}
+          >
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 12,
+              }}
+            >
+              Privacy Policy
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Trial disclaimer for new users */}
       {!isPro ? (
         <Text
@@ -755,47 +809,7 @@ const UpgradeScreen = () => {
         </View>
       ) : null}
 
-      <View
-        style={{
-          marginTop: 8,
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontSize: 12,
-            textAlign: "center",
-          }}
-        >
-          By continuing you agree to our Terms and Privacy Policy.
-        </Text>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <TouchableOpacity onPress={() => openLegal(TERMS_URL)}>
-            <Text
-              style={{
-                color: colors.primary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 12,
-              }}
-            >
-              Terms of Service
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => openLegal(PRIVACY_URL)}>
-            <Text
-              style={{
-                color: colors.primary,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 12,
-              }}
-            >
-              Privacy Policy
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* (Legal links moved above CTA for App Store compliance) */}
     </ScrollView>
   );
 };
