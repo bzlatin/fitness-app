@@ -73,7 +73,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your photos</string>
+	<string>Push/Pull needs access to your photo library to let you choose a profile picture and add a progress photo to a workout share. For example, you can pick a photo from your library to personalize your profile or attach a progress pic when sharing a workout with your squad.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>
