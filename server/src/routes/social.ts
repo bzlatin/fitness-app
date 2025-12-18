@@ -313,6 +313,112 @@ router.post("/me/avatar", upload.single("avatar"), async (req, res) => {
   }
 });
 
+router.post("/me/progress-photo", upload.single("photo"), async (req, res) => {
+  const userId = res.locals.userId as string | undefined;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const file = req.file;
+  if (!file?.buffer) {
+    return res.status(400).json({ error: "Missing photo file" });
+  }
+
+  const validation = validateImageBuffer(file.buffer);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error ?? "Invalid image" });
+  }
+
+  try {
+    const uploaded = await uploadImage(file.buffer, "progress_photos");
+    return res.json({ progressPhotoUrl: uploaded.secure_url });
+  } catch (err) {
+    console.error("Failed to upload progress photo", err);
+    return res.status(500).json({ error: "Failed to upload progress photo" });
+  }
+});
+
+router.get("/me/progress-photos", async (_req, res) => {
+  const userId = res.locals.userId as string | undefined;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const result = await query<{
+      id: string;
+      session_id: string | null;
+      template_name: string | null;
+      visibility: Visibility;
+      progress_photo_url: string;
+      created_at: string;
+    }>(
+      `
+        SELECT id, session_id, template_name, visibility, progress_photo_url, created_at
+        FROM workout_shares
+        WHERE user_id = $1 AND progress_photo_url IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 400
+      `,
+      [userId]
+    );
+
+    return res.json({
+      photos: result.rows.map((row) => ({
+        id: row.id,
+        sessionId: row.session_id,
+        templateName: row.template_name,
+        visibility: row.visibility,
+        imageUrl: row.progress_photo_url,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("Failed to load progress photos", err);
+    return res.status(500).json({ error: "Failed to load progress photos" });
+  }
+});
+
+router.delete("/me/progress-photos/:id", async (req, res) => {
+  const userId = res.locals.userId as string | undefined;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const id = (req.params.id ?? "").trim();
+  if (!id) {
+    return res.status(400).json({ error: "id required" });
+  }
+
+  try {
+    const existing = await query<{ progress_photo_url: string | null }>(
+      `SELECT progress_photo_url FROM workout_shares WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [id, userId]
+    );
+    const url = existing.rows[0]?.progress_photo_url ?? null;
+    if (!url) {
+      return res.status(404).json({ error: "Progress photo not found" });
+    }
+
+    await query(
+      `UPDATE workout_shares SET progress_photo_url = NULL WHERE id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+
+    const publicId = extractPublicId(url);
+    if (publicId) {
+      deleteImage(publicId).catch((err) =>
+        console.warn("[Social] Failed to delete progress photo", err)
+      );
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Failed to delete progress photo", err);
+    return res.status(500).json({ error: "Failed to delete progress photo" });
+  }
+});
+
 const reactionBodySchema = z
   .object({
     targetType: z.enum(["status", "share"]),

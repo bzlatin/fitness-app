@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { Image, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
-import { shareWorkoutSummary } from "../api/social";
+import { shareWorkoutSummary, uploadProgressPhoto } from "../api/social";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { RootRoute } from "../navigation/types";
 import { colors } from "../theme/colors";
@@ -79,40 +79,81 @@ const VisibilityToggle = ({
 const PostWorkoutShareScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const route = useRoute<RootRoute<"PostWorkoutShare">>();
+  const queryClient = useQueryClient();
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [progressPhotoUri, setProgressPhotoUri] = useState<
+    string | undefined
+  >();
+  const [progressPhotoUploadedUrl, setProgressPhotoUploadedUrl] = useState<
     string | undefined
   >();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      void maybePromptForRatingAfterLoggedWorkout({ threshold: 1 });
+      void maybePromptForRatingAfterLoggedWorkout({ threshold: 3 });
     }, 800);
     return () => clearTimeout(timer);
   }, []);
 
   const shareMutation = useMutation({
-    mutationFn: shareWorkoutSummary,
-    onSuccess: () => navigation.navigate("RootTabs", { screen: "History" }),
+    mutationFn: async (payload: Parameters<typeof shareWorkoutSummary>[0]) => {
+      let progressPhotoUrl = payload.progressPhotoUri;
+      const shouldUpload =
+        Boolean(progressPhotoUrl) &&
+        !progressPhotoUploadedUrl &&
+        (progressPhotoUrl?.startsWith("file:") ||
+          progressPhotoUrl?.startsWith("content:") ||
+          progressPhotoUrl?.startsWith("ph:"));
+
+      if (shouldUpload && progressPhotoUrl) {
+        const uploaded = await uploadProgressPhoto(progressPhotoUrl);
+        setProgressPhotoUploadedUrl(uploaded);
+        progressPhotoUrl = uploaded;
+      } else if (progressPhotoUploadedUrl) {
+        progressPhotoUrl = progressPhotoUploadedUrl;
+      }
+
+      return shareWorkoutSummary({
+        ...payload,
+        progressPhotoUri: progressPhotoUrl,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["progressPhotos", "me"] });
+      navigation.navigate("RootTabs", { screen: "History" });
+    },
   });
 
-  const requestPhoto = async () => {
+  const pickFromLibrary = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
+    if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.85,
     });
     if (!result.canceled && result.assets?.length) {
       setProgressPhotoUri(result.assets[0]?.uri);
+      setProgressPhotoUploadedUrl(undefined);
+    }
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.length) {
+      setProgressPhotoUri(result.assets[0]?.uri);
+      setProgressPhotoUploadedUrl(undefined);
     }
   };
 
   const share = () => {
-    if (visibility === "private") {
+    if (visibility === "private" && !progressPhotoUri) {
       navigation.navigate("RootTabs", { screen: "History" });
       return;
     }
@@ -209,27 +250,69 @@ const PostWorkoutShareScreen = () => {
             </Text>
           )}
 
-          <Pressable
-            onPress={requestPhoto}
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              opacity: pressed ? 0.88 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamilies.semibold,
-              }}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={takePhoto}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                opacity: pressed ? 0.88 : 1,
+              })}
             >
-              {progressPhotoUri ? "Change photo" : "Add progress picture"}
-            </Text>
-          </Pressable>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {progressPhotoUri ? "Retake" : "Take photo"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={pickFromLibrary}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                opacity: pressed ? 0.88 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {progressPhotoUri ? "Choose another" : "Choose from library"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {progressPhotoUri ? (
+            <Pressable
+              onPress={() => {
+                setProgressPhotoUri(undefined);
+                setProgressPhotoUploadedUrl(undefined);
+              }}
+              style={({ pressed }) => ({
+                paddingVertical: 10,
+                borderRadius: 12,
+                alignItems: "center",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: colors.textSecondary }}>Remove photo</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {shareMutation.isError ? (

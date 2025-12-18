@@ -34,6 +34,15 @@ export interface WorkoutSummaryShare {
   progressPhotoUrl?: string;
 }
 
+export interface ProgressPhoto {
+  id: string;
+  imageUrl: string;
+  createdAt: string;
+  sessionId?: string | null;
+  templateName?: string | null;
+  visibility?: Visibility;
+}
+
 export interface SocialProfile extends SocialUserSummary {
   bio?: string;
   followersCount?: number;
