@@ -1,13 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import {
-  Image,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { shareWorkoutSummary } from "../api/social";
 import { RootNavigation } from "../navigation/RootNavigator";
@@ -15,6 +10,7 @@ import { RootRoute } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { Visibility } from "../types/social";
+import { maybePromptForRatingAfterLoggedWorkout } from "../services/ratingPrompt";
 
 const VisibilityToggle = ({
   value,
@@ -47,7 +43,9 @@ const VisibilityToggle = ({
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? "rgba(34,197,94,0.12)" : colors.surfaceMuted,
+                backgroundColor: active
+                  ? "rgba(34,197,94,0.12)"
+                  : colors.surfaceMuted,
                 opacity: pressed ? 0.88 : 1,
               })}
             >
@@ -82,7 +80,16 @@ const PostWorkoutShareScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const route = useRoute<RootRoute<"PostWorkoutShare">>();
   const [visibility, setVisibility] = useState<Visibility>("private");
-  const [progressPhotoUri, setProgressPhotoUri] = useState<string | undefined>();
+  const [progressPhotoUri, setProgressPhotoUri] = useState<
+    string | undefined
+  >();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void maybePromptForRatingAfterLoggedWorkout({ threshold: 1 });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const shareMutation = useMutation({
     mutationFn: shareWorkoutSummary,
@@ -132,7 +139,9 @@ const PostWorkoutShareScreen = () => {
 
   const summaryLineParts = [
     route.params.templateName ?? "Custom workout",
-    route.params.durationSeconds ? formatDuration(route.params.durationSeconds) : undefined,
+    route.params.durationSeconds
+      ? formatDuration(route.params.durationSeconds)
+      : undefined,
     route.params.totalSets ? `${route.params.totalSets} sets` : undefined,
     route.params.totalVolume ? `${route.params.totalVolume} lbs` : undefined,
     route.params.prCount ? `${route.params.prCount} PRs` : undefined,
@@ -193,7 +202,9 @@ const PostWorkoutShareScreen = () => {
               }}
             />
           ) : (
-            <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+            <Text
+              style={{ color: colors.textSecondary, ...typography.caption }}
+            >
               Add a quick snap—only people in this visibility group will see it.
             </Text>
           )}
@@ -210,7 +221,12 @@ const PostWorkoutShareScreen = () => {
               opacity: pressed ? 0.88 : 1,
             })}
           >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
               {progressPhotoUri ? "Change photo" : "Add progress picture"}
             </Text>
           </Pressable>
@@ -249,7 +265,9 @@ const PostWorkoutShareScreen = () => {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => navigation.navigate("RootTabs", { screen: "History" })}
+            onPress={() =>
+              navigation.navigate("RootTabs", { screen: "History" })
+            }
             style={({ pressed }) => ({
               paddingVertical: 12,
               borderRadius: 12,

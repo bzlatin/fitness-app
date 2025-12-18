@@ -24,7 +24,8 @@
         "EXPO_PUBLIC_AUTH0_CALLBACK_SCHEME": "push-pull",
         "EXPO_PUBLIC_LEGAL_BASE_URL": "https://push-pull.app",
         "EXPO_PUBLIC_LEGAL_TERMS_URL": "https://push-pull.app/terms",
-        "EXPO_PUBLIC_LEGAL_PRIVACY_URL": "https://push-pull.app/privacy"
+        "EXPO_PUBLIC_LEGAL_PRIVACY_URL": "https://push-pull.app/privacy",
+        "EXPO_PUBLIC_IOS_APP_STORE_ID": "6755740946"
       }
     }
   },
