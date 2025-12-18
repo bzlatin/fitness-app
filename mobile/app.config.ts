@@ -32,9 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       NSPhotoLibraryUsageDescription:
         "Push/Pull needs access to your photo library to let you choose a profile picture and add a progress photo to a workout share. For example, you can pick a photo from your library to personalize your profile or attach a progress pic when sharing a workout with your squad.",
       NSHealthShareUsageDescription:
-        "Allow Push/Pull to read your Apple Health workouts, calories, and heart rate to keep your streak accurate.",
+        "Allow Push/Pull to read your Apple Health workouts (and optional active calories and heart rate) to keep your training history accurate.",
       NSHealthUpdateUsageDescription:
-        "Push/Pull writes workout metadata to your history so you can track progress alongside Apple Health.",
+        "Allow Push/Pull to save completed workouts to Apple Health so you can see them alongside your other activity.",
     },
     entitlements: {
       ...(config.ios?.entitlements ?? {}),

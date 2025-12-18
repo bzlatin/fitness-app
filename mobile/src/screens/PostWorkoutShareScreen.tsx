@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Platform, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { shareWorkoutSummary, uploadProgressPhoto } from "../api/social";
 import { RootNavigation } from "../navigation/RootNavigator";
@@ -11,6 +11,7 @@ import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { Visibility } from "../types/social";
 import { maybePromptForRatingAfterLoggedWorkout } from "../services/ratingPrompt";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 const VisibilityToggle = ({
   value,
@@ -80,6 +81,7 @@ const PostWorkoutShareScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const route = useRoute<RootRoute<"PostWorkoutShare">>();
   const queryClient = useQueryClient();
+  const { user } = useCurrentUser();
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [progressPhotoUri, setProgressPhotoUri] = useState<
     string | undefined
@@ -87,6 +89,7 @@ const PostWorkoutShareScreen = () => {
   const [progressPhotoUploadedUrl, setProgressPhotoUploadedUrl] = useState<
     string | undefined
   >();
+  const appleHealthEnabled = user?.appleHealthEnabled === true;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -215,6 +218,50 @@ const PostWorkoutShareScreen = () => {
             {summaryLineParts.join(" · ")}
           </Text>
         </View>
+
+        {Platform.OS === "ios" ? (
+          <View
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 8,
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Apple Health (HealthKit)
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {appleHealthEnabled
+                ? "Enabled — Push/Pull saves completed workouts to Apple Health (when permissions are granted)."
+                : "Off — Turn this on in Settings to save completed workouts to Apple Health."}
+            </Text>
+            <Pressable
+              onPress={() => navigation.navigate("Settings")}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Open Settings
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <VisibilityToggle value={visibility} onChange={setVisibility} />
 
