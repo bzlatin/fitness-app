@@ -1,20 +1,17 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import {
-  Image,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { Image, Platform, Pressable, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
-import { shareWorkoutSummary } from "../api/social";
+import { shareWorkoutSummary, uploadProgressPhoto } from "../api/social";
 import { RootNavigation } from "../navigation/RootNavigator";
 import { RootRoute } from "../navigation/types";
 import { colors } from "../theme/colors";
 import { typography, fontFamilies } from "../theme/typography";
 import { Visibility } from "../types/social";
+import { maybePromptForRatingAfterLoggedWorkout } from "../services/ratingPrompt";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 const VisibilityToggle = ({
   value,
@@ -47,7 +44,9 @@ const VisibilityToggle = ({
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? "rgba(34,197,94,0.12)" : colors.surfaceMuted,
+                backgroundColor: active
+                  ? "rgba(34,197,94,0.12)"
+                  : colors.surfaceMuted,
                 opacity: pressed ? 0.88 : 1,
               })}
             >
@@ -81,31 +80,83 @@ const VisibilityToggle = ({
 const PostWorkoutShareScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const route = useRoute<RootRoute<"PostWorkoutShare">>();
+  const queryClient = useQueryClient();
+  const { user } = useCurrentUser();
   const [visibility, setVisibility] = useState<Visibility>("private");
-  const [progressPhotoUri, setProgressPhotoUri] = useState<string | undefined>();
+  const [progressPhotoUri, setProgressPhotoUri] = useState<
+    string | undefined
+  >();
+  const [progressPhotoUploadedUrl, setProgressPhotoUploadedUrl] = useState<
+    string | undefined
+  >();
+  const appleHealthEnabled = user?.appleHealthEnabled === true;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void maybePromptForRatingAfterLoggedWorkout({ threshold: 3 });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const shareMutation = useMutation({
-    mutationFn: shareWorkoutSummary,
-    onSuccess: () => navigation.navigate("RootTabs", { screen: "History" }),
+    mutationFn: async (payload: Parameters<typeof shareWorkoutSummary>[0]) => {
+      let progressPhotoUrl = payload.progressPhotoUri;
+      const shouldUpload =
+        Boolean(progressPhotoUrl) &&
+        !progressPhotoUploadedUrl &&
+        (progressPhotoUrl?.startsWith("file:") ||
+          progressPhotoUrl?.startsWith("content:") ||
+          progressPhotoUrl?.startsWith("ph:"));
+
+      if (shouldUpload && progressPhotoUrl) {
+        const uploaded = await uploadProgressPhoto(progressPhotoUrl);
+        setProgressPhotoUploadedUrl(uploaded);
+        progressPhotoUrl = uploaded;
+      } else if (progressPhotoUploadedUrl) {
+        progressPhotoUrl = progressPhotoUploadedUrl;
+      }
+
+      return shareWorkoutSummary({
+        ...payload,
+        progressPhotoUri: progressPhotoUrl,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["progressPhotos", "me"] });
+      navigation.navigate("RootTabs", { screen: "History" });
+    },
   });
 
-  const requestPhoto = async () => {
+  const pickFromLibrary = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
+    if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.85,
     });
     if (!result.canceled && result.assets?.length) {
       setProgressPhotoUri(result.assets[0]?.uri);
+      setProgressPhotoUploadedUrl(undefined);
+    }
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.length) {
+      setProgressPhotoUri(result.assets[0]?.uri);
+      setProgressPhotoUploadedUrl(undefined);
     }
   };
 
   const share = () => {
-    if (visibility === "private") {
+    if (visibility === "private" && !progressPhotoUri) {
       navigation.navigate("RootTabs", { screen: "History" });
       return;
     }
@@ -132,7 +183,9 @@ const PostWorkoutShareScreen = () => {
 
   const summaryLineParts = [
     route.params.templateName ?? "Custom workout",
-    route.params.durationSeconds ? formatDuration(route.params.durationSeconds) : undefined,
+    route.params.durationSeconds
+      ? formatDuration(route.params.durationSeconds)
+      : undefined,
     route.params.totalSets ? `${route.params.totalSets} sets` : undefined,
     route.params.totalVolume ? `${route.params.totalVolume} lbs` : undefined,
     route.params.prCount ? `${route.params.prCount} PRs` : undefined,
@@ -166,6 +219,50 @@ const PostWorkoutShareScreen = () => {
           </Text>
         </View>
 
+        {Platform.OS === "ios" ? (
+          <View
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 8,
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Apple Health (HealthKit)
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {appleHealthEnabled
+                ? "Enabled — Push/Pull saves completed workouts to Apple Health (when permissions are granted)."
+                : "Off — Turn this on in Settings to save completed workouts to Apple Health."}
+            </Text>
+            <Pressable
+              onPress={() => navigation.navigate("Settings")}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Open Settings
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <VisibilityToggle value={visibility} onChange={setVisibility} />
 
         <View
@@ -193,27 +290,76 @@ const PostWorkoutShareScreen = () => {
               }}
             />
           ) : (
-            <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+            <Text
+              style={{ color: colors.textSecondary, ...typography.caption }}
+            >
               Add a quick snap—only people in this visibility group will see it.
             </Text>
           )}
 
-          <Pressable
-            onPress={requestPhoto}
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              opacity: pressed ? 0.88 : 1,
-            })}
-          >
-            <Text style={{ color: colors.textPrimary, fontFamily: fontFamilies.semibold }}>
-              {progressPhotoUri ? "Change photo" : "Add progress picture"}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={takePhoto}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                opacity: pressed ? 0.88 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {progressPhotoUri ? "Retake" : "Take photo"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={pickFromLibrary}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                opacity: pressed ? 0.88 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                {progressPhotoUri ? "Choose another" : "Choose from library"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {progressPhotoUri ? (
+            <Pressable
+              onPress={() => {
+                setProgressPhotoUri(undefined);
+                setProgressPhotoUploadedUrl(undefined);
+              }}
+              style={({ pressed }) => ({
+                paddingVertical: 10,
+                borderRadius: 12,
+                alignItems: "center",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: colors.textSecondary }}>Remove photo</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {shareMutation.isError ? (
@@ -249,7 +395,9 @@ const PostWorkoutShareScreen = () => {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => navigation.navigate("RootTabs", { screen: "History" })}
+            onPress={() =>
+              navigation.navigate("RootTabs", { screen: "History" })
+            }
             style={({ pressed }) => ({
               paddingVertical: 12,
               borderRadius: 12,

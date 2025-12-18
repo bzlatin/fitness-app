@@ -1918,6 +1918,94 @@ const SettingsScreen = () => {
           onClose={() => setShowPreferencesSheet(false)}
           title='Workout preferences'
         >
+          <View
+            style={{
+              gap: 10,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: `${colors.primary}22`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}44`,
+                }}
+              >
+                <Ionicons name='sparkles-outline' size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Personalize your workouts
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Retake a quick setup to update your goals, equipment, and training
+                  style. The settings below save automatically.
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                setShowPreferencesSheet(false);
+                navigation.navigate("Onboarding", { isRetake: true });
+              }}
+              style={({ pressed }) => ({
+                borderRadius: 12,
+                overflow: "hidden",
+                opacity: pressed ? 0.92 : 1,
+              })}
+            >
+              <LinearGradient
+                colors={[colors.primary, "#16A34A"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Ionicons name='rocket-outline' size={18} color={colors.surface} />
+                  <View style={{ gap: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.surface,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 15,
+                      }}
+                    >
+                      Update my training profile
+                    </Text>
+                    <Text style={{ color: `${colors.surface}CC`, fontSize: 12 }}>
+                      Takes ~1 minute
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name='arrow-forward' size={18} color={colors.surface} />
+              </LinearGradient>
+            </Pressable>
+          </View>
+
           <Pressable
             onPress={() => {
               if (!isPro) {
@@ -2049,15 +2137,58 @@ const SettingsScreen = () => {
                     fontSize: 15,
                   }}
                 >
-                  Apple Health Sync
+                  Apple Health (HealthKit)
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Import Apple Health workouts, calories, and heart rate into
-                  your history.
+                  Connect Apple Health to import workouts (and optional active
+                  calories + heart rate) into your Push/Pull history.
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  When enabled, Push/Pull can also save completed workouts to
+                  Apple Health.
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {healthSyncDisplay}
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      "Apple Health (HealthKit)",
+                      [
+                        "Push/Pull uses Apple Health (HealthKit) to:",
+                        "",
+                        "• Read: workouts, active calories (optional), heart rate (optional)",
+                        "• Write: completed workouts you log in Push/Pull (when enabled)",
+                        "",
+                        "You control permissions in the iOS Health app and can turn this off anytime in Settings.",
+                      ].join("\n")
+                    );
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 2,
+                    alignSelf: "flex-start",
+                    paddingVertical: 6,
+                    paddingHorizontal: 8,
+                    borderRadius: 999,
+                    backgroundColor: pressed
+                      ? colors.surfaceMuted
+                      : colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  })}
+                >
+                  <Ionicons
+                    name='information-circle-outline'
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    How HealthKit is used
+                  </Text>
+                </Pressable>
               </View>
               <Switch
                 value={appleHealthEnabled}
@@ -2365,31 +2496,6 @@ const SettingsScreen = () => {
             />
           </Pressable>
 
-          <Pressable
-            onPress={() => {
-              setShowPreferencesSheet(false);
-              navigation.navigate("Onboarding", { isRetake: true });
-            }}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              borderRadius: 12,
-              backgroundColor: colors.primary,
-              borderWidth: 1,
-              borderColor: colors.primary,
-              alignItems: "center",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.surface,
-                fontFamily: fontFamilies.semibold,
-                fontSize: 15,
-              }}
-            >
-              🎯 Update Training Preferences
-            </Text>
-          </Pressable>
         </DrillInSheet>
 
         <DrillInSheet
@@ -3383,68 +3489,149 @@ const DrillInSheet = ({
   onClose: () => void;
   title: string;
   children: ReactNode;
-}) => (
-  <Modal
-    visible={visible}
-    animationType='slide'
-    transparent
-    onRequestClose={onClose}
-  >
-    <View style={{ flex: 1, justifyContent: "flex-end" }}>
-      <Pressable
-        onPress={onClose}
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.35)",
-        }}
-      />
-      <View
-        style={{
-          padding: 16,
-          paddingBottom: 28,
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 12,
-        }}
-      >
+}) => {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 12) + 12;
+  const [contentHeight, setContentHeight] = useState(0);
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
+  const [isNearBottom, setIsNearBottom] = useState(false);
+  const [isNearTop, setIsNearTop] = useState(true);
+
+  const isScrollable = contentHeight > scrollViewHeight + 1;
+  const shouldShowTopFade = isScrollable && !isNearTop;
+  const shouldShowBottomFade = isScrollable && !isNearBottom;
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
+    const distanceFromTop = contentOffset.y;
+
+    setIsNearTop(distanceFromTop < 10);
+    setIsNearBottom(distanceFromBottom < 24);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType='slide'
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Pressable
+          onPress={onClose}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.35)",
+          }}
+        />
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
+            maxHeight: "85%",
+            paddingTop: 16,
+            paddingHorizontal: 16,
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
           }}
         >
-          <Text
+          <View
             style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-              fontSize: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingBottom: 12,
             }}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 16,
+              }}
           >
             {title}
           </Text>
           <Pressable
             onPress={onClose}
-            style={({ pressed }) => ({
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 999,
-              backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-            })}
-          >
-            <Text style={{ color: colors.textSecondary }}>Close</Text>
-          </Pressable>
+              style={({ pressed }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+              })}
+            >
+              <Text style={{ color: colors.textSecondary }}>Close</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ flexShrink: 1 }}>
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, paddingBottom: bottomPadding }}
+              onContentSizeChange={(_, h) => setContentHeight(h)}
+              onLayout={(e: LayoutChangeEvent) =>
+                setScrollViewHeight(e.nativeEvent.layout.height)
+              }
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
+              {children}
+            </ScrollView>
+
+            {shouldShowTopFade ? (
+              <LinearGradient
+                pointerEvents='none'
+                colors={[
+                  colors.surface,
+                  `${colors.surface}E0`,
+                  `${colors.surface}B0`,
+                  `${colors.surface}70`,
+                  "transparent",
+                ]}
+                locations={[0, 0.25, 0.5, 0.75, 1]}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 28,
+                }}
+              />
+            ) : null}
+
+            {shouldShowBottomFade ? (
+              <LinearGradient
+                pointerEvents='none'
+                colors={[
+                  "transparent",
+                  `${colors.surface}70`,
+                  `${colors.surface}B0`,
+                  `${colors.surface}E0`,
+                  colors.surface,
+                ]}
+                locations={[0, 0.25, 0.5, 0.75, 1]}
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 28,
+                }}
+              />
+            ) : null}
+          </View>
         </View>
-        {children}
       </View>
-    </View>
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 const Section = ({
   title,

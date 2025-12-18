@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import {
   ActiveWorkoutStatus,
+  ProgressPhoto,
   SocialProfile,
   SquadDetail,
   SquadMemberSummary,
@@ -170,6 +171,39 @@ export const shareWorkoutSummary = async (payload: {
     }
     throw err;
   }
+};
+
+export const uploadProgressPhoto = async (uri: string) => {
+  const form = new FormData();
+  form.append(
+    "photo",
+    {
+      uri,
+      name: "progress.jpg",
+      type: "image/jpeg",
+    } as any
+  );
+
+  const res = await apiClient.post<{ progressPhotoUrl: string }>(
+    "/social/me/progress-photo",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  if (!res.data?.progressPhotoUrl) {
+    throw new Error("Progress photo upload failed");
+  }
+  return res.data.progressPhotoUrl;
+};
+
+export const getMyProgressPhotos = async (): Promise<ProgressPhoto[]> => {
+  const res = await apiClient.get<{ photos: ProgressPhoto[] }>(
+    "/social/me/progress-photos"
+  );
+  return res.data?.photos ?? [];
+};
+
+export const deleteMyProgressPhoto = async (id: string) => {
+  await apiClient.delete<void>(`/social/me/progress-photos/${id}`);
 };
 
 export const getUserProfile = async (userId: string) => {

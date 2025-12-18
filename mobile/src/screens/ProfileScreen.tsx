@@ -696,6 +696,110 @@ const ProfileScreen = () => {
             </View>
           </View>
 
+          {isViewingSelf ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                Private
+              </Text>
+              <Pressable
+                onPress={() => {
+                  if (!subscriptionAccess.hasProAccess) {
+                    navigation.navigate("Upgrade");
+                    return;
+                  }
+                  navigation.navigate("ProgressPhotos");
+                }}
+                style={({ pressed }) => ({
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  opacity: pressed ? 0.92 : 1,
+                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                })}
+              >
+                <LinearGradient
+                  colors={[`${colors.primary}22`, `${colors.surface}F2`]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    padding: 16,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 14,
+                          backgroundColor: `${colors.primary}1A`,
+                          borderWidth: 1,
+                          borderColor: `${colors.primary}33`,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons name="images" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ gap: 2 }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                            fontSize: 16,
+                          }}
+                        >
+                          Progress photos
+                        </Text>
+                        <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+                          Your private timeline
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 999,
+                          backgroundColor: `${colors.surfaceMuted}CC`,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Ionicons
+                          name={subscriptionAccess.hasProAccess ? "lock-closed" : "sparkles"}
+                          size={12}
+                          color={colors.textSecondary}
+                        />
+                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                          {subscriptionAccess.hasProAccess ? "Only you" : "Pro"}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                    </View>
+                  </View>
+
+                  <Text style={{ color: colors.textSecondary }}>
+                    Compare your physique over time—captured right after workouts.
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Relationship status - only show for other users */}
           {!isViewingSelf && relationshipCopy ? (
             <View

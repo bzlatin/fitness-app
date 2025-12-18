@@ -19,6 +19,7 @@ import SquadScreen from "../screens/SquadScreen";
 import SquadDetailScreen from "../screens/SquadDetailScreen";
 import SquadSettingsScreen from "../screens/SquadSettingsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import ProgressPhotosScreen from "../screens/ProgressPhotosScreen";
 import PostWorkoutShareScreen from "../screens/PostWorkoutShareScreen";
 import HomeScreen from "../screens/HomeScreen";
 import OnboardingScreen from "../screens/OnboardingScreen";
@@ -163,6 +164,11 @@ const RootNavigator = () => (
       name='UserProfile'
       component={ProfileScreen}
       options={{ title: "Profile", presentation: 'modal' }}
+    />
+    <Stack.Screen
+      name='ProgressPhotos'
+      component={ProgressPhotosScreen}
+      options={{ title: "Progress Photos" }}
     />
     <Stack.Screen
       name='PostWorkoutShare'

@@ -309,6 +309,46 @@ Privacy Policy: https://pushpullapp.com/privacy
 
 ---
 
+## Issue 4: HealthKit UI Disclosure ✅
+
+**Guideline**: 2.5.1 - Performance - Software Requirements
+
+**Problem**: The app uses HealthKit but the in-app UI didn’t clearly call out what HealthKit is used for.
+
+### Fix Steps (Code)
+
+- [x] Update Settings UI copy to explicitly mention **Apple Health (HealthKit)** and clarify read/write behavior.
+- [x] Add a short “How HealthKit is used” explainer in Settings.
+- [x] Add a visible Apple Health (HealthKit) status card on the post‑workout screen so reviewers can see the integration even if they don’t find Settings.
+- [x] Update `NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` strings to match the actual behavior (read + write).
+
+**Files Modified**:
+
+- `mobile/src/screens/SettingsScreen.tsx`
+- `mobile/src/screens/PostWorkoutShareScreen.tsx`
+- `mobile/app.config.ts`
+- `mobile/ios/pushpull/Info.plist`
+
+### Reviewer Notes (Suggested)
+
+Paste this into App Store Connect → App Review Notes:
+
+```
+HealthKit Disclosure (Guideline 2.5.1):
+
+Push/Pull integrates with Apple Health using HealthKit.
+
+Where to find it in the UI:
+1) Settings → "Apple Health (HealthKit)" section (includes a "How HealthKit is used" explainer)
+2) After finishing a workout → Post-workout screen shows "Apple Health (HealthKit)" status
+
+HealthKit usage:
+- Read (optional): Apple Health workouts, active calories, heart rate
+- Write (optional): completed workouts logged in Push/Pull
+```
+
+---
+
 ## Submission Checklist (Before Resubmitting)
 
 - [x] ✅ Updated photo library permission strings in Info.plist
