@@ -1,3 +1,5 @@
+import { StatsVisibility } from "./user";
+
 export type Visibility = "private" | "followers" | "squad";
 
 export interface SocialUserSummary {
@@ -52,6 +54,8 @@ export interface SocialProfile extends SocialUserSummary {
   workoutsThisWeek?: number;
   currentStreakDays?: number;
   isFollowing?: boolean;
+  isFriend?: boolean;
+  statsVisibility?: StatsVisibility;
   plan?: string;
   planExpiresAt?: string | null;
   profileCompletedAt?: string | null;

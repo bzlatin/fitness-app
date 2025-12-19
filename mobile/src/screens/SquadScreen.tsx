@@ -642,6 +642,14 @@ const SquadScreen = () => {
   const friendsList = connectionsQuery.data?.friends ?? [];
   const pendingIncoming = connectionsQuery.data?.pendingInvites ?? [];
   const pendingOutgoing = connectionsQuery.data?.outgoingInvites ?? [];
+  const friendIds = useMemo(
+    () => new Set(friendsList.map((friend) => friend.id)),
+    [friendsList]
+  );
+  const pendingOutgoingIds = useMemo(
+    () => new Set(pendingOutgoing.map((invite) => invite.id)),
+    [pendingOutgoing]
+  );
 
   const feedItems = useMemo<FeedItem[]>(() => {
     return buildFeedItems(
@@ -1228,9 +1236,17 @@ const SquadScreen = () => {
                                 const alreadyFollowing = followingIds.has(
                                   user.id
                                 );
+                                const isFriend = friendIds.has(user.id);
+                                const isPendingOutgoing =
+                                  pendingOutgoingIds.has(user.id);
                                 const isPending =
                                   followMutation.isPending ||
                                   unfollowMutation.isPending;
+                                const label = isFriend
+                                  ? "Friends"
+                                  : isPendingOutgoing
+                                  ? "Pending"
+                                  : "Add friend";
                                 return (
                                   <TouchableOpacity
                                     key={user.id}
@@ -1298,9 +1314,7 @@ const SquadScreen = () => {
                                           fontFamily: fontFamilies.semibold,
                                         }}
                                       >
-                                        {alreadyFollowing
-                                          ? "Added"
-                                          : "Add friend"}
+                                        {label}
                                       </Text>
                                     </Pressable>
                                   </TouchableOpacity>

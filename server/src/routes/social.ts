@@ -12,6 +12,7 @@ import {
 } from "../services/cloudinary";
 
 type Visibility = "private" | "followers" | "squad";
+type StatsVisibility = "friends" | "public" | "private";
 
 type UserRow = {
   id: string;
@@ -37,6 +38,7 @@ type UserRow = {
   apple_health_permissions: unknown;
   apple_health_last_sync_at: string | null;
   ai_generations_used_count: number | null;
+  stats_visibility: string | null;
 };
 
 type SocialProfile = {
@@ -68,6 +70,8 @@ type SocialProfile = {
   appleHealthPermissions?: AppleHealthPermissions;
   appleHealthLastSyncAt?: string | null;
   aiGenerationsUsedCount?: number;
+  statsVisibility?: StatsVisibility;
+  isFriend?: boolean;
   friendsPreview?: {
     id: string;
     name: string;
@@ -265,6 +269,7 @@ const profileUpdateSchema = z
     appleHealthEnabled: z.boolean().optional(),
     appleHealthPermissions: z.record(z.string(), z.unknown()).nullable().optional(),
     appleHealthLastSyncAt: z.string().datetime().nullable().optional(),
+    statsVisibility: z.enum(["friends", "public", "private"]).optional(),
   })
   .strip();
 
@@ -466,6 +471,7 @@ const mapUserRow = (
   appleHealthEnabled: row.apple_health_enabled ?? false,
   appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
   appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
+  statsVisibility: (row.stats_visibility as StatsVisibility | null) ?? "friends",
   aiGenerationsUsedCount: options?.includePrivateFields
     ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
     : undefined,
@@ -631,7 +637,6 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
   if (!user) return null;
 
   const counts = await fetchRelationshipCounts(targetUserId);
-  const stats = await fetchWorkoutStats(targetUserId);
   const friendsPreview =
     viewerId === targetUserId
       ? await fetchMutualFriends(targetUserId, 12)
@@ -640,36 +645,54 @@ const fetchProfile = async (viewerId: string, targetUserId: string) => {
     `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
     [viewerId, targetUserId]
   );
-
-  // Calculate workoutsThisWeek using same logic as sessions.ts
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const weekStart = new Date(now);
-  weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
-  weekStart.setUTCHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const workoutsThisWeekResult = await query<{ count: string }>(
-    `SELECT COUNT(DISTINCT DATE(started_at)) as count
-     FROM workout_sessions
-     WHERE user_id = $1
-     AND started_at >= $2
-     AND started_at < $3
-     AND finished_at IS NOT NULL
-     AND ended_reason IS DISTINCT FROM 'auto_inactivity'`,
-    [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]
+  const isFollowedByResult = await query(
+    `SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`,
+    [targetUserId, viewerId]
   );
-  const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+  const isFollowing = (isFollowingResult.rowCount ?? 0) > 0;
+  const isFriend = isFollowing && (isFollowedByResult.rowCount ?? 0) > 0;
 
   const includePrivateFields = viewerId === targetUserId;
+  const baseProfile = mapUserRow(user, { includePrivateFields });
+  const statsVisibility = baseProfile.statsVisibility ?? "friends";
+  const canViewStats =
+    viewerId === targetUserId ||
+    statsVisibility === "public" ||
+    (statsVisibility === "friends" && isFriend);
+
+  // Calculate workoutsThisWeek using same logic as sessions.ts
+  const stats = canViewStats ? await fetchWorkoutStats(targetUserId) : {};
+  let workoutsThisWeek: number | undefined = undefined;
+  if (canViewStats) {
+    const now = new Date();
+    const dayOfWeek = now.getUTCDay();
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart = new Date(now);
+    weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const workoutsThisWeekResult = await query<{ count: string }>(
+      `SELECT COUNT(DISTINCT DATE(started_at)) as count
+       FROM workout_sessions
+       WHERE user_id = $1
+       AND started_at >= $2
+       AND started_at < $3
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'`,
+      [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]
+    );
+    workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+  }
   return {
-    ...mapUserRow(user, { includePrivateFields }),
+    ...baseProfile,
     ...counts,
     ...stats,
-    workoutsThisWeek,
+    workoutsThisWeek: canViewStats ? workoutsThisWeek : undefined,
+    weeklyGoal: canViewStats ? baseProfile.weeklyGoal : undefined,
     friendsPreview,
-    isFollowing: (isFollowingResult.rowCount ?? 0) > 0,
+    isFollowing,
+    isFriend,
   } satisfies SocialProfile;
 };
 
@@ -763,6 +786,7 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
     appleHealthEnabled,
     appleHealthPermissions,
     appleHealthLastSyncAt,
+    statsVisibility,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -889,6 +913,11 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
   if (appleHealthLastSyncAt !== undefined) {
     updates.push(`apple_health_last_sync_at = $${idx}`);
     values.push(appleHealthLastSyncAt ?? null);
+    idx += 1;
+  }
+  if (statsVisibility !== undefined) {
+    updates.push(`stats_visibility = $${idx}`);
+    values.push(statsVisibility);
     idx += 1;
   }
 
