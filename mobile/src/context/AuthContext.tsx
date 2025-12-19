@@ -5,11 +5,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import * as AuthSession from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
 import { setAuthErrorHandler, setAuthTokenProvider } from "../api/client";
+import { registerForPushNotificationsAsync } from "../services/notifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -104,6 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasRegisteredPushToken = useRef(false);
 
   const discovery = AuthSession.useAutoDiscovery(`https://${AUTH0_DOMAIN}`);
 
@@ -223,6 +226,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthTokenProvider(null);
     }
   }, [tokens?.accessToken, tokens?.expiresAt]);
+
+  const isSessionActive =
+    Boolean(tokens?.accessToken) && !isTokenExpired(tokens?.expiresAt);
+
+  useEffect(() => {
+    if (!isSessionActive) {
+      hasRegisteredPushToken.current = false;
+      return;
+    }
+
+    if (hasRegisteredPushToken.current) {
+      return;
+    }
+
+    hasRegisteredPushToken.current = true;
+    void registerForPushNotificationsAsync({ requestPermissions: false });
+  }, [isSessionActive]);
 
   const invalidateSession = useCallback(async () => {
     setTokens(null);
@@ -351,9 +371,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAuthorizing(false);
     }
   }, []);
-
-  const isSessionActive =
-    Boolean(tokens?.accessToken) && !isTokenExpired(tokens?.expiresAt);
 
   const getAccessToken = useCallback(async () => {
     if (!tokens) return null;

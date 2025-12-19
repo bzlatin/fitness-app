@@ -4,6 +4,9 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { apiClient } from "../api/client";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const process: any;
+
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -44,13 +47,33 @@ export interface InboxResponse {
   hasMore: boolean;
 }
 
+type RegisterOptions = {
+  requestPermissions?: boolean;
+};
+
+const resolveExpoProjectId = (): string | null => {
+  const manifest = Constants.manifest as
+    | { extra?: { eas?: { projectId?: string } } }
+    | null
+    | undefined;
+
+  return (
+    Constants.easConfig?.projectId ??
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    manifest?.extra?.eas?.projectId ??
+    process?.env?.EXPO_PUBLIC_EAS_PROJECT_ID ??
+    null
+  );
+};
+
 /**
  * Register for push notifications and send token to server
  */
-export const registerForPushNotificationsAsync = async (): Promise<
-  string | null
-> => {
+export const registerForPushNotificationsAsync = async (
+  options: RegisterOptions = {}
+): Promise<string | null> => {
   let token: string | null = null;
+  const { requestPermissions = true } = options;
 
   if (!Device.isDevice) {
     console.log(
@@ -66,6 +89,12 @@ export const registerForPushNotificationsAsync = async (): Promise<
 
   // Request permissions if not granted
   if (existingStatus !== "granted") {
+    if (!requestPermissions) {
+      console.log(
+        "[Notifications] Permission not granted; skipping token registration"
+      );
+      return null;
+    }
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
@@ -77,7 +106,7 @@ export const registerForPushNotificationsAsync = async (): Promise<
 
   try {
     // Get Expo push token
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const projectId = resolveExpoProjectId();
 
     if (!projectId) {
       console.error("[Notifications] Missing EAS project ID");
