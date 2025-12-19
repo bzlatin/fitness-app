@@ -79,8 +79,27 @@ const normalizeDurationSeconds = (
 
 const formatAppleWorkoutName = (raw?: string | null) => {
   if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+  if (lower === "imported_workout" || lower === "imported workout") {
+    return "Imported workout";
+  }
+  if (lower.includes("\\(type.rawvalue)") || lower.includes("type.rawvalue")) {
+    return "Imported workout";
+  }
   const pretty = raw.replace(/[_-]+/g, " ").trim();
   return pretty ? pretty.replace(/\b\w/g, (c) => c.toUpperCase()) : undefined;
+};
+
+const sanitizeAppleHealthTemplateName = (raw?: string | null) => {
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+  if (lower === "imported_workout" || lower === "imported workout") {
+    return "Imported workout";
+  }
+  if (lower.includes("\\(type.rawvalue)") || lower.includes("type.rawvalue")) {
+    return "Imported workout";
+  }
+  return raw;
 };
 
 const normalizeOptionalInteger = (value?: number) => {
@@ -232,11 +251,15 @@ router.post("/apple-health/import", async (req, res) => {
         session.durationSeconds
       );
 
+      const normalizedTemplateName = sanitizeAppleHealthTemplateName(session.templateName);
+
       return {
         externalId: session.externalId,
         workoutType: session.workoutType,
         templateName:
-          session.templateName ?? formatAppleWorkoutName(session.workoutType) ?? "Imported workout",
+          normalizedTemplateName ??
+          formatAppleWorkoutName(session.workoutType) ??
+          "Imported workout",
         startedAt,
         finishedAt,
         durationSeconds,

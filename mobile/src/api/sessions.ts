@@ -5,6 +5,15 @@ import {
   WorkoutSession,
   WorkoutSet,
 } from "../types/workouts";
+import { normalizeWorkoutTemplateName } from "../utils/workoutNames";
+
+const sanitizeSessionTemplateName = <T extends { templateName?: string }>(session: T) => {
+  const normalized = normalizeWorkoutTemplateName(session.templateName);
+  if (!normalized || normalized === session.templateName) {
+    return session;
+  }
+  return { ...session, templateName: normalized };
+};
 
 export const startSessionFromTemplate = async (templateId: string) => {
   const res = await apiClient.post<WorkoutSession>(
@@ -15,12 +24,18 @@ export const startSessionFromTemplate = async (templateId: string) => {
 
 export const fetchSession = async (id: string) => {
   const res = await apiClient.get<WorkoutSession>(`/sessions/${id}`);
-  return res.data;
+  return sanitizeSessionTemplateName(res.data);
 };
 
 export const fetchActiveSession = async () => {
   const res = await apiClient.get<ActiveSessionResponse>("/sessions/active/current");
-  return res.data;
+  return {
+    ...res.data,
+    session: res.data.session ? sanitizeSessionTemplateName(res.data.session) : null,
+    autoEndedSession: res.data.autoEndedSession
+      ? sanitizeSessionTemplateName(res.data.autoEndedSession)
+      : null,
+  };
 };
 
 export const completeSession = async (id: string, sets: WorkoutSession["sets"]) => {
@@ -58,7 +73,13 @@ export const fetchHistoryRange = async (
   const res = await apiClient.get<WorkoutHistoryResponse>("/sessions/history/range", {
     params: { start, end, tzOffsetMinutes },
   });
-  return res.data;
+  return {
+    ...res.data,
+    days: res.data.days.map((day) => ({
+      ...day,
+      sessions: day.sessions.map((session) => sanitizeSessionTemplateName(session)),
+    })),
+  };
 };
 
 export const createManualSession = async (payload: {

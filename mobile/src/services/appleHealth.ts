@@ -13,6 +13,7 @@ import {
   clearAppleHealthImports,
   importAppleHealthSessions,
 } from "../api/analytics";
+import { normalizeWorkoutTemplateName } from "../utils/workoutNames";
 
 const LAST_SYNC_STORAGE_KEY = "pushpull.apple_health.last_sync";
 const EXPORTED_SESSIONS_STORAGE_KEY = "pushpull.apple_health.exported_sessions";
@@ -70,8 +71,10 @@ const parseNumber = (value: unknown) =>
   typeof value === "number" && !Number.isNaN(value) ? value : undefined;
 
 const formatWorkoutName = (raw?: string | null) => {
-  if (!raw) return undefined;
-  const pretty = raw.replace(/[_-]+/g, " ").trim();
+  const normalized = normalizeWorkoutTemplateName(raw);
+  if (!normalized) return undefined;
+  if (normalized === "Imported workout") return normalized;
+  const pretty = normalized.replace(/[_-]+/g, " ").trim();
   return pretty ? pretty.replace(/\b\w/g, (c) => c.toUpperCase()) : undefined;
 };
 
