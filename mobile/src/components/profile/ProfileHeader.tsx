@@ -17,6 +17,7 @@ type Props = {
   showProBadge?: boolean;
   isViewingSelf: boolean;
   isFollowing: boolean;
+  isFriend?: boolean;
   onToggleFollow?: () => void;
   isFollowLoading?: boolean;
   onPressSettings?: () => void;
@@ -39,12 +40,20 @@ const ProfileHeader = ({
   showProBadge = false,
   isViewingSelf,
   isFollowing,
+  isFriend = false,
   onToggleFollow,
   isFollowLoading,
   onPressSettings,
   onPressFriends,
 }: Props) => {
   const showGym = gymName && gymVisibility !== "hidden";
+  const isPending = isFollowing && !isFriend;
+  const followLabel = isPending ? "Pending" : isFriend ? "Friends" : "Follow";
+  const followIcon = isPending
+    ? "time-outline"
+    : isFriend
+    ? "checkmark"
+    : "person-add";
   const badgeTone = isFollowing ? colors.primary : colors.border;
 
   return (
@@ -289,7 +298,7 @@ const ProfileHeader = ({
                   })}
                 >
                   <Ionicons
-                    name={isFollowing ? "checkmark" : "person-add"}
+                    name={followIcon as keyof typeof Ionicons.glyphMap}
                     size={16}
                     color={isFollowing ? colors.textPrimary : colors.surface}
                   />
@@ -300,7 +309,7 @@ const ProfileHeader = ({
                       fontSize: 13,
                     }}
                   >
-                    {isFollowing ? "Following" : "Follow"}
+                    {followLabel}
                   </Text>
                 </Pressable>
               ) : null}

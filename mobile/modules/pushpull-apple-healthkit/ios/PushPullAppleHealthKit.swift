@@ -360,10 +360,11 @@ public class PushPullAppleHealthKit: Module {
     case .yoga: return "yoga"
     case .pilates: return "pilates"
     case .hiking: return "hiking"
+    case .snowboarding: return "snowboarding"
     case .stairClimbing: return "stair_climbing"
     case .mindAndBody: return "mind_and_body"
     default:
-      return "workout_\\(type.rawValue)"
+      return "imported_workout"
     }
   }
 
@@ -386,6 +387,7 @@ public class PushPullAppleHealthKit: Module {
     case "yoga": return .yoga
     case "pilates": return .pilates
     case "hiking": return .hiking
+    case "snowboarding": return .snowboarding
     case "mind_and_body", "mindandbody": return .mindAndBody
     default:
       return nil

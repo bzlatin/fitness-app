@@ -220,8 +220,11 @@ export const getUserProfile = async (userId: string) => {
         followingCount: 0,
         friendsCount: 0,
         workoutsCompleted: 0,
+        workoutsThisWeek: 0,
         currentStreakDays: 0,
         isFollowing: false,
+        isFriend: false,
+        statsVisibility: "friends",
         gymName: null,
         gymVisibility: "hidden",
       } satisfies SocialProfile;

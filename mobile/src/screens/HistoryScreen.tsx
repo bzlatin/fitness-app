@@ -81,6 +81,14 @@ const isSameDay = (a: Date, b: Date) => formatDateKey(a) === formatDateKey(b);
 const isSameMonth = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 
+const buildManualForm = (date: string) => ({
+  date,
+  templateId: "manual" as string | "manual",
+  templateName: "",
+  exerciseName: "",
+  duration: "",
+});
+
 const HistoryScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
@@ -115,13 +123,9 @@ const HistoryScreen = () => {
   const [saveTemplateSessionId, setSaveTemplateSessionId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualForm, setManualForm] = useState({
-    date: formatDateKey(today),
-    templateId: "manual" as string | "manual",
-    templateName: "Logged workout",
-    exerciseName: "Bench Press / Chest",
-    duration: "45",
-  });
+  const [manualForm, setManualForm] = useState(() =>
+    buildManualForm(formatDateKey(today))
+  );
 
   // Fixed data range - fetch 2 years of history from today
   const rangeStart = useMemo(
@@ -707,7 +711,10 @@ const HistoryScreen = () => {
           </Text>
         </View>
         <Pressable
-          onPress={() => setManualOpen(true)}
+          onPress={() => {
+            setManualForm(buildManualForm(formatDateKey(today)));
+            setManualOpen(true);
+          }}
           style={({ pressed }) => ({
             backgroundColor: colors.primary,
             width: 36,
@@ -1254,11 +1261,15 @@ const HistoryScreen = () => {
                 contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
               >
                 <Pressable
-                  onPress={() => setManualForm((prev) => ({
-                    ...prev,
-                    templateId: "manual",
-                    templateName: "Logged workout"
-                  }))}
+                  onPress={() =>
+                    setManualForm((prev) => ({
+                      ...prev,
+                      templateId: "manual",
+                      templateName: "",
+                      exerciseName: "",
+                      duration: "",
+                    }))
+                  }
                   style={({ pressed }) => ({
                     paddingHorizontal: 16,
                     paddingVertical: 10,

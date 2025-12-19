@@ -20,11 +20,13 @@ import {
   Image,
   Switch,
   ActivityIndicator,
+  LayoutAnimation,
   Linking,
   Platform,
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  UIManager,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -47,7 +49,7 @@ import {
   removeFollower,
   unfollowUser,
 } from "../api/social";
-import { UserProfile } from "../types/user";
+import { StatsVisibility, UserProfile } from "../types/user";
 import { SocialUserSummary } from "../types/social";
 import { formatHandle, normalizeHandle } from "../utils/formatHandle";
 import { RootNavigation } from "../navigation/RootNavigator";
@@ -121,6 +123,7 @@ const SettingsScreen = () => {
   const [showPreferencesSheet, setShowPreferencesSheet] = useState(false);
   const [showNotificationsSheet, setShowNotificationsSheet] = useState(false);
   const [showBillingSheet, setShowBillingSheet] = useState(false);
+  const [showPrivacySheet, setShowPrivacySheet] = useState(false);
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
   const [connectionsContentHeight, setConnectionsContentHeight] = useState(0);
   const [connectionsScrollHeight, setConnectionsScrollHeight] = useState(0);
@@ -142,6 +145,11 @@ const SettingsScreen = () => {
   const [appleHealthEnabledUi, setAppleHealthEnabledUi] = useState<
     boolean | null
   >(null);
+  const statsVisibilityRequestRef = useRef<StatsVisibility | null>(null);
+  const [statsVisibility, setStatsVisibility] = useState<StatsVisibility>(
+    user?.statsVisibility ?? "friends"
+  );
+  const [isUpdatingStatsVisibility, setIsUpdatingStatsVisibility] = useState(false);
   const lastHandleChange = user?.handleLastChangedAt
     ? new Date(user.handleLastChangedAt)
     : null;
@@ -305,6 +313,15 @@ const SettingsScreen = () => {
     isProcessingAvatar,
   ]);
 
+  useEffect(() => {
+    if (
+      Platform.OS === "android" &&
+      UIManager.setLayoutAnimationEnabledExperimental
+    ) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
   // Warn on back/swipe-out when editing profile with unsaved changes.
   usePreventRemove(preventRemove, (event) => {
     const actionType = event.data.action.type;
@@ -381,6 +398,7 @@ const SettingsScreen = () => {
     setLastHealthSync(
       user.appleHealthLastSyncAt ? new Date(user.appleHealthLastSyncAt) : null
     );
+    setStatsVisibility(user.statsVisibility ?? "friends");
   }, [
     user?.id,
     user?.name,
@@ -393,6 +411,7 @@ const SettingsScreen = () => {
     user?.weeklyGoal,
     user?.appleHealthPermissions,
     user?.appleHealthLastSyncAt,
+    user?.statsVisibility,
     isEditing,
   ]);
 
@@ -1152,6 +1171,29 @@ const SettingsScreen = () => {
     }
   }
 
+  const handleStatsVisibilityChange = async (next: StatsVisibility) => {
+    if (!user || next === statsVisibility || statsVisibilityRequestRef.current)
+      return;
+    const previous = statsVisibility;
+    statsVisibilityRequestRef.current = next;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setStatsVisibility(next);
+    setIsUpdatingStatsVisibility(true);
+    try {
+      await updateProfile({ statsVisibility: next });
+    } catch (err) {
+      console.error("[Settings] Failed to update stats visibility", err);
+      setStatsVisibility(previous);
+      Alert.alert(
+        "Privacy",
+        "Could not update your stats visibility. Please try again."
+      );
+    } finally {
+      setIsUpdatingStatsVisibility(false);
+      statsVisibilityRequestRef.current = null;
+    }
+  };
+
   const preferencesSubtitle = `${
     isPro
       ? `Progressive overload ${
@@ -1161,6 +1203,13 @@ const SettingsScreen = () => {
   } · Rest timer ${
     user?.restTimerSoundEnabled ?? true ? "sound on" : "silent"
   } · Training goals`;
+
+  const privacySubtitle =
+    statsVisibility === "public"
+      ? "Public · Anyone can see your highlights"
+      : statsVisibility === "private"
+      ? "Private · Only you can see your highlights"
+      : "Friends only · Gym buddies can see your highlights";
 
   const notificationToggleCount = notificationPrefs
     ? notificationToggleKeys.filter((key) => notificationPrefs[key]).length
@@ -1731,6 +1780,17 @@ const SettingsScreen = () => {
                 title='Workout preferences'
                 subtitle={preferencesSubtitle}
                 onPress={() => setShowPreferencesSheet(true)}
+              />
+            </Section>
+
+            <Section
+              title='Privacy'
+              subtitle='Control who can see your workout highlights.'
+            >
+              <SettingRowCard
+                title='Stats visibility'
+                subtitle={privacySubtitle}
+                onPress={() => setShowPrivacySheet(true)}
               />
             </Section>
 
@@ -2496,6 +2556,146 @@ const SettingsScreen = () => {
             />
           </Pressable>
 
+        </DrillInSheet>
+
+        <DrillInSheet
+          visible={showPrivacySheet}
+          onClose={() => setShowPrivacySheet(false)}
+          title='Privacy'
+        >
+          <View
+            style={{
+              gap: 10,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: `${colors.primary}18`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}33`,
+                }}
+              >
+                <Ionicons
+                  name='shield-checkmark-outline'
+                  size={18}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 15,
+                  }}
+                >
+                  Share your highlights
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Choose who can see your stats like total workouts and weekly
+                  progress.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ minHeight: 18, justifyContent: "center" }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                opacity: isUpdatingStatsVisibility ? 1 : 0,
+              }}
+            >
+              Saving…
+            </Text>
+          </View>
+
+          {[
+            {
+              value: "private" as StatsVisibility,
+              title: "Only me",
+              description: "Keep your highlights private.",
+            },
+            {
+              value: "friends" as StatsVisibility,
+              title: "Friends only",
+              description: "Only gym buddies can see your highlights.",
+            },
+            {
+              value: "public" as StatsVisibility,
+              title: "Public",
+              description: "Anyone can see your highlights, even without a buddy.",
+            },
+          ].map((option) => {
+            const isSelected = statsVisibility === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                onPressIn={() => handleStatsVisibilityChange(option.value)}
+                onPress={() => handleStatsVisibilityChange(option.value)}
+                disabled={isUpdatingStatsVisibility}
+                style={({ pressed }) => ({
+                  padding: 14,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  backgroundColor: isSelected
+                    ? `${colors.primary}12`
+                    : colors.surface,
+                  opacity: pressed || isUpdatingStatsVisibility ? 0.9 : 1,
+                })}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected
+                        ? `${colors.primary}1F`
+                        : colors.surfaceMuted,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name={isSelected ? "checkmark" : "ellipse-outline"}
+                      size={14}
+                      color={isSelected ? colors.primary : colors.textSecondary}
+                    />
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 14,
+                      }}
+                    >
+                      {option.title}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {option.description}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
         </DrillInSheet>
 
         <DrillInSheet

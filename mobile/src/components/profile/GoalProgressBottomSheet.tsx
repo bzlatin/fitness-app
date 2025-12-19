@@ -23,6 +23,8 @@ type GoalProgressBottomSheetProps = {
   weeklyGoal: number | null;
   workoutsThisWeek: number;
   onEditGoal: () => void;
+  isViewingSelf?: boolean;
+  ownerName?: string;
 };
 
 const GoalProgressBottomSheet = ({
@@ -31,8 +33,17 @@ const GoalProgressBottomSheet = ({
   weeklyGoal,
   workoutsThisWeek,
   onEditGoal,
+  isViewingSelf = true,
+  ownerName,
 }: GoalProgressBottomSheetProps) => {
   const insets = useSafeAreaInsets();
+  const resolvedName = ownerName?.trim() || "their";
+  const possessiveName =
+    resolvedName === "their"
+      ? "their"
+      : resolvedName.endsWith("s")
+      ? `${resolvedName}'`
+      : `${resolvedName}'s`;
 
   const [showTopFade, setShowTopFade] = useState(false);
   const [showBottomFade, setShowBottomFade] = useState(true);
@@ -60,12 +71,12 @@ const GoalProgressBottomSheet = ({
   const { data: historyData, isLoading } = useQuery({
     queryKey: ["workout-history-goal", eightWeeksAgo, today],
     queryFn: () => fetchHistoryRange(eightWeeksAgo, today),
-    enabled: visible,
+    enabled: visible && isViewingSelf,
   });
 
   // Calculate weekly breakdown
   const weeklyBreakdown = useMemo(() => {
-    if (!historyData?.days) return [];
+    if (!isViewingSelf || !historyData?.days) return [];
 
     const weeks: Array<{
       weekStart: Date;
@@ -100,7 +111,7 @@ const GoalProgressBottomSheet = ({
     }
 
     return weeks;
-  }, [historyData, weeklyGoal]);
+  }, [historyData, weeklyGoal, isViewingSelf]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -222,8 +233,10 @@ const GoalProgressBottomSheet = ({
                   }}
                 >
                   {weeklyGoal
-                    ? `Your weekly goal: ${weeklyGoal} workouts`
-                    : "Set a goal to track progress"}
+                    ? `${isViewingSelf ? "Your" : possessiveName} weekly goal: ${weeklyGoal} workouts`
+                    : isViewingSelf
+                    ? "Set a goal to track progress"
+                    : `${possessiveName} goal isn't set yet`}
                 </Text>
               </View>
               <Pressable
@@ -361,12 +374,14 @@ const GoalProgressBottomSheet = ({
                         weeklyGoal - workoutsThisWeek === 1
                           ? "workout"
                           : "workouts"
-                      } to hit your goal`
-                  : "Set a weekly goal to track your progress"}
+                      } to hit ${isViewingSelf ? "your" : `${possessiveName}`} goal`
+                  : isViewingSelf
+                  ? "Set a weekly goal to track your progress"
+                  : `${possessiveName} goal is not set yet`}
               </Text>
             </View>
 
-            {weeklyGoal ? (
+            {weeklyGoal && isViewingSelf ? (
               <>
                 {/* Stats Overview */}
                 <View
@@ -566,41 +581,43 @@ const GoalProgressBottomSheet = ({
             ) : null}
 
             {/* Edit Goal CTA */}
-            <Pressable
-              onPress={() => {
-                onClose();
-                onEditGoal();
-              }}
-              style={({ pressed }) => ({
-                padding: 16,
-                borderRadius: 12,
-                backgroundColor: pressed
-                  ? `${colors.primary}DD`
-                  : colors.primary,
-                alignItems: "center",
-                flexDirection: "row",
-                justifyContent: "center",
-                gap: 8,
-              })}
-            >
-              <Ionicons
-                name='create-outline'
-                size={20}
-                color={colors.surface}
-              />
-              <Text
-                style={{
-                  color: colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 16,
+            {isViewingSelf ? (
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  onEditGoal();
                 }}
+                style={({ pressed }) => ({
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: pressed
+                    ? `${colors.primary}DD`
+                    : colors.primary,
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  gap: 8,
+                })}
               >
-                {weeklyGoal ? "Edit Weekly Goal" : "Set Weekly Goal"}
-              </Text>
-            </Pressable>
+                <Ionicons
+                  name='create-outline'
+                  size={20}
+                  color={colors.surface}
+                />
+                <Text
+                  style={{
+                    color: colors.surface,
+                    fontFamily: fontFamilies.semibold,
+                    fontSize: 16,
+                  }}
+                >
+                  {weeklyGoal ? "Edit Weekly Goal" : "Set Weekly Goal"}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Insight */}
-            {weeklyGoal && (
+            {weeklyGoal && isViewingSelf && (
               <View
                 style={{
                   marginTop: 20,

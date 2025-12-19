@@ -38,14 +38,18 @@ const AnimatedStatBlock = ({
   label,
   value,
   onPress,
+  disabled = false,
 }: {
   label: string;
   value: string;
-  onPress: () => void;
+  onPress?: () => void;
+  disabled?: boolean;
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const isDisabled = disabled || !onPress;
 
   const handlePressIn = () => {
+    if (isDisabled) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.spring(scaleAnim, {
       toValue: 0.95,
@@ -56,6 +60,7 @@ const AnimatedStatBlock = ({
   };
 
   const handlePressOut = () => {
+    if (isDisabled) return;
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -67,6 +72,7 @@ const AnimatedStatBlock = ({
   return (
     <Pressable
       onPress={onPress}
+      disabled={isDisabled}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={{ flex: 1 }}
@@ -269,6 +275,23 @@ const ProfileScreen = () => {
   const routeUserId = (route.params as { userId?: string })?.userId;
   const isViewingSelf = !routeUserId || userId === currentUser?.id;
   const isFollowing = resolvedProfile?.isFollowing ?? false;
+  const isFriend = resolvedProfile?.isFriend ?? false;
+  const statsVisibility = resolvedProfile?.statsVisibility ?? "friends";
+  const canViewHighlights =
+    Boolean(resolvedProfile) &&
+    (isViewingSelf ||
+      statsVisibility === "public" ||
+      (statsVisibility === "friends" && isFriend));
+  const displayName =
+    resolvedProfile?.name?.trim() ||
+    resolvedProfile?.handle?.replace(/^@/, "") ||
+    "their";
+  const possessiveName =
+    displayName === "their"
+      ? "their"
+      : displayName.endsWith("s")
+      ? `${displayName}'`
+      : `${displayName}'s`;
   const friendCount = useMemo(() => {
     if (!resolvedProfile) return 0;
     if (resolvedProfile.friendsCount !== undefined)
@@ -285,13 +308,16 @@ const ProfileScreen = () => {
       : "Not set";
   const formattedHandle = formatHandle(resolvedProfile?.handle);
   const friendsPreview = resolvedProfile?.friendsPreview ?? [];
-  const weeklyGoal =
-    (resolvedProfile as { weeklyGoal?: number } | null)?.weeklyGoal ??
-    currentUser?.weeklyGoal ??
-    null;
-  const workoutsThisWeek =
-    (resolvedProfile as { workoutsThisWeek?: number } | null)?.workoutsThisWeek ??
-    0;
+  const weeklyGoal = isViewingSelf
+    ? (resolvedProfile as { weeklyGoal?: number } | null)?.weeklyGoal ??
+      currentUser?.weeklyGoal ??
+      null
+    : (resolvedProfile as { weeklyGoal?: number } | null)?.weeklyGoal ?? null;
+  const workoutsThisWeek = isViewingSelf
+    ? (resolvedProfile as { workoutsThisWeek?: number } | null)?.workoutsThisWeek ??
+      0
+    : (resolvedProfile as { workoutsThisWeek?: number } | null)?.workoutsThisWeek ??
+      0;
   const goalProgress = weeklyGoal ? Math.min(workoutsThisWeek, weeklyGoal) : null;
   const heroSubtitle = resolvedProfile?.trainingStyleTags?.length
     ? resolvedProfile.trainingStyleTags.join(" · ")
@@ -527,16 +553,26 @@ const ProfileScreen = () => {
     </View>
   );
 
+  const isPending = !isViewingSelf && isFollowing && !isFriend;
   const relationshipCopy = isViewingSelf
     ? null
-    : isFollowing
+    : isFriend
     ? {
         title: "You're gym buddies",
-        body: "You follow their training. Remove if you no longer want updates.",
+        body: "You follow each other's training. Unfollow if you want fewer updates.",
         icon: "checkmark-circle",
         iconColor: colors.primary,
         bg: colors.surface,
         border: colors.primary,
+      }
+    : isPending
+    ? {
+        title: "Invite pending",
+        body: "They'll show as gym buddies once they add you back.",
+        icon: "time-outline",
+        iconColor: colors.textSecondary,
+        bg: colors.surfaceMuted,
+        border: colors.border,
       }
     : {
         title: "Not gym buddies yet",
@@ -599,6 +635,7 @@ const ProfileScreen = () => {
             showProBadge={isViewingSelf && subscriptionAccess.hasProAccess}
             isViewingSelf={isViewingSelf}
             isFollowing={isFollowing}
+            isFriend={isFriend}
             friendCount={friendCount}
             pendingRequestsCount={pendingRequestsCount}
             bio={resolvedProfile.bio}
@@ -610,91 +647,99 @@ const ProfileScreen = () => {
             onPressFriends={openConnections}
           />
 
-          <View style={{ gap: 10 }}>
-            <Text style={{ ...typography.title, color: colors.textPrimary }}>
-              Highlights
-            </Text>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <AnimatedStatBlock
-                label="Total Workouts"
-                value={String(resolvedProfile.workoutsCompleted ?? "—")}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowWorkoutsSheet(true);
-                }}
-              />
-            </View>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowGoalSheet(true);
-                }}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  borderRadius: 12,
-                  padding: 12,
-                  backgroundColor: `${colors.surface}F2`,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                  gap: 6,
-                  opacity: pressed ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
+          {canViewHighlights ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ ...typography.title, color: colors.textPrimary }}>
+                Highlights
+              </Text>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <AnimatedStatBlock
+                  label="Total Workouts"
+                  value={String(resolvedProfile.workoutsCompleted ?? "—")}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setShowWorkoutsSheet(true);
                   }}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 16,
-                    }}
-                  >
-                    Goal progress
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                      {weeklyGoal ? `${goalProgress ?? 0}/${weeklyGoal}` : "Not set"}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                  </View>
-                </View>
-                <View
-                  style={{
-                    height: 10,
-                    borderRadius: 999,
-                    backgroundColor: colors.surfaceMuted,
+                />
+              </View>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setShowGoalSheet(true);
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    borderRadius: 12,
+                    padding: 12,
+                    backgroundColor: `${colors.surface}F2`,
                     borderWidth: 1,
-                    borderColor: colors.border,
-                    overflow: "hidden",
-                  }}
+                    borderColor: colors.primary,
+                    gap: 6,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}
                 >
                   <View
                     style={{
-                      width: `${
-                        weeklyGoal && goalProgress !== null
-                          ? Math.min(100, (goalProgress / weeklyGoal) * 100)
-                          : 8
-                      }%`,
-                      backgroundColor: colors.primary,
-                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                     }}
-                  />
-                </View>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {weeklyGoal
-                    ? "Tap to see your weekly progress"
-                    : "Tap to set a weekly goal"}
-                </Text>
-              </Pressable>
+                  >
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 16,
+                      }}
+                    >
+                      {isViewingSelf ? "Goal progress" : `${possessiveName} goal`}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        {weeklyGoal ? `${goalProgress ?? 0}/${weeklyGoal}` : "Not set"}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      backgroundColor: colors.surfaceMuted,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: `${
+                          weeklyGoal && goalProgress !== null
+                            ? Math.min(100, (goalProgress / weeklyGoal) * 100)
+                            : 8
+                        }%`,
+                        backgroundColor: colors.primary,
+                        flex: 1,
+                      }}
+                    />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {weeklyGoal
+                      ? isViewingSelf
+                        ? "Tap to see your weekly progress"
+                        : `Tap to see ${possessiveName} weekly progress`
+                      : isViewingSelf
+                      ? "Tap to set a weekly goal"
+                      : displayName === "their"
+                      ? "Weekly goal not set yet."
+                      : `${displayName} hasn't set a weekly goal yet.`}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          ) : null}
 
           {isViewingSelf ? (
             <View style={{ gap: 10 }}>
@@ -880,7 +925,13 @@ const ProfileScreen = () => {
                 })}
               >
                 <Ionicons
-                  name={isFollowing ? "person-remove" : "person-add"}
+                  name={
+                    isPending
+                      ? "close-circle"
+                      : isFollowing
+                      ? "person-remove"
+                      : "person-add"
+                  }
                   size={20}
                   color={isFollowing ? colors.textPrimary : colors.surface}
                 />
@@ -891,7 +942,7 @@ const ProfileScreen = () => {
                     fontSize: 16,
                   }}
                 >
-                  {isFollowing ? "Unfollow" : "Follow"}
+                  {isPending ? "Cancel request" : isFollowing ? "Unfollow" : "Follow"}
                 </Text>
               </Pressable>
             </View>
@@ -1648,6 +1699,8 @@ const ProfileScreen = () => {
         visible={showWorkoutsSheet}
         onClose={() => setShowWorkoutsSheet(false)}
         totalWorkouts={resolvedProfile?.workoutsCompleted ?? 0}
+        isViewingSelf={isViewingSelf}
+        ownerName={displayName}
       />
 
       <GoalProgressBottomSheet
@@ -1656,6 +1709,8 @@ const ProfileScreen = () => {
         weeklyGoal={weeklyGoal}
         workoutsThisWeek={workoutsThisWeek}
         onEditGoal={() => navigation.navigate("Onboarding", { isRetake: true })}
+        isViewingSelf={isViewingSelf}
+        ownerName={displayName}
       />
     </ScreenContainer>
   );
