@@ -1368,6 +1368,26 @@ router.delete("/:id", async (req, res) => {
         );
       }
 
+      const shareRows = await client.query<{ id: string }>(
+        `SELECT id FROM workout_shares WHERE session_id = $1 AND user_id = $2`,
+        [sessionId, userId]
+      );
+      const shareIds = shareRows.rows.map((share) => share.id);
+      if (shareIds.length > 0) {
+        await client.query(
+          `DELETE FROM workout_reactions WHERE target_type = 'share' AND target_id = ANY($1::text[])`,
+          [shareIds]
+        );
+        await client.query(`DELETE FROM workout_shares WHERE id = ANY($1::text[])`, [
+          shareIds,
+        ]);
+      }
+
+      await client.query(
+        `DELETE FROM active_workout_statuses WHERE session_id = $1 AND user_id = $2`,
+        [sessionId, userId]
+      );
+
       const result = await client.query(
         `DELETE FROM workout_sessions WHERE id = $1 AND user_id = $2`,
         [sessionId, userId]

@@ -599,6 +599,22 @@ const trimCardioSetsToSingle = (sessionSets: WorkoutSet[]) => {
   return sessionSets.filter((set) => keepIds.has(set.id));
 };
 
+const isSetLoggedFromData = (set: WorkoutSet) => {
+  const hasStrengthReps =
+    typeof set.actualReps === "number" &&
+    Number.isFinite(set.actualReps) &&
+    set.actualReps > 0;
+  const hasCardioMinutes =
+    typeof set.actualDurationMinutes === "number" &&
+    Number.isFinite(set.actualDurationMinutes) &&
+    set.actualDurationMinutes > 0;
+  const hasCardioDistance =
+    typeof set.actualDistance === "number" &&
+    Number.isFinite(set.actualDistance) &&
+    set.actualDistance > 0;
+  return hasStrengthReps || hasCardioMinutes || hasCardioDistance;
+};
+
 const WorkoutSessionScreen = () => {
   const route = useRoute<RootRoute<"WorkoutSession">>();
   const navigation = useNavigation<Nav>();
@@ -1259,12 +1275,18 @@ const WorkoutSessionScreen = () => {
         autoEndedSession: null,
       });
 
-      const validSetIds = new Set(data.sets.map((set) => set.id));
+      const validSetIds = new Set(trimmedSets.map((set) => set.id));
       const persisted = await loadPersistedLoggedSetIds(sessionId);
+      const derived = new Set(
+        trimmedSets.filter(isSetLoggedFromData).map((set) => set.id)
+      );
       if (cancelled) return;
 
       const filtered = new Set<string>();
       persisted.forEach((id) => {
+        if (validSetIds.has(id)) filtered.add(id);
+      });
+      derived.forEach((id) => {
         if (validSetIds.has(id)) filtered.add(id);
       });
 
@@ -1443,7 +1465,7 @@ const WorkoutSessionScreen = () => {
     mutationFn: () => {
       // Pause timer before finishing
       pauseTimer();
-      return completeSession(sessionId!, sets);
+      return completeSession(sessionId!, setsRef.current);
     },
     onMutate: () => {
       isEndingSessionRef.current = true;
@@ -1455,7 +1477,11 @@ const WorkoutSessionScreen = () => {
       // Clear widget data when workout completes
       void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
-      const loggedSets = sets.filter((set) => loggedSetIds.has(set.id));
+      const currentSets = setsRef.current;
+      const currentLoggedSetIds = loggedSetIdsRef.current;
+      const loggedSets = currentSets.filter((set) =>
+        currentLoggedSetIds.has(set.id)
+      );
       const summary = summarizeSets(loggedSets);
 
       // End Live Activity with completion summary
@@ -1544,12 +1570,14 @@ const WorkoutSessionScreen = () => {
   };
 
   const applySetUpdates = (updatedList: WorkoutSet[]) => {
-    setSets((prev) =>
-      prev.map((set) => {
+    setSets((prev) => {
+      const nextSets = prev.map((set) => {
         const next = updatedList.find((u) => u.id === set.id);
         return next ?? set;
-      })
-    );
+      });
+      setsRef.current = nextSets;
+      return nextSets;
+    });
   };
 
   const updateSet = (updated: WorkoutSet) => {
@@ -2169,11 +2197,25 @@ const WorkoutSessionScreen = () => {
     // This prevents race conditions with the pending log set handler
     loggedSetIdsRef.current = updatedLoggedSetIds;
 
-    const updated: WorkoutSet = {
-      ...currentSet,
-      actualWeight: currentSet.actualWeight ?? currentSet.targetWeight,
-      actualReps: currentSet.actualReps ?? currentSet.targetReps,
-    };
+    const isCardioSet = isCardioExercise(
+      currentSet.exerciseId,
+      currentSet.exerciseName
+    );
+
+    const updated: WorkoutSet = isCardioSet
+      ? {
+          ...currentSet,
+          actualDistance: currentSet.actualDistance ?? currentSet.targetDistance,
+          actualIncline: currentSet.actualIncline ?? currentSet.targetIncline,
+          actualDurationMinutes:
+            currentSet.actualDurationMinutes ??
+            currentSet.targetDurationMinutes,
+        }
+      : {
+          ...currentSet,
+          actualWeight: currentSet.actualWeight ?? currentSet.targetWeight,
+          actualReps: currentSet.actualReps ?? currentSet.targetReps,
+        };
     applySetUpdates([updated]);
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId(setId);
@@ -3254,17 +3296,28 @@ const WorkoutSessionScreen = () => {
       <Pressable
         disabled={!sessionId || finishMutation.isPending}
         onPress={() => {
-          const unloggedSets = sets.filter((set) => !loggedSetIds.has(set.id));
+          const currentSets = setsRef.current;
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+          const unloggedSets = currentSets.filter(
+            (set) =>
+              set.setKind !== "warmup" && !currentLoggedSetIds.has(set.id)
+          );
           if (unloggedSets.length === 0) {
             finishMutation.mutate();
             return;
           }
 
           const unloggedExercises = new Set(unloggedSets.map((s) => s.exerciseId)).size;
+          const loggedWorkingSets = currentSets.filter(
+            (set) =>
+              set.setKind !== "warmup" && currentLoggedSetIds.has(set.id)
+          );
           const title =
-            loggedSetIds.size === 0 ? "Finish without logging?" : "Some sets are unlogged";
+            loggedWorkingSets.length === 0
+              ? "Finish without logging?"
+              : "Some sets are unlogged";
           const message =
-            loggedSetIds.size === 0
+            loggedWorkingSets.length === 0
               ? "You haven't logged any sets yet. If you finish now, this workout will count as 0 logged sets."
               : `You have ${unloggedSets.length} unlogged set${unloggedSets.length === 1 ? "" : "s"} across ${unloggedExercises} exercise${unloggedExercises === 1 ? "" : "s"}.`;
 
@@ -3681,6 +3734,18 @@ const SetInputRow = ({
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
   const [isEditingWeight, setIsEditingWeight] = useState(false);
+  const [distanceText, setDistanceText] = useState(
+    set.actualDistance?.toString() ?? ""
+  );
+  const [isEditingDistance, setIsEditingDistance] = useState(false);
+  const [inclineText, setInclineText] = useState(
+    set.actualIncline?.toString() ?? ""
+  );
+  const [isEditingIncline, setIsEditingIncline] = useState(false);
+  const [durationText, setDurationText] = useState(
+    set.actualDurationMinutes?.toString() ?? ""
+  );
+  const [isEditingDuration, setIsEditingDuration] = useState(false);
   const [rirText, setRirText] = useState(set.rir?.toString() ?? "");
   const [isEditingRir, setIsEditingRir] = useState(false);
   const restLabelSeconds =
@@ -3691,6 +3756,21 @@ const SetInputRow = ({
     if (isEditingWeight) return;
     setWeightText(set.actualWeight?.toString() ?? "");
   }, [isEditingWeight, set.actualWeight, set.id]);
+
+  useEffect(() => {
+    if (isEditingDistance) return;
+    setDistanceText(set.actualDistance?.toString() ?? "");
+  }, [isEditingDistance, set.actualDistance, set.id]);
+
+  useEffect(() => {
+    if (isEditingIncline) return;
+    setInclineText(set.actualIncline?.toString() ?? "");
+  }, [isEditingIncline, set.actualIncline, set.id]);
+
+  useEffect(() => {
+    if (isEditingDuration) return;
+    setDurationText(set.actualDurationMinutes?.toString() ?? "");
+  }, [isEditingDuration, set.actualDurationMinutes, set.id]);
 
   useEffect(() => {
     if (isEditingRir) return;
@@ -3744,6 +3824,12 @@ const SetInputRow = ({
     if (!isNaN(numValue)) {
       onChange({ ...set, [field]: numValue });
     }
+  };
+
+  const normalizeDecimalInput = (text: string) => {
+    const next = text.replace(/[^0-9.]/g, "");
+    const parts = next.split(".");
+    return parts.length <= 2 ? next : `${parts[0]}.${parts.slice(1).join("")}`;
   };
 
   return (
@@ -3899,8 +3985,17 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualDistance?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualDistance", text)}
+                value={distanceText}
+                onFocus={() => setIsEditingDistance(true)}
+                onBlur={() => {
+                  setIsEditingDistance(false);
+                  setDistanceText(set.actualDistance?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setDistanceText(normalized);
+                  updateField("actualDistance", normalized);
+                }}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -3919,8 +4014,17 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualIncline?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualIncline", text)}
+                value={inclineText}
+                onFocus={() => setIsEditingIncline(true)}
+                onBlur={() => {
+                  setIsEditingIncline(false);
+                  setInclineText(set.actualIncline?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setInclineText(normalized);
+                  updateField("actualIncline", normalized);
+                }}
               />
             </View>
           </View>
@@ -3941,10 +4045,17 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualDurationMinutes?.toString() ?? ""}
-                onChangeText={(text) =>
-                  updateField("actualDurationMinutes", text)
-                }
+                value={durationText}
+                onFocus={() => setIsEditingDuration(true)}
+                onBlur={() => {
+                  setIsEditingDuration(false);
+                  setDurationText(set.actualDurationMinutes?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setDurationText(normalized);
+                  updateField("actualDurationMinutes", normalized);
+                }}
               />
             </View>
             <View style={{ flex: 1 }} />

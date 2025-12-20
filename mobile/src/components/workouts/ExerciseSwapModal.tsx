@@ -15,7 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { swapExercise } from '../../api/ai';
 import { API_BASE_URL } from '../../api/client';
-import { searchAllExercises } from '../../api/exercises';
+import { getCustomExercises, searchAllExercises } from '../../api/exercises';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useSubscriptionAccess } from '../../hooks/useSubscriptionAccess';
 import { colors } from '../../theme/colors';
@@ -34,6 +34,7 @@ const muscleGroups = [
   'legs',
   'glutes',
   'core',
+  'custom',
 ];
 
 const getValidMuscleGroup = (primaryMuscleGroup?: string): string => {
@@ -104,15 +105,59 @@ const ExerciseSwapModal = ({ visible, onClose, exercise, onSwap }: ExerciseSwapM
     queryFn: () =>
       searchAllExercises({
         query: debouncedQuery || undefined,
-        muscleGroup: muscleGroup === 'all' ? undefined : muscleGroup,
+        muscleGroup:
+          muscleGroup === 'all' || muscleGroup === 'custom'
+            ? undefined
+            : muscleGroup,
       }),
     enabled: visible && swapMode === 'manual',
     staleTime: 1000 * 60 * 5,
   });
 
+  const customExercisesQuery = useQuery({
+    queryKey: ['custom-exercises', muscleGroup, debouncedQuery],
+    queryFn: getCustomExercises,
+    enabled: visible && swapMode === 'manual',
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const filteredCustomExercises = (customExercisesQuery.data ?? []).filter((exercise) => {
+    const nameMatches = debouncedQuery
+      ? exercise.name.toLowerCase().includes(debouncedQuery.toLowerCase())
+      : true;
+    if (!nameMatches) return false;
+    if (muscleGroup === 'custom') return true;
+    const exerciseGroup = exercise.primaryMuscleGroup?.toLowerCase() ?? '';
+    const muscleMatches =
+      muscleGroup === 'all'
+        ? true
+        : exerciseGroup
+        ? exerciseGroup.includes(muscleGroup)
+        : false;
+    return muscleMatches;
+  });
+
+  const customFromSearch = manualExercisesQuery.data?.custom ?? [];
+  const customById = new Map<string, Exercise>();
+  customFromSearch.forEach((exercise) => customById.set(exercise.id, exercise));
+  filteredCustomExercises.forEach((exercise) => {
+    if (!customById.has(exercise.id)) {
+      customById.set(exercise.id, {
+        id: exercise.id,
+        name: exercise.name,
+        primaryMuscleGroup: exercise.primaryMuscleGroup,
+        equipment: exercise.equipment ?? 'bodyweight',
+        category: 'custom',
+        gifUrl: exercise.imageUrl,
+        isCustom: true,
+        createdBy: exercise.userId,
+      });
+    }
+  });
+
   const allExercises = [
-    ...(manualExercisesQuery.data?.library ?? []),
-    ...(manualExercisesQuery.data?.custom ?? []),
+    ...(muscleGroup === 'custom' ? [] : manualExercisesQuery.data?.library ?? []),
+    ...Array.from(customById.values()),
   ];
 
   const resetAndClose = () => {

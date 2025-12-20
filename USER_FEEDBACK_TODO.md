@@ -146,20 +146,19 @@ Notes to share when asking for help:
       Validation: With timer off, log a set and verify highlight jumps to next unlogged set.
 - [x] save live visibility to be set to the last option you chose (for active workout sessions)
       Validation: Change visibility, background the app, reopen active session, and confirm it sticks.
-- [ ] swapping to a custom workout in an active workout session does not properly swap the image
+- [x] swapping to a custom workout in an active workout session does not properly swap the image
       Validation: Swap to a custom workout and confirm its image renders immediately and persists on reload.
-- [ ] ensure the weights and sets get auto filled into next set
+- [x] ensure the weights and sets get auto filled into next set
       Validation: Log a set, confirm next set pre-fills; edit next set manually, then log prior and confirm it does not overwrite.
 - [x] getting an issue when trying to change gym name to “crunch” it only saves “C” fix this (i had this issue with changing profile name and we fixed it) ensure editing profile works perfectly
       Validation: Update gym name to "crunch", save, reload profile, and confirm full value persists.
-- [ ] i tried saving my workout and it glitched and all the sets are unlogged now. ensure this does not happen.
+- [x] i tried saving my workout and it glitched and all the sets are unlogged now. ensure this does not happen.
       Validation: Save a workout with mixed logged/unlogged sets, refresh history, confirm statuses persist.
-- [ ] it doesn’t let me add a decimal for distance in treadmill logging
-      Fix notes: Update the distance input to accept decimals (keyboardType="decimal-pad" on iOS, "numeric" with decimal support on Android) and adjust validation/parsing to allow one decimal point.
+- [x] it doesn’t let me add a decimal for distance in treadmill logging
       Validation: Enter 1.5 miles/kilometers and confirm it saves and renders correctly.
-- [ ] it says i have unlogged sets when doing to save but it shows all my sets are logged. fix this bug
-      Fix notes: The save gate likely checks a stale or incorrect "unlogged" computation. Ensure the validation uses the current set states and counts only sets that are required (skip warmups or deleted sets).
+- [x] it says i have unlogged sets when doing to save but it shows all my sets are logged. fix this bug
       Validation: Mark all sets logged, attempt save, and ensure no warning appears.
-- [ ] when you delete a workout from your history it should delete in the squad feed and friends feed as well
+- [x] when you delete a workout from your history it should delete in the squad feed and friends feed as well
       Fix notes: Confirm the delete endpoint also removes associated feed items. If feeds are derived from workout ids, cascade delete in the server and/or filter out missing workouts in feed queries.
       Validation: Delete a workout and verify it disappears from history, squad feed, and friends feed.
+- [x] show custom workouts when swapping in workoutsession
