@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { NativeModules, Platform } from 'react-native';
 
 let restoreAudioModeTimeout: ReturnType<typeof setTimeout> | null = null;
+let unduckAudioModeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const baseAudioMode: Audio.AudioMode = {
   allowsRecordingIOS: false,
@@ -19,6 +20,12 @@ const timerAudioMode: Partial<Audio.AudioMode> = {
   staysActiveInBackground: true, // Keep playing when app is in background/lock screen
   shouldDuckAndroid: true, // Lower other audio volume on Android
   interruptionModeIOS: InterruptionModeIOS.DuckOthers, // Lower music volume when chime plays
+};
+const unduckedAudioMode: Partial<Audio.AudioMode> = {
+  playsInSilentModeIOS: true,
+  staysActiveInBackground: true,
+  shouldDuckAndroid: false,
+  interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
 };
 
 const restoreAudioMode = async () => {
@@ -44,6 +51,7 @@ export const scheduleRestTimerFinishSound = async (
   endsAtMs: number
 ): Promise<boolean> => {
   if (Platform.OS !== 'ios') return false;
+
   if (!LiveActivityModule?.scheduleTimerCompleteSound) return false;
 
   try {
@@ -117,6 +125,11 @@ export const playTimerSound = async () => {
         { shouldPlay: true, volume: 0.6 }
       );
 
+      if (unduckAudioModeTimeout) {
+        clearTimeout(unduckAudioModeTimeout);
+        unduckAudioModeTimeout = null;
+      }
+
       if (restoreAudioModeTimeout) {
         clearTimeout(restoreAudioModeTimeout);
         restoreAudioModeTimeout = null;
@@ -126,12 +139,29 @@ export const playTimerSound = async () => {
         if (!status.isLoaded) return;
         if (!status.didJustFinish) return;
         sound.setOnPlaybackStatusUpdate(null);
+        if (unduckAudioModeTimeout) {
+          clearTimeout(unduckAudioModeTimeout);
+          unduckAudioModeTimeout = null;
+        }
+        if (restoreAudioModeTimeout) {
+          clearTimeout(restoreAudioModeTimeout);
+          restoreAudioModeTimeout = null;
+        }
         sound.unloadAsync().catch(() => {});
         void restoreAudioMode();
       });
 
+      // Unduck quickly even if the sound keeps playing
+      unduckAudioModeTimeout = setTimeout(() => {
+        void Audio.setAudioModeAsync(unduckedAudioMode);
+      }, 500);
+
       // Fallback cleanup in case playback status doesn't fire
       restoreAudioModeTimeout = setTimeout(() => {
+        if (unduckAudioModeTimeout) {
+          clearTimeout(unduckAudioModeTimeout);
+          unduckAudioModeTimeout = null;
+        }
         sound.unloadAsync().catch(() => {});
         void restoreAudioMode();
       }, 2500);
