@@ -20,6 +20,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
   private var scheduledTimerEndsAtMs: Double?
   private var scheduledTimerWorkItem: DispatchWorkItem?
   private var scheduledTimerDuckingWorkItem: DispatchWorkItem?
+  private var keepAlivePlayer: AVAudioPlayer?
   private var immediateTimerPlayer: AVAudioPlayer?
   private var audioSessionRestoreWorkItem: DispatchWorkItem?
 
@@ -95,6 +96,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     scheduledTimerDuckingWorkItem = nil
     audioSessionRestoreWorkItem?.cancel()
     audioSessionRestoreWorkItem = nil
+    stopKeepAlivePlayer()
 
     guard let url = Bundle.main.url(forResource: "timer-complete", withExtension: "mp3") else {
       print("⚠️ [TimerSound] timer-complete.mp3 not found in bundle resources")
@@ -109,6 +111,13 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
       try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
       try session.setActive(true)
 
+      let keepAlive = try AVAudioPlayer(contentsOf: url)
+      keepAlive.volume = 0.0
+      keepAlive.numberOfLoops = -1
+      keepAlive.prepareToPlay()
+      keepAlive.play()
+      keepAlivePlayer = keepAlive
+
       let player = try AVAudioPlayer(contentsOf: url)
       player.delegate = self
       player.volume = 0.6
@@ -120,7 +129,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
       player.play(atTime: playAt)
       print("✅ [TimerSound] Scheduled timer-complete.mp3 in \(intervalSeconds)s")
 
-      scheduleAudioSessionRestore(after: intervalSeconds + 2.5)
+      scheduleAudioSessionRestore(after: intervalSeconds + 0.5)
 
       let applyDucking = { [weak self] in
         guard self != nil else { return }
@@ -179,6 +188,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     } catch {
       print("❌ [TimerSound] Failed to schedule sound: \(error.localizedDescription)")
       scheduledTimerPlayer = nil
+      stopKeepAlivePlayer()
       reject("timer_sound_schedule_failed", error.localizedDescription, error)
     }
   }
@@ -196,6 +206,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
       player.stop()
     }
     scheduledTimerPlayer = nil
+    stopKeepAlivePlayer()
 
     restoreAudioSession()
   }
@@ -205,6 +216,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
+    stopKeepAlivePlayer()
     immediateTimerPlayer?.stop()
     immediateTimerPlayer = nil
     audioSessionRestoreWorkItem?.cancel()
@@ -228,7 +240,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
       player.prepareToPlay()
       immediateTimerPlayer = player
       player.play()
-      scheduleAudioSessionRestore(after: 2.5)
+      scheduleAudioSessionRestore(after: 0.5)
       resolve(true)
     } catch {
       print("❌ [TimerSound] Failed to play immediate sound: \(error.localizedDescription)")
@@ -245,6 +257,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     if player == immediateTimerPlayer {
       immediateTimerPlayer = nil
     }
+    stopKeepAlivePlayer()
     scheduledTimerDuckingWorkItem?.cancel()
     scheduledTimerDuckingWorkItem = nil
     audioSessionRestoreWorkItem?.cancel()
@@ -252,13 +265,30 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     restoreAudioSession()
   }
 
+  private func stopKeepAlivePlayer() {
+    if let player = keepAlivePlayer {
+      player.stop()
+    }
+    keepAlivePlayer = nil
+  }
+
   private func scheduleAudioSessionRestore(after seconds: Double) {
     audioSessionRestoreWorkItem?.cancel()
     let workItem = DispatchWorkItem { [weak self] in
-      self?.restoreAudioSession()
+      self?.unduckAudioSession()
     }
     audioSessionRestoreWorkItem = workItem
     DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: workItem)
+  }
+
+  private func unduckAudioSession() {
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      try session.setActive(true)
+    } catch {
+      // ignore
+    }
   }
 
   private func restoreAudioSession() {
