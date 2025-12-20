@@ -699,6 +699,9 @@ const WorkoutSessionScreen = () => {
   const [startingSuggestions, setStartingSuggestions] = useState<
     Record<string, StartingSuggestion>
   >({});
+  const [dismissedStartingSuggestions, setDismissedStartingSuggestions] = useState<
+    Record<string, boolean>
+  >({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -2224,6 +2227,9 @@ const WorkoutSessionScreen = () => {
               .slice(currentSortedIndex + 1)
               .find((s) => !updatedLoggedSetIds.has(s.id))
           : undefined;
+      const nextUnloggedSet =
+        nextSetAfterCurrent ??
+        sorted.find((s) => !updatedLoggedSetIds.has(s.id));
 
       // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
       const restDuration = fallbackRest ?? smartDefaultRestSeconds;
@@ -2235,6 +2241,11 @@ const WorkoutSessionScreen = () => {
         autoRestTimer ? restDuration : 0,
         autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
       );
+
+      if (nextUnloggedSet) {
+        activeSetIdRef.current = nextUnloggedSet.id;
+        setActiveSetId(nextUnloggedSet.id);
+      }
 
       // Auto-carry weight + reps to the next set (strength only, working sets only).
       if (
@@ -3494,11 +3505,20 @@ const WorkoutSessionScreen = () => {
                     }}
                     onChangeSet={updateSet}
                     startingSuggestion={startingSuggestions[group.exerciseId]}
+                    isStartingSuggestionDismissed={
+                      dismissedStartingSuggestions[group.exerciseId]
+                    }
                     onApplyStartingSuggestion={() =>
                       applyStartingSuggestionToGroup(
                         group.key,
                         startingSuggestions[group.exerciseId]
                       )
+                    }
+                    onDismissStartingSuggestion={() =>
+                      setDismissedStartingSuggestions((prev) => ({
+                        ...prev,
+                        [group.exerciseId]: true,
+                      }))
                     }
                     onLogSet={logSet}
                     activeSetId={activeSetId}
@@ -4061,7 +4081,9 @@ type ExerciseCardProps = {
   onToggle: () => void;
   onChangeSet: (updated: WorkoutSet) => void;
   startingSuggestion?: StartingSuggestion;
+  isStartingSuggestionDismissed?: boolean;
   onApplyStartingSuggestion?: () => void;
+  onDismissStartingSuggestion?: () => void;
   onLogSet: (setId: string, restSeconds?: number) => void;
   activeSetId: string | null;
   onSelectSet: (setId: string | null) => void;
@@ -4095,7 +4117,9 @@ const ExerciseCard = ({
   onToggle,
   onChangeSet,
   startingSuggestion,
+  isStartingSuggestionDismissed = false,
   onApplyStartingSuggestion,
+  onDismissStartingSuggestion,
   onLogSet,
   activeSetId,
   onSelectSet,
@@ -4189,6 +4213,7 @@ const ExerciseCard = ({
 
   const canApplyStartingSuggestion =
     Boolean(startingSuggestion) &&
+    !isStartingSuggestionDismissed &&
     ((hasWeightSuggestion && hasMissingWeight) ||
       (hasRepsSuggestion && hasMissingReps));
 
@@ -4456,10 +4481,35 @@ const ExerciseCard = ({
                 gap: 10,
               }}
             >
-              <View style={{ gap: 2 }}>
-                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-                  Suggested start
-                </Text>
+              <View style={{ gap: 6 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                    Suggested start
+                  </Text>
+                  <Pressable
+                    onPress={onDismissStartingSuggestion}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      padding: 4,
+                      borderRadius: 12,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                    accessibilityRole='button'
+                    accessibilityLabel='Dismiss suggested start'
+                  >
+                    <Ionicons
+                      name='close'
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
+                </View>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {startingSuggestion?.suggestedWeight
                     ? `${startingSuggestion.suggestedWeight} lb`

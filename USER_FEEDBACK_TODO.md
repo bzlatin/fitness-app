@@ -139,11 +139,10 @@ Notes to share when asking for help:
 - [x] Logging a set dims the audio until the timer runs out - it should only do this when the timer sound plays!
       Fix notes: Gate the audio-ducking call behind the timer sound playback event (not the set logging action). Check for any global "timer active" state that is lowering volume; move it to "play timer sound" only, and restore volume immediately after the sound finishes.
       Validation: Log a set with timer on/off, ensure volume only dips during the timer sound.
-- [ ] x button on suggested start
+- [x] x button on suggested start
       Fix notes: Confirm the suggested-start card renders a close affordance. If missing, add a Pressable X icon to the card header and wire it to dismiss the suggestion (likely state in the workout start screen). Persist dismissal for the session only unless we want it remembered.
       Validation: Tap X to hide, and it should not block starting a workout.
-- [ ] ensure green highlight goes to next set after hitting log (isn’t working if timer is turned off) - it should highlight the set that is NOT logged & is next in order
-      Fix notes: The highlight logic should be derived from "next unlogged set index" rather than timer completion. After logging, recompute the next set (lowest order with logged=false) regardless of timer state.
+- [x] ensure green highlight goes to next set after hitting log (isn’t working if timer is turned off) - it should highlight the set that is NOT logged & is next in order
       Validation: With timer off, log a set and verify highlight jumps to next unlogged set.
 - [ ] save live visibility to be set to the last option you chose (for active workout sessions)
       Fix notes: Persist the visibility preference in local storage or session state (e.g., AsyncStorage + active session id). Load the stored value when resuming an active session and set the toggle default accordingly.
