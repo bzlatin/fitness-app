@@ -9,6 +9,14 @@ type ExerciseRow = {
   image_paths: string[] | null;
 };
 
+type CustomExerciseRow = {
+  id: string;
+  name: string;
+  primary_muscle_group: string | null;
+  equipment: string | null;
+  image_url: string | null;
+};
+
 export type ExerciseMeta = {
   id: string;
   name: string;
@@ -38,7 +46,8 @@ export const fetchExerciseCatalog = async (): Promise<ExerciseMeta[]> => {
 };
 
 export const fetchExerciseMetaByIds = async (
-  ids: string[]
+  ids: string[],
+  options?: { userId?: string }
 ): Promise<Map<string, ExerciseMeta>> => {
   if (!ids.length) return new Map();
   const result = await query<ExerciseRow>(
@@ -53,5 +62,26 @@ export const fetchExerciseMetaByIds = async (
     const meta = mapExerciseRow(row);
     map.set(meta.id, meta);
   });
+
+  if (options?.userId) {
+    const custom = await query<CustomExerciseRow>(
+      `SELECT id, name, primary_muscle_group, equipment, image_url
+       FROM user_exercises
+       WHERE id = ANY($1::text[])
+         AND user_id = $2
+         AND deleted_at IS NULL`,
+      [ids, options.userId]
+    );
+    custom.rows.forEach((row) => {
+      map.set(row.id, {
+        id: row.id,
+        name: row.name,
+        primaryMuscleGroup: (row.primary_muscle_group ?? "other").toLowerCase(),
+        equipment: (row.equipment ?? "bodyweight").toLowerCase(),
+        category: "custom",
+        gifUrl: row.image_url ?? undefined,
+      });
+    });
+  }
   return map;
 };

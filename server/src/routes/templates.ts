@@ -167,7 +167,7 @@ const buildShareUrls = (shareCode: string) => ({
   deepLinkUrl: `push-pull://workout/share/${shareCode}`,
 });
 
-const buildTemplates = async (templateRows: TemplateRow[]) => {
+const buildTemplates = async (templateRows: TemplateRow[], userId?: string) => {
   if (templateRows.length === 0) return [];
   const templateIds = templateRows.map((row) => row.id);
   const exerciseRowsResult = await query<ExerciseRow>(
@@ -180,7 +180,10 @@ const buildTemplates = async (templateRows: TemplateRow[]) => {
   const exerciseIds = Array.from(
     new Set(exerciseRowsResult.rows.map((row) => row.exercise_id))
   );
-  const metaMap = await fetchExerciseMetaByIds(exerciseIds);
+  const metaMap = await fetchExerciseMetaByIds(
+    exerciseIds,
+    userId ? { userId } : undefined
+  );
 
   return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows, metaMap));
 };
@@ -193,7 +196,7 @@ const fetchTemplates = async (userId: string): Promise<WorkoutTemplate[]> => {
      ORDER BY created_at DESC`,
     [userId]
   );
-  return buildTemplates(templateRowsResult.rows);
+  return buildTemplates(templateRowsResult.rows, userId);
 };
 
 const fetchTemplateById = async (
@@ -207,7 +210,7 @@ const fetchTemplateById = async (
      LIMIT 1`,
     [userId, templateId]
   );
-  const templates = await buildTemplates(templateRowsResult.rows);
+  const templates = await buildTemplates(templateRowsResult.rows, userId);
   return templates[0] ?? null;
 };
 
@@ -365,7 +368,8 @@ router.post("/", checkTemplateLimit, (req, res) => {
     ).rows;
 
     const metaMap = await fetchExerciseMetaByIds(
-      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id))),
+      { userId }
     );
 
     return mapTemplate(templateRow, exercisesRows, metaMap);
@@ -537,7 +541,8 @@ router.put("/:id", (req, res) => {
     ).rows;
 
     const metaMap = await fetchExerciseMetaByIds(
-      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id))),
+      { userId }
     );
 
     return mapTemplate(templateResult.rows[0], exercisesRows, metaMap);
@@ -822,7 +827,8 @@ router.post("/:id/duplicate", async (req, res) => {
     ).rows;
 
     const metaMap = await fetchExerciseMetaByIds(
-      Array.from(new Set(exercisesRows.map((row) => row.exercise_id)))
+      Array.from(new Set(exercisesRows.map((row) => row.exercise_id))),
+      { userId }
     );
 
     return mapTemplate(templateRow, exercisesRows, metaMap);

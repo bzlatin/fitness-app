@@ -85,12 +85,13 @@ const suggestWarmupSetSpecs = (workingWeight: number, workingReps?: number) => {
 };
 
 const buildMetaMapFromSets = async (
-  setRows: { exercise_id: string }[]
+  setRows: { exercise_id: string }[],
+  userId?: string
 ): Promise<Map<string, ExerciseMeta>> => {
   const ids = Array.from(
     new Set(setRows.map((set) => set.exercise_id).filter(Boolean))
   );
-  return fetchExerciseMetaByIds(ids);
+  return fetchExerciseMetaByIds(ids, userId ? { userId } : undefined);
 };
 
 type TemplateExerciseRow = {
@@ -392,7 +393,7 @@ const fetchSessionById = async (sessionId: string, userId: string) => {
     `SELECT * FROM workout_sets WHERE session_id = $1 ORDER BY set_index ASC`,
     [sessionId]
   );
-  const metaMap = await buildMetaMapFromSets(setRows.rows);
+      const metaMap = await buildMetaMapFromSets(setRows.rows, userId);
   return mapSession(sessionResult.rows[0], setRows.rows, undefined, metaMap);
 };
 
@@ -498,7 +499,7 @@ router.post("/from-template/:templateId", async (req, res) => {
           [sessionId]
         )
       ).rows;
-      const metaMap = await buildMetaMapFromSets(setRows);
+      const metaMap = await buildMetaMapFromSets(setRows, userId);
 
       return mapSession(
         {
@@ -589,7 +590,7 @@ router.get("/history/range", async (req, res) => {
               [sessionIds]
             )
           ).rows;
-    const metaMap = await buildMetaMapFromSets(setRows);
+    const metaMap = await buildMetaMapFromSets(setRows, userId);
 
     const summaries: SessionSummary[] = sessionRows.rows.map((row) => {
       const sets = setRows
@@ -789,7 +790,7 @@ router.get("/active/current", async (req, res) => {
     );
 
     // Build meta map for exercise names and images
-    const metaMap = await buildMetaMapFromSets(setsResult.rows);
+    const metaMap = await buildMetaMapFromSets(setsResult.rows, userId);
 
     // Get template name if exists
     let templateName: string | undefined;
@@ -1173,7 +1174,7 @@ router.post("/manual", async (req, res) => {
           sessionId,
         ])
       ).rows;
-      const metaMap = await buildMetaMapFromSets(setRows);
+      const metaMap = await buildMetaMapFromSets(setRows, userId);
 
       return mapSession(
         {

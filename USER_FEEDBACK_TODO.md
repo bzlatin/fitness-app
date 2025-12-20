@@ -144,20 +144,15 @@ Notes to share when asking for help:
       Validation: Tap X to hide, and it should not block starting a workout.
 - [x] ensure green highlight goes to next set after hitting log (isn’t working if timer is turned off) - it should highlight the set that is NOT logged & is next in order
       Validation: With timer off, log a set and verify highlight jumps to next unlogged set.
-- [ ] save live visibility to be set to the last option you chose (for active workout sessions)
-      Fix notes: Persist the visibility preference in local storage or session state (e.g., AsyncStorage + active session id). Load the stored value when resuming an active session and set the toggle default accordingly.
+- [x] save live visibility to be set to the last option you chose (for active workout sessions)
       Validation: Change visibility, background the app, reopen active session, and confirm it sticks.
 - [ ] swapping to a custom workout in an active workout session does not properly swap the image
-      Fix notes: Ensure the workout image source is keyed to the current workout id and updates when swapping. If a cache key or memo is stale, clear it on swap and update the image field on the active session state.
       Validation: Swap to a custom workout and confirm its image renders immediately and persists on reload.
 - [ ] ensure the weights and sets get auto filled into next set
-      Fix notes: After logging a set, copy prior set values into the next unlogged set (weight, reps, etc.) if the next set is empty. Use a guard to avoid overwriting user edits.
       Validation: Log a set, confirm next set pre-fills; edit next set manually, then log prior and confirm it does not overwrite.
-- [ ] getting an issue when trying to change gym name to “crunch” it only saves “C” fix this (i had this issue with changing name and we fixed it) ensure editing profile works perfectly
-      Fix notes: The input is likely being truncated by validation or a controlled input bug. Verify the text input uses full string state and server accepts full name length. Check any debounced save or "onChangeText" handler that might send only the first character.
+- [x] getting an issue when trying to change gym name to “crunch” it only saves “C” fix this (i had this issue with changing profile name and we fixed it) ensure editing profile works perfectly
       Validation: Update gym name to "crunch", save, reload profile, and confirm full value persists.
-- [ ] i tried saving my workout and it glitched and all the sets are unlogged now
-      Fix notes: On save, ensure the payload includes logged flags per set and server preserves them. Look for client-side reset logic after a failed save or a rehydrate path that defaults logged=false. Add a guard so failed saves do not reset local state.
+- [ ] i tried saving my workout and it glitched and all the sets are unlogged now. ensure this does not happen.
       Validation: Save a workout with mixed logged/unlogged sets, refresh history, confirm statuses persist.
 - [ ] it doesn’t let me add a decimal for distance in treadmill logging
       Fix notes: Update the distance input to accept decimals (keyboardType="decimal-pad" on iOS, "numeric" with decimal support on Android) and adjust validation/parsing to allow one decimal point.

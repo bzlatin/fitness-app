@@ -791,7 +791,14 @@ const WorkoutSessionScreen = () => {
       .map((set) =>
         [
           set.id,
+          set.exerciseId,
+          set.exerciseName ?? "",
+          set.exerciseImageUrl ?? "",
           set.setIndex,
+          set.setKind ?? "",
+          set.targetReps ?? "",
+          set.targetWeight ?? "",
+          set.targetRestSeconds ?? "",
           set.actualReps ?? "",
           set.actualWeight ?? "",
           set.actualDistance ?? "",
@@ -2254,27 +2261,23 @@ const WorkoutSessionScreen = () => {
         !isCardioExercise(updated.exerciseId, updated.exerciseName) &&
         nextSetAfterCurrent.setKind !== "warmup"
       ) {
-        const carryWeight =
+        const canCarryWeight =
           updated.actualWeight !== undefined &&
           nextSetAfterCurrent.actualWeight === undefined;
-        const carryReps =
+        const canCarryReps =
           updated.actualReps !== undefined &&
           nextSetAfterCurrent.actualReps === undefined;
 
-        if (carryWeight || carryReps) {
+        if (canCarryWeight || canCarryReps) {
           setSets((prev) =>
             prev.map((set) => {
               if (set.id !== nextSetAfterCurrent.id) return set;
               return {
                 ...set,
                 actualWeight:
-                  carryWeight && set.actualWeight === undefined
-                    ? updated.actualWeight
-                    : set.actualWeight,
+                  canCarryWeight ? updated.actualWeight : set.actualWeight,
                 actualReps:
-                  carryReps && set.actualReps === undefined
-                    ? updated.actualReps
-                    : set.actualReps,
+                  canCarryReps ? updated.actualReps : set.actualReps,
               };
             })
           );
@@ -2438,7 +2441,7 @@ const WorkoutSessionScreen = () => {
             targetReps: newExercise.reps ?? set.targetReps,
             targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
             actualReps: newExercise.reps ?? set.actualReps,
-            exerciseImageUrl: newExercise.gifUrl ?? set.exerciseImageUrl,
+            exerciseImageUrl: newExercise.gifUrl,
             targetWeight: undefined,
             actualWeight: undefined,
             targetDistance: undefined,

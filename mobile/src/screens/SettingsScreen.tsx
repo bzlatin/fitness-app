@@ -98,8 +98,11 @@ const SettingsScreen = () => {
   const draftNameRef = useRef(draftName);
   const [draftHandle, setDraftHandle] = useState(user?.handle ?? "");
   const [draftBio, setDraftBio] = useState(user?.bio ?? "");
+  const draftBioRef = useRef(draftBio);
   const [draftTraining, setDraftTraining] = useState(user?.trainingStyle ?? "");
+  const draftTrainingRef = useRef(draftTraining);
   const [draftGym, setDraftGym] = useState(user?.gymName ?? "");
+  const draftGymRef = useRef(draftGym);
   const [draftWeeklyGoal, setDraftWeeklyGoal] = useState(
     String(user?.weeklyGoal ?? 4)
   );
@@ -260,15 +263,36 @@ const SettingsScreen = () => {
     setDraftName(text);
   }, []);
 
+  const handleDraftBioChange = useCallback((text: string) => {
+    draftBioRef.current = text;
+    setDraftBio(text);
+  }, []);
+
+  const handleDraftTrainingChange = useCallback((text: string) => {
+    draftTrainingRef.current = text;
+    setDraftTraining(text);
+  }, []);
+
+  const handleDraftGymChange = useCallback((text: string) => {
+    draftGymRef.current = text;
+    setDraftGym(text);
+  }, []);
+
   const resetProfileDraftsToUser = useCallback(() => {
     if (!user) return;
     const nextName = user.name ?? "";
     draftNameRef.current = nextName;
     setDraftName(nextName);
     setDraftHandle(user.handle ?? "");
-    setDraftBio(user.bio ?? "");
-    setDraftTraining(user.trainingStyle ?? "");
-    setDraftGym(user.gymName ?? "");
+    const nextBio = user.bio ?? "";
+    draftBioRef.current = nextBio;
+    setDraftBio(nextBio);
+    const nextTraining = user.trainingStyle ?? "";
+    draftTrainingRef.current = nextTraining;
+    setDraftTraining(nextTraining);
+    const nextGym = user.gymName ?? "";
+    draftGymRef.current = nextGym;
+    setDraftGym(nextGym);
     setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
     setShowGym((user.gymVisibility ?? "hidden") === "shown");
     setAvatarUri(user.avatarUrl ?? undefined);
@@ -385,9 +409,15 @@ const SettingsScreen = () => {
     draftNameRef.current = nextName;
     setDraftName(nextName);
     setDraftHandle(user.handle ?? "");
-    setDraftBio(user.bio ?? "");
-    setDraftTraining(user.trainingStyle ?? "");
-    setDraftGym(user.gymName ?? "");
+    const nextBio = user.bio ?? "";
+    draftBioRef.current = nextBio;
+    setDraftBio(nextBio);
+    const nextTraining = user.trainingStyle ?? "";
+    draftTrainingRef.current = nextTraining;
+    setDraftTraining(nextTraining);
+    const nextGym = user.gymName ?? "";
+    draftGymRef.current = nextGym;
+    setDraftGym(nextGym);
     setDraftWeeklyGoal(String(user.weeklyGoal ?? 4));
     setShowGym((user.gymVisibility ?? "hidden") === "shown");
     setAvatarUri(user.avatarUrl ?? undefined);
@@ -1129,11 +1159,14 @@ const SettingsScreen = () => {
         }
       }
       const nameToSave = draftNameRef.current.trim();
+      const bioToSave = draftBioRef.current.trim();
+      const trainingToSave = draftTrainingRef.current.trim();
+      const gymToSave = draftGymRef.current.trim();
       const payload: Partial<UserProfile> = {
         name: nameToSave || user.name,
-        bio: draftBio.trim() || undefined,
-        trainingStyle: draftTraining.trim() || undefined,
-        gymName: draftGym.trim() ? draftGym.trim() : null,
+        bio: bioToSave || undefined,
+        trainingStyle: trainingToSave || undefined,
+        gymName: gymToSave ? gymToSave : null,
         gymVisibility: showGym ? "shown" : "hidden",
         weeklyGoal: Number(draftWeeklyGoal) || 4,
         avatarUrl: uploadReadyAvatar,
@@ -1650,7 +1683,7 @@ const SettingsScreen = () => {
                   </Text>
                   <TextInput
                     value={draftBio}
-                    onChangeText={setDraftBio}
+                    onChangeText={handleDraftBioChange}
                     placeholder='Bio'
                     placeholderTextColor={colors.textSecondary}
                     style={[inputStyle, { minHeight: 64 }]}
@@ -1658,14 +1691,14 @@ const SettingsScreen = () => {
                   />
                   <TextInput
                     value={draftTraining}
-                    onChangeText={setDraftTraining}
+                    onChangeText={handleDraftTrainingChange}
                     placeholder='Training focus'
                     placeholderTextColor={colors.textSecondary}
                     style={inputStyle}
                   />
                   <TextInput
                     value={draftGym}
-                    onChangeText={setDraftGym}
+                    onChangeText={handleDraftGymChange}
                     placeholder='Home gym'
                     placeholderTextColor={colors.textSecondary}
                     style={inputStyle}
