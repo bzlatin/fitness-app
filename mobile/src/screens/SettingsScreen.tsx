@@ -119,6 +119,7 @@ const SettingsScreen = () => {
     useState<SocialUserSummary | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isTogglingProgression, setIsTogglingProgression] = useState(false);
+  const [isTogglingRir, setIsTogglingRir] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [showPreferencesSheet, setShowPreferencesSheet] = useState(false);
   const [showNotificationsSheet, setShowNotificationsSheet] = useState(false);
@@ -1200,9 +1201,13 @@ const SettingsScreen = () => {
           user?.progressiveOverloadEnabled ? "on" : "off"
         }`
       : "Unlock progressive overload"
-  } · Rest timer ${
-    user?.restTimerSoundEnabled ?? true ? "sound on" : "silent"
-  } · Training goals`;
+  } · RIR ${
+    isPro
+      ? user?.rirEnabled ?? true
+        ? "on"
+        : "off"
+      : "locked"
+  } · Rest timer ${user?.restTimerSoundEnabled ?? true ? "sound on" : "silent"} · Training goals`;
 
   const privacySubtitle =
     statsVisibility === "public"
@@ -2154,6 +2159,109 @@ const SettingsScreen = () => {
                 thumbColor={
                   user?.progressiveOverloadEnabled ?? true ? "#fff" : "#f4f3f4"
                 }
+              />
+            ) : (
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.primary + "20",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>🔒</Text>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              if (!isPro) {
+                setShowPreferencesSheet(false);
+                setShowPaywallModal(true);
+                return;
+              }
+            }}
+            disabled={isPro && isTogglingRir}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: !isPro
+                ? `${colors.primary}10`
+                : colors.surfaceMuted,
+              padding: 12,
+              borderRadius: 10,
+              borderWidth: 1.5,
+              borderColor: !isPro ? colors.primary : colors.border,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Track RIR
+                </Text>
+                {!isPro && (
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#0B1220",
+                        fontSize: 10,
+                        fontFamily: fontFamilies.bold,
+                      }}
+                    >
+                      PRO
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                {!isPro
+                  ? "Tap to unlock optional reps in reserve tracking"
+                  : "Show RIR inputs during workouts and summaries"}
+              </Text>
+            </View>
+            {isPro ? (
+              <Switch
+                value={user?.rirEnabled ?? true}
+                disabled={isTogglingRir}
+                onValueChange={async (value) => {
+                  setIsTogglingRir(true);
+                  try {
+                    await updateProfile({ rirEnabled: value });
+                  } catch (err) {
+                    Alert.alert(
+                      "Could not update setting",
+                      "Please try again."
+                    );
+                  } finally {
+                    setIsTogglingRir(false);
+                  }
+                }}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                thumbColor={user?.rirEnabled ?? true ? "#fff" : "#f4f3f4"}
               />
             ) : (
               <View

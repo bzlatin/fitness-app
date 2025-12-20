@@ -22,6 +22,7 @@ export interface User {
   weeklyGoal?: number;
   onboardingData?: OnboardingData | null;
   progressiveOverloadEnabled?: boolean;
+  rirEnabled?: boolean;
   restTimerSoundEnabled?: boolean;
   appleHealthEnabled?: boolean;
   appleHealthPermissions?: AppleHealthPermissions | null;

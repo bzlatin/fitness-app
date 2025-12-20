@@ -34,6 +34,20 @@ const normalizeDifficultyRating = (
   return null;
 };
 
+const parseRirValue = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return { value: null, valid: true };
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) {
+    return { value: null, valid: false };
+  }
+  return { value: parsed, valid: true };
+};
+
+const hasInvalidRir = (sets?: Partial<WorkoutSet>[]) =>
+  Boolean(sets?.some((set) => !parseRirValue(set.rir).valid));
+
 const roundToIncrement = (value: number, increment: number) => {
   if (!Number.isFinite(value)) return value;
   if (!Number.isFinite(increment) || increment <= 0) return value;
@@ -123,6 +137,7 @@ type SetRow = {
   target_weight: string | null;
   actual_reps: number | null;
   actual_weight: string | null;
+  rir: string | null;
   rpe: string | null;
   difficulty_rating: string | null;
   // Cardio-specific fields
@@ -150,6 +165,7 @@ const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet =>
     targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
     actualReps: row.actual_reps ?? undefined,
     actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
+    rir: row.rir === null ? undefined : Number(row.rir),
     rpe: row.rpe === null ? undefined : Number(row.rpe),
     difficultyRating:
       normalizeDifficultyRating(row.difficulty_rating) ?? undefined,
@@ -835,6 +851,10 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
+    if (hasInvalidRir(sets)) {
+      return res.status(400).json({ error: "RIR must be between 0 and 10" });
+    }
+
     await withTransaction(async (client) => {
       if (sets) {
         await client.query(`DELETE FROM workout_sets WHERE session_id = $1`, [req.params.id]);
@@ -843,6 +863,7 @@ router.patch("/:id", async (req, res) => {
           const difficultyRating = normalizeDifficultyRating(
             (set as Partial<WorkoutSet>).difficultyRating
           );
+          const { value: rir } = parseRirValue(set.rir);
           await client.query(
             `
               INSERT INTO workout_sets (
@@ -856,6 +877,7 @@ router.patch("/:id", async (req, res) => {
                 target_weight,
                 actual_reps,
                 actual_weight,
+                rir,
                 rpe,
                 difficulty_rating,
                 target_distance,
@@ -865,7 +887,7 @@ router.patch("/:id", async (req, res) => {
                 target_duration_minutes,
                 actual_duration_minutes
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             `,
             [
               set.id ?? generateId(),
@@ -878,6 +900,7 @@ router.patch("/:id", async (req, res) => {
               set.targetWeight ?? null,
               set.actualReps ?? null,
               set.actualWeight ?? null,
+              rir,
               set.rpe ?? null,
               difficultyRating,
               set.targetDistance ?? null,
@@ -1058,6 +1081,10 @@ router.post("/manual", async (req, res) => {
     return res.status(400).json({ error: "At least one set is required" });
   }
 
+  if (hasInvalidRir(sets)) {
+    return res.status(400).json({ error: "RIR must be between 0 and 10" });
+  }
+
   const sessionId = generateId();
   const safeStart = startedAt ? new Date(startedAt) : new Date();
   const safeFinish = finishedAt ? new Date(finishedAt) : undefined;
@@ -1091,6 +1118,7 @@ router.post("/manual", async (req, res) => {
         const difficultyRating = normalizeDifficultyRating(
           (set as Partial<WorkoutSet>).difficultyRating
         );
+        const { value: rir } = parseRirValue(set.rir);
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1104,6 +1132,7 @@ router.post("/manual", async (req, res) => {
               target_weight,
               actual_reps,
               actual_weight,
+              rir,
               rpe,
               difficulty_rating,
               target_distance,
@@ -1113,7 +1142,7 @@ router.post("/manual", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           `,
           [
             set.id ?? generateId(),
@@ -1126,6 +1155,7 @@ router.post("/manual", async (req, res) => {
             set.targetWeight ?? null,
             set.actualReps ?? null,
             set.actualWeight ?? null,
+            rir,
             set.rpe ?? null,
             difficultyRating,
             set.targetDistance ?? null,
@@ -1212,6 +1242,7 @@ router.post("/:id/duplicate", async (req, res) => {
       for (const set of session.sets) {
         const setKind = normalizeSetKind(set.setKind);
         const difficultyRating = normalizeDifficultyRating(set.difficultyRating);
+        const { value: rir } = parseRirValue(set.rir);
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1225,6 +1256,7 @@ router.post("/:id/duplicate", async (req, res) => {
               target_weight,
               actual_reps,
               actual_weight,
+              rir,
               rpe,
               difficulty_rating,
               target_distance,
@@ -1234,7 +1266,7 @@ router.post("/:id/duplicate", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           `,
           [
             generateId(),
@@ -1247,6 +1279,7 @@ router.post("/:id/duplicate", async (req, res) => {
             set.targetWeight ?? null,
             set.actualReps ?? null,
             set.actualWeight ?? null,
+            rir,
             set.rpe ?? null,
             difficultyRating,
             set.targetDistance ?? null,

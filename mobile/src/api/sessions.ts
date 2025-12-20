@@ -89,7 +89,7 @@ export const createManualSession = async (payload: {
   sets: Array<
     Pick<
       WorkoutSet,
-      "exerciseId" | "actualReps" | "actualWeight" | "targetReps" | "targetWeight" | "setIndex" | "templateExerciseId"
+      "exerciseId" | "actualReps" | "actualWeight" | "targetReps" | "targetWeight" | "setIndex" | "templateExerciseId" | "rir"
     >
   >;
 }) => {

@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Switch, Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { TrainingSplit, TRAINING_SPLIT_LABELS } from "../../types/onboarding";
@@ -6,6 +6,9 @@ import { TrainingSplit, TRAINING_SPLIT_LABELS } from "../../types/onboarding";
 interface TrainingStyleStepProps {
   selectedSplit?: TrainingSplit;
   onSplitChange: (split: TrainingSplit) => void;
+  isPro: boolean;
+  rirEnabled: boolean;
+  onRirChange: (value: boolean) => void;
 }
 
 const SPLIT_DESCRIPTIONS: Record<TrainingSplit, string> = {
@@ -15,7 +18,13 @@ const SPLIT_DESCRIPTIONS: Record<TrainingSplit, string> = {
   custom: "Create your own training split",
 };
 
-const TrainingStyleStep = ({ selectedSplit, onSplitChange }: TrainingStyleStepProps) => {
+const TrainingStyleStep = ({
+  selectedSplit,
+  onSplitChange,
+  isPro,
+  rirEnabled,
+  onRirChange,
+}: TrainingStyleStepProps) => {
   const splits: TrainingSplit[] = ["push_pull_legs", "upper_lower", "full_body", "custom"];
 
   return (
@@ -135,6 +144,80 @@ const TrainingStyleStep = ({ selectedSplit, onSplitChange }: TrainingStyleStepPr
         </View>
         <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
           Pro-only: we'll analyze your performance and suggest weight increases when you're ready to progress. You can enable or disable this in settings anytime.
+        </Text>
+      </View>
+
+      <View
+        style={{
+          padding: 16,
+          borderRadius: 12,
+          backgroundColor: `${colors.primary}12`,
+          borderWidth: 1,
+          borderColor: `${colors.primary}30`,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 4,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 15,
+              }}
+            >
+              Track RIR
+            </Text>
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 6,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#0B1220",
+                  fontSize: 11,
+                  fontFamily: fontFamilies.bold,
+                }}
+              >
+                PRO
+              </Text>
+            </View>
+          </View>
+          {isPro ? (
+            <Switch
+              value={rirEnabled}
+              onValueChange={onRirChange}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={rirEnabled ? "#fff" : "#f4f3f4"}
+            />
+          ) : (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: colors.primary + "20",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>🔒</Text>
+            </View>
+          )}
+        </View>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+          Log reps in reserve per set. Keep this on to see RIR inputs during workouts.
         </Text>
       </View>
 
