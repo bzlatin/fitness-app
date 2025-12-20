@@ -12,7 +12,7 @@
 
 1. [Data Export](#data-export)
 2. [Gift Pass Feature](#gift-pass-feature)
-3. [Gym Equipment Preferences & Settings](#gym-equipment-preferences--settings)
+3. [Gym Equipment Preferences & Settings](#gym-equipment-preferences--settings) (DONE)
 4. [Social Video Workout Import](#social-video-workout-import)
 5. [Apple Watch Companion App](#apple-watch-companion-app)
 
@@ -56,6 +56,7 @@ Provide a user-controlled export of workout history for portability/compliance.
 **Export Format (CSV)**:
 
 Multiple CSV files in a ZIP archive:
+
 - `workouts.csv` - All workout sessions with dates and duration
 - `sets.csv` - All logged sets with exercise, weight, reps
 - `templates.csv` - All workout templates
@@ -65,6 +66,7 @@ Multiple CSV files in a ZIP archive:
 **Export Format (JSON)**:
 
 Single JSON file with nested structure:
+
 ```json
 {
   "user": { "handle": "@exhibited", "created_at": "..." },
@@ -95,7 +97,7 @@ Allow users to gift a 14-day Pro trial pass to friends/family, driving viral gro
 
 ### User Experience
 
-- "Gift a Pass" button in Settings/Profile (Pro users only, or anyone)
+- "Gift a Pass" button in Settings/Profile (Pro users only)
 - User enters recipient's email or handle
 - Recipient gets notification/email with unique redemption link
 - Link activates 14-day Pro trial (no payment method required)
@@ -104,6 +106,7 @@ Allow users to gift a 14-day Pro trial pass to friends/family, driving viral gro
 ### Implementation Details
 
 **Features**:
+
 - New `gift_passes` table with sender/recipient tracking and redemption status
 - Email template for gift notification with redemption link
 - Deep link handler for `pushpull://redeem/gift/{code}`
@@ -149,131 +152,6 @@ CREATE INDEX gift_passes_recipient_idx ON gift_passes(recipient_id);
 - `/mobile/src/api/gifts.ts` - Gift pass API client
 - `/mobile/App.tsx` - Deep link handler for gift redemption
 - `/server/src/db.ts` - Add gift_passes table
-
----
-
-## Gym Equipment Preferences & Settings
-
-**Priority**: HIGH | **Effort**: 8-12 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
-
-### Goal
-
-Let users define their gym's available equipment to improve AI workout generation accuracy and enable warm-up sets and cardio recommendations.
-
-### User Experience
-
-**New Screen**: Gym Preferences (accessible from Settings → "Gym Equipment & Preferences")
-
-#### 1. Equipment Selection
-
-- **Categories with checkboxes**:
-  - Small Weights (dumbbells, kettlebells)
-  - Bars & Plates (barbells, EZ bars, trap bars)
-  - Benches & Racks (flat/incline bench, squat rack, power rack)
-  - Cable Machines (cable crossover, lat pulldown, cable row)
-  - Resistance Bands (loop bands, resistance tubes)
-  - Exercise Balls & More (stability ball, foam roller, medicine ball)
-  - Plate-Loaded Machines (leg press, hack squat, chest press)
-  - Weight Machines (Smith machine, leg extension, pec deck)
-  - Rope & Suspension (battle ropes, TRX, suspension trainer)
-
-- **Quick toggles**:
-  - "Bodyweight Only" toggle (disables all equipment)
-  - "Home Gym" vs "Commercial Gym" presets for quick setup
-
-#### 2. Warm-Up Sets
-
-- **Toggle**: "Auto-calculate warm-up sets"
-- **Settings**:
-  - Number of warm-up sets (1-3)
-  - Starting percentage of working weight (40%, 50%, 60%)
-  - Increment percentage per warm-up set (10%, 15%, 20%)
-- **Display**: Show warm-up sets in WorkoutSessionScreen before working sets
-- **Example**: Working weight 225 lbs → Warm-up sets:
-  - Set 1: 90 lbs (40%)
-  - Set 2: 135 lbs (60%)
-  - Set 3: 180 lbs (80%)
-
-#### 3. Cardio Recommendations
-
-- **Toggle**: "Include cardio recommendations"
-- **Settings**:
-  - Cardio timing: Before weights / After weights / Separate session
-  - Cardio type preference: LISS (steady state) / HIIT / Mixed
-  - Target duration: 10/15/20/30 minutes
-  - Frequency: 0-7 days per week
-- **Features**:
-  - AI workout generation includes cardio based on preferences
-  - Cardio tracked separately in workout sessions (optional sets/reps)
-
-#### 4. Workout Duration Preference
-
-- **Slider**: Target session length (30/45/60/90 minutes)
-- **AI Adjustment**: AI adjusts exercise selection, sets, and rest times to fit duration
-- **Display**: Show estimated duration on workout templates and AI-generated workouts
-
-### AI Integration
-
-- Equipment selections filter exercises during AI workout generation
-- AI only suggests exercises available with user's equipment
-- Bodyweight-only mode prioritizes calisthenics and bodyweight exercises
-- Warm-up sets auto-generated based on first working set weight
-- Cardio recommendations added to workout template based on user preferences
-
-### Implementation Details
-
-**Database Schema**:
-
-```sql
--- Extend users table with gym preferences
-ALTER TABLE users ADD COLUMN gym_preferences JSONB DEFAULT '{
-  "equipment": [],
-  "bodyweightOnly": false,
-  "warmupSets": {
-    "enabled": false,
-    "numSets": 2,
-    "startPercentage": 50,
-    "incrementPercentage": 15
-  },
-  "cardio": {
-    "enabled": false,
-    "timing": "after",
-    "type": "mixed",
-    "duration": 20,
-    "frequency": 2
-  },
-  "sessionDuration": 60
-}';
-
--- Extend workout_sessions to track cardio
-ALTER TABLE workout_sessions ADD COLUMN cardio_data JSONB;
--- Structure: { type: "LISS" | "HIIT", duration: number, notes: string }
-```
-
-**API Endpoints**:
-
-- `GET /api/user/gym-preferences` - Get user gym preferences
-- `PUT /api/user/gym-preferences` - Update gym preferences
-
-**Files to Create/Modify**:
-
-- `/mobile/src/screens/GymPreferencesScreen.tsx` - Full gym preferences UI (new)
-- `/mobile/src/components/gym/EquipmentSelector.tsx` - Equipment category selection
-- `/mobile/src/components/gym/WarmupSettings.tsx` - Warm-up set configuration
-- `/mobile/src/components/gym/CardioSettings.tsx` - Cardio preferences
-- `/server/src/routes/social.ts` - Update profile endpoint to save gym_preferences
-- `/server/src/services/ai/workoutPrompts.ts` - Filter exercises by equipment
-- `/mobile/src/screens/WorkoutSessionScreen.tsx` - Display warm-up sets + cardio
-- `/mobile/src/screens/SettingsScreen.tsx` - Add "Gym Preferences" navigation link
-- `/mobile/src/utils/warmupCalculator.ts` - Warm-up set weight calculations
-
-**Implementation Notes**:
-
-- Equipment selections stored as array of strings (e.g., `["dumbbells", "barbells", "cable_machines"]`)
-- Warm-up sets calculated client-side but could be server-side for consistency
-- Cardio data optional in workout sessions (not required)
-- AI prompt includes equipment filter: "Only use exercises available with: dumbbells, barbells, cable machines"
-- Session duration impacts exercise count and rest times in AI generation
 
 ---
 
@@ -452,7 +330,10 @@ Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance prog
 
 ## Version History
 
-- **v2.0**: Gift Pass Feature + Gym Equipment Preferences
+- **v2.0**: Gym Equipment Preferences & Settings
+  - Added gym profiles with equipment selection presets, cardio preferences, and session duration targeting
+  - Auto-generated warm-up sets and optional cardio logging in workout sessions
+  - AI generation now honors equipment + bodyweight-only constraints
 - **v2.1**: Social Video Import (TikTok/Instagram)
 - **v2.2**: Apple Watch Companion App
 - **v2.x**: Additional features TBD based on user feedback

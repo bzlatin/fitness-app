@@ -70,8 +70,8 @@ type UpNextCardProps = {
  * - Recovery status indicator
  * - Start / Generate / Swap actions
  *
- * Pro users: Can generate with AI
- * Free users: See recommendation + subtle upsell
+ * Pro users: Unlimited AI generation
+ * Free users: One free AI generation when available
  */
 export const UpNextCard: React.FC<UpNextCardProps> = ({
   recommendation,
@@ -312,6 +312,7 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
   }
 
   const { recommendedSplit, matchedTemplate, fatigueStatus, canGenerateAI, reasoning, daysSinceLastSplit } = recommendation;
+  const canGenerateFree = !isPro && canGenerateAI;
   const splitEmoji = SPLIT_EMOJIS[recommendedSplit.splitKey] ?? "🎯";
   const fatigueColor = FATIGUE_COLORS[fatigueStatus];
   const fatigueLabel = FATIGUE_LABELS[fatigueStatus];
@@ -510,7 +511,7 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
           >
             <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
               No saved {recommendedSplit.label.toLowerCase()} template found.{" "}
-              {isPro
+              {isPro || canGenerateFree
                 ? "Generate a smart workout or create your own."
                 : "Create one or upgrade to generate smart workouts."}
             </Text>
@@ -528,11 +529,11 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               }}
               style={({ pressed }) => ({
                 flex: 1,
-                backgroundColor: isPro ? colors.primary : colors.surfaceMuted,
+                backgroundColor: isPro || canGenerateFree ? colors.primary : colors.surfaceMuted,
                 paddingVertical: 14,
                 borderRadius: 12,
                 alignItems: "center",
-                borderWidth: isPro ? 0 : 1,
+                borderWidth: isPro || canGenerateFree ? 0 : 1,
                 borderColor: colors.primary,
                 opacity: pressed ? 0.9 : 1,
                 flexDirection: "row",
@@ -543,26 +544,26 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               {!isPro && (
                 <View
                   style={{
-                    backgroundColor: colors.primary,
+                    backgroundColor: canGenerateFree ? "#0B1220" : colors.primary,
                     paddingHorizontal: 6,
                     paddingVertical: 2,
-                    borderRadius: 4,
+                    borderRadius: 6,
                   }}
                 >
                   <Text
                     style={{
-                      color: "#0B1220",
+                      color: canGenerateFree ? colors.primary : "#0B1220",
                       fontSize: 9,
                       fontWeight: "700",
                     }}
                   >
-                    PRO
+                    {canGenerateFree ? "1 FREE" : "PRO"}
                   </Text>
                 </View>
               )}
               <Text
                 style={{
-                  color: isPro ? colors.surface : colors.primary,
+                  color: isPro || canGenerateFree ? colors.surface : colors.primary,
                   fontFamily: fontFamilies.semibold,
                   fontSize: 15,
                 }}

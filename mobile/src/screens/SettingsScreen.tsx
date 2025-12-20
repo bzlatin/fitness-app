@@ -1819,6 +1819,11 @@ const SettingsScreen = () => {
                 subtitle={preferencesSubtitle}
                 onPress={() => setShowPreferencesSheet(true)}
               />
+              <SettingRowCard
+                title='Gym Equipment & Preferences'
+                subtitle='Equipment, cardio, and session length'
+                onPress={() => navigation.navigate("GymPreferences")}
+              />
             </Section>
 
             <Section

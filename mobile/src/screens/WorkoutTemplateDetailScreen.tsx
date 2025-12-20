@@ -24,6 +24,7 @@ import {
   getStoredLiveVisibility,
   setStoredLiveVisibility,
 } from "../utils/liveVisibilityPreference";
+import { estimateTemplateDurationMinutes } from "../utils/workoutDuration";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -234,6 +235,11 @@ const WorkoutTemplateDetailScreen = () => {
           {template.splitType ? (
             <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
               Split: {template.splitType.toUpperCase()}
+            </Text>
+          ) : null}
+          {template.exercises.length > 0 ? (
+            <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
+              Estimated: ~{estimateTemplateDurationMinutes(template)} min
             </Text>
           ) : null}
 

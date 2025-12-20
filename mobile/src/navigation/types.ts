@@ -37,6 +37,7 @@ export type RootStackParamList = {
   Upgrade: { plan?: "monthly" | "annual" } | undefined;
   NotificationInbox: undefined;
   Settings: { openConnections?: boolean } | undefined;
+  GymPreferences: undefined;
   FeedbackBoard: undefined;
 };
 

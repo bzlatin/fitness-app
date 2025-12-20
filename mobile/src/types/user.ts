@@ -1,5 +1,6 @@
 import { OnboardingData } from "./onboarding";
 import { AppleHealthPermissions } from "./health";
+import { GymPreferences } from "./gym";
 
 export type Plan = "free" | "pro" | "lifetime";
 export type StatsVisibility = "friends" | "public" | "private";
@@ -28,6 +29,7 @@ export interface User {
   appleHealthPermissions?: AppleHealthPermissions | null;
   appleHealthLastSyncAt?: string | null;
   statsVisibility?: StatsVisibility;
+  gymPreferences?: GymPreferences;
 }
 
 export interface UserProfile extends User {

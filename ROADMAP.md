@@ -1833,7 +1833,7 @@ CREATE INDEX template_shares_creator_idx ON template_shares(created_by);
 **See [ROADMAP-POST-LAUNCH.md](ROADMAP-POST-LAUNCH.md) for:**
 
 1. **Gift Pass Feature** - Allow users to gift 14-day Pro trial passes
-2. **Gym Equipment Preferences & Settings** - Equipment selection, warm-up sets, cardio recommendations, workout duration
+2. **Gym Equipment Preferences & Settings** - Equipment selection, warm-up sets, cardio recommendations, workout duration (Completed)
 3. **Social Video Workout Import** - Generate workouts from TikTok/Instagram videos
 4. **Apple Watch Companion App** - Mirror workouts to Apple Watch with quick controls
 
@@ -2036,3 +2036,4 @@ These features are planned for implementation after the initial app launch and w
 - **v1.6.4**: Logging + PII cleanup (server log levels + redaction; gated mobile debug logs)
 - **v1.6.5**: Free-tier AI trial (1 lifetime AI workout generation + paywall copy)
 - **v1.7** (Next): Marketing & Growth (landing page, App/Play listings, support flow)
+- **v2.0**: Gym Equipment Preferences & Settings (post-launch)

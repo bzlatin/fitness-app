@@ -10,6 +10,11 @@ import {
   uploadImage,
   validateImageBuffer,
 } from "../services/cloudinary";
+import {
+  gymPreferencesSchema,
+  normalizeGymPreferences,
+} from "../utils/gymPreferences";
+import type { GymPreferences } from "../utils/gymPreferences";
 
 type Visibility = "private" | "followers" | "squad";
 type StatsVisibility = "friends" | "public" | "private";
@@ -40,6 +45,7 @@ type UserRow = {
   apple_health_last_sync_at: string | null;
   ai_generations_used_count: number | null;
   stats_visibility: string | null;
+  gym_preferences: unknown;
 };
 
 type SocialProfile = {
@@ -73,6 +79,7 @@ type SocialProfile = {
   appleHealthLastSyncAt?: string | null;
   aiGenerationsUsedCount?: number;
   statsVisibility?: StatsVisibility;
+  gymPreferences?: GymPreferences;
   isFriend?: boolean;
   friendsPreview?: {
     id: string;
@@ -273,6 +280,7 @@ const profileUpdateSchema = z
     appleHealthPermissions: z.record(z.string(), z.unknown()).nullable().optional(),
     appleHealthLastSyncAt: z.string().datetime().nullable().optional(),
     statsVisibility: z.enum(["friends", "public", "private"]).optional(),
+    gymPreferences: gymPreferencesSchema.nullable().optional(),
   })
   .strip();
 
@@ -476,6 +484,9 @@ const mapUserRow = (
   appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
   appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
   statsVisibility: (row.stats_visibility as StatsVisibility | null) ?? "friends",
+  gymPreferences: options?.includePrivateFields
+    ? normalizeGymPreferences(row.gym_preferences)
+    : undefined,
   aiGenerationsUsedCount: options?.includePrivateFields
     ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
     : undefined,
@@ -792,6 +803,7 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
     appleHealthPermissions,
     appleHealthLastSyncAt,
     statsVisibility,
+    gymPreferences,
   } = req.body as Partial<SocialProfile>;
 
   const handleProvided = Object.prototype.hasOwnProperty.call(
@@ -928,6 +940,15 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
   if (statsVisibility !== undefined) {
     updates.push(`stats_visibility = $${idx}`);
     values.push(statsVisibility);
+    idx += 1;
+  }
+  if (gymPreferences !== undefined) {
+    updates.push(`gym_preferences = $${idx}`);
+    values.push(
+      gymPreferences === null
+        ? null
+        : normalizeGymPreferences(gymPreferences)
+    );
     idx += 1;
   }
 

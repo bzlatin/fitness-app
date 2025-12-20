@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { WorkoutTemplate } from "../../types/workouts";
+import { estimateTemplateDurationMinutes } from "../../utils/workoutDuration";
 
 type Props = {
   template: WorkoutTemplate;
@@ -82,7 +83,8 @@ const WorkoutTemplateCard = ({
         <Badge label={template.splitType.toUpperCase()} />
       ) : null}
       <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-        {template.exercises.length} exercises
+        {template.exercises.length} exercises · ~
+        {estimateTemplateDurationMinutes(template)} min
       </Text>
       {onDuplicate ? (
         <Pressable onPress={onDuplicate}>

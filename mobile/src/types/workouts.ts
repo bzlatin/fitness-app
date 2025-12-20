@@ -56,6 +56,13 @@ export interface WorkoutTemplate {
 
 export type SetDifficultyRating = "too_easy" | "just_right" | "too_hard";
 
+export type CardioData = {
+  type?: "LISS" | "HIIT" | "MIXED";
+  duration?: number;
+  notes?: string;
+  timing?: "before" | "after" | "separate";
+};
+
 export interface WorkoutSet {
   id: string;
   sessionId: string;
@@ -97,6 +104,7 @@ export interface WorkoutSession {
   totalEnergyBurned?: number;
   avgHeartRate?: number;
   maxHeartRate?: number;
+  cardioData?: CardioData;
   sets: WorkoutSet[];
 }
 

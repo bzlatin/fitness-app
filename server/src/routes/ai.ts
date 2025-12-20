@@ -9,6 +9,7 @@ import { generateId } from "../utils/id";
 import { fetchExerciseCatalog, ExerciseMeta } from "../utils/exerciseCatalog";
 import { loadExercisesJson } from "../utils/exerciseData";
 import { createLogger } from "../utils/logger";
+import { normalizeGymPreferences } from "../utils/gymPreferences";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
 import { aiGenerateLimiter, aiRecommendLimiter, aiSwapLimiter } from "../middleware/rateLimit";
@@ -214,6 +215,16 @@ const normalizeOnboardingEquipment = (
   return unique.length > 0 ? unique : undefined;
 };
 
+const normalizeEquipmentList = (raw?: unknown) => {
+  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  if (values.length === 0) return undefined;
+  const normalized = values
+    .map((value) => String(value).toLowerCase().trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set(normalized));
+  return unique.length > 0 ? unique : undefined;
+};
+
 const readOnboardingField = <T,>(onboardingData: any, keys: string[]): T | undefined => {
   for (const key of keys) {
     const value = onboardingData?.[key];
@@ -299,10 +310,12 @@ router.post(
     // Get user profile data
     const userResult = await query<{
       onboarding_data: any;
-    }>(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+      gym_preferences: unknown;
+    }>(`SELECT onboarding_data, gym_preferences FROM users WHERE id = $1`, [userId]);
 
     const user = userResult.rows[0];
     const onboardingData = user?.onboarding_data || {};
+    const gymPreferences = normalizeGymPreferences(user?.gym_preferences);
 
     const preferredSplit = normalizePreferredSplit(
       readOnboardingField<string>(onboardingData, ["preferredSplit", "preferred_split"])
@@ -312,10 +325,29 @@ router.post(
     const weeklyFrequency = readOnboardingField<number>(onboardingData, ["weeklyFrequency", "weekly_frequency"]);
     const baseSessionDuration = readOnboardingField<number>(onboardingData, ["sessionDuration", "session_duration"]);
     const injuryNotes = readOnboardingField<string>(onboardingData, ["injuryNotes", "injury_notes"]);
-    const equipment = normalizeOnboardingEquipment(
-      overrides?.availableEquipment ??
-        readOnboardingField(onboardingData, ["availableEquipment", "available_equipment"]),
-      readOnboardingField(onboardingData, ["customEquipment", "custom_equipment"])
+    const equipmentOverride = overrides?.availableEquipment
+      ? normalizeOnboardingEquipment(overrides.availableEquipment)
+      : undefined;
+    const gymEquipment = gymPreferences.bodyweightOnly
+      ? ["bodyweight"]
+      : normalizeEquipmentList(gymPreferences.equipment);
+    const equipment =
+      equipmentOverride ??
+      gymEquipment ??
+      normalizeOnboardingEquipment(
+        readOnboardingField(onboardingData, [
+          "availableEquipment",
+          "available_equipment",
+        ]),
+        readOnboardingField(onboardingData, [
+          "customEquipment",
+          "custom_equipment",
+        ])
+      );
+    const inferredBodyweightOnly = Boolean(
+      gymPreferences.bodyweightOnly ||
+        (gymEquipment?.length === 1 && gymEquipment[0] === "bodyweight") ||
+        (equipmentOverride?.length === 1 && equipmentOverride[0] === "bodyweight")
     );
     const excludedExercises =
       normalizeExcludedExercises(
@@ -382,9 +414,14 @@ router.post(
         experienceLevel,
         availableEquipment: equipment,
         weeklyFrequency,
-        sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+        sessionDuration:
+          overrides?.sessionDuration ??
+          gymPreferences.sessionDuration ??
+          baseSessionDuration,
         injuryNotes,
         preferredSplit: preferredSplit === "custom" ? "full_body" : preferredSplit,
+        bodyweightOnly: inferredBodyweightOnly,
+        cardioPreferences: gymPreferences.cardio,
       },
       recentWorkouts,
       muscleFatigue,
@@ -795,11 +832,14 @@ router.post(
     try {
       const { overrides } = req.body as z.infer<typeof recommendNextWorkoutBodySchema>;
 
-      const userResult = await query<{ onboarding_data: any }>(
-        `SELECT onboarding_data FROM users WHERE id = $1`,
+      const userResult = await query<{ onboarding_data: any; gym_preferences: unknown }>(
+        `SELECT onboarding_data, gym_preferences FROM users WHERE id = $1`,
         [userId]
       );
       const onboardingData = userResult.rows[0]?.onboarding_data || {};
+      const gymPreferences = normalizeGymPreferences(
+        userResult.rows[0]?.gym_preferences
+      );
 
       const preferredSplit = normalizePreferredSplit(
         readOnboardingField<string>(onboardingData, ["preferredSplit", "preferred_split"])
@@ -816,7 +856,10 @@ router.post(
         recentWorkouts,
         fatigue: fatigueResult,
         overrides: {
-          sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+          sessionDuration:
+            overrides?.sessionDuration ??
+            gymPreferences.sessionDuration ??
+            baseSessionDuration,
           avoidMuscles: overrides?.avoidMuscles,
         },
       });
