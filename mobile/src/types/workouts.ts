@@ -72,6 +72,7 @@ export interface WorkoutSet {
   targetRestSeconds?: number;
   actualReps?: number;
   actualWeight?: number;
+  rir?: number;
   rpe?: number;
   difficultyRating?: SetDifficultyRating;
   // Cardio-specific fields

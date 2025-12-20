@@ -33,6 +33,7 @@ type UserRow = {
   weekly_goal: number | null;
   onboarding_data: unknown;
   progressive_overload_enabled: boolean | null;
+  rir_enabled: boolean | null;
   rest_timer_sound_enabled: boolean | null;
   apple_health_enabled: boolean | null;
   apple_health_permissions: unknown;
@@ -65,6 +66,7 @@ type SocialProfile = {
   weeklyGoal?: number;
   onboardingData?: unknown;
   progressiveOverloadEnabled?: boolean;
+  rirEnabled?: boolean;
   restTimerSoundEnabled?: boolean;
   appleHealthEnabled?: boolean;
   appleHealthPermissions?: AppleHealthPermissions;
@@ -265,6 +267,7 @@ const profileUpdateSchema = z
     weeklyGoal: z.number().int().min(1).max(14).optional(),
     onboardingData: z.record(z.string(), z.unknown()).nullable().optional(),
     progressiveOverloadEnabled: z.boolean().optional(),
+    rirEnabled: z.boolean().optional(),
     restTimerSoundEnabled: z.boolean().optional(),
     appleHealthEnabled: z.boolean().optional(),
     appleHealthPermissions: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -467,6 +470,7 @@ const mapUserRow = (
   weeklyGoal: row.weekly_goal ?? 4,
   onboardingData: row.onboarding_data ?? undefined,
   progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
+  rirEnabled: row.rir_enabled ?? undefined,
   restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
   appleHealthEnabled: row.apple_health_enabled ?? false,
   appleHealthPermissions: (row.apple_health_permissions as AppleHealthPermissions | null) ?? undefined,
@@ -782,6 +786,7 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
     weeklyGoal,
     onboardingData,
     progressiveOverloadEnabled,
+    rirEnabled,
     restTimerSoundEnabled,
     appleHealthEnabled,
     appleHealthPermissions,
@@ -893,6 +898,11 @@ router.put("/me", validateBody(profileUpdateSchema), async (req, res) => {
   if (progressiveOverloadEnabled !== undefined) {
     updates.push(`progressive_overload_enabled = $${idx}`);
     values.push(progressiveOverloadEnabled);
+    idx += 1;
+  }
+  if (rirEnabled !== undefined) {
+    updates.push(`rir_enabled = $${idx}`);
+    values.push(rirEnabled);
     idx += 1;
   }
   if (restTimerSoundEnabled !== undefined) {

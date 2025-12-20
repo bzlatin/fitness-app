@@ -72,11 +72,13 @@ const CreateCustomExerciseModal = ({
   const createMutation = useMutation({
     mutationFn: createCustomExercise,
     onSuccess: async (data) => {
+      let uploadedImageUrl: string | undefined;
       // If there's an image, upload it
       if (imageUri) {
         try {
           setIsUploadingImage(true);
-          await uploadCustomExerciseImage(data.id, imageUri);
+          const upload = await uploadCustomExerciseImage(data.id, imageUri);
+          uploadedImageUrl = upload.imageUrl;
         } catch (error) {
           console.error("Failed to upload image:", error);
           Alert.alert("Warning", "Exercise created but image upload failed. You can add an image later.");
@@ -95,6 +97,7 @@ const CreateCustomExerciseModal = ({
         name: data.name,
         primaryMuscleGroup: data.primaryMuscleGroup,
         equipment: data.equipment || "bodyweight",
+        gifUrl: uploadedImageUrl,
         isCustom: true,
         createdBy: data.userId,
       };

@@ -36,28 +36,30 @@ export const useActiveWorkoutStatus = ({
   const lastTemplateName = useRef<string | undefined>(templateName);
 
   useEffect(() => {
-    if (initialVisibility) {
-      setVisibilityState(initialVisibility);
-      setVisibilityResolved(true);
-      void setStoredLiveVisibility(initialVisibility);
-      return;
-    }
-
     let cancelled = false;
     void (async () => {
+      if (initialVisibility) {
+        setVisibilityState(initialVisibility);
+        setVisibilityResolved(true);
+        void setStoredLiveVisibility(initialVisibility);
+        return;
+      }
+
       const stored = await getStoredLiveVisibility();
       if (cancelled) return;
-      if (stored) setVisibilityState(stored);
+      setVisibilityState(stored ?? "private");
       setVisibilityResolved(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [initialVisibility]);
+  }, [initialVisibility, sessionId]);
 
   useEffect(() => {
     if (sessionId !== lastSessionId.current) {
-      setVisibilityState(initialVisibility ?? "private");
+      if (initialVisibility) {
+        setVisibilityState(initialVisibility);
+      }
       setVisibilityResolved(Boolean(initialVisibility));
       hasInitialized.current = false;
       lastSessionId.current = sessionId;

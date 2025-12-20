@@ -102,6 +102,7 @@ const OnboardingScreen = () => {
 
   // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
+  const [rirEnabled, setRirEnabled] = useState(user?.rirEnabled ?? true);
 
   // Step 9: Notifications
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -275,6 +276,7 @@ const OnboardingScreen = () => {
         handle: normalizedHandle,
         avatarUrl: uploadReadyAvatar,
         onboardingData: onboardingData as any,
+        rirEnabled: isProUser || selectedPlan === "pro" ? rirEnabled : false,
       });
 
       // Register for push notifications if user opted in
@@ -373,7 +375,13 @@ const OnboardingScreen = () => {
         );
       case 8:
         return (
-          <TrainingStyleStep selectedSplit={preferredSplit} onSplitChange={setPreferredSplit} />
+          <TrainingStyleStep
+            selectedSplit={preferredSplit}
+            onSplitChange={setPreferredSplit}
+            isPro={isProUser || selectedPlan === "pro"}
+            rirEnabled={rirEnabled}
+            onRirChange={setRirEnabled}
+          />
         );
       case 9:
         // Skip NotificationsStep if retaking (they can manage in Settings)

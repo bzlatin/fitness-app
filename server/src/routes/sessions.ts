@@ -34,6 +34,20 @@ const normalizeDifficultyRating = (
   return null;
 };
 
+const parseRirValue = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return { value: null, valid: true };
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) {
+    return { value: null, valid: false };
+  }
+  return { value: parsed, valid: true };
+};
+
+const hasInvalidRir = (sets?: Partial<WorkoutSet>[]) =>
+  Boolean(sets?.some((set) => !parseRirValue(set.rir).valid));
+
 const roundToIncrement = (value: number, increment: number) => {
   if (!Number.isFinite(value)) return value;
   if (!Number.isFinite(increment) || increment <= 0) return value;
@@ -71,12 +85,13 @@ const suggestWarmupSetSpecs = (workingWeight: number, workingReps?: number) => {
 };
 
 const buildMetaMapFromSets = async (
-  setRows: { exercise_id: string }[]
+  setRows: { exercise_id: string }[],
+  userId?: string
 ): Promise<Map<string, ExerciseMeta>> => {
   const ids = Array.from(
     new Set(setRows.map((set) => set.exercise_id).filter(Boolean))
   );
-  return fetchExerciseMetaByIds(ids);
+  return fetchExerciseMetaByIds(ids, userId ? { userId } : undefined);
 };
 
 type TemplateExerciseRow = {
@@ -123,6 +138,7 @@ type SetRow = {
   target_weight: string | null;
   actual_reps: number | null;
   actual_weight: string | null;
+  rir: string | null;
   rpe: string | null;
   difficulty_rating: string | null;
   // Cardio-specific fields
@@ -150,6 +166,7 @@ const mapSet = (row: SetRow, metaMap?: Map<string, ExerciseMeta>): WorkoutSet =>
     targetWeight: row.target_weight === null ? undefined : Number(row.target_weight),
     actualReps: row.actual_reps ?? undefined,
     actualWeight: row.actual_weight === null ? undefined : Number(row.actual_weight),
+    rir: row.rir === null ? undefined : Number(row.rir),
     rpe: row.rpe === null ? undefined : Number(row.rpe),
     difficultyRating:
       normalizeDifficultyRating(row.difficulty_rating) ?? undefined,
@@ -376,7 +393,7 @@ const fetchSessionById = async (sessionId: string, userId: string) => {
     `SELECT * FROM workout_sets WHERE session_id = $1 ORDER BY set_index ASC`,
     [sessionId]
   );
-  const metaMap = await buildMetaMapFromSets(setRows.rows);
+      const metaMap = await buildMetaMapFromSets(setRows.rows, userId);
   return mapSession(sessionResult.rows[0], setRows.rows, undefined, metaMap);
 };
 
@@ -482,7 +499,7 @@ router.post("/from-template/:templateId", async (req, res) => {
           [sessionId]
         )
       ).rows;
-      const metaMap = await buildMetaMapFromSets(setRows);
+      const metaMap = await buildMetaMapFromSets(setRows, userId);
 
       return mapSession(
         {
@@ -573,7 +590,7 @@ router.get("/history/range", async (req, res) => {
               [sessionIds]
             )
           ).rows;
-    const metaMap = await buildMetaMapFromSets(setRows);
+    const metaMap = await buildMetaMapFromSets(setRows, userId);
 
     const summaries: SessionSummary[] = sessionRows.rows.map((row) => {
       const sets = setRows
@@ -773,7 +790,7 @@ router.get("/active/current", async (req, res) => {
     );
 
     // Build meta map for exercise names and images
-    const metaMap = await buildMetaMapFromSets(setsResult.rows);
+    const metaMap = await buildMetaMapFromSets(setsResult.rows, userId);
 
     // Get template name if exists
     let templateName: string | undefined;
@@ -835,6 +852,10 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
+    if (hasInvalidRir(sets)) {
+      return res.status(400).json({ error: "RIR must be between 0 and 10" });
+    }
+
     await withTransaction(async (client) => {
       if (sets) {
         await client.query(`DELETE FROM workout_sets WHERE session_id = $1`, [req.params.id]);
@@ -843,6 +864,7 @@ router.patch("/:id", async (req, res) => {
           const difficultyRating = normalizeDifficultyRating(
             (set as Partial<WorkoutSet>).difficultyRating
           );
+          const { value: rir } = parseRirValue(set.rir);
           await client.query(
             `
               INSERT INTO workout_sets (
@@ -856,6 +878,7 @@ router.patch("/:id", async (req, res) => {
                 target_weight,
                 actual_reps,
                 actual_weight,
+                rir,
                 rpe,
                 difficulty_rating,
                 target_distance,
@@ -865,7 +888,7 @@ router.patch("/:id", async (req, res) => {
                 target_duration_minutes,
                 actual_duration_minutes
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             `,
             [
               set.id ?? generateId(),
@@ -878,6 +901,7 @@ router.patch("/:id", async (req, res) => {
               set.targetWeight ?? null,
               set.actualReps ?? null,
               set.actualWeight ?? null,
+              rir,
               set.rpe ?? null,
               difficultyRating,
               set.targetDistance ?? null,
@@ -1058,6 +1082,10 @@ router.post("/manual", async (req, res) => {
     return res.status(400).json({ error: "At least one set is required" });
   }
 
+  if (hasInvalidRir(sets)) {
+    return res.status(400).json({ error: "RIR must be between 0 and 10" });
+  }
+
   const sessionId = generateId();
   const safeStart = startedAt ? new Date(startedAt) : new Date();
   const safeFinish = finishedAt ? new Date(finishedAt) : undefined;
@@ -1091,6 +1119,7 @@ router.post("/manual", async (req, res) => {
         const difficultyRating = normalizeDifficultyRating(
           (set as Partial<WorkoutSet>).difficultyRating
         );
+        const { value: rir } = parseRirValue(set.rir);
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1104,6 +1133,7 @@ router.post("/manual", async (req, res) => {
               target_weight,
               actual_reps,
               actual_weight,
+              rir,
               rpe,
               difficulty_rating,
               target_distance,
@@ -1113,7 +1143,7 @@ router.post("/manual", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           `,
           [
             set.id ?? generateId(),
@@ -1126,6 +1156,7 @@ router.post("/manual", async (req, res) => {
             set.targetWeight ?? null,
             set.actualReps ?? null,
             set.actualWeight ?? null,
+            rir,
             set.rpe ?? null,
             difficultyRating,
             set.targetDistance ?? null,
@@ -1143,7 +1174,7 @@ router.post("/manual", async (req, res) => {
           sessionId,
         ])
       ).rows;
-      const metaMap = await buildMetaMapFromSets(setRows);
+      const metaMap = await buildMetaMapFromSets(setRows, userId);
 
       return mapSession(
         {
@@ -1212,6 +1243,7 @@ router.post("/:id/duplicate", async (req, res) => {
       for (const set of session.sets) {
         const setKind = normalizeSetKind(set.setKind);
         const difficultyRating = normalizeDifficultyRating(set.difficultyRating);
+        const { value: rir } = parseRirValue(set.rir);
         await client.query(
           `
             INSERT INTO workout_sets (
@@ -1225,6 +1257,7 @@ router.post("/:id/duplicate", async (req, res) => {
               target_weight,
               actual_reps,
               actual_weight,
+              rir,
               rpe,
               difficulty_rating,
               target_distance,
@@ -1234,7 +1267,7 @@ router.post("/:id/duplicate", async (req, res) => {
               target_duration_minutes,
               actual_duration_minutes
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           `,
           [
             generateId(),
@@ -1247,6 +1280,7 @@ router.post("/:id/duplicate", async (req, res) => {
             set.targetWeight ?? null,
             set.actualReps ?? null,
             set.actualWeight ?? null,
+            rir,
             set.rpe ?? null,
             difficultyRating,
             set.targetDistance ?? null,
@@ -1333,6 +1367,26 @@ router.delete("/:id", async (req, res) => {
           ]
         );
       }
+
+      const shareRows = await client.query<{ id: string }>(
+        `SELECT id FROM workout_shares WHERE session_id = $1 AND user_id = $2`,
+        [sessionId, userId]
+      );
+      const shareIds = shareRows.rows.map((share) => share.id);
+      if (shareIds.length > 0) {
+        await client.query(
+          `DELETE FROM workout_reactions WHERE target_type = 'share' AND target_id = ANY($1::text[])`,
+          [shareIds]
+        );
+        await client.query(`DELETE FROM workout_shares WHERE id = ANY($1::text[])`, [
+          shareIds,
+        ]);
+      }
+
+      await client.query(
+        `DELETE FROM active_workout_statuses WHERE session_id = $1 AND user_id = $2`,
+        [sessionId, userId]
+      );
 
       const result = await client.query(
         `DELETE FROM workout_sessions WHERE id = $1 AND user_id = $2`,

@@ -483,6 +483,11 @@ const formatExerciseName = (id: string) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
+const formatRirValue = (value: number) => {
+  if (!Number.isFinite(value)) return "--";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+};
+
 // Helper to identify cardio exercises
 const isCardioExercise = (
   exerciseId: string,
@@ -594,6 +599,22 @@ const trimCardioSetsToSingle = (sessionSets: WorkoutSet[]) => {
   return sessionSets.filter((set) => keepIds.has(set.id));
 };
 
+const isSetLoggedFromData = (set: WorkoutSet) => {
+  const hasStrengthReps =
+    typeof set.actualReps === "number" &&
+    Number.isFinite(set.actualReps) &&
+    set.actualReps > 0;
+  const hasCardioMinutes =
+    typeof set.actualDurationMinutes === "number" &&
+    Number.isFinite(set.actualDurationMinutes) &&
+    set.actualDurationMinutes > 0;
+  const hasCardioDistance =
+    typeof set.actualDistance === "number" &&
+    Number.isFinite(set.actualDistance) &&
+    set.actualDistance > 0;
+  return hasStrengthReps || hasCardioMinutes || hasCardioDistance;
+};
+
 const WorkoutSessionScreen = () => {
   const route = useRoute<RootRoute<"WorkoutSession">>();
   const navigation = useNavigation<Nav>();
@@ -648,6 +669,10 @@ const WorkoutSessionScreen = () => {
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showWarmupSets, setShowWarmupSets] = useState(true);
+  const [rirEnabledByExerciseKey, setRirEnabledByExerciseKey] = useState<
+    Record<string, boolean>
+  >({});
+  const [hasHydratedRirToggles, setHasHydratedRirToggles] = useState(false);
   const [instructionsExercise, setInstructionsExercise] = useState<{
     id: string;
     name: string;
@@ -657,6 +682,8 @@ const WorkoutSessionScreen = () => {
   const { data: templates } = useWorkoutTemplates();
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
+  const isRirFeatureEnabled =
+    subscriptionAccess.hasProAccess && (user?.rirEnabled ?? true);
 
   // Refs to access latest state in deep link handler without causing re-renders
   const activeSetIdRef = useRef<string | null>(null);
@@ -679,12 +706,17 @@ const WorkoutSessionScreen = () => {
   const timerLockedRef = useRef<boolean>(false);
   const previousRestEndsAtRef = useRef<number | null>(null);
   const nativeScheduledRestEndsAtRef = useRef<number | null>(null);
+  const restEndsAtRef = useRef<number | null>(null);
+  const appStateRef = useRef(AppState.currentState);
   const exercisesListRef = useRef<any>(null);
   const shouldAutoScrollToActiveExerciseRef = useRef(false);
   const hasUserChangedWarmupPreferenceRef = useRef(false);
   const startingSuggestionFetchRef = useRef<Set<string>>(new Set());
   const [startingSuggestions, setStartingSuggestions] = useState<
     Record<string, StartingSuggestion>
+  >({});
+  const [dismissedStartingSuggestions, setDismissedStartingSuggestions] = useState<
+    Record<string, boolean>
   >({});
 
   // Keep refs in sync with state
@@ -711,6 +743,10 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     timerLockedRef.current = timerLocked;
   }, [timerLocked]);
+
+  useEffect(() => {
+    restEndsAtRef.current = restEndsAt;
+  }, [restEndsAt]);
 
   // Check if user currently has Pro access (blocks grace/expired)
   const isPro = subscriptionAccess.hasProAccess;
@@ -771,12 +807,20 @@ const WorkoutSessionScreen = () => {
       .map((set) =>
         [
           set.id,
+          set.exerciseId,
+          set.exerciseName ?? "",
+          set.exerciseImageUrl ?? "",
           set.setIndex,
+          set.setKind ?? "",
+          set.targetReps ?? "",
+          set.targetWeight ?? "",
+          set.targetRestSeconds ?? "",
           set.actualReps ?? "",
           set.actualWeight ?? "",
           set.actualDistance ?? "",
           set.actualIncline ?? "",
           set.actualDurationMinutes ?? "",
+          set.rir ?? "",
           set.rpe ?? "",
         ].join(":")
       )
@@ -1231,12 +1275,18 @@ const WorkoutSessionScreen = () => {
         autoEndedSession: null,
       });
 
-      const validSetIds = new Set(data.sets.map((set) => set.id));
+      const validSetIds = new Set(trimmedSets.map((set) => set.id));
       const persisted = await loadPersistedLoggedSetIds(sessionId);
+      const derived = new Set(
+        trimmedSets.filter(isSetLoggedFromData).map((set) => set.id)
+      );
       if (cancelled) return;
 
       const filtered = new Set<string>();
       persisted.forEach((id) => {
+        if (validSetIds.has(id)) filtered.add(id);
+      });
+      derived.forEach((id) => {
         if (validSetIds.has(id)) filtered.add(id);
       });
 
@@ -1372,6 +1422,7 @@ const WorkoutSessionScreen = () => {
   }, []);
 
   const rescheduleRestTimerSoundsIfNeeded = useCallback(() => {
+    if (appStateRef.current === "active") return;
     const soundEnabled = user?.restTimerSoundEnabled !== false;
     if (!soundEnabled) return;
     if (!sessionId) return;
@@ -1390,11 +1441,31 @@ const WorkoutSessionScreen = () => {
     user?.restTimerSoundEnabled,
   ]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appStateRef.current = nextState;
+      const currentRestEndsAt = restEndsAtRef.current;
+      if (!currentRestEndsAt || currentRestEndsAt <= Date.now()) return;
+
+      if (nextState === "active") {
+        cancelRestTimerSounds();
+        nativeScheduledRestEndsAtRef.current = null;
+        return;
+      }
+
+      rescheduleRestTimerSoundsIfNeeded();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [cancelRestTimerSounds, rescheduleRestTimerSoundsIfNeeded]);
+
   const finishMutation = useMutation({
     mutationFn: () => {
       // Pause timer before finishing
       pauseTimer();
-      return completeSession(sessionId!, sets);
+      return completeSession(sessionId!, setsRef.current);
     },
     onMutate: () => {
       isEndingSessionRef.current = true;
@@ -1406,7 +1477,11 @@ const WorkoutSessionScreen = () => {
       // Clear widget data when workout completes
       void syncActiveSessionToWidget(null);
       // Only include logged sets in summary
-      const loggedSets = sets.filter((set) => loggedSetIds.has(set.id));
+      const currentSets = setsRef.current;
+      const currentLoggedSetIds = loggedSetIdsRef.current;
+      const loggedSets = currentSets.filter((set) =>
+        currentLoggedSetIds.has(set.id)
+      );
       const summary = summarizeSets(loggedSets);
 
       // End Live Activity with completion summary
@@ -1495,12 +1570,14 @@ const WorkoutSessionScreen = () => {
   };
 
   const applySetUpdates = (updatedList: WorkoutSet[]) => {
-    setSets((prev) =>
-      prev.map((set) => {
+    setSets((prev) => {
+      const nextSets = prev.map((set) => {
         const next = updatedList.find((u) => u.id === set.id);
         return next ?? set;
-      })
-    );
+      });
+      setsRef.current = nextSets;
+      return nextSets;
+    });
   };
 
   const updateSet = (updated: WorkoutSet) => {
@@ -1526,6 +1603,18 @@ const WorkoutSessionScreen = () => {
     if (!hasHydratedWarmupPreference) return;
     void setStoredShowWarmupSets(showWarmupSets);
   }, [hasHydratedWarmupPreference, showWarmupSets]);
+
+  useEffect(() => {
+    if (!hasHydratedSession || hasHydratedRirToggles) return;
+    const next: Record<string, boolean> = {};
+    sets.forEach((set) => {
+      if (set.rir === undefined || set.rir === null) return;
+      const key = set.templateExerciseId ?? set.exerciseId;
+      next[key] = true;
+    });
+    setRirEnabledByExerciseKey(next);
+    setHasHydratedRirToggles(true);
+  }, [hasHydratedSession, hasHydratedRirToggles, sets]);
 
   const visibleSets = useMemo(() => {
     if (showWarmupSets) return sets;
@@ -1692,6 +1781,7 @@ const WorkoutSessionScreen = () => {
     previousRestEndsAtRef.current = restEndsAt;
 
     const soundEnabled = user?.restTimerSoundEnabled !== false;
+    const shouldScheduleNativeSound = appStateRef.current !== "active";
 
     if (
       restEndsAt &&
@@ -1700,6 +1790,11 @@ const WorkoutSessionScreen = () => {
       !isEndingSessionRef.current &&
       !sessionQuery.data?.endedReason
     ) {
+      if (!shouldScheduleNativeSound) {
+        cancelRestTimerSounds();
+        nativeScheduledRestEndsAtRef.current = null;
+        return;
+      }
       void (async () => {
         const scheduled = await scheduleRestTimerFinishSound(sessionId, restEndsAt);
         nativeScheduledRestEndsAtRef.current = scheduled ? restEndsAt : null;
@@ -1717,7 +1812,13 @@ const WorkoutSessionScreen = () => {
     if (!restEndsAt) {
       nativeScheduledRestEndsAtRef.current = null;
     }
-  }, [restEndsAt, sessionId, sessionQuery.data?.endedReason, user?.restTimerSoundEnabled]);
+  }, [
+    restEndsAt,
+    sessionId,
+    sessionQuery.data?.endedReason,
+    user?.restTimerSoundEnabled,
+    cancelRestTimerSounds,
+  ]);
 
   useEffect(() => {
     if (!sessionQuery.data?.endedReason) return;
@@ -2096,11 +2197,25 @@ const WorkoutSessionScreen = () => {
     // This prevents race conditions with the pending log set handler
     loggedSetIdsRef.current = updatedLoggedSetIds;
 
-    const updated: WorkoutSet = {
-      ...currentSet,
-      actualWeight: currentSet.actualWeight ?? currentSet.targetWeight,
-      actualReps: currentSet.actualReps ?? currentSet.targetReps,
-    };
+    const isCardioSet = isCardioExercise(
+      currentSet.exerciseId,
+      currentSet.exerciseName
+    );
+
+    const updated: WorkoutSet = isCardioSet
+      ? {
+          ...currentSet,
+          actualDistance: currentSet.actualDistance ?? currentSet.targetDistance,
+          actualIncline: currentSet.actualIncline ?? currentSet.targetIncline,
+          actualDurationMinutes:
+            currentSet.actualDurationMinutes ??
+            currentSet.targetDurationMinutes,
+        }
+      : {
+          ...currentSet,
+          actualWeight: currentSet.actualWeight ?? currentSet.targetWeight,
+          actualReps: currentSet.actualReps ?? currentSet.targetReps,
+        };
     applySetUpdates([updated]);
     setLoggedSetIds(updatedLoggedSetIds);
     setLastLoggedSetId(setId);
@@ -2161,6 +2276,9 @@ const WorkoutSessionScreen = () => {
               .slice(currentSortedIndex + 1)
               .find((s) => !updatedLoggedSetIds.has(s.id))
           : undefined;
+      const nextUnloggedSet =
+        nextSetAfterCurrent ??
+        sorted.find((s) => !updatedLoggedSetIds.has(s.id));
 
       // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
       const restDuration = fallbackRest ?? smartDefaultRestSeconds;
@@ -2173,6 +2291,11 @@ const WorkoutSessionScreen = () => {
         autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
       );
 
+      if (nextUnloggedSet) {
+        activeSetIdRef.current = nextUnloggedSet.id;
+        setActiveSetId(nextUnloggedSet.id);
+      }
+
       // Auto-carry weight + reps to the next set (strength only, working sets only).
       if (
         nextSetAfterCurrent &&
@@ -2180,27 +2303,23 @@ const WorkoutSessionScreen = () => {
         !isCardioExercise(updated.exerciseId, updated.exerciseName) &&
         nextSetAfterCurrent.setKind !== "warmup"
       ) {
-        const carryWeight =
+        const canCarryWeight =
           updated.actualWeight !== undefined &&
           nextSetAfterCurrent.actualWeight === undefined;
-        const carryReps =
+        const canCarryReps =
           updated.actualReps !== undefined &&
           nextSetAfterCurrent.actualReps === undefined;
 
-        if (carryWeight || carryReps) {
+        if (canCarryWeight || canCarryReps) {
           setSets((prev) =>
             prev.map((set) => {
               if (set.id !== nextSetAfterCurrent.id) return set;
               return {
                 ...set,
                 actualWeight:
-                  carryWeight && set.actualWeight === undefined
-                    ? updated.actualWeight
-                    : set.actualWeight,
+                  canCarryWeight ? updated.actualWeight : set.actualWeight,
                 actualReps:
-                  carryReps && set.actualReps === undefined
-                    ? updated.actualReps
-                    : set.actualReps,
+                  canCarryReps ? updated.actualReps : set.actualReps,
               };
             })
           );
@@ -2364,7 +2483,7 @@ const WorkoutSessionScreen = () => {
             targetReps: newExercise.reps ?? set.targetReps,
             targetRestSeconds: newExercise.restSeconds ?? set.targetRestSeconds,
             actualReps: newExercise.reps ?? set.actualReps,
-            exerciseImageUrl: newExercise.gifUrl ?? set.exerciseImageUrl,
+            exerciseImageUrl: newExercise.gifUrl,
             targetWeight: undefined,
             actualWeight: undefined,
             targetDistance: undefined,
@@ -3177,17 +3296,28 @@ const WorkoutSessionScreen = () => {
       <Pressable
         disabled={!sessionId || finishMutation.isPending}
         onPress={() => {
-          const unloggedSets = sets.filter((set) => !loggedSetIds.has(set.id));
+          const currentSets = setsRef.current;
+          const currentLoggedSetIds = loggedSetIdsRef.current;
+          const unloggedSets = currentSets.filter(
+            (set) =>
+              set.setKind !== "warmup" && !currentLoggedSetIds.has(set.id)
+          );
           if (unloggedSets.length === 0) {
             finishMutation.mutate();
             return;
           }
 
           const unloggedExercises = new Set(unloggedSets.map((s) => s.exerciseId)).size;
+          const loggedWorkingSets = currentSets.filter(
+            (set) =>
+              set.setKind !== "warmup" && currentLoggedSetIds.has(set.id)
+          );
           const title =
-            loggedSetIds.size === 0 ? "Finish without logging?" : "Some sets are unlogged";
+            loggedWorkingSets.length === 0
+              ? "Finish without logging?"
+              : "Some sets are unlogged";
           const message =
-            loggedSetIds.size === 0
+            loggedWorkingSets.length === 0
               ? "You haven't logged any sets yet. If you finish now, this workout will count as 0 logged sets."
               : `You have ${unloggedSets.length} unlogged set${unloggedSets.length === 1 ? "" : "s"} across ${unloggedExercises} exercise${unloggedExercises === 1 ? "" : "s"}.`;
 
@@ -3397,92 +3527,117 @@ const WorkoutSessionScreen = () => {
               item: group,
               drag,
               isActive,
-            }: RenderItemParams<ExerciseGroup>) => (
-              <ScaleDecorator>
-                <ExerciseCard
-                  group={group}
-                  expanded={group.key === activeExerciseKey}
-                  onToggle={() => {
-                    setAutoFocusEnabled(false);
-                    setActiveExerciseKey((prev) => {
-                      const next = prev === group.key ? null : group.key;
-                      if (next === group.key) {
-                        setActiveSetId(group.sets[0]?.id ?? null);
-                        // Sync newly expanded exercise to widget
-                        const firstUnloggedSet = group.sets.find(
-                          (s) => !loggedSetIds.has(s.id)
-                        );
-                        if (firstUnloggedSet) {
-                          const setIndex = group.sets.findIndex(
-                            (s) => s.id === firstUnloggedSet.id
+            }: RenderItemParams<ExerciseGroup>) => {
+              const hasRirValues = group.sets.some(
+                (set) => set.rir !== undefined && set.rir !== null
+              );
+              const isRirEnabled = isRirFeatureEnabled
+                ? rirEnabledByExerciseKey[group.key] ?? hasRirValues ?? true
+                : false;
+              return (
+                <ScaleDecorator>
+                  <ExerciseCard
+                    group={group}
+                    expanded={group.key === activeExerciseKey}
+                    onToggle={() => {
+                      setAutoFocusEnabled(false);
+                      setActiveExerciseKey((prev) => {
+                        const next = prev === group.key ? null : group.key;
+                        if (next === group.key) {
+                          setActiveSetId(group.sets[0]?.id ?? null);
+                          // Sync newly expanded exercise to widget
+                          const firstUnloggedSet = group.sets.find(
+                            (s) => !loggedSetIds.has(s.id)
                           );
-                          syncCurrentExerciseToWidget(group.key, setIndex);
+                          if (firstUnloggedSet) {
+                            const setIndex = group.sets.findIndex(
+                              (s) => s.id === firstUnloggedSet.id
+                            );
+                            syncCurrentExerciseToWidget(group.key, setIndex);
+                          }
                         }
-                      }
-                      return next;
-                    });
-                  }}
-                  onChangeSet={updateSet}
-                  startingSuggestion={startingSuggestions[group.exerciseId]}
-                  onApplyStartingSuggestion={() =>
-                    applyStartingSuggestionToGroup(
-                      group.key,
-                      startingSuggestions[group.exerciseId]
-                    )
-                  }
-                  onLogSet={logSet}
-                  activeSetId={activeSetId}
-                  onSelectSet={setActiveSetId}
-                  autoRestTimer={autoRestTimer}
-                  loggedSetIds={loggedSetIds}
-                  restRemaining={restRemaining}
-                  lastLoggedSetId={lastLoggedSetId}
-                  sessionRestSeconds={sessionRestTimes[group.key]}
-                  warmupRestSeconds={sessionWarmupRestTimes[group.key]}
-                  onUndo={undoSet}
-                  onSwap={() => setSwapExerciseKey(group.key)}
-                  onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
-                  onDrag={drag}
-                  isDragging={isActive}
-                  onAddSet={() => handleAddSet(group.key)}
-                  onRemoveSet={handleRemoveSet}
-                  onDeleteExercise={() => handleDeleteExercise(group.key)}
-                  onImagePress={() =>
-                    group.imageUrl && setImagePreviewUrl(group.imageUrl)
-                  }
-                  onShowInstructions={() =>
-                    setInstructionsExercise({
-                      id: group.exerciseId,
-                      name: group.name,
-                    })
-                  }
-                  showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
-                  onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
-                    // Apply rating to all working sets in this exercise
-                    const workingSetsInGroup = setsRef.current.filter(
-                      (s) =>
-                        (s.templateExerciseId ?? s.exerciseId) === group.key &&
-                        s.setKind !== "warmup"
-                    );
-                    const updatedSets = workingSetsInGroup.map((s) => ({
-                      ...s,
-                      difficultyRating: rating,
-                    }));
-                    if (updatedSets.length > 0) {
-                      applySetUpdates(updatedSets);
+                        return next;
+                      });
+                    }}
+                    onChangeSet={updateSet}
+                    startingSuggestion={startingSuggestions[group.exerciseId]}
+                    isStartingSuggestionDismissed={
+                      dismissedStartingSuggestions[group.exerciseId]
                     }
-                    // Clear pending state and advance to next exercise
-                    setPendingDifficultyFeedbackKey(null);
-                    advanceToNextExercise(group.key, loggedSetIds);
-                  }}
-                  onSkipDifficultyFeedback={() => {
-                    // Clear pending state and advance to next exercise without saving rating
-                    setPendingDifficultyFeedbackKey(null);
-                    advanceToNextExercise(group.key, loggedSetIds);
-                  }}
-                />
-              </ScaleDecorator>
-            )}
+                    onApplyStartingSuggestion={() =>
+                      applyStartingSuggestionToGroup(
+                        group.key,
+                        startingSuggestions[group.exerciseId]
+                      )
+                    }
+                    onDismissStartingSuggestion={() =>
+                      setDismissedStartingSuggestions((prev) => ({
+                        ...prev,
+                        [group.exerciseId]: true,
+                      }))
+                    }
+                    onLogSet={logSet}
+                    activeSetId={activeSetId}
+                    onSelectSet={setActiveSetId}
+                    autoRestTimer={autoRestTimer}
+                    loggedSetIds={loggedSetIds}
+                    restRemaining={restRemaining}
+                    lastLoggedSetId={lastLoggedSetId}
+                    sessionRestSeconds={sessionRestTimes[group.key]}
+                    warmupRestSeconds={sessionWarmupRestTimes[group.key]}
+                    isRirEnabled={isRirEnabled}
+                    showRirToggle={isRirFeatureEnabled}
+                    onToggleRir={() =>
+                      setRirEnabledByExerciseKey((prev) => ({
+                        ...prev,
+                        [group.key]: !isRirEnabled,
+                      }))
+                    }
+                    onUndo={undoSet}
+                    onSwap={() => setSwapExerciseKey(group.key)}
+                    onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
+                    onDrag={drag}
+                    isDragging={isActive}
+                    onAddSet={() => handleAddSet(group.key)}
+                    onRemoveSet={handleRemoveSet}
+                    onDeleteExercise={() => handleDeleteExercise(group.key)}
+                    onImagePress={() =>
+                      group.imageUrl && setImagePreviewUrl(group.imageUrl)
+                    }
+                    onShowInstructions={() =>
+                      setInstructionsExercise({
+                        id: group.exerciseId,
+                        name: group.name,
+                      })
+                    }
+                    showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
+                    onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
+                      // Apply rating to all working sets in this exercise
+                      const workingSetsInGroup = setsRef.current.filter(
+                        (s) =>
+                          (s.templateExerciseId ?? s.exerciseId) === group.key &&
+                          s.setKind !== "warmup"
+                      );
+                      const updatedSets = workingSetsInGroup.map((s) => ({
+                        ...s,
+                        difficultyRating: rating,
+                      }));
+                      if (updatedSets.length > 0) {
+                        applySetUpdates(updatedSets);
+                      }
+                      // Clear pending state and advance to next exercise
+                      setPendingDifficultyFeedbackKey(null);
+                      advanceToNextExercise(group.key, loggedSetIds);
+                    }}
+                    onSkipDifficultyFeedback={() => {
+                      // Clear pending state and advance to next exercise without saving rating
+                      setPendingDifficultyFeedbackKey(null);
+                      advanceToNextExercise(group.key, loggedSetIds);
+                    }}
+                  />
+                </ScaleDecorator>
+              );
+            }}
           />
         </View>
 
@@ -3553,6 +3708,7 @@ type SetInputRowProps = {
   onLog: () => void;
   restSeconds?: number;
   isActive?: boolean;
+  showRir?: boolean;
   autoRestTimer: boolean;
   logged: boolean;
   onUndo: () => void;
@@ -3568,6 +3724,7 @@ const SetInputRow = ({
   onLog,
   restSeconds,
   isActive,
+  showRir,
   autoRestTimer,
   logged,
   onUndo,
@@ -3577,6 +3734,20 @@ const SetInputRow = ({
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
   const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
   const [isEditingWeight, setIsEditingWeight] = useState(false);
+  const [distanceText, setDistanceText] = useState(
+    set.actualDistance?.toString() ?? ""
+  );
+  const [isEditingDistance, setIsEditingDistance] = useState(false);
+  const [inclineText, setInclineText] = useState(
+    set.actualIncline?.toString() ?? ""
+  );
+  const [isEditingIncline, setIsEditingIncline] = useState(false);
+  const [durationText, setDurationText] = useState(
+    set.actualDurationMinutes?.toString() ?? ""
+  );
+  const [isEditingDuration, setIsEditingDuration] = useState(false);
+  const [rirText, setRirText] = useState(set.rir?.toString() ?? "");
+  const [isEditingRir, setIsEditingRir] = useState(false);
   const restLabelSeconds =
     restSeconds ??
     (isWarmup ? DEFAULT_WARMUP_REST_SECONDS : DEFAULT_WORKING_REST_SECONDS);
@@ -3585,6 +3756,26 @@ const SetInputRow = ({
     if (isEditingWeight) return;
     setWeightText(set.actualWeight?.toString() ?? "");
   }, [isEditingWeight, set.actualWeight, set.id]);
+
+  useEffect(() => {
+    if (isEditingDistance) return;
+    setDistanceText(set.actualDistance?.toString() ?? "");
+  }, [isEditingDistance, set.actualDistance, set.id]);
+
+  useEffect(() => {
+    if (isEditingIncline) return;
+    setInclineText(set.actualIncline?.toString() ?? "");
+  }, [isEditingIncline, set.actualIncline, set.id]);
+
+  useEffect(() => {
+    if (isEditingDuration) return;
+    setDurationText(set.actualDurationMinutes?.toString() ?? "");
+  }, [isEditingDuration, set.actualDurationMinutes, set.id]);
+
+  useEffect(() => {
+    if (isEditingRir) return;
+    setRirText(set.rir?.toString() ?? "");
+  }, [isEditingRir, set.rir, set.id]);
 
   const hasRepRange =
     set.targetRepsMin !== undefined &&
@@ -3633,6 +3824,12 @@ const SetInputRow = ({
     if (!isNaN(numValue)) {
       onChange({ ...set, [field]: numValue });
     }
+  };
+
+  const normalizeDecimalInput = (text: string) => {
+    const next = text.replace(/[^0-9.]/g, "");
+    const parts = next.split(".");
+    return parts.length <= 2 ? next : `${parts[0]}.${parts.slice(1).join("")}`;
   };
 
   return (
@@ -3788,8 +3985,17 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualDistance?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualDistance", text)}
+                value={distanceText}
+                onFocus={() => setIsEditingDistance(true)}
+                onBlur={() => {
+                  setIsEditingDistance(false);
+                  setDistanceText(set.actualDistance?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setDistanceText(normalized);
+                  updateField("actualDistance", normalized);
+                }}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -3808,8 +4014,17 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualIncline?.toString() ?? ""}
-                onChangeText={(text) => updateField("actualIncline", text)}
+                value={inclineText}
+                onFocus={() => setIsEditingIncline(true)}
+                onBlur={() => {
+                  setIsEditingIncline(false);
+                  setInclineText(set.actualIncline?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setInclineText(normalized);
+                  updateField("actualIncline", normalized);
+                }}
               />
             </View>
           </View>
@@ -3830,73 +4045,129 @@ const SetInputRow = ({
                 keyboardType='decimal-pad'
                 placeholder='--'
                 placeholderTextColor={colors.textSecondary}
-                value={set.actualDurationMinutes?.toString() ?? ""}
-                onChangeText={(text) =>
-                  updateField("actualDurationMinutes", text)
-                }
+                value={durationText}
+                onFocus={() => setIsEditingDuration(true)}
+                onBlur={() => {
+                  setIsEditingDuration(false);
+                  setDurationText(set.actualDurationMinutes?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const normalized = normalizeDecimalInput(text);
+                  setDurationText(normalized);
+                  updateField("actualDurationMinutes", normalized);
+                }}
               />
             </View>
             <View style={{ flex: 1 }} />
           </View>
         </>
       ) : (
-        // Strength training inputs: Weight & Reps
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              Weight
-            </Text>
-            <TextInput
-              style={{
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                borderRadius: 8,
-                padding: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-              keyboardType='decimal-pad'
-              placeholder='--'
-              placeholderTextColor={colors.textSecondary}
-              value={weightText}
-              onFocus={() => setIsEditingWeight(true)}
-              onBlur={() => {
-                setIsEditingWeight(false);
-                setWeightText(set.actualWeight?.toString() ?? "");
-              }}
-              onChangeText={(text) => {
-                const next = text.replace(/[^0-9.]/g, "");
-                const parts = next.split(".");
-                const normalized =
-                  parts.length <= 2
-                    ? next
-                    : `${parts[0]}.${parts.slice(1).join("")}`;
-                setWeightText(normalized);
-                updateField("actualWeight", normalized);
-              }}
-            />
+        <>
+          {/* Strength training inputs: Weight & Reps */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Weight
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='decimal-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={weightText}
+                onFocus={() => setIsEditingWeight(true)}
+                onBlur={() => {
+                  setIsEditingWeight(false);
+                  setWeightText(set.actualWeight?.toString() ?? "");
+                }}
+                onChangeText={(text) => {
+                  const next = text.replace(/[^0-9.]/g, "");
+                  const parts = next.split(".");
+                  const normalized =
+                    parts.length <= 2
+                      ? next
+                      : `${parts[0]}.${parts.slice(1).join("")}`;
+                  setWeightText(normalized);
+                  updateField("actualWeight", normalized);
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                Reps
+              </Text>
+              <TextInput
+                style={{
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                keyboardType='number-pad'
+                placeholder='--'
+                placeholderTextColor={colors.textSecondary}
+                value={set.actualReps?.toString() ?? ""}
+                onChangeText={(text) => updateField("actualReps", text)}
+              />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              Reps
-            </Text>
-            <TextInput
-              style={{
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                borderRadius: 8,
-                padding: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-              keyboardType='number-pad'
-              placeholder='--'
-              placeholderTextColor={colors.textSecondary}
-              value={set.actualReps?.toString() ?? ""}
-              onChangeText={(text) => updateField("actualReps", text)}
-            />
-          </View>
-        </View>
+          {showRir ? (
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  RIR
+                </Text>
+                <TextInput
+                  style={{
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                    borderRadius: 8,
+                    padding: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                  keyboardType='decimal-pad'
+                  placeholder='--'
+                  placeholderTextColor={colors.textSecondary}
+                  value={rirText}
+                  onFocus={() => setIsEditingRir(true)}
+                  onBlur={() => {
+                    setIsEditingRir(false);
+                    setRirText(set.rir?.toString() ?? "");
+                  }}
+                  onChangeText={(text) => {
+                    const next = text.replace(/[^0-9.]/g, "");
+                    const parts = next.split(".");
+                    const normalized =
+                      parts.length <= 2
+                        ? next
+                        : `${parts[0]}.${parts.slice(1).join("")}`;
+                    setRirText(normalized);
+                    if (normalized === "") {
+                      onChange({ ...set, rir: undefined });
+                      return;
+                    }
+                    const numValue = parseFloat(normalized);
+                    if (!Number.isNaN(numValue)) {
+                      const clamped = Math.max(0, Math.min(10, numValue));
+                      onChange({ ...set, rir: clamped });
+                    }
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }} />
+            </View>
+          ) : null}
+        </>
       )}
       <View
         style={{
@@ -3924,7 +4195,9 @@ type ExerciseCardProps = {
   onToggle: () => void;
   onChangeSet: (updated: WorkoutSet) => void;
   startingSuggestion?: StartingSuggestion;
+  isStartingSuggestionDismissed?: boolean;
   onApplyStartingSuggestion?: () => void;
+  onDismissStartingSuggestion?: () => void;
   onLogSet: (setId: string, restSeconds?: number) => void;
   activeSetId: string | null;
   onSelectSet: (setId: string | null) => void;
@@ -3934,6 +4207,8 @@ type ExerciseCardProps = {
   lastLoggedSetId: string | null;
   sessionRestSeconds?: number;
   warmupRestSeconds?: number;
+  isRirEnabled: boolean;
+  onToggleRir: () => void;
   onUndo: (setId: string) => void;
   onSwap: () => void;
   onAdjustTimer: () => void;
@@ -3947,6 +4222,7 @@ type ExerciseCardProps = {
   showExerciseDifficultyFeedback: boolean;
   onExerciseDifficultyFeedback: (rating: SetDifficultyRating) => void;
   onSkipDifficultyFeedback: () => void;
+  showRirToggle: boolean;
 };
 
 const ExerciseCard = ({
@@ -3955,7 +4231,9 @@ const ExerciseCard = ({
   onToggle,
   onChangeSet,
   startingSuggestion,
+  isStartingSuggestionDismissed = false,
   onApplyStartingSuggestion,
+  onDismissStartingSuggestion,
   onLogSet,
   activeSetId,
   onSelectSet,
@@ -3965,6 +4243,8 @@ const ExerciseCard = ({
   lastLoggedSetId,
   sessionRestSeconds,
   warmupRestSeconds,
+  isRirEnabled,
+  onToggleRir,
   onUndo,
   onSwap,
   onAdjustTimer,
@@ -3978,6 +4258,7 @@ const ExerciseCard = ({
   showExerciseDifficultyFeedback,
   onExerciseDifficultyFeedback,
   onSkipDifficultyFeedback,
+  showRirToggle,
 }: ExerciseCardProps) => {
   const loggedSetsCount = group.sets.filter((s) =>
     loggedSetIds.has(s.id)
@@ -4005,9 +4286,22 @@ const ExerciseCard = ({
     ? `${primaryWorkingSet.targetReps} reps`
     : "adjust as you go";
 
+  const rirValues = group.sets.filter(
+    (set) => set.setKind !== "warmup" && typeof set.rir === "number"
+  );
+  const averageRir =
+    rirValues.length > 0
+      ? rirValues.reduce((sum, set) => sum + (set.rir ?? 0), 0) / rirValues.length
+      : null;
+  const rirSummary = isRirEnabled
+    ? averageRir === null
+      ? "RIR on"
+      : `RIR ${formatRirValue(averageRir)}`
+    : null;
+
   const summaryLine = `${workingSetCount} working${
     warmupSetCount > 0 ? ` · ${warmupSetCount} warm-up` : ""
-  } · ${repsDisplaySummary}`;
+  } · ${repsDisplaySummary}${rirSummary ? ` · ${rirSummary}` : ""}`;
 
   const hasWeightSuggestion =
     typeof startingSuggestion?.suggestedWeight === "number" &&
@@ -4033,6 +4327,7 @@ const ExerciseCard = ({
 
   const canApplyStartingSuggestion =
     Boolean(startingSuggestion) &&
+    !isStartingSuggestionDismissed &&
     ((hasWeightSuggestion && hasMissingWeight) ||
       (hasRepsSuggestion && hasMissingReps));
 
@@ -4255,6 +4550,40 @@ const ExerciseCard = ({
             </Pressable>
           </View>
 
+          {!isCardioGroup && showRirToggle ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                  Track RIR
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Optional reps in reserve per working set.
+                </Text>
+              </View>
+              <Switch
+                value={isRirEnabled}
+                onValueChange={onToggleRir}
+                trackColor={{
+                  false: colors.border,
+                  true: "rgba(34,197,94,0.35)",
+                }}
+                thumbColor={isRirEnabled ? colors.primary : "#6B7280"}
+              />
+            </View>
+          ) : null}
+
           {canApplyStartingSuggestion ? (
             <View
               style={{
@@ -4266,10 +4595,35 @@ const ExerciseCard = ({
                 gap: 10,
               }}
             >
-              <View style={{ gap: 2 }}>
-                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-                  Suggested start
-                </Text>
+              <View style={{ gap: 6 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                    Suggested start
+                  </Text>
+                  <Pressable
+                    onPress={onDismissStartingSuggestion}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      padding: 4,
+                      borderRadius: 12,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                    accessibilityRole='button'
+                    accessibilityLabel='Dismiss suggested start'
+                  >
+                    <Ionicons
+                      name='close'
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
+                </View>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {startingSuggestion?.suggestedWeight
                     ? `${startingSuggestion.suggestedWeight} lb`
@@ -4315,6 +4669,7 @@ const ExerciseCard = ({
                   onLog={() => onLogSet(set.id, restSecondsForSet)}
                   restSeconds={restSecondsForSet}
                   isActive={activeSetId === set.id}
+                  showRir={isRirEnabled && !isCardioGroup && set.setKind !== "warmup"}
                   autoRestTimer={autoRestTimer}
                   logged={loggedSetIds.has(set.id)}
                   onUndo={() => onUndo(set.id)}

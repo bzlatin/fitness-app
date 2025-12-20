@@ -19,6 +19,9 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
   private var scheduledTimerPlayer: AVAudioPlayer?
   private var scheduledTimerEndsAtMs: Double?
   private var scheduledTimerWorkItem: DispatchWorkItem?
+  private var scheduledTimerDuckingWorkItem: DispatchWorkItem?
+  private var immediateTimerPlayer: AVAudioPlayer?
+  private var audioSessionRestoreWorkItem: DispatchWorkItem?
 
   @available(iOS 16.1, *)
   private var currentActivity: Activity<WorkoutActivityAttributes>? {
@@ -88,6 +91,10 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     scheduledTimerEndsAtMs = endsAtMs
     scheduledTimerWorkItem?.cancel()
     scheduledTimerWorkItem = nil
+    scheduledTimerDuckingWorkItem?.cancel()
+    scheduledTimerDuckingWorkItem = nil
+    audioSessionRestoreWorkItem?.cancel()
+    audioSessionRestoreWorkItem = nil
 
     guard let url = Bundle.main.url(forResource: "timer-complete", withExtension: "mp3") else {
       print("⚠️ [TimerSound] timer-complete.mp3 not found in bundle resources")
@@ -97,10 +104,9 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
     do {
       let session = AVAudioSession.sharedInstance()
-      // Use .duckOthers to temporarily lower music volume when chime plays
-      // This ensures the timer sound is audible even with loud music through AirPods
-      // .playback category ensures sound plays even when device is in silent mode
-      try session.setCategory(.playback, mode: .default, options: [.duckOthers])
+      // Keep audio session active without ducking while the timer counts down.
+      // We only duck other audio right before the chime plays.
+      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
       try session.setActive(true)
 
       let player = try AVAudioPlayer(contentsOf: url)
@@ -113,6 +119,31 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
       let playAt = player.deviceCurrentTime + intervalSeconds
       player.play(atTime: playAt)
       print("✅ [TimerSound] Scheduled timer-complete.mp3 in \(intervalSeconds)s")
+
+      scheduleAudioSessionRestore(after: intervalSeconds + 2.5)
+
+      let applyDucking = { [weak self] in
+        guard self != nil else { return }
+        do {
+          let duckSession = AVAudioSession.sharedInstance()
+          // Use voicePrompt for more reliable, short-lived ducking across music apps.
+          try duckSession.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+          try duckSession.setActive(true)
+        } catch {
+          print("⚠️ [TimerSound] Failed to enable ducking: \(error.localizedDescription)")
+        }
+      }
+
+      if intervalSeconds <= 0.01 {
+        applyDucking()
+      } else {
+        let duckDelay = max(0, intervalSeconds - 0.05)
+        let duckWorkItem = DispatchWorkItem {
+          applyDucking()
+        }
+        scheduledTimerDuckingWorkItem = duckWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + duckDelay, execute: duckWorkItem)
+      }
 
       // Best-effort: when the timer ends, clear rest state on the Live Activity so the UI can show "Log Set".
       let workItem = DispatchWorkItem { [weak self] in
@@ -157,23 +188,99 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     scheduledTimerEndsAtMs = nil
     scheduledTimerWorkItem?.cancel()
     scheduledTimerWorkItem = nil
+    scheduledTimerDuckingWorkItem?.cancel()
+    scheduledTimerDuckingWorkItem = nil
+    audioSessionRestoreWorkItem?.cancel()
+    audioSessionRestoreWorkItem = nil
     if let player = scheduledTimerPlayer {
       player.stop()
     }
     scheduledTimerPlayer = nil
 
+    restoreAudioSession()
+  }
+
+  @objc
+  func playTimerCompleteSoundNow(
+    _ resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    immediateTimerPlayer?.stop()
+    immediateTimerPlayer = nil
+    audioSessionRestoreWorkItem?.cancel()
+    audioSessionRestoreWorkItem = nil
+
+    guard let url = Bundle.main.url(forResource: "timer-complete", withExtension: "mp3") else {
+      print("⚠️ [TimerSound] timer-complete.mp3 not found in bundle resources")
+      resolve(false)
+      return
+    }
+
     do {
-      try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+      let session = AVAudioSession.sharedInstance()
+      // Voice prompt mode improves ducking reliability for short sounds.
+      try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+      try session.setActive(true)
+
+      let player = try AVAudioPlayer(contentsOf: url)
+      player.delegate = self
+      player.volume = 0.6
+      player.prepareToPlay()
+      immediateTimerPlayer = player
+      player.play()
+      scheduleAudioSessionRestore(after: 2.5)
+      resolve(true)
     } catch {
-      // ignore
+      print("❌ [TimerSound] Failed to play immediate sound: \(error.localizedDescription)")
+      immediateTimerPlayer = nil
+      reject("timer_sound_play_failed", error.localizedDescription, error)
     }
   }
 
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-    scheduledTimerPlayer = nil
-    scheduledTimerEndsAtMs = nil
+    if player == scheduledTimerPlayer {
+      scheduledTimerPlayer = nil
+      scheduledTimerEndsAtMs = nil
+    }
+    if player == immediateTimerPlayer {
+      immediateTimerPlayer = nil
+    }
+    scheduledTimerDuckingWorkItem?.cancel()
+    scheduledTimerDuckingWorkItem = nil
+    audioSessionRestoreWorkItem?.cancel()
+    audioSessionRestoreWorkItem = nil
+    restoreAudioSession()
+  }
+
+  private func scheduleAudioSessionRestore(after seconds: Double) {
+    audioSessionRestoreWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      self?.restoreAudioSession()
+    }
+    audioSessionRestoreWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: workItem)
+  }
+
+  private func restoreAudioSession() {
     do {
-      try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+      let session = AVAudioSession.sharedInstance()
+      try session.setActive(false, options: [.notifyOthersOnDeactivation])
+      // If another audio app stays ducked, explicitly re-activate with mix so it can recover.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        do {
+          try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+          try session.setActive(true)
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            do {
+              try session.setActive(false, options: [.notifyOthersOnDeactivation])
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // ignore
     }

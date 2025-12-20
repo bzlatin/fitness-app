@@ -63,6 +63,7 @@ export interface SocialProfile extends SocialUserSummary {
   gymName?: string | null;
   gymVisibility?: "hidden" | "shown";
   progressiveOverloadEnabled?: boolean;
+  rirEnabled?: boolean;
   friendsPreview?: SocialUserSummary[];
 }
 
