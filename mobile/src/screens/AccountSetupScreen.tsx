@@ -423,7 +423,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                 </Text>
               </Pressable>
             </View>
-          ) : (
+          ) : currentStep === 3 ? (
             <View style={{ gap: 10, paddingBottom: Math.max(insets.bottom, 16) }}>
               <Pressable
                 onPress={() =>
@@ -468,7 +468,7 @@ const AccountSetupScreen = ({ onFinished }: Props) => {
                 </Text>
               </Pressable>
             </View>
-          )}
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>

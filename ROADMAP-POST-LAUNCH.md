@@ -56,6 +56,7 @@ Provide a user-controlled export of workout history for portability/compliance.
 **Export Format (CSV)**:
 
 Multiple CSV files in a ZIP archive:
+
 - `workouts.csv` - All workout sessions with dates and duration
 - `sets.csv` - All logged sets with exercise, weight, reps
 - `templates.csv` - All workout templates
@@ -65,6 +66,7 @@ Multiple CSV files in a ZIP archive:
 **Export Format (JSON)**:
 
 Single JSON file with nested structure:
+
 ```json
 {
   "user": { "handle": "@exhibited", "created_at": "..." },
@@ -95,7 +97,7 @@ Allow users to gift a 14-day Pro trial pass to friends/family, driving viral gro
 
 ### User Experience
 
-- "Gift a Pass" button in Settings/Profile (Pro users only, or anyone)
+- "Gift a Pass" button in Settings/Profile (Pro users only)
 - User enters recipient's email or handle
 - Recipient gets notification/email with unique redemption link
 - Link activates 14-day Pro trial (no payment method required)
@@ -104,6 +106,7 @@ Allow users to gift a 14-day Pro trial pass to friends/family, driving viral gro
 ### Implementation Details
 
 **Features**:
+
 - New `gift_passes` table with sender/recipient tracking and redemption status
 - Email template for gift notification with redemption link
 - Deep link handler for `pushpull://redeem/gift/{code}`
@@ -154,11 +157,11 @@ CREATE INDEX gift_passes_recipient_idx ON gift_passes(recipient_id);
 
 ## Gym Equipment Preferences & Settings
 
-**Priority**: HIGH | **Effort**: 8-12 days | **Impact**: VERY HIGH | **Status**: ☐ PLANNED
+**Priority**: HIGH | **Effort**: 8-12 days | **Impact**: VERY HIGH | **Status**: ✅ COMPLETE
 
 ### Goal
 
-Let users define their gym's available equipment to improve AI workout generation accuracy and enable warm-up sets and cardio recommendations.
+Let users define their gym's available equipment to improve AI workout generation accuracy and enable warm-up sets and cardio recommendations. During onboarding, give them the option to either skip or choose the equipment they have. Also, users may have multiple gyms they go to with different equipment, so we want to be able to save different "gyms" and specify different equipment for each & be able to easily swap between them.
 
 ### User Experience
 
@@ -167,6 +170,7 @@ Let users define their gym's available equipment to improve AI workout generatio
 #### 1. Equipment Selection
 
 - **Categories with checkboxes**:
+
   - Small Weights (dumbbells, kettlebells)
   - Bars & Plates (barbells, EZ bars, trap bars)
   - Benches & Racks (flat/incline bench, squat rack, power rack)
@@ -181,20 +185,7 @@ Let users define their gym's available equipment to improve AI workout generatio
   - "Bodyweight Only" toggle (disables all equipment)
   - "Home Gym" vs "Commercial Gym" presets for quick setup
 
-#### 2. Warm-Up Sets
-
-- **Toggle**: "Auto-calculate warm-up sets"
-- **Settings**:
-  - Number of warm-up sets (1-3)
-  - Starting percentage of working weight (40%, 50%, 60%)
-  - Increment percentage per warm-up set (10%, 15%, 20%)
-- **Display**: Show warm-up sets in WorkoutSessionScreen before working sets
-- **Example**: Working weight 225 lbs → Warm-up sets:
-  - Set 1: 90 lbs (40%)
-  - Set 2: 135 lbs (60%)
-  - Set 3: 180 lbs (80%)
-
-#### 3. Cardio Recommendations
+#### 2. Cardio Recommendations
 
 - **Toggle**: "Include cardio recommendations"
 - **Settings**:
@@ -259,7 +250,6 @@ ALTER TABLE workout_sessions ADD COLUMN cardio_data JSONB;
 
 - `/mobile/src/screens/GymPreferencesScreen.tsx` - Full gym preferences UI (new)
 - `/mobile/src/components/gym/EquipmentSelector.tsx` - Equipment category selection
-- `/mobile/src/components/gym/WarmupSettings.tsx` - Warm-up set configuration
 - `/mobile/src/components/gym/CardioSettings.tsx` - Cardio preferences
 - `/server/src/routes/social.ts` - Update profile endpoint to save gym_preferences
 - `/server/src/services/ai/workoutPrompts.ts` - Filter exercises by equipment
@@ -452,7 +442,10 @@ Mirror active workouts to Apple Watch with a lightweight UI for at-a-glance prog
 
 ## Version History
 
-- **v2.0**: Gift Pass Feature + Gym Equipment Preferences
+- **v2.0**: Gym Equipment Preferences & Settings
+  - Added gym profiles with equipment selection presets, cardio preferences, and session duration targeting
+  - Auto-generated warm-up sets and optional cardio logging in workout sessions
+  - AI generation now honors equipment + bodyweight-only constraints
 - **v2.1**: Social Video Import (TikTok/Instagram)
 - **v2.2**: Apple Watch Companion App
 - **v2.x**: Additional features TBD based on user feedback

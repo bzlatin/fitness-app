@@ -23,6 +23,13 @@ export type WorkoutSource = "manual" | "ai" | "apple_health";
 
 export type SetDifficultyRating = "too_easy" | "just_right" | "too_hard";
 
+export type CardioData = {
+  type?: "LISS" | "HIIT" | "MIXED";
+  duration?: number;
+  notes?: string;
+  timing?: "before" | "after" | "separate";
+};
+
 export interface Exercise {
   id: string;
   name: string;
@@ -113,6 +120,7 @@ export interface WorkoutSession {
   avgHeartRate?: number;
   maxHeartRate?: number;
   importMetadata?: Record<string, unknown>;
+  cardioData?: CardioData;
   sets: WorkoutSet[];
 }
 

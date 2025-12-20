@@ -39,7 +39,7 @@ import {
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
-import { SetDifficultyRating, WorkoutSet, ExerciseDetails } from "../types/workouts";
+import { CardioData, SetDifficultyRating, WorkoutSet, ExerciseDetails } from "../types/workouts";
 import { fetchExerciseDetails } from "../api/exercises";
 import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
@@ -83,6 +83,7 @@ import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution"
 import { formatMuscleGroup, getTopMuscleGroups } from "../utils/muscleGroupCalculations";
 import { getWarmupSuggestionsForMuscleGroups } from "../utils/warmupSuggestions";
 import { StartingSuggestion } from "../types/analytics";
+import { ensureGymPreferences } from "../utils/gymPreferences";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -483,6 +484,20 @@ const formatExerciseName = (id: string) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
+const formatCardioTiming = (timing?: CardioData["timing"]) => {
+  if (timing === "before") return "Before weights";
+  if (timing === "after") return "After weights";
+  if (timing === "separate") return "Separate session";
+  return "After weights";
+};
+
+const formatCardioType = (type?: CardioData["type"]) => {
+  if (type === "LISS") return "LISS";
+  if (type === "HIIT") return "HIIT";
+  if (type === "MIXED") return "Mixed";
+  return "Mixed";
+};
+
 const formatRirValue = (value: number) => {
   if (!Number.isFinite(value)) return "--";
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -622,6 +637,7 @@ const WorkoutSessionScreen = () => {
   const [sessionId, setSessionId] = useState(route.params.sessionId);
   const [hasHydratedSession, setHasHydratedSession] = useState(false);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
+  const [cardioDraft, setCardioDraft] = useState<CardioData | null>(null);
   const [startTime, setStartTime] = useState<string | undefined>(undefined);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [elapsedBaseSeconds, setElapsedBaseSeconds] = useState(0);
@@ -684,6 +700,22 @@ const WorkoutSessionScreen = () => {
   const subscriptionAccess = useSubscriptionAccess();
   const isRirFeatureEnabled =
     subscriptionAccess.hasProAccess && (user?.rirEnabled ?? true);
+  const gymPreferences = useMemo(
+    () => ensureGymPreferences(user?.gymPreferences ?? null),
+    [user?.gymPreferences]
+  );
+  const cardioPreferences = gymPreferences.cardio;
+  const cardioSuggestion = useMemo<CardioData | null>(() => {
+    if (!cardioPreferences.enabled) return null;
+    const type = cardioPreferences.type?.toUpperCase();
+    const normalizedType =
+      type === "LISS" || type === "HIIT" || type === "MIXED" ? type : "MIXED";
+    return {
+      type: normalizedType,
+      duration: cardioPreferences.duration,
+      timing: cardioPreferences.timing,
+    };
+  }, [cardioPreferences]);
 
   // Refs to access latest state in deep link handler without causing re-renders
   const activeSetIdRef = useRef<string | null>(null);
@@ -691,6 +723,7 @@ const WorkoutSessionScreen = () => {
   const sessionRestTimesRef = useRef<Record<string, number>>({});
   const sessionWarmupRestTimesRef = useRef<Record<string, number>>({});
   const loggedSetIdsRef = useRef<Set<string>>(new Set());
+  const cardioDraftRef = useRef<CardioData | null>(null);
   // Lock to prevent duplicate processing of pending log set actions
   const isProcessingLogSetRef = useRef<boolean>(false);
   // Track the last processed timestamp to prevent duplicate processing
@@ -712,6 +745,7 @@ const WorkoutSessionScreen = () => {
   const shouldAutoScrollToActiveExerciseRef = useRef(false);
   const hasUserChangedWarmupPreferenceRef = useRef(false);
   const startingSuggestionFetchRef = useRef<Set<string>>(new Set());
+  const hasInitializedCardioRef = useRef(false);
   const [startingSuggestions, setStartingSuggestions] = useState<
     Record<string, StartingSuggestion>
   >({});
@@ -727,6 +761,27 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     setsRef.current = sets;
   }, [sets]);
+
+  useEffect(() => {
+    cardioDraftRef.current = cardioDraft;
+  }, [cardioDraft]);
+
+  useEffect(() => {
+    hasInitializedCardioRef.current = false;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!hasHydratedSession) return;
+    if (hasInitializedCardioRef.current) return;
+    if (cardioDraft) {
+      hasInitializedCardioRef.current = true;
+      return;
+    }
+    if (cardioSuggestion) {
+      setCardioDraft(cardioSuggestion);
+      hasInitializedCardioRef.current = true;
+    }
+  }, [cardioDraft, cardioSuggestion, hasHydratedSession]);
 
   useEffect(() => {
     sessionRestTimesRef.current = sessionRestTimes;
@@ -1107,12 +1162,19 @@ const WorkoutSessionScreen = () => {
     },
   });
 
+  const savedCardioData = sessionQuery.data?.cardioData ?? null;
+  const shouldShowCardioCard = Boolean(cardioPreferences.enabled || cardioDraft);
+  const cardioIsDirty = useMemo(() => {
+    return JSON.stringify(cardioDraft ?? null) !== JSON.stringify(savedCardioData ?? null);
+  }, [cardioDraft, savedCardioData]);
+
   const startMutation = useMutation({
     mutationFn: () => startSessionFromTemplate(route.params.templateId),
     onSuccess: (session) => {
       const trimmedSets = trimCardioSetsToSingle(session.sets);
       setSessionId(session.id);
       setSets(trimmedSets);
+      setCardioDraft(session.cardioData ?? null);
       initializeTimer({ startedAt: session.startedAt });
       setHasHydratedSession(true);
       queryClient.setQueryData(["activeSession"], {
@@ -1123,6 +1185,42 @@ const WorkoutSessionScreen = () => {
     onError: () => {
       Alert.alert("Could not start session", "Please try again.");
       navigation.goBack();
+    },
+  });
+
+  const saveCardioMutation = useMutation({
+    mutationFn: async (next: CardioData | null) => {
+      if (!sessionId) {
+        throw new Error("Missing session");
+      }
+      await updateSession(sessionId, { cardioData: next });
+      return next;
+    },
+    onSuccess: (next) => {
+      setCardioDraft(next);
+      queryClient.setQueryData(["session", sessionId], (prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cardioData: next ?? undefined,
+        };
+      });
+      queryClient.setQueryData(["activeSession"], (prev: any) => {
+        if (!prev?.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            cardioData: next ?? undefined,
+          },
+        };
+      });
+    },
+    onError: () => {
+      Alert.alert(
+        "Cardio update failed",
+        "We couldn't save your cardio notes. Please try again."
+      );
     },
   });
 
@@ -1265,6 +1363,7 @@ const WorkoutSessionScreen = () => {
     void (async () => {
       const trimmedSets = trimCardioSetsToSingle(data.sets);
       setSets(trimmedSets);
+      setCardioDraft(data.cardioData ?? null);
       initializeTimer({
         startedAt: data.startedAt,
         finishedAt: data.finishedAt,
@@ -1462,9 +1561,16 @@ const WorkoutSessionScreen = () => {
   }, [cancelRestTimerSounds, rescheduleRestTimerSoundsIfNeeded]);
 
   const finishMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       // Pause timer before finishing
       pauseTimer();
+      const pendingCardio = cardioDraftRef.current ?? null;
+      if (
+        sessionId &&
+        JSON.stringify(pendingCardio) !== JSON.stringify(savedCardioData ?? null)
+      ) {
+        await updateSession(sessionId, { cardioData: pendingCardio });
+      }
       return completeSession(sessionId!, setsRef.current);
     },
     onMutate: () => {
@@ -2691,6 +2797,19 @@ const WorkoutSessionScreen = () => {
   const visibilityLabel =
     visibilityOptions.find((o) => o.value === visibility)?.label ?? "Private";
   const hasWorkoutProgress = loggedSetIds.size > 0 || elapsedSeconds > 0;
+  const cardioValue = cardioDraft ?? cardioSuggestion;
+
+  const applyCardioUpdate = (updates: Partial<CardioData>) => {
+    const fallback: CardioData = {
+      type: "MIXED",
+      duration: cardioPreferences.duration,
+      timing: cardioPreferences.timing,
+    };
+    setCardioDraft((prev) => ({
+      ...(prev ?? cardioSuggestion ?? fallback),
+      ...updates,
+    }));
+  };
 
   if (isBootstrappingSession) {
     return (
@@ -3103,6 +3222,154 @@ const WorkoutSessionScreen = () => {
             </View>
           </View>
         )}
+
+        {shouldShowCardioCard && cardioValue ? (
+          <View
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: colors.border,
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: `${colors.primary}15`,
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}25`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name='heart-outline' size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  Cardio add-on
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {cardioPreferences.enabled
+                    ? `Recommended ${formatCardioTiming(cardioPreferences.timing)}`
+                    : "Optional cardio log"}
+                </Text>
+              </View>
+              {cardioIsDirty ? (
+                <Pressable
+                  onPress={() =>
+                    saveCardioMutation.mutate(cardioDraft ?? cardioValue ?? null)
+                  }
+                  disabled={saveCardioMutation.isPending}
+                  style={({ pressed }) => ({
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
+                    backgroundColor: pressed ? `${colors.primary}25` : colors.surface,
+                    opacity: saveCardioMutation.isPending ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>
+                    {saveCardioMutation.isPending ? "Saving..." : "Save"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Type</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {(["LISS", "HIIT", "MIXED"] as CardioData["type"][]).map((type) => {
+                  const isActive = cardioValue.type === type;
+                  return (
+                    <Pressable
+                      key={type}
+                      onPress={() => applyCardioUpdate({ type })}
+                      style={({ pressed }) => ({
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        backgroundColor: isActive ? `${colors.primary}20` : colors.surface,
+                        opacity: pressed ? 0.85 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          color: isActive ? colors.primary : colors.textPrimary,
+                          fontWeight: "700",
+                          fontSize: 12,
+                        }}
+                      >
+                        {formatCardioType(type)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Duration</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {[10, 15, 20, 30].map((minutes) => {
+                  const isActive = cardioValue.duration === minutes;
+                  return (
+                    <Pressable
+                      key={minutes}
+                      onPress={() => applyCardioUpdate({ duration: minutes })}
+                      style={({ pressed }) => ({
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        backgroundColor: isActive ? `${colors.primary}20` : colors.surface,
+                        opacity: pressed ? 0.85 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          color: isActive ? colors.primary : colors.textPrimary,
+                          fontWeight: "700",
+                          fontSize: 12,
+                        }}
+                      >
+                        {minutes} min
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Notes</Text>
+              <TextInput
+                value={cardioValue.notes ?? ""}
+                onChangeText={(text) => applyCardioUpdate({ notes: text })}
+                placeholder='Optional notes (treadmill, incline, pace...)'
+                placeholderTextColor={colors.textSecondary}
+                style={{
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  backgroundColor: colors.surface,
+                  color: colors.textPrimary,
+                }}
+              />
+            </View>
+          </View>
+        ) : null}
 
         <Pressable
           onPress={() => {

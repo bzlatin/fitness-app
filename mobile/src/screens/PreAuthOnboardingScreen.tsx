@@ -124,6 +124,9 @@ const PreAuthOnboardingScreen = ({ onFinished }: Props) => {
       case 2:
         return experienceLevel !== undefined;
       case 3:
+        if (selectedEquipment.includes('custom')) {
+          return customEquipment.length > 0;
+        }
         return selectedEquipment.length > 0;
       case 4:
         return weeklyFrequency !== undefined && sessionDuration !== undefined;

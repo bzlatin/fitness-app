@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import {
   ActiveSessionResponse,
+  CardioData,
   WorkoutHistoryResponse,
   WorkoutSession,
   WorkoutSet,
@@ -86,6 +87,7 @@ export const createManualSession = async (payload: {
   startedAt: string;
   finishedAt?: string;
   templateName?: string;
+  cardioData?: CardioData;
   sets: Array<
     Pick<
       WorkoutSet,

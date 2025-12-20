@@ -1198,23 +1198,58 @@ const SwapModal = ({
       setSavedScrollContentHeight(0);
       setSavedScrollLayoutHeight(1);
 
-      const durationFromOnboarding = user?.onboardingData?.sessionDuration ?? 45;
-    const preferredDuration = DURATION_OPTIONS.includes(
-      durationFromOnboarding as (typeof DURATION_OPTIONS)[number]
-    )
-      ? durationFromOnboarding
-      : 45;
-    setSmartSessionDuration(preferredDuration);
+      const durationFromPreferences =
+        user?.gymPreferences?.sessionDuration ??
+        user?.onboardingData?.sessionDuration ??
+        45;
+      const preferredDuration = DURATION_OPTIONS.includes(
+        durationFromPreferences as (typeof DURATION_OPTIONS)[number]
+      )
+        ? durationFromPreferences
+        : 45;
+      setSmartSessionDuration(preferredDuration);
 
-    const equipment = user?.onboardingData?.availableEquipment ?? [];
-    const nextEquipment: EquipmentMode | null = equipment.includes("gym_full")
-      ? "gym_full"
-      : equipment.includes("home_limited")
-        ? "home_limited"
-        : equipment.includes("bodyweight")
+      const preferenceEquipment = user?.gymPreferences?.equipment ?? [];
+      const bodyweightOnly = user?.gymPreferences?.bodyweightOnly ?? false;
+      const equipment = preferenceEquipment.length
+        ? preferenceEquipment
+        : user?.onboardingData?.availableEquipment ?? [];
+      const hasLegacyGymFull = equipment.includes("gym_full");
+      const hasLegacyHome = equipment.includes("home_limited");
+      const hasLegacyBodyweight = equipment.includes("bodyweight");
+      const hasBarbells =
+        equipment.includes("barbells") ||
+        equipment.includes("ez_bars") ||
+        equipment.includes("trap_bars");
+      const hasMachines = equipment.some((item) =>
+        [
+          "cable_crossover",
+          "lat_pulldown",
+          "cable_row",
+          "leg_press",
+          "hack_squat",
+          "chest_press",
+          "smith_machine",
+          "leg_extension",
+          "pec_deck",
+        ].includes(item)
+      );
+      const hasHomeBasics =
+        equipment.includes("dumbbells") ||
+        equipment.includes("kettlebells") ||
+        equipment.includes("loop_bands") ||
+        equipment.includes("resistance_tubes");
+      const nextEquipment: EquipmentMode | null =
+        bodyweightOnly || hasLegacyBodyweight
           ? "bodyweight"
-          : null;
-    setSmartEquipment(nextEquipment);
+          : hasLegacyGymFull || hasBarbells || hasMachines
+            ? "gym_full"
+            : hasLegacyHome || hasHomeBasics
+              ? "home_limited"
+              : equipment.includes("bodyweight")
+                ? "bodyweight"
+                : null;
+      setSmartEquipment(nextEquipment);
   };
 
     // Reset state when modal visibility changes
@@ -1580,53 +1615,45 @@ const SwapModal = ({
                   >
                     <Text style={{ fontSize: 24 }}>{option.icon}</Text>
                   </View>
-                  <View style={{ alignItems: "center" }}>
-                    <View
+                  <View style={{ alignItems: "center", gap: 4 }}>
+                    <Text
                       style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
+                        color: colors.textPrimary,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 14,
+                        textAlign: "center",
                       }}
                     >
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: fontFamilies.semibold,
-                          fontSize: 14,
-                          textAlign: "center",
-                        }}
-                      >
-                        {option.label}
-                      </Text>
-                      {!hasProAccess &&
-                        (option.action === "muscle" ||
-                          option.action === "smart") && (
-                          <View
+                      {option.label}
+                    </Text>
+                    {!hasProAccess &&
+                      (option.action === "muscle" ||
+                        option.action === "smart") && (
+                        <View
+                          style={{
+                            backgroundColor: colors.primary,
+                            paddingHorizontal: 6,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            minWidth: 44,
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
                             style={{
-                              backgroundColor: colors.primary,
-                              paddingHorizontal: aiFreeAvailable ? 7 : 5,
-                              paddingVertical: 3,
-                              borderRadius: 4,
-                              minWidth: aiFreeAvailable ? 34 : 28,
-                              alignItems: "center",
+                              color: "#0B1220",
+                              fontSize: 9,
+                              fontWeight: "700",
+                              includeFontPadding: false,
                             }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.8}
                           >
-                            <Text
-                              style={{
-                                color: "#0B1220",
-                                fontSize: aiFreeAvailable ? 8 : 8,
-                                fontWeight: "700",
-                                includeFontPadding: false,
-                              }}
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                              minimumFontScale={0.85}
-                            >
-                              {aiFreeAvailable ? "FREE" : "PRO"}
-                            </Text>
-                          </View>
-                        )}
-                    </View>
+                            {aiFreeAvailable ? "1 FREE" : "PRO"}
+                          </Text>
+                        </View>
+                      )}
                     <Text
                       style={{
                         color: colors.textSecondary,

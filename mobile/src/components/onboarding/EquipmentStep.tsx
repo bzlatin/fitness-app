@@ -1,4 +1,5 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import EquipmentSelector from "../gym/EquipmentSelector";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { EquipmentType, EQUIPMENT_TYPE_LABELS } from "../../types/onboarding";
@@ -8,6 +9,7 @@ interface EquipmentStepProps {
   customEquipment?: string[];
   onEquipmentChange: (equipment: EquipmentType[]) => void;
   onCustomEquipmentChange: (equipment: string[]) => void;
+  onSkip?: () => void;
 }
 
 const EQUIPMENT_DESCRIPTIONS: Record<EquipmentType, string> = {
@@ -22,17 +24,16 @@ const EquipmentStep = ({
   customEquipment = [],
   onEquipmentChange,
   onCustomEquipmentChange,
+  onSkip,
 }: EquipmentStepProps) => {
-  const toggleEquipment = (equipment: EquipmentType) => {
-    if (selectedEquipment.includes(equipment)) {
-      onEquipmentChange(selectedEquipment.filter((e) => e !== equipment));
-    } else {
-      onEquipmentChange([...selectedEquipment, equipment]);
-    }
-  };
-
   const equipment: EquipmentType[] = ["gym_full", "home_limited", "bodyweight", "custom"];
-  const showCustomInput = selectedEquipment.includes("custom");
+  const selectedPreset = selectedEquipment[0];
+  const showCustomSelector = selectedPreset === "custom";
+
+  const handleSelect = (preset: EquipmentType) => {
+    if (selectedPreset === preset) return;
+    onEquipmentChange([preset]);
+  };
 
   return (
     <View style={{ gap: 20 }}>
@@ -41,17 +42,17 @@ const EquipmentStep = ({
           What equipment do you have access to?
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Select all that apply so we can suggest appropriate workouts.
+          Pick the setup that matches your gym, or choose Custom to fine-tune.
         </Text>
       </View>
 
       <View style={{ gap: 12 }}>
         {equipment.map((eq) => {
-          const isSelected = selectedEquipment.includes(eq);
+          const isSelected = selectedPreset === eq;
           return (
             <Pressable
               key={eq}
-              onPress={() => toggleEquipment(eq)}
+              onPress={() => handleSelect(eq)}
               style={({ pressed }) => ({
                 padding: 16,
                 borderRadius: 12,
@@ -106,36 +107,41 @@ const EquipmentStep = ({
         })}
       </View>
 
-      {showCustomInput && (
-        <View style={{ gap: 6 }}>
+      {showCustomSelector ? (
+        <View style={{ gap: 12 }}>
           <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-            List your equipment (comma-separated)
+            Pick the equipment that is actually available.
           </Text>
-          <TextInput
-            value={customEquipment.join(", ")}
-            onChangeText={(text) => {
-              const items = text
-                .split(",")
-                .map((item) => item.trim())
-                .filter(Boolean);
-              onCustomEquipmentChange(items);
-            }}
-            placeholder="e.g., Pull-up bar, Kettlebells, Yoga mat"
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: colors.textPrimary,
-              minHeight: 72,
-              fontFamily: fontFamilies.medium,
-            }}
+          <EquipmentSelector
+            selectedEquipment={customEquipment}
+            bodyweightOnly={false}
+            onSelectionChange={onCustomEquipmentChange}
+            onBodyweightOnlyChange={() => undefined}
+            onApplyPreset={() => undefined}
+            showPresets={false}
+            showBodyweightToggle={false}
           />
         </View>
-      )}
+      ) : null}
+
+      {onSkip ? (
+        <Pressable
+          onPress={onSkip}
+          style={({ pressed }) => ({
+            paddingVertical: 10,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+            alignItems: "center",
+            marginTop: 6,
+          })}
+        >
+          <Text style={{ color: colors.textSecondary, fontFamily: fontFamilies.semibold }}>
+            Skip and use full gym defaults
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 };

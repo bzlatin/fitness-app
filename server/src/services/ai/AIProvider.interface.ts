@@ -11,6 +11,14 @@ export interface UserProfile {
   sessionDuration?: number;
   injuryNotes?: string;
   preferredSplit?: string;
+  bodyweightOnly?: boolean;
+  cardioPreferences?: {
+    enabled?: boolean;
+    timing?: "before" | "after" | "separate";
+    type?: "liss" | "hiit" | "mixed";
+    duration?: number;
+    frequency?: number;
+  };
 }
 
 /**

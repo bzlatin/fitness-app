@@ -2,6 +2,7 @@ import { Router } from "express";
 import { PoolClient } from "pg";
 import { pool, query } from "../db";
 import {
+  CardioData,
   SetDifficultyRating,
   WorkoutSession,
   WorkoutSet,
@@ -9,12 +10,19 @@ import {
 } from "../types/workouts";
 import { generateId } from "../utils/id";
 import { ExerciseMeta, fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
+import { normalizeGymPreferences } from "../utils/gymPreferences";
 
 const router = Router();
 
 const AUTO_END_LIMIT_MS = 1000 * 60 * 60 * 4; // 4 hours
 
 type SetKind = "warmup" | "working";
+
+type WarmupSettings = {
+  numSets: number;
+  startPercentage: number;
+  incrementPercentage: number;
+};
 
 const formatExerciseId = (id: string) =>
   id
@@ -45,6 +53,17 @@ const parseRirValue = (value: unknown) => {
   return { value: parsed, valid: true };
 };
 
+const normalizeCardioType = (
+  value?: string | null
+): CardioData["type"] | undefined => {
+  const raw = value?.toLowerCase().trim();
+  if (!raw) return undefined;
+  if (raw === "liss") return "LISS";
+  if (raw === "hiit") return "HIIT";
+  if (raw === "mixed") return "MIXED";
+  return undefined;
+};
+
 const hasInvalidRir = (sets?: Partial<WorkoutSet>[]) =>
   Boolean(sets?.some((set) => !parseRirValue(set.rir).valid));
 
@@ -54,7 +73,11 @@ const roundToIncrement = (value: number, increment: number) => {
   return Math.round(value / increment) * increment;
 };
 
-const suggestWarmupSetSpecs = (workingWeight: number, workingReps?: number) => {
+const suggestWarmupSetSpecs = (
+  workingWeight: number,
+  workingReps?: number,
+  settings?: WarmupSettings
+) => {
   if (!Number.isFinite(workingWeight) || workingWeight <= 0) return [];
 
   const normalizedWorkingReps =
@@ -63,22 +86,36 @@ const suggestWarmupSetSpecs = (workingWeight: number, workingReps?: number) => {
       : undefined;
 
   const increments = 2.5;
-  const progressions = [
-    { percent: 0.5, reps: normalizedWorkingReps ? Math.min(8, normalizedWorkingReps) : 8 },
-    { percent: 0.75, reps: normalizedWorkingReps ? Math.min(5, Math.max(3, normalizedWorkingReps - 3)) : 5 },
-    { percent: 0.9, reps: 2 },
+  const numSets = Math.max(0, Math.min(6, Math.trunc(settings?.numSets ?? 2)));
+  if (numSets === 0) return [];
+  const startPercentage = settings?.startPercentage ?? 50;
+  const incrementPercentage = settings?.incrementPercentage ?? 15;
+  const repOptions = [
+    normalizedWorkingReps ? Math.min(8, normalizedWorkingReps) : 8,
+    normalizedWorkingReps ? Math.min(5, Math.max(3, normalizedWorkingReps - 3)) : 5,
+    2,
+    1,
+    1,
+    1,
   ];
 
   const seen = new Set<number>();
   const specs: Array<{ targetWeight: number; targetReps: number }> = [];
-  for (const item of progressions) {
-    const rawWeight = workingWeight * item.percent;
+  for (let index = 0; index < numSets; index += 1) {
+    const percentage = (startPercentage + incrementPercentage * index) / 100;
+    const normalizedPercentage = Math.min(0.95, Math.max(0.2, percentage));
+    const rawWeight = workingWeight * normalizedPercentage;
     const rounded = roundToIncrement(rawWeight, increments);
     const targetWeight = Math.max(increments, Math.min(rounded, workingWeight - increments));
     if (targetWeight >= workingWeight) continue;
     if (seen.has(targetWeight)) continue;
     seen.add(targetWeight);
-    specs.push({ targetWeight, targetReps: item.reps });
+    const fallbackReps =
+      normalizedWorkingReps !== undefined
+        ? Math.max(1, normalizedWorkingReps - index * 2)
+        : 6;
+    const targetReps = repOptions[index] ?? fallbackReps;
+    specs.push({ targetWeight, targetReps });
   }
 
   return specs;
@@ -118,6 +155,7 @@ type SessionRow = {
   source: WorkoutSource | null;
   external_id: string | null;
   import_metadata: Record<string, unknown> | null;
+  cardio_data: CardioData | null;
   total_energy_burned: string | null;
   avg_heart_rate: string | null;
   max_heart_rate: string | null;
@@ -210,6 +248,7 @@ const mapSession = (
     avgHeartRate: row.avg_heart_rate === null ? undefined : Number(row.avg_heart_rate),
     maxHeartRate: row.max_heart_rate === null ? undefined : Number(row.max_heart_rate),
     importMetadata: row.import_metadata ?? undefined,
+    cardioData: row.cardio_data ?? undefined,
     sets: setRows
       .filter((set) => set.session_id === row.id)
       .sort((a, b) => a.set_index - b.set_index)
@@ -404,6 +443,28 @@ router.post("/from-template/:templateId", async (req, res) => {
   }
 
   try {
+    const preferencesResult = await query<{ gym_preferences: unknown }>(
+      `SELECT gym_preferences FROM users WHERE id = $1`,
+      [userId]
+    );
+    const gymPreferences = normalizeGymPreferences(
+      preferencesResult.rows[0]?.gym_preferences
+    );
+    const warmupSettings = gymPreferences.warmupSets.enabled
+      ? {
+          numSets: gymPreferences.warmupSets.numSets,
+          startPercentage: gymPreferences.warmupSets.startPercentage,
+          incrementPercentage: gymPreferences.warmupSets.incrementPercentage,
+        }
+      : null;
+    const cardioData: CardioData | null = gymPreferences.cardio.enabled
+      ? {
+          type: normalizeCardioType(gymPreferences.cardio.type) ?? "MIXED",
+          duration: gymPreferences.cardio.duration,
+          timing: gymPreferences.cardio.timing,
+        }
+      : null;
+
     const templateResult = await query<{ id: string; name: string }>(
       `SELECT id, name FROM workout_templates WHERE id = $1 AND user_id = $2`,
       [req.params.templateId, userId]
@@ -432,10 +493,10 @@ router.post("/from-template/:templateId", async (req, res) => {
         let setIndex = 0;
         await client.query(
           `
-          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $5, $5)
+          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, cardio_data, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $5, $5)
         `,
-          [sessionId, userId, template.id, template.name, now]
+          [sessionId, userId, template.id, template.name, now, cardioData]
         );
 
       for (const templateExercise of templateExercises.rows) {
@@ -444,8 +505,15 @@ router.post("/from-template/:templateId", async (req, res) => {
             ? undefined
             : Number(templateExercise.default_weight);
         const warmupSpecs =
-          typeof workingWeight === "number" && Number.isFinite(workingWeight) && workingWeight > 0
-            ? suggestWarmupSetSpecs(workingWeight, templateExercise.default_reps)
+          warmupSettings &&
+          typeof workingWeight === "number" &&
+          Number.isFinite(workingWeight) &&
+          workingWeight > 0
+            ? suggestWarmupSetSpecs(
+                workingWeight,
+                templateExercise.default_reps,
+                warmupSettings
+              )
             : [];
 
         for (const warmup of warmupSpecs) {
@@ -514,6 +582,7 @@ router.post("/from-template/:templateId", async (req, res) => {
           source: "manual",
           external_id: null,
           import_metadata: null,
+          cardio_data: cardioData,
           total_energy_burned: null,
           avg_heart_rate: null,
           max_heart_rate: null,
@@ -834,13 +903,16 @@ router.patch("/:id", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { sets, startedAt, finishedAt, endedReason, autoEndedAt } = req.body as Partial<WorkoutSession> & {
+  const { sets, startedAt, finishedAt, endedReason, autoEndedAt, cardioData } = req.body as Partial<
+    WorkoutSession
+  > & {
     startedAt?: string;
   };
 
   const finishedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "finishedAt");
   const endedReasonProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "endedReason");
   const autoEndedAtProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "autoEndedAt");
+  const cardioDataProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "cardioData");
   const shouldUpdateDuration = startedAt !== undefined || finishedAt !== undefined;
 
   try {
@@ -919,10 +991,11 @@ router.patch("/:id", async (req, res) => {
         startedAt !== undefined ||
         finishedAt !== undefined ||
         endedReasonProvided ||
-        autoEndedAtProvided
+        autoEndedAtProvided ||
+        cardioDataProvided
       ) {
         const updateFragments: string[] = [];
-        const values: Array<string | null> = [];
+        const values: unknown[] = [];
 
         if (startedAt !== undefined) {
           updateFragments.push(`started_at = COALESCE($${values.length + 1}, started_at)`);
@@ -948,6 +1021,11 @@ router.patch("/:id", async (req, res) => {
         if (autoEndedAtProvided) {
           updateFragments.push(`auto_ended_at = $${values.length + 1}`);
           values.push(autoEndedAt ?? null);
+        }
+
+        if (cardioDataProvided) {
+          updateFragments.push(`cardio_data = $${values.length + 1}`);
+          values.push(cardioData ?? null);
         }
 
         updateFragments.push("updated_at = NOW()");
@@ -1071,11 +1149,13 @@ router.post("/manual", async (req, res) => {
     finishedAt,
     templateName,
     sets,
+    cardioData,
   }: {
     startedAt?: string;
     finishedAt?: string;
     templateName?: string;
     sets?: Partial<WorkoutSet>[];
+    cardioData?: CardioData;
   } = req.body ?? {};
 
   if (!sets || sets.length === 0) {
@@ -1101,8 +1181,8 @@ router.post("/manual", async (req, res) => {
     const session = await withTransaction(async (client) => {
       await client.query(
         `
-          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, finished_at, created_at, updated_at)
-          VALUES ($1, $2, NULL, $3, $4, $5, NOW(), NOW())
+          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, finished_at, cardio_data, created_at, updated_at)
+          VALUES ($1, $2, NULL, $3, $4, $5, $6, NOW(), NOW())
         `,
         [
           sessionId,
@@ -1110,6 +1190,7 @@ router.post("/manual", async (req, res) => {
           templateName ?? null,
           safeStart.toISOString(),
           safeFinish?.toISOString() ?? null,
+          cardioData ?? null,
         ]
       );
 
@@ -1190,6 +1271,7 @@ router.post("/manual", async (req, res) => {
           source: "manual",
           external_id: null,
           import_metadata: null,
+          cardio_data: cardioData ?? null,
           total_energy_burned: null,
           avg_heart_rate: null,
           max_heart_rate: null,
@@ -1227,8 +1309,8 @@ router.post("/:id/duplicate", async (req, res) => {
     await withTransaction(async (client) => {
       await client.query(
         `
-          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, finished_at, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+          INSERT INTO workout_sessions (id, user_id, template_id, template_name, started_at, finished_at, cardio_data, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         `,
         [
           newSessionId,
@@ -1237,6 +1319,7 @@ router.post("/:id/duplicate", async (req, res) => {
           session.templateName ?? null,
           nowIso,
           session.finishedAt ?? null,
+          session.cardioData ?? null,
         ]
       );
 

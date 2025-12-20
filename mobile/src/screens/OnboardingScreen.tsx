@@ -84,7 +84,10 @@ const OnboardingScreen = () => {
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | undefined>(user?.onboardingData?.experienceLevel);
 
   // Step 4: Equipment
-  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>(user?.onboardingData?.availableEquipment ?? []);
+  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>(
+    user?.onboardingData?.availableEquipment ?? []
+  );
+  const [equipmentSkipped, setEquipmentSkipped] = useState(false);
   const [customEquipment, setCustomEquipment] = useState<string[]>(user?.onboardingData?.customEquipment ?? []);
 
   // Step 5: Schedule
@@ -190,7 +193,10 @@ const OnboardingScreen = () => {
       case 3:
         return experienceLevel !== undefined;
       case 4:
-        return selectedEquipment.length > 0;
+        if (selectedEquipment.includes("custom")) {
+          return customEquipment.length > 0;
+        }
+        return selectedEquipment.length > 0 || equipmentSkipped;
       case 5:
         return weeklyFrequency !== undefined && sessionDuration !== undefined;
       case 6:
@@ -340,8 +346,16 @@ const OnboardingScreen = () => {
           <EquipmentStep
             selectedEquipment={selectedEquipment}
             customEquipment={customEquipment}
-            onEquipmentChange={setSelectedEquipment}
+            onEquipmentChange={(next) => {
+              setEquipmentSkipped(false);
+              setSelectedEquipment(next);
+            }}
             onCustomEquipmentChange={setCustomEquipment}
+            onSkip={() => {
+              setSelectedEquipment(['gym_full']);
+              setCustomEquipment([]);
+              setEquipmentSkipped(true);
+            }}
           />
         );
       case 5:
