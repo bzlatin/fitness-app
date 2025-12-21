@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,11 +17,13 @@ import { RootNavigation } from "../navigation/RootNavigator";
 import { createTemplate } from "../api/templates";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { fetchStartingSuggestion } from "../api/analytics";
 import {
   canGenerateAiWorkout,
   getAiWorkoutGenerationsRemaining,
 } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import { estimateWorkingWeightFromProfile } from "../utils/weightEstimates";
 
 const SPLIT_OPTIONS = [
   { value: "push", label: "Push", emoji: "💪" },
@@ -48,6 +50,9 @@ const WorkoutGeneratorScreen = () => {
   const [generatedWorkout, setGeneratedWorkout] = useState<GeneratedWorkout | null>(null);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [paywallFreeUsed, setPaywallFreeUsed] = useState(false);
+  const [targetWeights, setTargetWeights] = useState<
+    Record<string, { weight: number; reason?: string; source: "history" | "profile" }>
+  >({});
 
   const generateMutation = useMutation({
     mutationFn: generateWorkout,
@@ -85,6 +90,7 @@ const WorkoutGeneratorScreen = () => {
           defaultSets: ex.sets,
           defaultReps: ex.reps,
           defaultRestSeconds: ex.restSeconds,
+          defaultWeight: targetWeights[ex.exerciseId]?.weight,
           notes: ex.notes,
         })),
       };
@@ -149,6 +155,70 @@ const WorkoutGeneratorScreen = () => {
     setPaywallFreeUsed(false);
   };
 
+  useEffect(() => {
+    if (!generatedWorkout) {
+      setTargetWeights({});
+      return;
+    }
+
+    const exerciseNames = new Map<string, string>();
+    generatedWorkout.exercises.forEach((exercise) => {
+      if (!exercise.exerciseId) return;
+      if (!exerciseNames.has(exercise.exerciseId)) {
+        exerciseNames.set(exercise.exerciseId, exercise.exerciseName);
+      }
+    });
+
+    let cancelled = false;
+    const loadSuggestions = async () => {
+      const entries = await Promise.all(
+        Array.from(exerciseNames.entries()).map(async ([exerciseId, exerciseName]) => {
+          let suggestion = null;
+          try {
+            suggestion = await fetchStartingSuggestion(exerciseId);
+          } catch {
+            suggestion = null;
+          }
+          const suggestionWeight = suggestion?.suggestedWeight;
+          const profileWeight = estimateWorkingWeightFromProfile(
+            exerciseName,
+            exerciseId,
+            user?.onboardingData ?? null
+          );
+          const weight = suggestionWeight ?? profileWeight;
+          if (!weight || !Number.isFinite(weight)) return null;
+          return [
+            exerciseId,
+            {
+              weight,
+              reason: suggestionWeight
+                ? suggestion?.reason
+                : "Estimated from your profile",
+              source: suggestionWeight ? "history" : "profile",
+            },
+          ] as const;
+        })
+      );
+
+      if (cancelled) return;
+      const next: Record<
+        string,
+        { weight: number; reason?: string; source: "history" | "profile" }
+      > = {};
+      entries.forEach((entry) => {
+        if (!entry) return;
+        const [exerciseId, data] = entry;
+        next[exerciseId] = data;
+      });
+      setTargetWeights(next);
+    };
+
+    void loadSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedWorkout, user?.onboardingData]);
+
   // Show generated workout preview
   if (generatedWorkout) {
     return (
@@ -206,69 +276,92 @@ const WorkoutGeneratorScreen = () => {
         </View>
 
         {/* Exercise List */}
-        {generatedWorkout.exercises.map((exercise, index) => (
-          <View
-            key={index}
-            style={{
-              backgroundColor: colors.surface,
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
+        {generatedWorkout.exercises.map((exercise, index) => {
+          const targetWeight = targetWeights[exercise.exerciseId];
+
+          return (
             <View
+              key={index}
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 8,
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
               }}
             >
-              <Text
+              <View
                 style={{
-                  color: colors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: "600",
-                  marginRight: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 8,
                 }}
               >
-                #{index + 1}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: "600",
-                  flex: 1,
-                }}
-              >
-                {exercise.exerciseName}
-              </Text>
-            </View>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    marginRight: 8,
+                  }}
+                >
+                  #{index + 1}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: "600",
+                    flex: 1,
+                  }}
+                >
+                  {exercise.exerciseName}
+                </Text>
+              </View>
 
-            <View style={{ flexDirection: "row", gap: 16, marginBottom: 8 }}>
-              <Text style={{ color: colors.textSecondary }}>
-                {exercise.sets} sets × {exercise.reps} reps
-              </Text>
-              <Text style={{ color: colors.textSecondary }}>
-                {exercise.restSeconds}s rest
-              </Text>
-            </View>
+              <View style={{ flexDirection: "row", gap: 16, marginBottom: 6 }}>
+                <Text style={{ color: colors.textSecondary }}>
+                  {exercise.sets} sets × {exercise.reps} reps
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {exercise.restSeconds}s rest
+                </Text>
+              </View>
 
-            {exercise.notes && (
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 13,
-                  fontStyle: "italic",
-                }}
-              >
-                💡 {exercise.notes}
-              </Text>
-            )}
-          </View>
-        ))}
+              {targetWeight?.weight ? (
+                <View style={{ marginBottom: 6 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                    Target weight: {Math.round(targetWeight.weight)} lb
+                  </Text>
+                  {targetWeight.reason ? (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      {targetWeight.reason}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {exercise.notes && (
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 13,
+                    fontStyle: "italic",
+                  }}
+                >
+                  💡 {exercise.notes}
+                </Text>
+              )}
+            </View>
+          );
+        })}
 
         {/* Action Buttons */}
         <View style={{ marginTop: 12, gap: 12 }}>

@@ -25,7 +25,12 @@ export const computeSubscriptionAccess = (
   user: User | null,
   status?: SubscriptionStatus
 ) => {
-  const plan = status?.plan ?? user?.plan ?? "free";
+  const statusPlan = status?.plan ?? null;
+  const profilePlan = user?.plan ?? null;
+  const plan =
+    statusPlan && statusPlan !== "free"
+      ? statusPlan
+      : profilePlan ?? statusPlan ?? "free";
   const hasProPlan = plan === "pro" || plan === "lifetime";
   let normalizedStatus = normalizeStatus(status?.status);
 
@@ -73,7 +78,7 @@ export const useSubscriptionAccess = () => {
   });
 
   const derived = computeSubscriptionAccess(user, statusQuery.data);
-  const hasProAccess = statusQuery.isError ? false : derived.hasProAccess;
+  const hasProAccess = derived.hasProAccess;
 
   return {
     ...statusQuery,

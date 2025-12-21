@@ -39,9 +39,16 @@ import {
 import { API_BASE_URL } from "../api/client";
 import { RootRoute, RootStackParamList } from "../navigation/types";
 import { colors } from "../theme/colors";
-import { SetDifficultyRating, WorkoutSet, ExerciseDetails } from "../types/workouts";
+import {
+  SetDifficultyRating,
+  WorkoutSet,
+  ExerciseDetails,
+} from "../types/workouts";
 import { fetchExerciseDetails } from "../api/exercises";
-import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import {
+  templatesKey,
+  useWorkoutTemplates,
+} from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
 import { Visibility } from "../types/social";
@@ -79,9 +86,13 @@ import {
   getStoredShowWarmupSets,
   setStoredShowWarmupSets,
 } from "../utils/warmupPreference";
-import { useMuscleGroupDistribution } from "../hooks/useMuscleGroupDistribution";
-import { formatMuscleGroup, getTopMuscleGroups } from "../utils/muscleGroupCalculations";
-import { getWarmupSuggestionsForMuscleGroups } from "../utils/warmupSuggestions";
+import { calculateWarmupSets } from "../utils/warmupCalculator";
+import { ensureGymPreferences } from "../utils/gymPreferences";
+import {
+  estimateWorkingWeightFromProfile,
+  isBodyweightMovement,
+  isLowerBodyMovement,
+} from "../utils/weightEstimates";
 import { StartingSuggestion } from "../types/analytics";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -242,7 +253,7 @@ const ExerciseInstructionsModal = ({
     muscle.charAt(0).toUpperCase() + muscle.slice(1).replace(/_/g, " ");
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType='slide'>
       <Pressable
         onPress={onClose}
         style={{
@@ -287,9 +298,16 @@ const ExerciseInstructionsModal = ({
                 {exerciseName ?? "Exercise"}
               </Text>
               {details?.level && (
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {details.level.charAt(0).toUpperCase() + details.level.slice(1)} •{" "}
-                  {details.mechanic ?? "—"} • {details.equipment ?? "—"}
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
+                >
+                  {details.level.charAt(0).toUpperCase() +
+                    details.level.slice(1)}{" "}
+                  • {details.mechanic ?? "—"} • {details.equipment ?? "—"}
                 </Text>
               )}
             </View>
@@ -301,7 +319,7 @@ const ExerciseInstructionsModal = ({
                 backgroundColor: colors.surfaceMuted,
               }}
             >
-              <Ionicons name="close" color={colors.textSecondary} size={20} />
+              <Ionicons name='close' color={colors.textSecondary} size={20} />
             </Pressable>
           </View>
 
@@ -314,14 +332,18 @@ const ExerciseInstructionsModal = ({
           >
             {loading ? (
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                <ActivityIndicator color={colors.primary} size="large" />
+                <ActivityIndicator color={colors.primary} size='large' />
                 <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
                   Loading instructions...
                 </Text>
               </View>
             ) : error ? (
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                <Ionicons name="alert-circle-outline" size={40} color={colors.textSecondary} />
+                <Ionicons
+                  name='alert-circle-outline'
+                  size={40}
+                  color={colors.textSecondary}
+                />
                 <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
                   {error}
                 </Text>
@@ -329,12 +351,21 @@ const ExerciseInstructionsModal = ({
             ) : details ? (
               <View style={{ gap: 20 }}>
                 {/* Muscles */}
-                {(details.primaryMuscles.length > 0 || details.secondaryMuscles.length > 0) && (
+                {(details.primaryMuscles.length > 0 ||
+                  details.secondaryMuscles.length > 0) && (
                   <View style={{ gap: 8 }}>
-                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: "700",
+                      }}
+                    >
                       Muscles Worked
                     </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    <View
+                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                    >
                       {details.primaryMuscles.map((muscle) => (
                         <View
                           key={muscle}
@@ -347,7 +378,13 @@ const ExerciseInstructionsModal = ({
                             borderColor: `${colors.primary}40`,
                           }}
                         >
-                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "600" }}>
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontSize: 12,
+                              fontWeight: "600",
+                            }}
+                          >
                             {formatMuscle(muscle)}
                           </Text>
                         </View>
@@ -364,7 +401,13 @@ const ExerciseInstructionsModal = ({
                             borderColor: colors.border,
                           }}
                         >
-                          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: "600",
+                            }}
+                          >
                             {formatMuscle(muscle)}
                           </Text>
                         </View>
@@ -376,7 +419,13 @@ const ExerciseInstructionsModal = ({
                 {/* Instructions */}
                 {details.instructions.length > 0 ? (
                   <View style={{ gap: 12 }}>
-                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: "700",
+                      }}
+                    >
                       How to Perform
                     </Text>
                     {details.instructions.map((instruction, index) => (
@@ -423,8 +472,18 @@ const ExerciseInstructionsModal = ({
                   </View>
                 ) : (
                   <View style={{ alignItems: "center", paddingVertical: 20 }}>
-                    <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
-                    <Text style={{ color: colors.textSecondary, marginTop: 8, textAlign: "center" }}>
+                    <Ionicons
+                      name='document-text-outline'
+                      size={32}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        marginTop: 8,
+                        textAlign: "center",
+                      }}
+                    >
                       No detailed instructions available for this exercise.
                     </Text>
                   </View>
@@ -487,6 +546,9 @@ const formatRirValue = (value: number) => {
   if (!Number.isFinite(value)) return "--";
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 };
+
+const createWarmupSetId = () =>
+  `warmup-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Helper to identify cardio exercises
 const isCardioExercise = (
@@ -638,7 +700,8 @@ const WorkoutSessionScreen = () => {
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [loggedSetIds, setLoggedSetIds] = useState<Set<string>>(new Set());
   const [lastLoggedSetId, setLastLoggedSetId] = useState<string | null>(null);
-  const [pendingDifficultyFeedbackKey, setPendingDifficultyFeedbackKey] = useState<string | null>(null);
+  const [pendingDifficultyFeedbackKey, setPendingDifficultyFeedbackKey] =
+    useState<string | null>(null);
   const [autoFocusEnabled, setAutoFocusEnabled] = useState(true);
   const [swapExerciseKey, setSwapExerciseKey] = useState<string | null>(null);
   const [timerAdjustExerciseKey, setTimerAdjustExerciseKey] = useState<
@@ -684,6 +747,10 @@ const WorkoutSessionScreen = () => {
   const subscriptionAccess = useSubscriptionAccess();
   const isRirFeatureEnabled =
     subscriptionAccess.hasProAccess && (user?.rirEnabled ?? true);
+  const warmupSettings = useMemo(
+    () => ensureGymPreferences(user?.gymPreferences).warmupSets,
+    [user?.gymPreferences]
+  );
 
   // Refs to access latest state in deep link handler without causing re-renders
   const activeSetIdRef = useRef<string | null>(null);
@@ -717,9 +784,8 @@ const WorkoutSessionScreen = () => {
   const [startingSuggestions, setStartingSuggestions] = useState<
     Record<string, StartingSuggestion>
   >({});
-  const [dismissedStartingSuggestions, setDismissedStartingSuggestions] = useState<
-    Record<string, boolean>
-  >({});
+  const [dismissedStartingSuggestions, setDismissedStartingSuggestions] =
+    useState<Record<string, boolean>>({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -757,22 +823,6 @@ const WorkoutSessionScreen = () => {
     () => templates?.find((t) => t.id === route.params.templateId),
     [templates, route.params.templateId]
   );
-
-  const { distribution: muscleDistribution } = useMuscleGroupDistribution(template);
-  const warmupSuggestions = useMemo(() => {
-    const topMuscles = getTopMuscleGroups(muscleDistribution, 2).map(
-      (group) => group.muscleGroup
-    );
-    return getWarmupSuggestionsForMuscleGroups(topMuscles, { maxSuggestions: 4 });
-  }, [muscleDistribution]);
-
-  const warmupTargetsLabel = useMemo(() => {
-    const topMuscles = getTopMuscleGroups(muscleDistribution, 2)
-      .map((group) => group.muscleGroup)
-      .filter(Boolean);
-    if (topMuscles.length === 0) return "Warm up";
-    return `Warm up ${topMuscles.map(formatMuscleGroup).join(" + ")}`;
-  }, [muscleDistribution]);
 
   const restLookup = useMemo(() => {
     if (!template) return {};
@@ -849,9 +899,13 @@ const WorkoutSessionScreen = () => {
         autosaveRetryTimeoutRef.current = null;
       }
 
-      autosavePromiseRef.current = updateSession(sessionId, {
-        sets: currentSets,
-      }, { timeoutMs: 45000 })
+      autosavePromiseRef.current = updateSession(
+        sessionId,
+        {
+          sets: currentSets,
+        },
+        { timeoutMs: 45000 }
+      )
         .then(() => {
           autosaveRetryAttemptsRef.current = 0;
           lastSavedSetsFingerprintRef.current = fingerprint;
@@ -1129,10 +1183,7 @@ const WorkoutSessionScreen = () => {
   });
 
   const applyProgressionWeightsToSession = useCallback(
-    (
-      exerciseIds?: string[],
-      { persist }: { persist?: boolean } = {}
-    ) => {
+    (exerciseIds?: string[], { persist }: { persist?: boolean } = {}) => {
       if (!progressionData) return;
 
       const suggestions = progressionData.suggestions.filter((suggestion) => {
@@ -1160,12 +1211,15 @@ const WorkoutSessionScreen = () => {
 
         const previousTargetWeight = set.targetWeight;
         const shouldUpdateActualWeight =
-          set.actualWeight === undefined || set.actualWeight === previousTargetWeight;
+          set.actualWeight === undefined ||
+          set.actualWeight === previousTargetWeight;
 
         return {
           ...set,
           targetWeight: suggestedWeight,
-          actualWeight: shouldUpdateActualWeight ? suggestedWeight : set.actualWeight,
+          actualWeight: shouldUpdateActualWeight
+            ? suggestedWeight
+            : set.actualWeight,
         };
       });
 
@@ -1444,7 +1498,9 @@ const WorkoutSessionScreen = () => {
           sessionId,
           targetRestEndsAt
         );
-        nativeScheduledRestEndsAtRef.current = scheduled ? targetRestEndsAt : null;
+        nativeScheduledRestEndsAtRef.current = scheduled
+          ? targetRestEndsAt
+          : null;
       })();
     },
     [
@@ -1629,6 +1685,160 @@ const WorkoutSessionScreen = () => {
     void setStoredShowWarmupSets(showWarmupSets);
   }, [hasHydratedWarmupPreference, showWarmupSets]);
 
+  const addWarmupSetsIfMissing = useCallback(
+    (inputSets?: WorkoutSet[]) => {
+      const currentSets = inputSets ?? setsRef.current;
+      if (!currentSets.length) return;
+      const session = sessionId ?? currentSets[0]?.sessionId;
+      if (!session) return;
+
+      const groupOrder: string[] = [];
+      const grouped = new Map<string, WorkoutSet[]>();
+      currentSets.forEach((set) => {
+        const key = set.templateExerciseId ?? set.exerciseId;
+        if (!grouped.has(key)) {
+          groupOrder.push(key);
+          grouped.set(key, []);
+        }
+        grouped.get(key)?.push(set);
+      });
+
+      let didInsert = false;
+      const nextSets: WorkoutSet[] = [];
+      let nextIndex = 0;
+
+      groupOrder.forEach((key) => {
+        const groupSets = grouped.get(key) ?? [];
+        const sorted = [...groupSets].sort((a, b) => a.setIndex - b.setIndex);
+        const hasWarmups = sorted.some((set) => set.setKind === "warmup");
+        let warmupAdds: WorkoutSet[] = [];
+
+        if (!hasWarmups) {
+          const workingSets = sorted.filter((set) => set.setKind !== "warmup");
+          const workingBase = workingSets[0];
+          if (!workingBase) {
+            const combined = hasWarmups ? sorted : [...warmupAdds, ...sorted];
+            combined.forEach((set) => {
+              nextSets.push({ ...set, setIndex: nextIndex });
+              nextIndex += 1;
+            });
+            return;
+          }
+
+          if (
+            isCardioExercise(workingBase.exerciseId, workingBase.exerciseName)
+          ) {
+            const combined = hasWarmups ? sorted : [...warmupAdds, ...sorted];
+            combined.forEach((set) => {
+              nextSets.push({ ...set, setIndex: nextIndex });
+              nextIndex += 1;
+            });
+            return;
+          }
+
+          const weightCandidates = workingSets
+            .flatMap((set) => [
+              typeof set.actualWeight === "number"
+                ? set.actualWeight
+                : undefined,
+              typeof set.targetWeight === "number"
+                ? set.targetWeight
+                : undefined,
+            ])
+            .filter((value): value is number => Boolean(value && value > 0));
+          const maxWorkingWeight =
+            weightCandidates.length > 0
+              ? Math.max(...weightCandidates)
+              : undefined;
+          const suggestionWeight =
+            startingSuggestions[workingBase.exerciseId]?.suggestedWeight;
+          const profileWeight = estimateWorkingWeightFromProfile(
+            workingBase.exerciseName,
+            workingBase.exerciseId,
+            user?.onboardingData ?? null
+          );
+          const isBodyweight = isBodyweightMovement(
+            workingBase.exerciseName,
+            workingBase.exerciseId
+          );
+          const fallbackWeight = isBodyweight
+            ? undefined
+            : isLowerBodyMovement(
+                workingBase.exerciseName,
+                workingBase.exerciseId
+              )
+            ? 45
+            : 20;
+          const resolvedWorkingWeight =
+            maxWorkingWeight ??
+            suggestionWeight ??
+            profileWeight ??
+            fallbackWeight;
+
+          if (resolvedWorkingWeight && warmupSettings.numSets > 0) {
+            const workingReps =
+              typeof workingBase.targetReps === "number" &&
+              workingBase.targetReps > 0
+                ? workingBase.targetReps
+                : typeof workingBase.actualReps === "number" &&
+                  workingBase.actualReps > 0
+                ? workingBase.actualReps
+                : undefined;
+
+            const specs = calculateWarmupSets(
+              resolvedWorkingWeight,
+              workingReps,
+              warmupSettings
+            );
+            if (specs.length > 0) {
+              warmupAdds = specs.map((spec) => ({
+                id: createWarmupSetId(),
+                sessionId: session,
+                templateExerciseId: workingBase.templateExerciseId,
+                exerciseId: workingBase.exerciseId,
+                exerciseName: workingBase.exerciseName,
+                exerciseImageUrl: workingBase.exerciseImageUrl,
+                setKind: "warmup",
+                setIndex: 0,
+                targetReps: spec.targetReps,
+                targetWeight: spec.targetWeight,
+              }));
+              didInsert = true;
+            }
+          }
+        }
+
+        const combined = hasWarmups ? sorted : [...warmupAdds, ...sorted];
+        combined.forEach((set) => {
+          nextSets.push({ ...set, setIndex: nextIndex });
+          nextIndex += 1;
+        });
+      });
+
+      if (!didInsert) return;
+
+      setsRef.current = nextSets;
+      setSets(nextSets);
+    },
+    [sessionId, startingSuggestions, user?.onboardingData, warmupSettings]
+  );
+
+  const handleToggleWarmupSets = useCallback(() => {
+    hasUserChangedWarmupPreferenceRef.current = true;
+    const nextValue = !showWarmupSets;
+    if (nextValue) {
+      addWarmupSetsIfMissing(setsRef.current);
+    }
+    setShowWarmupSets(nextValue);
+  }, [addWarmupSetsIfMissing, showWarmupSets]);
+
+
+  useEffect(() => {
+    if (!hasHydratedSession) return;
+    if (!showWarmupSets) return;
+    addWarmupSetsIfMissing(sets);
+  }, [addWarmupSetsIfMissing, hasHydratedSession, sets, showWarmupSets]);
+
   useEffect(() => {
     if (!hasHydratedSession || hasHydratedRirToggles) return;
     const next: Record<string, boolean> = {};
@@ -1690,7 +1900,9 @@ const WorkoutSessionScreen = () => {
   useEffect(() => {
     if (!activeExerciseKey) return;
     if (!shouldAutoScrollToActiveExerciseRef.current) return;
-    const index = groupedSets.findIndex((group) => group.key === activeExerciseKey);
+    const index = groupedSets.findIndex(
+      (group) => group.key === activeExerciseKey
+    );
     if (index < 0) return;
 
     shouldAutoScrollToActiveExerciseRef.current = false;
@@ -1753,7 +1965,8 @@ const WorkoutSessionScreen = () => {
 
     const key = activeSet.templateExerciseId ?? activeSet.exerciseId;
     const group = groupedSets.find((g) => g.key === key);
-    const fallback = group?.sets.find((s) => !loggedSetIds.has(s.id)) ?? group?.sets[0];
+    const fallback =
+      group?.sets.find((s) => !loggedSetIds.has(s.id)) ?? group?.sets[0];
     if (!fallback) {
       setActiveSetId(null);
       activeSetIdRef.current = null;
@@ -1799,7 +2012,13 @@ const WorkoutSessionScreen = () => {
         });
       }
     }
-  }, [sessionId, startTime, groupedSets.length, timerLocked, sessionQuery.data?.endedReason]);
+  }, [
+    sessionId,
+    startTime,
+    groupedSets.length,
+    timerLocked,
+    sessionQuery.data?.endedReason,
+  ]);
 
   useEffect(() => {
     const prev = previousRestEndsAtRef.current;
@@ -1859,12 +2078,16 @@ const WorkoutSessionScreen = () => {
         if (!pendingDifficultyFeedbackKey) {
           const currentLoggedSetIds = loggedSetIdsRef.current;
           const currentActiveSetId = activeSetIdRef.current;
-          if (!currentActiveSetId || currentLoggedSetIds.has(currentActiveSetId)) {
+          if (
+            !currentActiveSetId ||
+            currentLoggedSetIds.has(currentActiveSetId)
+          ) {
             const orderedSets = [...setsRef.current].sort(
               (a, b) => a.setIndex - b.setIndex
             );
             const startIndex = currentActiveSetId
-              ? orderedSets.findIndex((set) => set.id === currentActiveSetId) + 1
+              ? orderedSets.findIndex((set) => set.id === currentActiveSetId) +
+                1
               : 0;
             const nextUnlogged =
               orderedSets
@@ -2125,7 +2348,10 @@ const WorkoutSessionScreen = () => {
 
     // Get all completed sets with weight for this exercise
     const completedSetsWithWeight = groupedSets
-      .filter((s) => s.actualReps != null && s.actualWeight != null && s.actualWeight > 0)
+      .filter(
+        (s) =>
+          s.actualReps != null && s.actualWeight != null && s.actualWeight > 0
+      )
       .sort((a, b) => (b.actualWeight ?? 0) - (a.actualWeight ?? 0));
 
     if (completedSetsWithWeight.length === 0) {
@@ -2264,7 +2490,8 @@ const WorkoutSessionScreen = () => {
     const updated: WorkoutSet = isCardioSet
       ? {
           ...currentSet,
-          actualDistance: currentSet.actualDistance ?? currentSet.targetDistance,
+          actualDistance:
+            currentSet.actualDistance ?? currentSet.targetDistance,
           actualIncline: currentSet.actualIncline ?? currentSet.targetIncline,
           actualDurationMinutes:
             currentSet.actualDurationMinutes ??
@@ -2375,10 +2602,10 @@ const WorkoutSessionScreen = () => {
               if (set.id !== nextSetAfterCurrent.id) return set;
               return {
                 ...set,
-                actualWeight:
-                  canCarryWeight ? updated.actualWeight : set.actualWeight,
-                actualReps:
-                  canCarryReps ? updated.actualReps : set.actualReps,
+                actualWeight: canCarryWeight
+                  ? updated.actualWeight
+                  : set.actualWeight,
+                actualReps: canCarryReps ? updated.actualReps : set.actualReps,
               };
             })
           );
@@ -2415,7 +2642,9 @@ const WorkoutSessionScreen = () => {
   // Helper to advance to next exercise (extracted for reuse after difficulty feedback)
   const advanceToNextExercise = useCallback(
     (currentExerciseKey: string, currentLoggedSetIds: Set<string>) => {
-      const currentIndex = groupedSets.findIndex((g) => g.key === currentExerciseKey);
+      const currentIndex = groupedSets.findIndex(
+        (g) => g.key === currentExerciseKey
+      );
       const nextGroup = groupedSets[currentIndex + 1];
       if (nextGroup) {
         setAutoFocusEnabled(true);
@@ -2467,10 +2696,18 @@ const WorkoutSessionScreen = () => {
 
           return {
             ...set,
-            targetWeight: shouldFillWeight ? suggestion.suggestedWeight : set.targetWeight,
-            actualWeight: shouldFillWeight ? suggestion.suggestedWeight : set.actualWeight,
-            targetReps: shouldFillReps ? suggestion.suggestedReps : set.targetReps,
-            actualReps: shouldFillReps ? suggestion.suggestedReps : set.actualReps,
+            targetWeight: shouldFillWeight
+              ? suggestion.suggestedWeight
+              : set.targetWeight,
+            actualWeight: shouldFillWeight
+              ? suggestion.suggestedWeight
+              : set.actualWeight,
+            targetReps: shouldFillReps
+              ? suggestion.suggestedReps
+              : set.targetReps,
+            actualReps: shouldFillReps
+              ? suggestion.suggestedReps
+              : set.actualReps,
           };
         })
       );
@@ -2675,7 +2912,10 @@ const WorkoutSessionScreen = () => {
     if (!lastSet) return;
 
     if (isCardioExercise(lastSet.exerciseId, lastSet.exerciseName)) {
-      Alert.alert("Cardio is single-log", "Cardio exercises only have one log.");
+      Alert.alert(
+        "Cardio is single-log",
+        "Cardio exercises only have one log."
+      );
       return;
     }
 
@@ -3042,10 +3282,7 @@ const WorkoutSessionScreen = () => {
         </View>
 
         <Pressable
-          onPress={() => {
-            hasUserChangedWarmupPreferenceRef.current = true;
-            setShowWarmupSets((prev) => !prev);
-          }}
+          onPress={handleToggleWarmupSets}
           style={({ pressed }) => ({
             padding: 12,
             borderRadius: 12,
@@ -3061,16 +3298,18 @@ const WorkoutSessionScreen = () => {
         >
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-              Warm-up sets
+              Warm-up
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              {showWarmupSets ? "Shown before working sets" : "Hidden (working sets only)"}
+              {showWarmupSets
+                ? "Log these before your working sets"
+                : "Hidden. Turn on to add warm-up sets."}
             </Text>
           </View>
           <View pointerEvents='none'>
             <Switch
               value={showWarmupSets}
-              onValueChange={setShowWarmupSets}
+              onValueChange={handleToggleWarmupSets}
               trackColor={{
                 false: colors.border,
                 true: "rgba(56,189,248,0.35)",
@@ -3079,89 +3318,6 @@ const WorkoutSessionScreen = () => {
             />
           </View>
         </Pressable>
-
-        {showWarmupSets && warmupSuggestions.length > 0 && (
-          <View
-            style={{
-              padding: 12,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: colors.border,
-              gap: 8,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: `${colors.secondary}15`,
-                  borderWidth: 1,
-                  borderColor: `${colors.secondary}25`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name='flash-outline' size={18} color={colors.secondary} />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-                  {warmupTargetsLabel}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Quick routine (2–4 min)
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ gap: 8 }}>
-              {warmupSuggestions.map((item) => (
-                <View
-                  key={`${item.title}-${item.note ?? ""}`}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    gap: 10,
-                    paddingVertical: 8,
-                    paddingHorizontal: 10,
-                    borderRadius: 12,
-                    backgroundColor: colors.surface,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 6,
-                      backgroundColor: `${colors.secondary}12`,
-                      borderWidth: 1,
-                      borderColor: `${colors.secondary}25`,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginTop: 1,
-                    }}
-                  >
-                    <Ionicons name='checkmark' size={14} color={colors.secondary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-                      {item.title}
-                    </Text>
-                    {item.note ? (
-                      <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                        {item.note}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
 
         <Pressable
           onPress={() => {
@@ -3185,7 +3341,14 @@ const WorkoutSessionScreen = () => {
             gap: 10,
           })}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              flex: 1,
+            }}
+          >
             <View
               style={{
                 width: 34,
@@ -3204,7 +3367,10 @@ const WorkoutSessionScreen = () => {
               <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
                 Advanced analytics
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 12 }}
+                numberOfLines={1}
+              >
                 View trends and training insights
               </Text>
             </View>
@@ -3232,11 +3398,7 @@ const WorkoutSessionScreen = () => {
                   gap: 6,
                 }}
               >
-                <Ionicons
-                  name='lock-closed'
-                  size={12}
-                  color={colors.primary}
-                />
+                <Ionicons name='lock-closed' size={12} color={colors.primary} />
                 <Text
                   style={{
                     color: colors.primary,
@@ -3366,10 +3528,11 @@ const WorkoutSessionScreen = () => {
             return;
           }
 
-          const unloggedExercises = new Set(unloggedSets.map((s) => s.exerciseId)).size;
+          const unloggedExercises = new Set(
+            unloggedSets.map((s) => s.exerciseId)
+          ).size;
           const loggedWorkingSets = currentSets.filter(
-            (set) =>
-              set.setKind !== "warmup" && currentLoggedSetIds.has(set.id)
+            (set) => set.setKind !== "warmup" && currentLoggedSetIds.has(set.id)
           );
           const title =
             loggedWorkingSets.length === 0
@@ -3378,7 +3541,11 @@ const WorkoutSessionScreen = () => {
           const message =
             loggedWorkingSets.length === 0
               ? "You haven't logged any sets yet. If you finish now, this workout will count as 0 logged sets."
-              : `You have ${unloggedSets.length} unlogged set${unloggedSets.length === 1 ? "" : "s"} across ${unloggedExercises} exercise${unloggedExercises === 1 ? "" : "s"}.`;
+              : `You have ${unloggedSets.length} unlogged set${
+                  unloggedSets.length === 1 ? "" : "s"
+                } across ${unloggedExercises} exercise${
+                  unloggedExercises === 1 ? "" : "s"
+                }.`;
 
           Alert.alert(title, message, [
             { text: "Keep logging", style: "cancel" },
@@ -3459,7 +3626,8 @@ const WorkoutSessionScreen = () => {
             DEFAULT_WORKING_REST_SECONDS
           }
           currentWarmupSeconds={
-            sessionWarmupRestTimes[timerAdjustGroup.key] ?? DEFAULT_WARMUP_REST_SECONDS
+            sessionWarmupRestTimes[timerAdjustGroup.key] ??
+            DEFAULT_WARMUP_REST_SECONDS
           }
           showWarmupOption={showWarmupSets}
           exerciseName={timerAdjustGroup.name}
@@ -3560,7 +3728,10 @@ const WorkoutSessionScreen = () => {
             onScroll={handleScroll}
             onScrollToIndexFailed={({ index, averageItemLength }) => {
               const offset = Math.max(0, index * (averageItemLength || 180));
-              exercisesListRef.current?.scrollToOffset?.({ offset, animated: true });
+              exercisesListRef.current?.scrollToOffset?.({
+                offset,
+                animated: true,
+              });
               setTimeout(() => {
                 exercisesListRef.current?.scrollToIndex?.({
                   index,
@@ -3669,13 +3840,17 @@ const WorkoutSessionScreen = () => {
                         name: group.name,
                       })
                     }
-                    showExerciseDifficultyFeedback={pendingDifficultyFeedbackKey === group.key}
-                    onExerciseDifficultyFeedback={(rating: SetDifficultyRating) => {
+                    showExerciseDifficultyFeedback={
+                      pendingDifficultyFeedbackKey === group.key
+                    }
+                    onExerciseDifficultyFeedback={(
+                      rating: SetDifficultyRating
+                    ) => {
                       // Apply rating to all working sets in this exercise
                       const workingSetsInGroup = setsRef.current.filter(
                         (s) =>
-                          (s.templateExerciseId ?? s.exerciseId) === group.key &&
-                          s.setKind !== "warmup"
+                          (s.templateExerciseId ?? s.exerciseId) ===
+                            group.key && s.setKind !== "warmup"
                       );
                       const updatedSets = workingSetsInGroup.map((s) => ({
                         ...s,
@@ -3716,7 +3891,9 @@ const WorkoutSessionScreen = () => {
               `${colors.background}08`,
               "transparent",
             ]}
-            locations={[0, 0.08, 0.15, 0.25, 0.35, 0.45, 0.55, 0.68, 0.82, 0.92, 1]}
+            locations={[
+              0, 0.08, 0.15, 0.25, 0.35, 0.45, 0.55, 0.68, 0.82, 0.92, 1,
+            ]}
             style={{
               position: "absolute",
               top: 0,
@@ -3791,7 +3968,9 @@ const SetInputRow = ({
   canRemove,
 }: SetInputRowProps) => {
   const isCardio = isCardioExercise(set.exerciseId, set.exerciseName);
-  const [weightText, setWeightText] = useState(set.actualWeight?.toString() ?? "");
+  const [weightText, setWeightText] = useState(
+    set.actualWeight?.toString() ?? ""
+  );
   const [isEditingWeight, setIsEditingWeight] = useState(false);
   const [distanceText, setDistanceText] = useState(
     set.actualDistance?.toString() ?? ""
@@ -4325,7 +4504,9 @@ const ExerciseCard = ({
   const allSetsLogged = loggedSetsCount === group.sets.length;
   const isCardioGroup = isCardioExercise(group.exerciseId, group.name);
 
-  const warmupSetCount = group.sets.filter((set) => set.setKind === "warmup").length;
+  const warmupSetCount = group.sets.filter(
+    (set) => set.setKind === "warmup"
+  ).length;
   const workingSetCount = group.sets.length - warmupSetCount;
   const primaryWorkingSet =
     group.sets.find((set) => set.setKind !== "warmup") ?? group.sets[0];
@@ -4350,7 +4531,8 @@ const ExerciseCard = ({
   );
   const averageRir =
     rirValues.length > 0
-      ? rirValues.reduce((sum, set) => sum + (set.rir ?? 0), 0) / rirValues.length
+      ? rirValues.reduce((sum, set) => sum + (set.rir ?? 0), 0) /
+        rirValues.length
       : null;
   const rirSummary = isRirEnabled
     ? averageRir === null
@@ -4662,7 +4844,9 @@ const ExerciseCard = ({
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
+                  <Text
+                    style={{ color: colors.textPrimary, fontWeight: "800" }}
+                  >
                     Suggested start
                   </Text>
                   <Pressable
@@ -4690,7 +4874,9 @@ const ExerciseCard = ({
                   {startingSuggestion?.suggestedReps
                     ? ` · ${startingSuggestion.suggestedReps} reps`
                     : ""}
-                  {startingSuggestion?.reason ? ` · ${startingSuggestion.reason}` : ""}
+                  {startingSuggestion?.reason
+                    ? ` · ${startingSuggestion.reason}`
+                    : ""}
                 </Text>
               </View>
               <Pressable
@@ -4728,14 +4914,18 @@ const ExerciseCard = ({
                   onLog={() => onLogSet(set.id, restSecondsForSet)}
                   restSeconds={restSecondsForSet}
                   isActive={activeSetId === set.id}
-                  showRir={isRirEnabled && !isCardioGroup && set.setKind !== "warmup"}
+                  showRir={
+                    isRirEnabled && !isCardioGroup && set.setKind !== "warmup"
+                  }
                   autoRestTimer={autoRestTimer}
                   logged={loggedSetIds.has(set.id)}
                   onUndo={() => onUndo(set.id)}
                   onRemove={() => onRemoveSet(set.id)}
                   canRemove={group.sets.length > 1}
                 />
-                {restRemaining !== null && lastLoggedSetId === set.id && !showExerciseDifficultyFeedback ? (
+                {restRemaining !== null &&
+                lastLoggedSetId === set.id &&
+                !showExerciseDifficultyFeedback ? (
                   <View
                     style={{
                       padding: 10,
@@ -4790,7 +4980,13 @@ const ExerciseCard = ({
               }}
             >
               <View style={{ gap: 2 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "800" }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: "800",
+                  }}
+                >
                   How did this exercise feel?
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
@@ -4804,13 +5000,21 @@ const ExerciseCard = ({
                     flex: 1,
                     paddingVertical: 12,
                     borderRadius: 10,
-                    backgroundColor: pressed ? `${colors.secondary}35` : `${colors.secondary}20`,
+                    backgroundColor: pressed
+                      ? `${colors.secondary}35`
+                      : `${colors.secondary}20`,
                     borderWidth: 1,
                     borderColor: `${colors.secondary}50`,
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ color: colors.secondary, fontSize: 13, fontWeight: "800" }}>
+                  <Text
+                    style={{
+                      color: colors.secondary,
+                      fontSize: 13,
+                      fontWeight: "800",
+                    }}
+                  >
                     Too Easy
                   </Text>
                 </Pressable>
@@ -4820,13 +5024,21 @@ const ExerciseCard = ({
                     flex: 1,
                     paddingVertical: 12,
                     borderRadius: 10,
-                    backgroundColor: pressed ? `${colors.primary}35` : `${colors.primary}20`,
+                    backgroundColor: pressed
+                      ? `${colors.primary}35`
+                      : `${colors.primary}20`,
                     borderWidth: 1,
                     borderColor: `${colors.primary}50`,
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: 13,
+                      fontWeight: "800",
+                    }}
+                  >
                     Just Right
                   </Text>
                 </Pressable>
@@ -4836,13 +5048,21 @@ const ExerciseCard = ({
                     flex: 1,
                     paddingVertical: 12,
                     borderRadius: 10,
-                    backgroundColor: pressed ? `${colors.error}35` : `${colors.error}20`,
+                    backgroundColor: pressed
+                      ? `${colors.error}35`
+                      : `${colors.error}20`,
                     borderWidth: 1,
                     borderColor: `${colors.error}50`,
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ color: colors.error, fontSize: 13, fontWeight: "800" }}>
+                  <Text
+                    style={{
+                      color: colors.error,
+                      fontSize: 13,
+                      fontWeight: "800",
+                    }}
+                  >
                     Too Hard
                   </Text>
                 </Pressable>
@@ -4863,10 +5083,20 @@ const ExerciseCard = ({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: "600",
+                  }}
+                >
                   Skip
                 </Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.textSecondary} />
+                <Ionicons
+                  name='arrow-forward'
+                  size={14}
+                  color={colors.textSecondary}
+                />
               </Pressable>
             </View>
           )}
