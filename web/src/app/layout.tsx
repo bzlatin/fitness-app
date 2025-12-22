@@ -1,7 +1,21 @@
 import type { Metadata } from 'next';
-import ScrollReveal from '../components/ScrollReveal';
+import { Sora, Source_Sans_3 } from 'next/font/google';
 import SiteNav from '../components/SiteNav';
 import './globals.css';
+
+const sora = Sora({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-sora',
+  display: 'swap',
+});
+
+const sourceSans = Source_Sans_3({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app');
 const defaultOgImage = '/SCREENSHOT_HOME.PNG';
@@ -121,7 +135,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sourceSans.variable} ${sora.variable}`}>
       <head>
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
@@ -130,7 +144,6 @@ export default function RootLayout({
       <body className="bg-background text-text-primary">
         <SiteNav />
         {children}
-        <ScrollReveal />
       </body>
     </html>
   );

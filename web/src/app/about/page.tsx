@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import ScrollReveal from '../../components/ScrollReveal';
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
 const defaultOgImage = '/SCREENSHOT_HOME.PNG';
@@ -160,6 +161,7 @@ export default function AboutPage() {
           </div>
         </section>
       </div>
+      <ScrollReveal />
     </main>
   );
 }
