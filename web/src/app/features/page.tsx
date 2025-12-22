@@ -89,6 +89,11 @@ export default function FeaturesPage() {
           <p className='text-lg text-text-secondary mt-4'>
             Built by a lifter who wanted fewer taps and more progress. Use the pieces that help you and skip the rest.
           </p>
+          <p className='text-text-secondary mt-4'>
+            Push Pull: Gym Tracker is a social workout log and strength training planner that helps you stay
+            consistent, build smarter routines, and track real progress with AI-powered programming and community
+            motivation. Train at the gym or at home with workouts tailored to your goals.
+          </p>
           <div className='mt-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm text-primary'>
             Private beta testing now. Public launch coming soon.
           </div>
@@ -124,6 +129,12 @@ export default function FeaturesPage() {
               className='rounded-full border border-border/60 bg-surface/60 px-4 py-2 hover:border-primary/40 hover:text-text-primary transition'
             >
               Templates
+            </Link>
+            <Link
+              href='#pricing'
+              className='rounded-full border border-border/60 bg-surface/60 px-4 py-2 hover:border-primary/40 hover:text-text-primary transition'
+            >
+              Pricing
             </Link>
           </div>
 
@@ -257,6 +268,49 @@ export default function FeaturesPage() {
                 alt='Push/Pull custom workout builder and log'
                 caption='Templates stay easy to edit and repeat.'
               />
+            </div>
+          </section>
+
+          <section
+            id='pricing'
+            className='mt-12 rounded-3xl border border-border/60 bg-surface/70 p-6 sm:p-8 shadow-[0_24px_70px_rgba(5,8,22,0.35)] backdrop-blur reveal'
+            data-reveal
+          >
+            <h2 className='text-2xl font-semibold text-text-primary'>Free and Pro features</h2>
+            <p className='text-text-secondary mt-3'>
+              Start for free and upgrade to Pro for unlimited planning, AI programming, and recovery insights.
+            </p>
+            <div className='mt-6 grid gap-6 md:grid-cols-2'>
+              <div>
+                <p className='text-sm uppercase tracking-[0.2em] text-text-secondary mb-3'>Free features</p>
+                <ul className='list-disc list-inside text-text-secondary space-y-2'>
+                  <li>Log unlimited workouts with 800+ strength and cardio exercises</li>
+                  <li>Create up to 3 custom routines and templates</li>
+                  <li>Track sets, reps, and weight with progressive overload support</li>
+                  <li>Join squads and share workouts for accountability</li>
+                  <li>Follow friends and view real-time activity feeds</li>
+                  <li>Review history, streaks, and training trends</li>
+                </ul>
+              </div>
+              <div>
+                <p className='text-sm uppercase tracking-[0.2em] text-text-secondary mb-3'>Pro features</p>
+                <ul className='list-disc list-inside text-text-secondary space-y-2'>
+                  <li>Unlimited routine templates and planning</li>
+                  <li>AI workout generation tailored to your goals and experience level</li>
+                  <li>Recovery and fatigue indicators for smarter strength training</li>
+                  <li>Personalized progression recommendations</li>
+                  <li>Muscle group balance and analytics for optimized results</li>
+                </ul>
+                <div className='mt-4 text-text-secondary'>
+                  <p className='font-semibold text-text-primary'>Subscription pricing</p>
+                  <p>Monthly: $4.99</p>
+                  <p>Annual: $49.99 (17% savings)</p>
+                  <p className='mt-3 text-sm'>
+                    Subscriptions renew automatically unless canceled at least 24 hours before the end of the current
+                    period. Manage or cancel anytime in Account Settings.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 

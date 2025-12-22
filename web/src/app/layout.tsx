@@ -31,6 +31,20 @@ const structuredData = {
         '@type': 'Organization',
         name: 'Push/Pull',
       },
+      offers: [
+        {
+          '@type': 'Offer',
+          price: '4.99',
+          priceCurrency: 'USD',
+          url: siteUrl.toString(),
+        },
+        {
+          '@type': 'Offer',
+          price: '49.99',
+          priceCurrency: 'USD',
+          url: siteUrl.toString(),
+        },
+      ],
     },
   ],
 };
@@ -38,19 +52,30 @@ const structuredData = {
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: 'Push/Pull - Workout Tracker for Lifters',
+    default: 'Push Pull: Gym Tracker',
     template: '%s - Push/Pull',
   },
   description:
-    'The workout tracker built for lifters. Fast logging, clear progress, squads for accountability, and optional AI planning.',
-  keywords: ['workout tracker', 'fitness app', 'push pull', 'strength training'],
+    'Push Pull is a gym tracker with smart workouts, fast logging, clear progress, squads for accountability, and optional AI planning.',
+  keywords: [
+    'workout logger',
+    'gym tracker',
+    'strength training',
+    'ai planner',
+    'home workouts',
+    'weightlifting',
+    'routine',
+    'progression',
+    'fitness app',
+    'push pull',
+  ],
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Push/Pull - Workout Tracker for Lifters',
+    title: 'Push Pull: Gym Tracker',
     description:
-      'The workout tracker built for lifters. Fast logging, clear progress, squads for accountability, and optional AI planning.',
+      'Push Pull is a gym tracker with smart workouts, fast logging, clear progress, squads for accountability, and optional AI planning.',
     url: siteUrl.toString(),
     siteName: 'Push/Pull',
     locale: 'en_US',
