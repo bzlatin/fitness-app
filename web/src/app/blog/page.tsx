@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import ScrollReveal from '../../components/ScrollReveal';
 import { posts } from './posts';
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
@@ -205,6 +206,7 @@ export default function BlogIndexPage() {
           </div>
         </section>
       </div>
+      <ScrollReveal />
     </main>
   );
 }
