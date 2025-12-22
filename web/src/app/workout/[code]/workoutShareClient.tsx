@@ -65,7 +65,7 @@ export default function WorkoutShareClient({ raw, code, debug }: WorkoutShareCli
           ) : null}
           <Link
             href="/"
-            className="inline-flex items-center justify-center w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition-colors"
+            className="inline-flex items-center justify-center w-full px-4 py-3 bg-primary hover:bg-primary/90 text-background font-semibold rounded-xl transition-colors"
           >
             Go to Push/Pull
           </Link>
@@ -80,7 +80,7 @@ export default function WorkoutShareClient({ raw, code, debug }: WorkoutShareCli
         <div className="mb-6">
           <Image
             src="/push-pull-logo.svg"
-            alt="Push/Pull Logo"
+            alt=""
             width={72}
             height={72}
             priority
@@ -115,7 +115,7 @@ export default function WorkoutShareClient({ raw, code, debug }: WorkoutShareCli
           {deepLink ? (
             <a
               href={deepLink}
-              className="w-full inline-flex items-center justify-center px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition-colors"
+              className="w-full inline-flex items-center justify-center px-4 py-3 bg-primary hover:bg-primary/90 text-background font-semibold rounded-xl transition-colors"
             >
               Open in app
             </a>

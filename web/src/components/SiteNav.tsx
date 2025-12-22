@@ -55,7 +55,7 @@ export default function SiteNav() {
           <Link href='/' className='inline-flex items-center gap-3'>
             <Image
               src='/push-pull-logo.svg'
-              alt='Push/Pull'
+              alt=''
               width={34}
               height={34}
               className='rounded-xl'

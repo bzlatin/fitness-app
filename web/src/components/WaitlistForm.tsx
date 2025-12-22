@@ -63,7 +63,7 @@ export default function WaitlistForm({ waitlistUrl }: WaitlistFormProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold rounded-xl transition-colors"
+            className="w-full px-4 py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-background font-semibold rounded-xl transition-colors"
           >
             {loading ? 'Joining...' : 'Get Notified'}
           </button>
@@ -91,7 +91,7 @@ export default function WaitlistForm({ waitlistUrl }: WaitlistFormProps) {
       )}
 
       {!submitted && (
-        <p className="text-text-secondary/60 text-sm text-center mt-3">
+        <p className="text-text-secondary text-sm text-center mt-3">
           Be the first to know when we launch.
         </p>
       )}

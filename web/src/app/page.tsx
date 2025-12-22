@@ -21,7 +21,7 @@ export default function Home() {
         <div className="mb-6">
           <Image
             src="/push-pull-logo.svg"
-            alt="Push/Pull Logo"
+            alt=""
             width={80}
             height={80}
             priority
