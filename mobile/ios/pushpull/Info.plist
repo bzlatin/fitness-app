@@ -65,7 +65,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your camera</string>
+	<string>$(PRODUCT_NAME) uses the camera to take a progress photo to share with your workout summary (for example, snapping a post-workout pic to attach to a session).</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Allow Push/Pull to read your Apple Health workouts (and optional active calories and heart rate) to keep your training history accurate.</string>
 	<key>NSHealthUpdateUsageDescription</key>
