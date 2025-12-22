@@ -2,11 +2,16 @@ import { User } from "../types/user";
 
 const KG_TO_LB = 2.20462;
 
+const normalizeExerciseText = (
+  exerciseName?: string,
+  exerciseId?: string
+) => `${exerciseName ?? ""} ${exerciseId ?? ""}`.toLowerCase();
+
 export const isBodyweightMovement = (
   exerciseName?: string,
   exerciseId?: string
 ) => {
-  const name = `${exerciseName ?? ""} ${exerciseId ?? ""}`.toLowerCase();
+  const name = normalizeExerciseText(exerciseName, exerciseId);
   const keywords = [
     "bodyweight",
     "push-up",
@@ -27,7 +32,7 @@ export const isLowerBodyMovement = (
   exerciseName?: string,
   exerciseId?: string
 ) => {
-  const name = `${exerciseName ?? ""} ${exerciseId ?? ""}`.toLowerCase();
+  const name = normalizeExerciseText(exerciseName, exerciseId);
   const keywords = [
     "squat",
     "deadlift",
@@ -40,6 +45,79 @@ export const isLowerBodyMovement = (
     "hip",
   ];
   return keywords.some((keyword) => name.includes(keyword));
+};
+
+export const isIsolationMovement = (
+  exerciseName?: string,
+  exerciseId?: string
+) => {
+  const name = normalizeExerciseText(exerciseName, exerciseId);
+  const keywords = [
+    "curl",
+    "extension",
+    "fly",
+    "lateral raise",
+    "front raise",
+    "rear delt",
+    "reverse fly",
+    "kickback",
+    "shrug",
+    "pullover",
+    "pec deck",
+    "adduction",
+    "abduction",
+    "calf",
+    "wrist",
+    "forearm",
+    "triceps",
+    "biceps",
+  ];
+  return keywords.some((keyword) => name.includes(keyword));
+};
+
+export const isPerSideMovement = (
+  exerciseName?: string,
+  exerciseId?: string,
+  equipment?: string
+) => {
+  const name = normalizeExerciseText(exerciseName, exerciseId);
+  const equipmentValue = (equipment ?? "").toLowerCase();
+  const perSideNameKeywords = [
+    "one-arm",
+    "one arm",
+    "single-arm",
+    "single arm",
+    "single-hand",
+    "single hand",
+    "one-hand",
+    "one hand",
+    "alternating",
+    "unilateral",
+  ];
+  if (perSideNameKeywords.some((keyword) => name.includes(keyword))) {
+    return true;
+  }
+
+  if (equipmentValue.includes("dumbbell") || name.includes("dumbbell")) {
+    return true;
+  }
+
+  const cableDualHandleKeywords = [
+    "crossover",
+    "fly",
+    "chest press",
+    "shoulder press",
+    "lateral raise",
+    "front raise",
+    "rear delt",
+    "reverse fly",
+    "upright row",
+  ];
+  const isCable = equipmentValue.includes("cable") || name.includes("cable");
+  return (
+    isCable &&
+    cableDualHandleKeywords.some((keyword) => name.includes(keyword))
+  );
 };
 
 const estimateBodyWeightKg = (profile?: User["onboardingData"] | null) => {
@@ -101,9 +179,31 @@ export const estimateWorkingWeightFromProfile = (
 
   const multiplier =
     multipliers[gender][isLower ? "lower" : "upper"][expIndex] ?? 0.4;
-  const estimated = bodyWeightKg * KG_TO_LB * multiplier;
+  const isPerSide = isPerSideMovement(exerciseName, exerciseId);
+  const isIsolation = isIsolationMovement(exerciseName, exerciseId);
+  const perSideFactor = isPerSide ? 0.5 : 1;
+  const isolationFactor = isIsolation ? 0.7 : 1;
+  const safetyFactor =
+    exp === "advanced" ? 0.9 : exp === "intermediate" ? 0.85 : 0.8;
+  const estimated =
+    bodyWeightKg *
+    KG_TO_LB *
+    multiplier *
+    safetyFactor *
+    perSideFactor *
+    isolationFactor;
   const rounded = roundToIncrement(estimated, 2.5);
-  const min = isLower ? 45 : 15;
-  const max = isLower ? 405 : 225;
+  const min = isLower ? (isPerSide ? 20 : 45) : isPerSide ? 10 : 15;
+  const max = isLower
+    ? isPerSide
+      ? 225
+      : 405
+    : isIsolation
+    ? isPerSide
+      ? 40
+      : 80
+    : isPerSide
+    ? 120
+    : 225;
   return Math.min(Math.max(rounded, min), max);
 };

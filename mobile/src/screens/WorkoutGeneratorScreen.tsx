@@ -23,7 +23,10 @@ import {
   getAiWorkoutGenerationsRemaining,
 } from "../utils/featureGating";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
-import { estimateWorkingWeightFromProfile } from "../utils/weightEstimates";
+import {
+  estimateWorkingWeightFromProfile,
+  isPerSideMovement,
+} from "../utils/weightEstimates";
 
 const SPLIT_OPTIONS = [
   { value: "push", label: "Push", emoji: "💪" },
@@ -278,6 +281,12 @@ const WorkoutGeneratorScreen = () => {
         {/* Exercise List */}
         {generatedWorkout.exercises.map((exercise, index) => {
           const targetWeight = targetWeights[exercise.exerciseId];
+          const weightSuffix = isPerSideMovement(
+            exercise.exerciseName,
+            exercise.exerciseId
+          )
+            ? ' per arm'
+            : '';
 
           return (
             <View
@@ -332,7 +341,7 @@ const WorkoutGeneratorScreen = () => {
               {targetWeight?.weight ? (
                 <View style={{ marginBottom: 6 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                    Target weight: {Math.round(targetWeight.weight)} lb
+                    Target weight: {Math.round(targetWeight.weight)} lb{weightSuffix}
                   </Text>
                   {targetWeight.reason ? (
                     <Text

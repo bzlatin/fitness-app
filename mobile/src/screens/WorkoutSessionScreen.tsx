@@ -100,6 +100,7 @@ import {
   estimateWorkingWeightFromProfile,
   isBodyweightMovement,
   isLowerBodyMovement,
+  isPerSideMovement,
 } from "../utils/weightEstimates";
 import {
   calculateNextWeightSuggestion,
@@ -735,6 +736,7 @@ type ExerciseGroup = {
   exerciseId: string;
   name: string;
   imageUrl?: string;
+  equipment?: string;
   sets: WorkoutSet[];
   restSeconds?: number;
 };
@@ -742,7 +744,8 @@ type ExerciseGroup = {
 const groupSetsByExercise = (
   sessionSets: WorkoutSet[],
   restLookup?: Record<string, number | undefined>,
-  sessionRestTimes?: Record<string, number>
+  sessionRestTimes?: Record<string, number>,
+  equipmentLookup?: Record<string, string | undefined>
 ): ExerciseGroup[] => {
   const grouped = new Map<string, ExerciseGroup>();
   sessionSets.forEach((set) => {
@@ -752,6 +755,7 @@ const groupSetsByExercise = (
       exerciseId: set.exerciseId,
       name: set.exerciseName ?? formatExerciseName(set.exerciseId),
       imageUrl: resolveExerciseImageUri(set.exerciseImageUrl),
+      equipment: equipmentLookup?.[key] ?? equipmentLookup?.[set.exerciseId],
       sets: [],
       restSeconds:
         sessionRestTimes?.[key] ?? // Prioritize session-specific rest times
@@ -991,6 +995,17 @@ const WorkoutSessionScreen = () => {
     template.exercises.forEach((ex) => {
       lookup[ex.id] = ex.defaultRestSeconds;
       lookup[ex.exerciseId] = ex.defaultRestSeconds;
+    });
+    return lookup;
+  }, [template]);
+
+  const equipmentLookup = useMemo(() => {
+    if (!template) return {};
+    const lookup: Record<string, string | undefined> = {};
+    template.exercises.forEach((ex) => {
+      if (!ex.equipment) return;
+      lookup[ex.id] = ex.equipment;
+      lookup[ex.exerciseId] = ex.equipment;
     });
     return lookup;
   }, [template]);
@@ -1960,14 +1975,12 @@ const WorkoutSessionScreen = () => {
   };
 
   const applySetUpdates = (updatedList: WorkoutSet[]) => {
-    setSets((prev) => {
-      const nextSets = prev.map((set) => {
-        const next = updatedList.find((u) => u.id === set.id);
-        return next ?? set;
-      });
-      setsRef.current = nextSets;
-      return nextSets;
+    const nextSets = setsRef.current.map((set) => {
+      const next = updatedList.find((u) => u.id === set.id);
+      return next ?? set;
     });
+    setsRef.current = nextSets;
+    setSets(nextSets);
   };
 
   const updateSet = (updated: WorkoutSet) => {
@@ -2166,8 +2179,14 @@ const WorkoutSessionScreen = () => {
   }, [sets, showWarmupSets]);
 
   const groupedSets = useMemo(
-    () => groupSetsByExercise(visibleSets, restLookup, sessionRestTimes),
-    [visibleSets, restLookup, sessionRestTimes]
+    () =>
+      groupSetsByExercise(
+        visibleSets,
+        restLookup,
+        sessionRestTimes,
+        equipmentLookup
+      ),
+    [visibleSets, restLookup, sessionRestTimes, equipmentLookup]
   );
 
   useEffect(() => {
@@ -2842,9 +2861,7 @@ const WorkoutSessionScreen = () => {
         const needsRepRangeUpdate =
           set.targetRepsMin !== repMin || set.targetRepsMax !== repMax;
         const needsTargetRepsUpdate = set.targetReps !== nextTargetReps;
-        const canUpdateTargetWeight = set.actualWeight === undefined;
-        const needsTargetWeightUpdate =
-          canUpdateTargetWeight && set.targetWeight !== suggestion.weight;
+        const needsTargetWeightUpdate = set.targetWeight !== suggestion.weight;
         if (
           !needsRepRangeUpdate &&
           !needsTargetRepsUpdate &&
@@ -3006,32 +3023,42 @@ const WorkoutSessionScreen = () => {
       }
 
       // Auto-carry weight + reps to the next set (strength only, working sets only).
+      const nextCarrySet = nextSetAfterCurrent ?? nextUnloggedSet;
       if (
-        nextSetAfterCurrent &&
+        nextCarrySet &&
         updated.setKind !== "warmup" &&
         !isCardioExercise(updated.exerciseId, updated.exerciseName) &&
-        nextSetAfterCurrent.setKind !== "warmup"
+        nextCarrySet.setKind !== "warmup"
       ) {
         const canCarryWeight =
           updated.actualWeight !== undefined &&
-          nextSetAfterCurrent.actualWeight === undefined;
+          nextCarrySet.actualWeight === undefined;
         const canCarryReps =
           updated.actualReps !== undefined &&
-          nextSetAfterCurrent.actualReps === undefined;
+          nextCarrySet.actualReps === undefined;
 
         if (canCarryWeight || canCarryReps) {
-          setSets((prev) =>
-            prev.map((set) => {
-              if (set.id !== nextSetAfterCurrent.id) return set;
-              return {
-                ...set,
-                actualWeight: canCarryWeight
-                  ? updated.actualWeight
-                  : set.actualWeight,
-                actualReps: canCarryReps ? updated.actualReps : set.actualReps,
-              };
-            })
-          );
+          const shouldUpdateTargetWeight =
+            nextCarrySet.targetWeight === undefined && canCarryWeight;
+          const shouldUpdateTargetReps =
+            nextCarrySet.targetReps === undefined && canCarryReps;
+          applySetUpdates([
+            {
+              ...nextCarrySet,
+              actualWeight: canCarryWeight
+                ? updated.actualWeight
+                : nextCarrySet.actualWeight,
+              actualReps: canCarryReps
+                ? updated.actualReps
+                : nextCarrySet.actualReps,
+              targetWeight: shouldUpdateTargetWeight
+                ? updated.actualWeight
+                : nextCarrySet.targetWeight,
+              targetReps: shouldUpdateTargetReps
+                ? updated.actualReps
+                : nextCarrySet.targetReps,
+            },
+          ]);
         }
       }
 
@@ -3329,7 +3356,8 @@ const WorkoutSessionScreen = () => {
     const fullGroups = groupSetsByExercise(
       allSets,
       restLookup,
-      sessionRestTimesRef.current
+      sessionRestTimesRef.current,
+      equipmentLookup
     );
     const fullGroupMap = new Map(fullGroups.map((group) => [group.key, group]));
 
@@ -4404,6 +4432,7 @@ type SetInputRowProps = {
   isWarmup?: boolean;
   suggestedWeight?: number;
   inSessionSuggestion?: NextWeightSuggestion;
+  isPerSideWeight?: boolean;
   onChange: (updated: WorkoutSet) => void;
   onLog: () => void;
   restSeconds?: number;
@@ -4422,6 +4451,7 @@ const SetInputRow = ({
   isWarmup,
   suggestedWeight,
   inSessionSuggestion,
+  isPerSideWeight,
   onChange,
   onLog,
   restSeconds,
@@ -4502,21 +4532,25 @@ const SetInputRow = ({
     typeof suggestedWeight === "number" &&
     Number.isFinite(suggestedWeight) &&
     suggestedWeight > 0;
+  const weightSuffix = isPerSideWeight ? ' per arm' : '';
   const suggestedWeightLabel = shouldShowSuggestedWeight
     ? `${Number.isInteger(suggestedWeight)
         ? suggestedWeight
-        : suggestedWeight.toFixed(1)} lb`
+        : suggestedWeight.toFixed(1)} lb${weightSuffix}`
     : undefined;
   const inSessionWeightLabel = shouldUseInSessionSuggestion
     ? `${Number.isInteger(inSessionWeight!)
         ? inSessionWeight
-        : inSessionWeight!.toFixed(1)} lb`
+        : inSessionWeight!.toFixed(1)} lb${weightSuffix}`
     : undefined;
+  const targetWeightLabel =
+    set.targetWeight !== undefined
+      ? `${set.targetWeight} lb${weightSuffix}`
+      : undefined;
   const displayWeightLabel =
     inSessionWeightLabel ??
-    (set.targetWeight !== undefined
-      ? `${set.targetWeight} lb`
-      : suggestedWeightLabel);
+    targetWeightLabel ??
+    suggestedWeightLabel;
 
   const targetLine = isCardio
     ? [
@@ -4808,7 +4842,7 @@ const SetInputRow = ({
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Weight
+                {`Weight${isPerSideWeight ? ' (per arm)' : ''}`}
               </Text>
               <TextInput
                 style={{
@@ -5010,6 +5044,12 @@ const ExerciseCard = ({
   ).length;
   const allSetsLogged = loggedSetsCount === group.sets.length;
   const isCardioGroup = isCardioExercise(group.exerciseId, group.name);
+  const isPerSideWeight = isPerSideMovement(
+    group.name,
+    group.exerciseId,
+    group.equipment
+  );
+  const weightSuffix = isPerSideWeight ? ' per arm' : '';
 
   const warmupSetCount = group.sets.filter(
     (set) => set.setKind === "warmup"
@@ -5376,7 +5416,7 @@ const ExerciseCard = ({
                 </View>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {startingSuggestion?.suggestedWeight
-                    ? `${startingSuggestion.suggestedWeight} lb`
+                    ? `${startingSuggestion.suggestedWeight} lb${weightSuffix}`
                     : "—"}
                   {startingSuggestion?.suggestedReps
                     ? ` · ${startingSuggestion.suggestedReps} reps`
@@ -5419,6 +5459,7 @@ const ExerciseCard = ({
                   isWarmup={set.setKind === "warmup"}
                   suggestedWeight={suggestedWeight}
                   inSessionSuggestion={inSessionSuggestion}
+                  isPerSideWeight={isPerSideWeight}
                   onChange={onChangeSet}
                   onLog={() => onLogSet(set.id, restSecondsForSet)}
                   restSeconds={restSecondsForSet}

@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 import { colors } from "../../theme/colors";
 import { WorkoutTemplateExercise } from "../../types/workouts";
+import { isPerSideMovement } from "../../utils/weightEstimates";
 
 type Props = {
   item: WorkoutTemplateExercise;
@@ -15,6 +16,13 @@ const formatExerciseName = (exerciseId: string) =>
 
 const ExerciseRow = ({ item, exerciseName }: Props) => {
   const title = exerciseName ?? formatExerciseName(item.exerciseId);
+  const weightSuffix = isPerSideMovement(
+    exerciseName,
+    item.exerciseId,
+    item.equipment
+  )
+    ? ' per arm'
+    : '';
 
   const cardioParts: string[] = [];
   if (item.defaultDurationMinutes) {
@@ -59,7 +67,7 @@ const ExerciseRow = ({ item, exerciseName }: Props) => {
       </Text>
       {item.defaultWeight ? (
         <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
-          Target weight: {item.defaultWeight} lb
+          Target weight: {item.defaultWeight} lb{weightSuffix}
         </Text>
       ) : null}
       {cardioParts.length > 0 ? (

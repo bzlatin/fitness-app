@@ -45,6 +45,7 @@ import {
   WorkoutTemplateExercise,
 } from "../types/workouts";
 import { isCardioExercise } from "../utils/exercises";
+import { isPerSideMovement } from "../utils/weightEstimates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { canCreateAnotherTemplate } from "../utils/featureGating";
 import type { ApiClientError } from "../api/client";
@@ -909,6 +910,11 @@ const WorkoutTemplateBuilderScreen = () => {
     isActive,
   }: RenderItemParams<TemplateExerciseForm>) => {
     const cardio = isCardioExercise(item.exercise);
+    const isPerSideWeight = isPerSideMovement(
+      item.exercise.name,
+      item.exercise.id,
+      item.exercise.equipment
+    );
     return (
       <View
         style={{
@@ -1089,7 +1095,7 @@ const WorkoutTemplateBuilderScreen = () => {
             </View>
 
             <InlineNumberInput
-              label='Weight (lb)'
+              label={isPerSideWeight ? 'Weight (lb per arm)' : 'Weight (lb)'}
               value={item.weight ?? ""}
               onChangeText={(val) =>
                 updateExerciseField(item.formId, "weight", val)

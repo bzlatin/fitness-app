@@ -84,6 +84,7 @@ const GymPreferencesScreen = () => {
       const normalized = ensureGymPreferences(next);
       setDraft(normalized);
       queryClient.setQueryData(['gym-preferences'], normalized);
+      queryClient.invalidateQueries({ queryKey: ['analytics', 'up-next'] });
       void refresh();
     },
     onError: () => {

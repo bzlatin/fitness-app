@@ -31,6 +31,7 @@ import { WorkoutSession, WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import UpNextCard from "../components/workout/UpNextCard";
 import { generateWorkout, recommendNextWorkout } from "../api/ai";
+import { fetchGymPreferences, updateGymPreferences } from "../api/gymPreferences";
 import { deleteTemplate } from "../api/templates";
 import { deleteSession, undoAutoEndSession } from "../api/sessions";
 import { fetchRecap } from "../api/analytics";
@@ -51,8 +52,10 @@ import {
   canGenerateAiWorkout,
   getAiWorkoutGenerationsRemaining,
 } from "../utils/featureGating";
+import { ensureGymPreferences, getActiveGym } from "../utils/gymPreferences";
 import RecapCard from "../components/RecapCard";
 import { RecapSlice } from "../types/analytics";
+import { GymPreferences, GymProfile } from "../types/gym";
 
 // Generate unique ID for React Native (no crypto dependency)
 const generateId = () =>
@@ -61,7 +64,7 @@ const generateId = () =>
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
   const { data: templates } = useWorkoutTemplates();
-  const { user } = useCurrentUser();
+  const { user, refresh } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
   const hasProAccess = subscriptionAccess.hasProAccess;
   const isPro = hasProAccess;
@@ -101,6 +104,7 @@ const HomeScreen = () => {
     refetch: refetchUpNext,
   } = useUpNextRecommendation();
 
+  const [gymSwitchOpen, setGymSwitchOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
@@ -115,6 +119,7 @@ const HomeScreen = () => {
     id: string;
     dismissedAt: number;
   } | null>(null);
+  const [pendingGymId, setPendingGymId] = useState<string | null>(null);
 
   // Subscription status for trial/grace/expired handling
   const subscriptionStatusError = subscriptionAccess.isError;
@@ -159,6 +164,22 @@ const HomeScreen = () => {
   }, [fatigue]);
 
   const queryClient = useQueryClient();
+  const { data: gymPreferencesData } = useQuery<GymPreferences>({
+    queryKey: ["gym-preferences"],
+    queryFn: fetchGymPreferences,
+    enabled: Boolean(user),
+    initialData: user?.gymPreferences
+      ? ensureGymPreferences(user.gymPreferences)
+      : undefined,
+  });
+  const gymPreferences = useMemo(() => {
+    const base = gymPreferencesData ?? user?.gymPreferences;
+    return base ? ensureGymPreferences(base) : null;
+  }, [gymPreferencesData, user?.gymPreferences]);
+  const activeGym = useMemo(
+    () => (gymPreferences ? getActiveGym(gymPreferences) : null),
+    [gymPreferences]
+  );
   const { data: recap, isLoading: recapLoading, isError: recapError, refetch: refetchRecap } =
     useQuery<RecapSlice>({
       queryKey: ["recap"],
@@ -223,6 +244,50 @@ const HomeScreen = () => {
       );
     },
   });
+
+  const updateGymMutation = useMutation({
+    mutationFn: async (nextGymId: string) => {
+      if (!gymPreferences) {
+        throw new Error("Missing gym preferences");
+      }
+      const nextPreferences = ensureGymPreferences({
+        ...gymPreferences,
+        activeGymId: nextGymId,
+      });
+      return updateGymPreferences(nextPreferences);
+    },
+    retry: (failureCount, error: any) => {
+      const message = (error?.message ?? "").toString().toLowerCase();
+      return message.includes("timed out") && failureCount < 1;
+    },
+    retryDelay: 600,
+    onSuccess: (next) => {
+      const normalized = ensureGymPreferences(next);
+      queryClient.setQueryData(["gym-preferences"], normalized);
+      void refresh();
+      void refetchUpNext();
+    },
+    onError: () => {
+      Alert.alert("Could not update gym", "Please try again in a moment.");
+    },
+  });
+
+  const handleGymSelect = (gymId: string) => {
+    if (!gymPreferences) return;
+    if (gymId === gymPreferences.activeGymId) {
+      setGymSwitchOpen(false);
+      return;
+    }
+    setPendingGymId(gymId);
+    updateGymMutation.mutate(gymId, {
+      onSuccess: () => {
+        setGymSwitchOpen(false);
+      },
+      onSettled: () => {
+        setPendingGymId(null);
+      },
+    });
+  };
 
   const cancelActiveWorkout = useMutation({
     mutationFn: async (sessionId: string) => {
@@ -677,6 +742,47 @@ const HomeScreen = () => {
           </Pressable>
         </View>
 
+        {activeGym ? (
+          <Pressable
+            onPress={() => setGymSwitchOpen(true)}
+            accessibilityRole='button'
+            accessibilityLabel='Change active gym'
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: pressed ? colors.surface : colors.surfaceMuted,
+            })}
+          >
+            <Ionicons
+              name='location-outline'
+              size={12}
+              color={colors.textSecondary}
+            />
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: fontFamilies.medium,
+                fontSize: 12,
+              }}
+              numberOfLines={1}
+            >
+              Gym · {activeGym.name}
+            </Text>
+            <Ionicons
+              name='chevron-down'
+              size={12}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        ) : null}
+
         <UpNextCard
           recommendation={upNextRecommendation ?? null}
           isLoading={upNextLoading || generateUpNextMutation.isPending}
@@ -1013,6 +1119,20 @@ const HomeScreen = () => {
         </Pressable>
       </View>
 
+      <GymSwitchModal
+        visible={gymSwitchOpen}
+        gyms={gymPreferences?.gyms ?? []}
+        activeGymId={gymPreferences?.activeGymId ?? null}
+        updatingGymId={pendingGymId}
+        isUpdating={updateGymMutation.isPending}
+        onClose={() => setGymSwitchOpen(false)}
+        onSelect={handleGymSelect}
+        onManage={() => {
+          setGymSwitchOpen(false);
+          navigation.navigate("GymPreferences");
+        }}
+      />
+
       <SwapModal
         visible={swapOpen}
         onClose={() => setSwapOpen(false)}
@@ -1089,6 +1209,197 @@ const PrefsChip = ({ label }: { label: string }) => (
     </Text>
   </View>
 );
+
+const formatGymType = (type: GymProfile["type"]) => {
+  if (type === "home") return "Home gym";
+  if (type === "commercial") return "Commercial gym";
+  return "Custom gym";
+};
+
+const GymSwitchModal = ({
+  visible,
+  gyms,
+  activeGymId,
+  updatingGymId,
+  isUpdating,
+  onClose,
+  onSelect,
+  onManage,
+}: {
+  visible: boolean;
+  gyms: GymProfile[];
+  activeGymId: string | null;
+  updatingGymId: string | null;
+  isUpdating: boolean;
+  onClose: () => void;
+  onSelect: (gymId: string) => void;
+  onManage: () => void;
+}) => {
+  const insets = useSafeAreaInsets();
+  const safeBottomPadding = Math.max(insets.bottom, 12);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType='slide'
+      transparent
+      presentationStyle='overFullScreen'
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole='button'
+          accessibilityLabel='Close gym picker'
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "rgba(0,0,0,0.6)" },
+          ]}
+        />
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 16,
+            paddingBottom: 16 + safeBottomPadding,
+            borderWidth: 1,
+            borderColor: colors.border,
+            gap: 12,
+            marginBottom: -1,
+          }}
+        >
+          <View
+            style={{
+              alignSelf: "center",
+              width: 48,
+              height: 5,
+              borderRadius: 999,
+              backgroundColor: `${colors.textSecondary}35`,
+              marginTop: 2,
+              marginBottom: 6,
+            }}
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              Active gym
+            </Text>
+            <Pressable
+              onPress={onManage}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamilies.semibold,
+                }}
+              >
+                Manage
+              </Text>
+            </Pressable>
+          </View>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 12,
+              lineHeight: 18,
+            }}
+          >
+            We use your active gym when tailoring generated workouts.
+          </Text>
+          <View style={{ gap: 10 }}>
+            {gyms.length === 0 ? (
+              <View
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceMuted,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  No gyms yet. Add one in Gym Preferences.
+                </Text>
+              </View>
+            ) : (
+              gyms.map((gym) => {
+                const isActive = gym.id === activeGymId;
+                const isPending = updatingGymId === gym.id;
+                return (
+                  <Pressable
+                    key={gym.id}
+                    onPress={() => onSelect(gym.id)}
+                    disabled={isUpdating}
+                    style={({ pressed }) => ({
+                      padding: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: isActive ? colors.primary : colors.border,
+                      backgroundColor: isActive
+                        ? `${colors.primary}15`
+                        : pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      opacity: isUpdating && !isPending ? 0.6 : 1,
+                    })}
+                  >
+                    <View style={{ gap: 4 }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: fontFamilies.semibold,
+                          fontSize: 14,
+                        }}
+                      >
+                        {gym.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                        }}
+                      >
+                        {formatGymType(gym.type)}
+                      </Text>
+                    </View>
+                    {isPending ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : isActive ? (
+                      <Ionicons
+                        name='checkmark-circle'
+                        size={18}
+                        color={colors.primary}
+                      />
+                    ) : (
+                      <Ionicons
+                        name='chevron-forward'
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 const MUSCLE_GROUPS = [
   { value: "chest", label: "Chest", emoji: "💪" },

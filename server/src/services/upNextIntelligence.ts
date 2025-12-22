@@ -21,6 +21,7 @@ import {
   normalizeSplitKey,
 } from "./smartNextWorkout";
 import { createLogger } from "../utils/logger";
+import { GymPreferences, normalizeGymPreferences } from "../utils/gymPreferences";
 
 const log = createLogger("UpNextIntelligence");
 
@@ -43,6 +44,134 @@ const formatSplitLabel = (splitKey?: string, fallback?: string) => {
   return (
     map[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
+};
+
+const KNOWN_EQUIPMENT = [
+  "bodyweight",
+  "dumbbell",
+  "barbell",
+  "kettlebell",
+  "cable",
+  "machine",
+  "other",
+] as const;
+
+const normalizeEquipmentToken = (value?: string | null) => {
+  const raw = (value ?? "").toLowerCase().trim();
+  if (!raw) return "other";
+  if (raw.includes("body")) return "bodyweight";
+  if (raw.includes("machine")) return "machine";
+  if (raw.includes("cable")) return "cable";
+  if (raw.includes("dumbbell")) return "dumbbell";
+  if (raw.includes("barbell")) return "barbell";
+  if (raw.includes("kettlebell")) return "kettlebell";
+  return "other";
+};
+
+const normalizeTemplateEquipment = (equipment?: string[] | null) => {
+  if (!equipment) return [];
+  const normalized = equipment
+    .map((item) => normalizeEquipmentToken(item))
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
+};
+
+const normalizeGymToken = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const expandGymEquipmentToken = (value: string): string[] => {
+  const token = normalizeGymToken(value);
+  if (!token) return [];
+  if (token === "gym full" || token === "gym_full") return [...KNOWN_EQUIPMENT];
+  if (token === "home limited" || token === "home_limited") {
+    return ["dumbbell", "bodyweight"];
+  }
+  if (token.includes("body")) return ["bodyweight"];
+  if (token.includes("dumbbell")) return ["dumbbell"];
+  if (token.includes("kettlebell")) return ["kettlebell"];
+  if (
+    token.includes("barbell") ||
+    token.includes("ez bar") ||
+    token.includes("trap bar") ||
+    token.includes("landmine") ||
+    token.includes("t bar") ||
+    token.includes("yoke") ||
+    token.includes("plate")
+  ) {
+    return ["barbell"];
+  }
+  if (token.includes("bench") || token.includes("rack")) {
+    return ["barbell", "dumbbell"];
+  }
+  if (token.includes("cable") || token.includes("pulley") || token.includes("pulldown")) {
+    return ["cable"];
+  }
+  if (
+    token.includes("machine") ||
+    token.includes("smith") ||
+    token.includes("hack squat") ||
+    token.includes("leg press") ||
+    token.includes("pec deck") ||
+    token.includes("row machine") ||
+    token.includes("treadmill") ||
+    token.includes("elliptical") ||
+    token.includes("bike") ||
+    token.includes("rowing") ||
+    token.includes("stair") ||
+    token.includes("ski erg") ||
+    token.includes("freemotion") ||
+    token.includes("hammer strength")
+  ) {
+    return ["machine"];
+  }
+  if (
+    token.includes("pull up") ||
+    token.includes("dip") ||
+    token.includes("ring") ||
+    token.includes("parallette") ||
+    token.includes("suspension") ||
+    token.includes("trx")
+  ) {
+    return ["bodyweight"];
+  }
+  if (
+    token.includes("band") ||
+    token.includes("rope") ||
+    token.includes("bosu") ||
+    token.includes("foam") ||
+    token.includes("stability") ||
+    token.includes("medicine ball") ||
+    token.includes("ab wheel") ||
+    token.includes("sled") ||
+    token.includes("tire") ||
+    token.includes("box") ||
+    token.includes("cone") ||
+    token.includes("platform")
+  ) {
+    return ["other"];
+  }
+  return [];
+};
+
+const buildEquipmentFilter = (prefs?: GymPreferences | null) => {
+  if (!prefs) return null;
+  if (prefs.bodyweightOnly) {
+    return new Set<string>(["bodyweight"]);
+  }
+  const equipment = prefs.equipment ?? [];
+  if (equipment.length === 0) return null;
+  const allowed = new Set<string>();
+  equipment.forEach((item) => {
+    expandGymEquipmentToken(item).forEach((token) => allowed.add(token));
+  });
+  if (allowed.size === 0) return null;
+  allowed.add("bodyweight");
+  const hasAll = KNOWN_EQUIPMENT.every((token) => allowed.has(token));
+  return hasAll ? null : allowed;
 };
 
 export type UpNextTemplate = {
@@ -100,6 +229,7 @@ type TemplateRow = {
   exercise_count: string;
   muscle_groups: string[] | null;
   last_used_at: string | null;
+  equipment: string[] | null;
 };
 
 /**
@@ -117,7 +247,11 @@ const fetchUserTemplates = async (userId: string): Promise<TemplateRow[]> => {
         ARRAY_REMOVE(
           ARRAY_AGG(DISTINCT LOWER(COALESCE(ue.primary_muscle_group, e.primary_muscle_group, 'other'))),
           NULL
-        ) as muscle_groups
+        ) as muscle_groups,
+        ARRAY_REMOVE(
+          ARRAY_AGG(DISTINCT LOWER(COALESCE(ue.equipment, e.equipment, 'bodyweight'))),
+          NULL
+        ) as equipment
       FROM workout_templates t
       LEFT JOIN workout_template_exercises te ON te.template_id = t.id
       LEFT JOIN exercises e ON e.id = te.exercise_id
@@ -141,6 +275,7 @@ const fetchUserTemplates = async (userId: string): Promise<TemplateRow[]> => {
       tm.split_type,
       tm.exercise_count::text,
       tm.muscle_groups,
+      tm.equipment,
       lu.last_used_at::text
     FROM template_muscles tm
     LEFT JOIN last_usage lu ON lu.template_id = tm.id
@@ -399,16 +534,18 @@ export const getUpNextRecommendation = async (
       getFatigueScores(userId),
       query<{
         onboarding_data: any;
+        gym_preferences: unknown;
         plan: string | null;
         plan_expires_at: string | null;
         ai_generations_used_count: number | null;
-      }>(`SELECT onboarding_data, plan, plan_expires_at, ai_generations_used_count FROM users WHERE id = $1`, [
+      }>(`SELECT onboarding_data, gym_preferences, plan, plan_expires_at, ai_generations_used_count FROM users WHERE id = $1`, [
         userId,
       ]),
     ]);
 
     const userRecord = userResult.rows[0];
     const onboardingData = userRecord?.onboarding_data ?? {};
+    const gymPreferences = normalizeGymPreferences(userRecord?.gym_preferences);
     const preferredSplit =
       onboardingData.preferredSplit || onboardingData.preferred_split;
     const plan = String(userRecord?.plan ?? "free").toLowerCase();
@@ -431,15 +568,25 @@ export const getUpNextRecommendation = async (
     });
 
     const recommendedSplitKey = splitRecommendation.selected.splitKey;
+    const equipmentFilter = buildEquipmentFilter(gymPreferences);
 
     // Find matching templates
     const scoredTemplates = templates
       .map((template) => {
+        const templateEquipment = normalizeTemplateEquipment(template.equipment);
+        const hasEquipmentMismatch =
+          equipmentFilter &&
+          templateEquipment.length > 0 &&
+          templateEquipment.some((item) => !equipmentFilter.has(item));
         const { score, reason } = scoreTemplateMatch(
           template,
           recommendedSplitKey,
           fatigue
         );
+        const matchScore = hasEquipmentMismatch ? 0 : score;
+        const matchReason = hasEquipmentMismatch
+          ? "Needs gear not in this gym"
+          : reason;
         return {
           templateId: template.id,
           templateName: template.name,
@@ -447,8 +594,8 @@ export const getUpNextRecommendation = async (
           exerciseCount: parseInt(template.exercise_count) || 0,
           muscleGroups: template.muscle_groups ?? [],
           lastUsedAt: template.last_used_at,
-          matchScore: score,
-          matchReason: reason,
+          matchScore,
+          matchReason,
         };
       })
       .sort((a, b) => {

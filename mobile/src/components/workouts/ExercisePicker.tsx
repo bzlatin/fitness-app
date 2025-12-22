@@ -19,6 +19,7 @@ import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { CustomExercise, Exercise, TemplateExerciseForm } from "../../types/workouts";
 import { isCardioExercise } from "../../utils/exercises";
+import { isPerSideMovement } from "../../utils/weightEstimates";
 import EditCustomExerciseModal from "./EditCustomExerciseModal";
 
 type Props = {
@@ -214,6 +215,9 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
     const isAdded = selected.some((ex) => ex.exercise.id === item.id);
     const isConfiguring = activeExercise?.id === item.id;
     const cardio = isCardioExercise(item);
+    const weightLabel = isPerSideMovement(item.name, item.id, item.equipment)
+      ? 'Weight (lb per arm)'
+      : 'Weight (lb)';
     const imageUri =
       item.gifUrl && item.gifUrl.startsWith("http")
         ? item.gifUrl
@@ -405,7 +409,7 @@ const ExercisePicker = ({ visible, onClose, selected, onAdd, onRemove, onCreateC
                 </View>
                 <View style={{ flexDirection: "row", gap: 10 }}>
                   <InputChip
-                    label="Weight (lb)"
+                    label={weightLabel}
                     value={weight}
                     onChangeText={setWeight}
                     keyboardType="decimal-pad"
