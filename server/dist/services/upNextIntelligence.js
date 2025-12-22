@@ -281,10 +281,23 @@ const getUpNextRecommendation = async (userId, hasProAccess) => {
             fetchUserTemplates(userId),
             (0, fatigue_2.getRecentWorkouts)(userId, 7),
             (0, fatigue_1.getFatigueScores)(userId),
-            (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]),
+            (0, db_1.query)(`SELECT onboarding_data, plan, plan_expires_at, ai_generations_used_count FROM users WHERE id = $1`, [
+                userId,
+            ]),
         ]);
-        const onboardingData = userResult.rows[0]?.onboarding_data ?? {};
+        const userRecord = userResult.rows[0];
+        const onboardingData = userRecord?.onboarding_data ?? {};
         const preferredSplit = onboardingData.preferredSplit || onboardingData.preferred_split;
+        const plan = String(userRecord?.plan ?? "free").toLowerCase();
+        const expiresAt = userRecord?.plan_expires_at
+            ? new Date(userRecord.plan_expires_at)
+            : null;
+        const isExpired = Boolean(expiresAt && expiresAt < new Date());
+        const aiUsed = Math.max(0, Number(userRecord?.ai_generations_used_count ?? 0));
+        const FREE_AI_GENERATION_LIMIT = 1;
+        const canGenerateAi = hasProAccess ||
+            plan === "lifetime" ||
+            (!isExpired && plan !== "pro" && plan !== "lifetime" && aiUsed < FREE_AI_GENERATION_LIMIT);
         // Get the smart next workout recommendation (split type)
         const splitRecommendation = (0, smartNextWorkout_1.recommendSmartNextWorkout)({
             preferredSplit,
@@ -357,7 +370,7 @@ const getUpNextRecommendation = async (userId, hasProAccess) => {
             alternateTemplates,
             fatigueStatus,
             readinessScore: fatigue?.readinessScore ?? 80,
-            canGenerateAI: hasProAccess,
+            canGenerateAI: canGenerateAi,
             reasoning,
             lastWorkoutAt: fatigue?.lastWorkoutAt ?? null,
             daysSinceLastSplit,

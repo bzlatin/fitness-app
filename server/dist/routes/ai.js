@@ -11,6 +11,7 @@ const id_1 = require("../utils/id");
 const exerciseCatalog_1 = require("../utils/exerciseCatalog");
 const exerciseData_1 = require("../utils/exerciseData");
 const logger_1 = require("../utils/logger");
+const gymPreferences_1 = require("../utils/gymPreferences");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
 const rateLimit_1 = require("../middleware/rateLimit");
@@ -183,6 +184,16 @@ const normalizeOnboardingEquipment = (raw, custom) => {
     const unique = Array.from(new Set(mapped));
     return unique.length > 0 ? unique : undefined;
 };
+const normalizeEquipmentList = (raw) => {
+    const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+    if (values.length === 0)
+        return undefined;
+    const normalized = values
+        .map((value) => String(value).toLowerCase().trim())
+        .filter(Boolean);
+    const unique = Array.from(new Set(normalized));
+    return unique.length > 0 ? unique : undefined;
+};
 const readOnboardingField = (onboardingData, keys) => {
     for (const key of keys) {
         const value = onboardingData?.[key];
@@ -249,17 +260,34 @@ router.post("/generate-workout", rateLimit_1.aiGenerateLimiter, (0, validate_1.v
     try {
         const { requestedSplit, specificRequest, overrides } = req.body;
         // Get user profile data
-        const userResult = await (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+        const userResult = await (0, db_1.query)(`SELECT onboarding_data, gym_preferences FROM users WHERE id = $1`, [userId]);
         const user = userResult.rows[0];
         const onboardingData = user?.onboarding_data || {};
+        const gymPreferences = (0, gymPreferences_1.normalizeGymPreferences)(user?.gym_preferences);
         const preferredSplit = normalizePreferredSplit(readOnboardingField(onboardingData, ["preferredSplit", "preferred_split"]));
         const goals = readOnboardingField(onboardingData, ["goals"]);
         const experienceLevel = readOnboardingField(onboardingData, ["experienceLevel", "experience_level"]);
         const weeklyFrequency = readOnboardingField(onboardingData, ["weeklyFrequency", "weekly_frequency"]);
         const baseSessionDuration = readOnboardingField(onboardingData, ["sessionDuration", "session_duration"]);
         const injuryNotes = readOnboardingField(onboardingData, ["injuryNotes", "injury_notes"]);
-        const equipment = normalizeOnboardingEquipment(overrides?.availableEquipment ??
-            readOnboardingField(onboardingData, ["availableEquipment", "available_equipment"]), readOnboardingField(onboardingData, ["customEquipment", "custom_equipment"]));
+        const equipmentOverride = overrides?.availableEquipment
+            ? normalizeOnboardingEquipment(overrides.availableEquipment)
+            : undefined;
+        const gymEquipment = gymPreferences.bodyweightOnly
+            ? ["bodyweight"]
+            : normalizeEquipmentList(gymPreferences.equipment);
+        const equipment = equipmentOverride ??
+            gymEquipment ??
+            normalizeOnboardingEquipment(readOnboardingField(onboardingData, [
+                "availableEquipment",
+                "available_equipment",
+            ]), readOnboardingField(onboardingData, [
+                "customEquipment",
+                "custom_equipment",
+            ]));
+        const inferredBodyweightOnly = Boolean(gymPreferences.bodyweightOnly ||
+            (gymEquipment?.length === 1 && gymEquipment[0] === "bodyweight") ||
+            (equipmentOverride?.length === 1 && equipmentOverride[0] === "bodyweight"));
         const excludedExercises = normalizeExcludedExercises(readOnboardingField(onboardingData, [
             "excludedExercises",
             "excluded_exercises",
@@ -312,9 +340,13 @@ router.post("/generate-workout", rateLimit_1.aiGenerateLimiter, (0, validate_1.v
                 experienceLevel,
                 availableEquipment: equipment,
                 weeklyFrequency,
-                sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+                sessionDuration: overrides?.sessionDuration ??
+                    gymPreferences.sessionDuration ??
+                    baseSessionDuration,
                 injuryNotes,
                 preferredSplit: preferredSplit === "custom" ? "full_body" : preferredSplit,
+                bodyweightOnly: inferredBodyweightOnly,
+                cardioPreferences: gymPreferences.cardio,
             },
             recentWorkouts,
             muscleFatigue,
@@ -641,8 +673,9 @@ router.post("/recommend-next-workout", rateLimit_1.aiRecommendLimiter, (0, valid
     }
     try {
         const { overrides } = req.body;
-        const userResult = await (0, db_1.query)(`SELECT onboarding_data FROM users WHERE id = $1`, [userId]);
+        const userResult = await (0, db_1.query)(`SELECT onboarding_data, gym_preferences FROM users WHERE id = $1`, [userId]);
         const onboardingData = userResult.rows[0]?.onboarding_data || {};
+        const gymPreferences = (0, gymPreferences_1.normalizeGymPreferences)(userResult.rows[0]?.gym_preferences);
         const preferredSplit = normalizePreferredSplit(readOnboardingField(onboardingData, ["preferredSplit", "preferred_split"]));
         const baseSessionDuration = readOnboardingField(onboardingData, ["sessionDuration", "session_duration"]);
         const [recentWorkouts, fatigueResult] = await Promise.all([
@@ -654,7 +687,9 @@ router.post("/recommend-next-workout", rateLimit_1.aiRecommendLimiter, (0, valid
             recentWorkouts,
             fatigue: fatigueResult,
             overrides: {
-                sessionDuration: overrides?.sessionDuration ?? baseSessionDuration,
+                sessionDuration: overrides?.sessionDuration ??
+                    gymPreferences.sessionDuration ??
+                    baseSessionDuration,
                 avoidMuscles: overrides?.avoidMuscles,
             },
         });

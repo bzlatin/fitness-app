@@ -98,12 +98,37 @@ const formatFatigueTargets = (targets) => {
  * Generate the system prompt for workout generation
  */
 const buildWorkoutGenerationPrompt = (params, availableExercises) => {
+    const cardioEquipmentIds = new Set([
+        "treadmill",
+        "elliptical",
+        "stationary_bike",
+        "rowing_machine",
+        "stair_climber",
+        "ski_erg",
+        "assault_bike",
+    ]);
+    const formatEquipmentLabel = (value) => value
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase());
     const profile = params.userProfile || {};
     const experience = profile.experienceLevel || "intermediate";
     const goals = profile.goals?.join(", ") || "general fitness";
-    const equipment = profile.availableEquipment?.join(", ") || "full gym access";
+    const bodyweightOnly = profile.bodyweightOnly === true;
+    const equipment = bodyweightOnly
+        ? "bodyweight only"
+        : profile.availableEquipment?.join(", ") || "full gym access";
     const limitations = profile.injuryNotes || "None";
     const sessionDuration = profile.sessionDuration || 60;
+    const cardioPreferences = profile.cardioPreferences;
+    const cardioSummary = cardioPreferences?.enabled
+        ? `${cardioPreferences.timing ?? "after"} · ${cardioPreferences.type ?? "mixed"} · ${cardioPreferences.duration ?? 20} min · ${cardioPreferences.frequency ?? 2}x/week`
+        : "None";
+    const cardioEquipment = profile.availableEquipment?.filter((item) => cardioEquipmentIds.has(item));
+    const cardioEquipmentSummary = cardioPreferences?.enabled
+        ? cardioEquipment && cardioEquipment.length > 0
+            ? cardioEquipment.map(formatEquipmentLabel).join(", ")
+            : "None"
+        : "None";
     const requestedSplit = params.requestedSplit ||
         (params.specificRequest ? "custom" : profile.preferredSplit || "full_body");
     const focusLabel = params.specificRequest
@@ -149,6 +174,9 @@ const buildWorkoutGenerationPrompt = (params, availableExercises) => {
     };
     const exclusionNotice = excluded.length > 0
         ? `\n\n🚫 CRITICAL: Never include these exercises under any circumstances: ${excluded.join(", ")}. If an excluded exercise appears in history or fatigue data, substitute it with a different movement for the same muscle group.`
+        : "";
+    const bodyweightNotice = bodyweightOnly
+        ? "\n\n⚠️ BODYWEIGHT-ONLY MODE: Only select exercises that can be performed with no equipment or minimal bodyweight setups (e.g., pull-up bar). Avoid equipment-dependent movements."
         : "";
     // Filter exercises if specific muscle groups are requested
     let exercisesToUse = availableExercises.filter((ex) => !isExcluded(ex.id) && !isExcluded(ex.name));
@@ -196,6 +224,8 @@ const buildWorkoutGenerationPrompt = (params, availableExercises) => {
 - Goals: ${goals}
 - Available Equipment: ${equipment}
 - Session Duration Target: ${sessionDuration} minutes
+- Cardio Preferences: ${cardioSummary}
+- Cardio Equipment Available: ${cardioEquipmentSummary}
 - Injury/Limitations: ${limitations}
 
 # RECENT TRAINING HISTORY (Last 7 Days)
@@ -207,7 +237,7 @@ ${(0, exports.formatFatigueScores)(params.muscleFatigue)}
 # WORKOUT REQUEST
 Split Type: ${requestedSplit}${params.specificRequest
         ? `\nSpecific Request: ${params.specificRequest}`
-        : ""}${muscleGroupFilter}${exclusionNotice}
+        : ""}${muscleGroupFilter}${exclusionNotice}${bodyweightNotice}
 
 # RECOVERY-BASED GUIDANCE
 ${formatFatigueTargets(params.fatigueTargets)}
@@ -227,6 +257,7 @@ ${exercisesToUse
    - ALWAYS include the exact exercise ID in your response
    - Use the human-friendly exercise name from the list (never the ID/slug) so photos and labels render correctly
    - Respect equipment limitations (only select exercises matching available equipment)
+   - If bodyweight-only mode is active, prefer calisthenics and minimize equipment dependencies
    - Avoid exercises that conflict with stated injuries/limitations
    - ${excluded.length > 0
         ? `Absolutely exclude these exercises and their close variants: ${excluded.join(", ")}`
@@ -260,6 +291,7 @@ ${exercisesToUse
 
 6. **Workout Duration**:
    - Estimate total duration and try to stay within ${sessionDuration}±10 minutes
+   - If cardio is enabled, include that time in your estimate and mention the recommendation in the reasoning
    - Include warm-up time in your estimate
 
 7. **Naming & Labeling**:

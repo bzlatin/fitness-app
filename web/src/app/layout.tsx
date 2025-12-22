@@ -1,23 +1,75 @@
 import type { Metadata } from 'next';
+import ScrollReveal from '../components/ScrollReveal';
 import './globals.css';
 
+const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app');
+const defaultOgImage = '/SCREENSHOT_HOME.PNG';
+const logoUrl = new URL('/push-pull-logo.png', siteUrl).toString();
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Push/Pull',
+      url: siteUrl.toString(),
+      logo: logoUrl,
+    },
+    {
+      '@type': 'WebSite',
+      name: 'Push/Pull',
+      url: siteUrl.toString(),
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Push/Pull',
+      applicationCategory: 'HealthApplication',
+      operatingSystem: 'iOS, Android',
+      description:
+        'A workout tracker built for lifters with fast logging, clear progress, squads for accountability, and optional AI planning.',
+      url: siteUrl.toString(),
+      publisher: {
+        '@type': 'Organization',
+        name: 'Push/Pull',
+      },
+    },
+  ],
+};
+
 export const metadata: Metadata = {
-  title: 'Push/Pull - Coming Soon',
+  metadataBase: siteUrl,
+  title: {
+    default: 'Push/Pull - Workout Tracker for Lifters',
+    template: '%s - Push/Pull',
+  },
   description:
-    'The workout tracker built for lifters. Track your gains, push your limits.',
+    'The workout tracker built for lifters. Fast logging, clear progress, squads for accountability, and optional AI planning.',
   keywords: ['workout tracker', 'fitness app', 'push pull', 'strength training'],
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
-    title: 'Push/Pull - Coming Soon',
-    description: 'The workout tracker built for lifters.',
-    url: 'https://push-pull.app',
+    title: 'Push/Pull - Workout Tracker for Lifters',
+    description:
+      'The workout tracker built for lifters. Fast logging, clear progress, squads for accountability, and optional AI planning.',
+    url: siteUrl.toString(),
     siteName: 'Push/Pull',
     locale: 'en_US',
     type: 'website',
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 630,
+        alt: 'Push/Pull workout tracker preview',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Push/Pull - Coming Soon',
-    description: 'The workout tracker built for lifters.',
+    title: 'Push/Pull - Workout Tracker for Lifters',
+    description:
+      'The workout tracker built for lifters. Fast logging, clear progress, squads for accountability, and optional AI planning.',
+    images: [defaultOgImage],
   },
   icons: {
     icon: '/push-pull-logo.png',
@@ -27,6 +79,13 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
 };
 
@@ -37,7 +96,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-background text-text-primary">{children}</body>
+      <head>
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      </head>
+      <body className="bg-background text-text-primary">
+        {children}
+        <ScrollReveal />
+      </body>
     </html>
   );
 }

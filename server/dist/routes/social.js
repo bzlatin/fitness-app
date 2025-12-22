@@ -43,6 +43,7 @@ const id_1 = require("../utils/id");
 const zod_1 = require("zod");
 const validate_1 = require("../middleware/validate");
 const cloudinary_1 = require("../services/cloudinary");
+const gymPreferences_1 = require("../utils/gymPreferences");
 const SQUAD_MEMBERS_AGGREGATE = `
   SELECT s.id, s.name, s.description, s.is_public, s.created_by,
     COALESCE(
@@ -131,10 +132,13 @@ const profileUpdateSchema = zod_1.z
     weeklyGoal: zod_1.z.number().int().min(1).max(14).optional(),
     onboardingData: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).nullable().optional(),
     progressiveOverloadEnabled: zod_1.z.boolean().optional(),
+    rirEnabled: zod_1.z.boolean().optional(),
     restTimerSoundEnabled: zod_1.z.boolean().optional(),
     appleHealthEnabled: zod_1.z.boolean().optional(),
     appleHealthPermissions: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).nullable().optional(),
     appleHealthLastSyncAt: zod_1.z.string().datetime().nullable().optional(),
+    statsVisibility: zod_1.z.enum(["friends", "public", "private"]).optional(),
+    gymPreferences: gymPreferences_1.gymPreferencesSchema.nullable().optional(),
 })
     .strip();
 router.post("/me/avatar", upload.single("avatar"), async (req, res) => {
@@ -165,6 +169,84 @@ router.post("/me/avatar", upload.single("avatar"), async (req, res) => {
     catch (err) {
         console.error("Failed to upload avatar", err);
         return res.status(500).json({ error: "Failed to upload avatar" });
+    }
+});
+router.post("/me/progress-photo", upload.single("photo"), async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const file = req.file;
+    if (!file?.buffer) {
+        return res.status(400).json({ error: "Missing photo file" });
+    }
+    const validation = (0, cloudinary_1.validateImageBuffer)(file.buffer);
+    if (!validation.valid) {
+        return res.status(400).json({ error: validation.error ?? "Invalid image" });
+    }
+    try {
+        const uploaded = await (0, cloudinary_1.uploadImage)(file.buffer, "progress_photos");
+        return res.json({ progressPhotoUrl: uploaded.secure_url });
+    }
+    catch (err) {
+        console.error("Failed to upload progress photo", err);
+        return res.status(500).json({ error: "Failed to upload progress photo" });
+    }
+});
+router.get("/me/progress-photos", async (_req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const result = await (0, db_1.query)(`
+        SELECT id, session_id, template_name, visibility, progress_photo_url, created_at
+        FROM workout_shares
+        WHERE user_id = $1 AND progress_photo_url IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 400
+      `, [userId]);
+        return res.json({
+            photos: result.rows.map((row) => ({
+                id: row.id,
+                sessionId: row.session_id,
+                templateName: row.template_name,
+                visibility: row.visibility,
+                imageUrl: row.progress_photo_url,
+                createdAt: row.created_at,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("Failed to load progress photos", err);
+        return res.status(500).json({ error: "Failed to load progress photos" });
+    }
+});
+router.delete("/me/progress-photos/:id", async (req, res) => {
+    const userId = res.locals.userId;
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const id = (req.params.id ?? "").trim();
+    if (!id) {
+        return res.status(400).json({ error: "id required" });
+    }
+    try {
+        const existing = await (0, db_1.query)(`SELECT progress_photo_url FROM workout_shares WHERE id = $1 AND user_id = $2 LIMIT 1`, [id, userId]);
+        const url = existing.rows[0]?.progress_photo_url ?? null;
+        if (!url) {
+            return res.status(404).json({ error: "Progress photo not found" });
+        }
+        await (0, db_1.query)(`UPDATE workout_shares SET progress_photo_url = NULL WHERE id = $1 AND user_id = $2`, [id, userId]);
+        const publicId = (0, cloudinary_1.extractPublicId)(url);
+        if (publicId) {
+            (0, cloudinary_1.deleteImage)(publicId).catch((err) => console.warn("[Social] Failed to delete progress photo", err));
+        }
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error("Failed to delete progress photo", err);
+        return res.status(500).json({ error: "Failed to delete progress photo" });
     }
 });
 const reactionBodySchema = zod_1.z
@@ -206,10 +288,15 @@ const mapUserRow = (row, options) => ({
     weeklyGoal: row.weekly_goal ?? 4,
     onboardingData: row.onboarding_data ?? undefined,
     progressiveOverloadEnabled: row.progressive_overload_enabled ?? undefined,
+    rirEnabled: row.rir_enabled ?? undefined,
     restTimerSoundEnabled: row.rest_timer_sound_enabled ?? undefined,
     appleHealthEnabled: row.apple_health_enabled ?? false,
     appleHealthPermissions: row.apple_health_permissions ?? undefined,
     appleHealthLastSyncAt: row.apple_health_last_sync_at ?? undefined,
+    statsVisibility: row.stats_visibility ?? "friends",
+    gymPreferences: options?.includePrivateFields
+        ? (0, gymPreferences_1.normalizeGymPreferences)(row.gym_preferences)
+        : undefined,
     aiGenerationsUsedCount: options?.includePrivateFields
         ? Math.max(0, Number(row.ai_generations_used_count ?? 0))
         : undefined,
@@ -332,35 +419,48 @@ const fetchProfile = async (viewerId, targetUserId) => {
     if (!user)
         return null;
     const counts = await fetchRelationshipCounts(targetUserId);
-    const stats = await fetchWorkoutStats(targetUserId);
     const friendsPreview = viewerId === targetUserId
         ? await fetchMutualFriends(targetUserId, 12)
         : await fetchSharedFriends(viewerId, targetUserId, 12);
     const isFollowingResult = await (0, db_1.query)(`SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`, [viewerId, targetUserId]);
-    // Calculate workoutsThisWeek using same logic as sessions.ts
-    const now = new Date();
-    const dayOfWeek = now.getUTCDay();
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const weekStart = new Date(now);
-    weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
-    weekStart.setUTCHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const workoutsThisWeekResult = await (0, db_1.query)(`SELECT COUNT(DISTINCT DATE(started_at)) as count
-     FROM workout_sessions
-     WHERE user_id = $1
-     AND started_at >= $2
-     AND started_at < $3
-     AND finished_at IS NOT NULL
-     AND ended_reason IS DISTINCT FROM 'auto_inactivity'`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
-    const workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+    const isFollowedByResult = await (0, db_1.query)(`SELECT 1 FROM follows WHERE user_id = $1 AND target_user_id = $2 LIMIT 1`, [targetUserId, viewerId]);
+    const isFollowing = (isFollowingResult.rowCount ?? 0) > 0;
+    const isFriend = isFollowing && (isFollowedByResult.rowCount ?? 0) > 0;
     const includePrivateFields = viewerId === targetUserId;
+    const baseProfile = mapUserRow(user, { includePrivateFields });
+    const statsVisibility = baseProfile.statsVisibility ?? "friends";
+    const canViewStats = viewerId === targetUserId ||
+        statsVisibility === "public" ||
+        (statsVisibility === "friends" && isFriend);
+    // Calculate workoutsThisWeek using same logic as sessions.ts
+    const stats = canViewStats ? await fetchWorkoutStats(targetUserId) : {};
+    let workoutsThisWeek = undefined;
+    if (canViewStats) {
+        const now = new Date();
+        const dayOfWeek = now.getUTCDay();
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const weekStart = new Date(now);
+        weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+        weekStart.setUTCHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const workoutsThisWeekResult = await (0, db_1.query)(`SELECT COUNT(DISTINCT DATE(started_at)) as count
+       FROM workout_sessions
+       WHERE user_id = $1
+       AND started_at >= $2
+       AND started_at < $3
+       AND finished_at IS NOT NULL
+       AND ended_reason IS DISTINCT FROM 'auto_inactivity'`, [targetUserId, weekStart.toISOString(), weekEnd.toISOString()]);
+        workoutsThisWeek = Number(workoutsThisWeekResult.rows[0]?.count ?? 0);
+    }
     return {
-        ...mapUserRow(user, { includePrivateFields }),
+        ...baseProfile,
         ...counts,
         ...stats,
-        workoutsThisWeek,
+        workoutsThisWeek: canViewStats ? workoutsThisWeek : undefined,
+        weeklyGoal: canViewStats ? baseProfile.weeklyGoal : undefined,
         friendsPreview,
-        isFollowing: (isFollowingResult.rowCount ?? 0) > 0,
+        isFollowing,
+        isFriend,
     };
 };
 const canView = (ownerId, visibility, viewerId, following, mutual) => {
@@ -426,7 +526,7 @@ router.put("/me", (0, validate_1.validateBody)(profileUpdateSchema), async (req,
     if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, restTimerSoundEnabled, appleHealthEnabled, appleHealthPermissions, appleHealthLastSyncAt, } = req.body;
+    const { name, handle, bio, avatarUrl, profileCompletedAt, trainingStyle, gymName, gymVisibility, weeklyGoal, onboardingData, progressiveOverloadEnabled, rirEnabled, restTimerSoundEnabled, appleHealthEnabled, appleHealthPermissions, appleHealthLastSyncAt, statsVisibility, gymPreferences, } = req.body;
     const handleProvided = Object.prototype.hasOwnProperty.call(req.body, "handle");
     const normalizedHandle = handleProvided ? normalizeHandle(handle) : undefined;
     const currentUserResult = await (0, db_1.query)(`SELECT * FROM users WHERE id = $1 LIMIT 1`, [userId]);
@@ -515,6 +615,11 @@ router.put("/me", (0, validate_1.validateBody)(profileUpdateSchema), async (req,
         values.push(progressiveOverloadEnabled);
         idx += 1;
     }
+    if (rirEnabled !== undefined) {
+        updates.push(`rir_enabled = $${idx}`);
+        values.push(rirEnabled);
+        idx += 1;
+    }
     if (restTimerSoundEnabled !== undefined) {
         updates.push(`rest_timer_sound_enabled = $${idx}`);
         values.push(restTimerSoundEnabled);
@@ -533,6 +638,18 @@ router.put("/me", (0, validate_1.validateBody)(profileUpdateSchema), async (req,
     if (appleHealthLastSyncAt !== undefined) {
         updates.push(`apple_health_last_sync_at = $${idx}`);
         values.push(appleHealthLastSyncAt ?? null);
+        idx += 1;
+    }
+    if (statsVisibility !== undefined) {
+        updates.push(`stats_visibility = $${idx}`);
+        values.push(statsVisibility);
+        idx += 1;
+    }
+    if (gymPreferences !== undefined) {
+        updates.push(`gym_preferences = $${idx}`);
+        values.push(gymPreferences === null
+            ? null
+            : (0, gymPreferences_1.normalizeGymPreferences)(gymPreferences));
         idx += 1;
     }
     if (updates.length === 0) {

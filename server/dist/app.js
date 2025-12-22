@@ -12,6 +12,7 @@ const exercises_1 = __importDefault(require("./routes/exercises"));
 const templates_1 = __importDefault(require("./routes/templates"));
 const sessions_1 = __importDefault(require("./routes/sessions"));
 const social_1 = __importDefault(require("./routes/social"));
+const user_1 = __importDefault(require("./routes/user"));
 const ai_1 = __importDefault(require("./routes/ai"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
 const subscriptions_1 = __importDefault(require("./routes/subscriptions"));
@@ -91,6 +92,7 @@ app.use("/api/templates/share", ...authChain, templateShares_1.templateSharesAut
 app.use("/api/templates", ...authChain, templates_1.default);
 app.use("/api/sessions", ...authChain, sessions_1.default);
 app.use("/api/social", ...authChain, social_1.default);
+app.use("/api/user", ...authChain, user_1.default);
 app.use("/api/ai", ...authChain, ai_1.default);
 app.use("/api/analytics", ...authChain, analytics_1.default);
 app.use("/api/subscriptions", ...authChain, subscriptions_1.default);

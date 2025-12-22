@@ -26,7 +26,11 @@ class OpenAIProvider {
      */
     async generateWorkout(params, availableExercises) {
         try {
-            const normalizeToken = (value) => value.toLowerCase().trim();
+            const normalizeToken = (value) => value
+                .toLowerCase()
+                .replace(/[_-]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
             const normalizeEquipmentToken = (value) => {
                 const token = normalizeToken(value);
                 if (!token)
@@ -35,17 +39,68 @@ class OpenAIProvider {
                     return "gym";
                 if (token.includes("body"))
                     return "bodyweight";
+                if (token.includes("pull up") ||
+                    token.includes("dip bar") ||
+                    token.includes("ring") ||
+                    token.includes("parallette")) {
+                    return "bodyweight";
+                }
                 if (token.includes("dumbbell"))
                     return "dumbbell";
-                if (token.includes("barbell"))
+                if (token.includes("barbell") ||
+                    token.includes("ez bar") ||
+                    token.includes("trap bar") ||
+                    token.includes("landmine") ||
+                    token.includes("t bar") ||
+                    token.includes("yoke") ||
+                    token.includes("plate")) {
                     return "barbell";
+                }
                 if (token.includes("kettlebell"))
                     return "kettlebell";
-                if (token.includes("cable"))
+                if (token.includes("cable") || token.includes("pulley"))
                     return "cable";
-                if (token.includes("machine"))
+                if (token.includes("machine") ||
+                    token.includes("smith") ||
+                    token.includes("freemotion") ||
+                    token.includes("hammer strength") ||
+                    token.includes("treadmill") ||
+                    token.includes("elliptical") ||
+                    token.includes("bike") ||
+                    token.includes("rower") ||
+                    token.includes("rowing") ||
+                    token.includes("stair") ||
+                    token.includes("ski erg") ||
+                    token.includes("leg press") ||
+                    token.includes("hack squat")) {
                     return "machine";
+                }
+                if (token.includes("band") ||
+                    token.includes("trx") ||
+                    token.includes("suspension") ||
+                    token.includes("rope") ||
+                    token.includes("bosu") ||
+                    token.includes("foam roller") ||
+                    token.includes("stability") ||
+                    token.includes("medicine ball") ||
+                    token.includes("ab wheel") ||
+                    token.includes("sled") ||
+                    token.includes("tire") ||
+                    token.includes("box") ||
+                    token.includes("cone") ||
+                    token.includes("platform")) {
+                    return "other";
+                }
                 return token;
+            };
+            const expandEquipmentTokens = (value) => {
+                const token = normalizeToken(value);
+                if (!token)
+                    return [];
+                if (token.includes("bench") || token.includes("rack")) {
+                    return ["barbell", "dumbbell"];
+                }
+                return [normalizeEquipmentToken(token)].filter(Boolean);
             };
             const normalizeNameKey = (value) => value
                 .toLowerCase()
@@ -82,6 +137,7 @@ class OpenAIProvider {
             let filteredExercises = availableExercises;
             if (params.userProfile?.availableEquipment) {
                 const equipment = params.userProfile.availableEquipment
+                    .flatMap(expandEquipmentTokens)
                     .map(normalizeEquipmentToken)
                     .filter(Boolean);
                 const hasGymAccess = equipment.some((token) => token === "gym");

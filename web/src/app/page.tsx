@@ -5,15 +5,15 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 const waitlistUrl = (() => {
-  const rawApiBase = (process.env.NEXT_PUBLIC_API_URL || '')
+  const rawApiBase = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/+$/, '');
+  if (rawApiBase) {
+    return rawApiBase.endsWith('/api') ? `${rawApiBase}/waitlist` : `${rawApiBase}/api/waitlist`;
+  }
+
+  const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || 'https://push-pull.app')
     .trim()
     .replace(/\/+$/, '');
-  const apiHost =
-    rawApiBase && rawApiBase.endsWith('/api')
-      ? rawApiBase.slice(0, -4)
-      : rawApiBase || 'http://localhost:4000';
-
-  return `${apiHost}/api/waitlist`;
+  return `${siteBase}/api/waitlist`;
 })();
 
 export default function Home() {
@@ -84,7 +84,7 @@ export default function Home() {
           The workout tracker built for lifters.
         </p>
 
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm" id="waitlist">
           {!submitted ? (
             <form onSubmit={handleSubmit} className="space-y-3">
               <input
@@ -145,6 +145,14 @@ export default function Home() {
           <span className="hidden sm:inline">·</span>
           <Link href="/terms" className="hover:text-text-primary transition-colors">
             Terms of Service
+          </Link>
+          <span className="hidden sm:inline">·</span>
+          <Link href="/features" className="hover:text-text-primary transition-colors">
+            Features
+          </Link>
+          <span className="hidden sm:inline">·</span>
+          <Link href="/blog" className="hover:text-text-primary transition-colors">
+            Blog
           </Link>
           <span className="hidden sm:inline">·</span>
           <Link href="/support" className="hover:text-text-primary transition-colors">
