@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../../api/client";
 import { colors } from "../../theme/colors";
 import { fontFamilies } from "../../theme/typography";
 import { WorkoutSet } from "../../types/workouts";
+import { isPerSideMovement } from "../../utils/weightEstimates";
 
 type Props = {
   set: WorkoutSet;
@@ -21,8 +22,13 @@ const SetEditorRow = ({ set, onChange }: Props) => {
   };
 
   const exerciseName = set.exerciseName ?? formatExerciseName(set.exerciseId);
+  const weightSuffix = isPerSideMovement(exerciseName, set.exerciseId)
+    ? ' per arm'
+    : '';
   const targetLine = [
-    set.targetWeight !== undefined ? `${set.targetWeight} lb` : undefined,
+    set.targetWeight !== undefined
+      ? `${set.targetWeight} lb${weightSuffix}`
+      : undefined,
     set.targetReps !== undefined ? `${set.targetReps} reps` : undefined,
   ]
     .filter(Boolean)
@@ -99,7 +105,9 @@ const SetEditorRow = ({ set, onChange }: Props) => {
       </View>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Weight</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            {`Weight${weightSuffix ? ' (per arm)' : ''}`}
+          </Text>
           <TextInput
             style={{
               color: colors.textPrimary,
