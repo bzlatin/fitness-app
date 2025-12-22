@@ -4,7 +4,7 @@ import { posts } from './blog/posts';
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ['', '/features', '/blog', '/support', '/privacy', '/terms'];
+  const staticRoutes = ['', '/features', '/about', '/blog', '/support', '/privacy', '/terms'];
   const staticEntries = staticRoutes.map((route) => ({
     url: `${siteUrl}${route || '/'}`,
     lastModified: new Date(),

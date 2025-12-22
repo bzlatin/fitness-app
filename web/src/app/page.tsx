@@ -189,6 +189,10 @@ export default function Home() {
             Features
           </Link>
           <span className="hidden sm:inline">·</span>
+          <Link href="/about" className="hover:text-text-primary transition-colors">
+            About
+          </Link>
+          <span className="hidden sm:inline">·</span>
           <Link href="/blog" className="hover:text-text-primary transition-colors">
             Blog
           </Link>
