@@ -112,8 +112,19 @@ export const metadata: Metadata = {
     images: [defaultOgImage],
   },
   icons: {
-    icon: '/push-pull-logo.png',
-    shortcut: '/push-pull-logo.png',
+    icon: [
+      {
+        url: '/favicon.png',
+        sizes: '48x48',
+        type: 'image/png',
+      },
+      {
+        url: '/push-pull-logo.png',
+        sizes: '1024x1024',
+        type: 'image/png',
+      },
+    ],
+    shortcut: '/favicon.png',
     apple: '/push-pull-logo.png',
   },
   robots: {
