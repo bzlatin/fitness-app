@@ -97,7 +97,7 @@ const buildShareUrls = (shareCode) => ({
     webUrl: `${PUBLIC_APP_URL}/workout/${shareCode}`,
     deepLinkUrl: `push-pull://workout/share/${shareCode}`,
 });
-const buildTemplates = async (templateRows) => {
+const buildTemplates = async (templateRows, userId) => {
     if (templateRows.length === 0)
         return [];
     const templateIds = templateRows.map((row) => row.id);
@@ -106,7 +106,7 @@ const buildTemplates = async (templateRows) => {
      WHERE template_id = ANY($1::text[])
      ORDER BY order_index ASC`, [templateIds]);
     const exerciseIds = Array.from(new Set(exerciseRowsResult.rows.map((row) => row.exercise_id)));
-    const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(exerciseIds);
+    const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(exerciseIds, userId ? { userId } : undefined);
     return templateRows.map((row) => mapTemplate(row, exerciseRowsResult.rows, metaMap));
 };
 const fetchTemplates = async (userId) => {
@@ -114,14 +114,14 @@ const fetchTemplates = async (userId) => {
      FROM workout_templates
      WHERE user_id = $1
      ORDER BY created_at DESC`, [userId]);
-    return buildTemplates(templateRowsResult.rows);
+    return buildTemplates(templateRowsResult.rows, userId);
 };
 const fetchTemplateById = async (userId, templateId) => {
     const templateRowsResult = await (0, db_1.query)(`SELECT *
      FROM workout_templates
      WHERE user_id = $1 AND id = $2
      LIMIT 1`, [userId, templateId]);
-    const templates = await buildTemplates(templateRowsResult.rows);
+    const templates = await buildTemplates(templateRowsResult.rows, userId);
     return templates[0] ?? null;
 };
 const withTransaction = async (fn) => {
@@ -216,7 +216,7 @@ router.post("/", planLimits_1.checkTemplateLimit, (req, res) => {
             await client.query(`INSERT INTO workout_template_exercises
           (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
             default_weight, default_incline, default_distance, default_duration_minutes, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, [
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, [
                 (0, id_1.generateId)(),
                 templateId,
                 index,
@@ -234,7 +234,7 @@ router.post("/", planLimits_1.checkTemplateLimit, (req, res) => {
             ]);
         }
         const exercisesRows = (await client.query(`SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`, [templateId])).rows;
-        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))));
+        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))), { userId });
         return mapTemplate(templateRow, exercisesRows, metaMap);
     })
         .then((template) => res.status(201).json(template))
@@ -345,7 +345,7 @@ router.put("/:id", (req, res) => {
             }
         }
         const exercisesRows = (await client.query(`SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`, [templateId])).rows;
-        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))));
+        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))), { userId });
         return mapTemplate(templateResult.rows[0], exercisesRows, metaMap);
     })
         .then((template) => res.json(template))
@@ -533,7 +533,7 @@ router.post("/:id/duplicate", async (req, res) => {
             await client.query(`INSERT INTO workout_template_exercises
           (id, template_id, order_index, exercise_id, default_sets, default_reps, default_reps_min, default_reps_max, default_rest_seconds,
             default_weight, default_incline, default_distance, default_duration_minutes, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, [
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, [
                 (0, id_1.generateId)(),
                 templateId,
                 index,
@@ -551,7 +551,7 @@ router.post("/:id/duplicate", async (req, res) => {
             ]);
         }
         const exercisesRows = (await client.query(`SELECT * FROM workout_template_exercises WHERE template_id = $1 ORDER BY order_index`, [templateId])).rows;
-        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))));
+        const metaMap = await (0, exerciseCatalog_1.fetchExerciseMetaByIds)(Array.from(new Set(exercisesRows.map((row) => row.exercise_id))), { userId });
         return mapTemplate(templateRow, exercisesRows, metaMap);
     })
         .then((duplicate) => res.status(201).json(duplicate))
