@@ -1,9 +1,35 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import type { Metadata } from 'next';
+import Link from 'next/link';
+
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
+const defaultOgImage = '/SCREENSHOT_HOME.PNG';
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Push/Pull",
-  description: "Terms of Service for the Push/Pull workout tracking app.",
+  title: 'Terms of Service - Push/Pull',
+  description: 'Terms of Service for the Push/Pull workout tracking app.',
+  alternates: {
+    canonical: '/terms',
+  },
+  openGraph: {
+    title: 'Terms of Service - Push/Pull',
+    description: 'Terms of Service for the Push/Pull workout tracking app.',
+    url: `${siteUrl}/terms`,
+    type: 'website',
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 630,
+        alt: 'Push/Pull terms of service',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Terms of Service - Push/Pull',
+    description: 'Terms of Service for the Push/Pull workout tracking app.',
+    images: [defaultOgImage],
+  },
 };
 
 export default function TermsOfService() {
@@ -104,33 +130,33 @@ export default function TermsOfService() {
             </p>
             <ul className='list-disc list-inside space-y-2 text-text-secondary'>
               <li>
-                <strong className='text-text-primary'>Duration:</strong>{" "}
+                <strong className='text-text-primary'>Duration:</strong>{' '}
                 Subscription terms may be monthly or annual, as shown at the
                 time of purchase.
               </li>
               <li>
-                <strong className='text-text-primary'>Auto-renewal:</strong>{" "}
+                <strong className='text-text-primary'>Auto-renewal:</strong>{' '}
                 Subscriptions automatically renew unless cancelled at least 24
                 hours before the end of the current period.
               </li>
               <li>
-                <strong className='text-text-primary'>Cancellation:</strong>{" "}
+                <strong className='text-text-primary'>Cancellation:</strong>{' '}
                 You can manage or cancel your subscription in your Apple ID / App
                 Store account settings.
               </li>
               <li>
-                <strong className='text-text-primary'>Refunds:</strong>{" "}
+                <strong className='text-text-primary'>Refunds:</strong>{' '}
                 Purchases and refunds are handled by Apple in accordance with
                 their policies.
               </li>
               <li>
-                <strong className='text-text-primary'>Price changes:</strong>{" "}
+                <strong className='text-text-primary'>Price changes:</strong>{' '}
                 Pricing may vary by region and may change over time. Any price
                 changes and renewal terms are handled by Apple and will be
                 presented to you as required.
               </li>
               <li>
-                <strong className='text-text-primary'>Payment:</strong>{" "}
+                <strong className='text-text-primary'>Payment:</strong>{' '}
                 Payment is processed by Apple for purchases made on iOS. We do
                 not collect or store your payment card details.
               </li>
@@ -147,14 +173,14 @@ export default function TermsOfService() {
               <li>
                 <strong className='text-text-primary'>
                   Not Medical Advice:
-                </strong>{" "}
+                </strong>{' '}
                 The service is for informational purposes only and is not a
                 substitute for professional medical advice.
               </li>
               <li>
                 <strong className='text-text-primary'>
                   Exercise at Your Own Risk:
-                </strong>{" "}
+                </strong>{' '}
                 Physical exercise carries inherent risks. Consult a healthcare
                 professional before starting any exercise program.
               </li>
@@ -192,7 +218,7 @@ export default function TermsOfService() {
 
           <Section title='12. Contact Us'>
             <p>
-              If you have questions about these Terms, please contact us at:{" "}
+              If you have questions about these Terms, please contact us at:{' '}
               <a
                 href='mailto:help@push-pull.app'
                 className='text-primary hover:underline'

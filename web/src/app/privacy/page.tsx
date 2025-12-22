@@ -1,9 +1,35 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import type { Metadata } from 'next';
+import Link from 'next/link';
+
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
+const defaultOgImage = '/SCREENSHOT_HOME.PNG';
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - Push/Pull",
-  description: "Privacy Policy for the Push/Pull workout tracking app.",
+  title: 'Privacy Policy - Push/Pull',
+  description: 'Privacy Policy for the Push/Pull workout tracking app.',
+  alternates: {
+    canonical: '/privacy',
+  },
+  openGraph: {
+    title: 'Privacy Policy - Push/Pull',
+    description: 'Privacy Policy for the Push/Pull workout tracking app.',
+    url: `${siteUrl}/privacy`,
+    type: 'website',
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 630,
+        alt: 'Push/Pull privacy policy',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Privacy Policy - Push/Pull',
+    description: 'Privacy Policy for the Push/Pull workout tracking app.',
+    images: [defaultOgImage],
+  },
 };
 
 export default function PrivacyPolicy() {
@@ -53,18 +79,18 @@ export default function PrivacyPolicy() {
               <li>
                 <strong className='text-text-primary'>
                   Account Information:
-                </strong>{" "}
+                </strong>{' '}
                 Email address and profile details when you create an account.
               </li>
               <li>
-                <strong className='text-text-primary'>Workout Data:</strong>{" "}
+                <strong className='text-text-primary'>Workout Data:</strong>{' '}
                 Exercises, sets, reps, weights, and other fitness information
                 you log.
               </li>
               <li>
                 <strong className='text-text-primary'>
                   Device Information:
-                </strong>{" "}
+                </strong>{' '}
                 Device type, operating system, and identifiers for app
                 functionality.
               </li>
@@ -100,7 +126,7 @@ export default function PrivacyPolicy() {
             </ul>
           </Section>
 
-          <Section title="6. Children's Privacy">
+          <Section title='6. Children&apos;s Privacy'>
             <p>
               Our service is not intended for children under 13 years of age. We
               do not knowingly collect personal information from children under
@@ -112,15 +138,15 @@ export default function PrivacyPolicy() {
           <Section title='7. Changes to This Policy'>
             <p>
               We may update this Privacy Policy from time to time. We will
-              notify you of significant changes by posting the new policy on
-              this page and updating the &quot;Last Updated&quot; date.
+              notify you of significant changes by posting the new policy on this page and updating the
+              &quot;Last Updated&quot; date.
             </p>
           </Section>
 
           <Section title='8. Contact Us'>
             <p>
               If you have questions about this Privacy Policy, please contact us
-              at:{" "}
+              at:{' '}
               <a
                 href='mailto:help@push-pull.app'
                 className='text-primary hover:underline'

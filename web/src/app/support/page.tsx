@@ -1,9 +1,35 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app').replace(/\/+$/, '');
+const defaultOgImage = '/SCREENSHOT_HOME.PNG';
+
 export const metadata: Metadata = {
   title: 'Support - Push/Pull',
   description: 'Support and contact information for the Push/Pull workout tracking app.',
+  alternates: {
+    canonical: '/support',
+  },
+  openGraph: {
+    title: 'Support - Push/Pull',
+    description: 'Support and contact information for the Push/Pull workout tracking app.',
+    url: `${siteUrl}/support`,
+    type: 'website',
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 630,
+        alt: 'Push/Pull support preview',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Support - Push/Pull',
+    description: 'Support and contact information for the Push/Pull workout tracking app.',
+    images: [defaultOgImage],
+  },
 };
 
 const SUPPORT_EMAIL = 'help@push-pull.app';
@@ -102,4 +128,3 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   );
 }
-
