@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -19,17 +19,17 @@ const apiHost = (() => {
 export default function SquadInviteClient({ raw, code, debug }: SquadInviteClientProps) {
   const valid = Boolean(code);
   const deepLink = useMemo(() => (code ? `push-pull://squad/join/${code}` : null), [code]);
-  const [autoAttempted, setAutoAttempted] = useState(false);
+  const autoAttemptedRef = useRef(false);
   const [squadName, setSquadName] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [maxMembers, setMaxMembers] = useState<number | null>(null);
 
   useEffect(() => {
     if (!valid || !deepLink) return;
-    if (autoAttempted) return;
-    setAutoAttempted(true);
+    if (autoAttemptedRef.current) return;
+    autoAttemptedRef.current = true;
     window.location.href = deepLink;
-  }, [autoAttempted, deepLink, valid]);
+  }, [deepLink, valid]);
 
   useEffect(() => {
     if (!valid || !code) return;
@@ -156,4 +156,3 @@ export default function SquadInviteClient({ raw, code, debug }: SquadInviteClien
     </main>
   );
 }
-

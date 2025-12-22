@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ScrollReveal from '../components/ScrollReveal';
+import SiteNav from '../components/SiteNav';
 import './globals.css';
 
 const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://push-pull.app');
@@ -127,6 +128,7 @@ export default function RootLayout({
         </script>
       </head>
       <body className="bg-background text-text-primary">
+        <SiteNav />
         {children}
         <ScrollReveal />
       </body>

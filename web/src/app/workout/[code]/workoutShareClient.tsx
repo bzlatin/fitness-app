@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -19,16 +19,16 @@ const apiHost = (() => {
 export default function WorkoutShareClient({ raw, code, debug }: WorkoutShareClientProps) {
   const valid = Boolean(code);
   const deepLink = useMemo(() => (code ? `push-pull://workout/share/${code}` : null), [code]);
-  const [autoAttempted, setAutoAttempted] = useState(false);
+  const autoAttemptedRef = useRef(false);
   const [templateName, setTemplateName] = useState<string | null>(null);
   const [creatorHandle, setCreatorHandle] = useState<string | null>(null);
 
   useEffect(() => {
     if (!valid || !deepLink) return;
-    if (autoAttempted) return;
-    setAutoAttempted(true);
+    if (autoAttemptedRef.current) return;
+    autoAttemptedRef.current = true;
     window.location.href = deepLink;
-  }, [autoAttempted, deepLink, valid]);
+  }, [deepLink, valid]);
 
   useEffect(() => {
     if (!valid || !code) return;

@@ -7,32 +7,68 @@ const ScrollReveal = () => {
   const pathname = usePathname();
 
   useEffect(() => {
-    document.documentElement.classList.add('reveal-ready');
-
-    const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
+    const root = document.documentElement;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
 
     if (!elements.length) {
-      document.documentElement.classList.remove('reveal-ready');
       return;
     }
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const revealAll = () => {
+      root.classList.remove('reveal-ready');
+      elements.forEach((element) => element.classList.add('is-visible'));
+    };
+
+    if (prefersReducedMotion) {
+      revealAll();
+      return;
+    }
+
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      revealAll();
+      return;
+    }
+
+    root.classList.add('reveal-ready');
+    let remaining = elements.length;
+
+    const emergencyTimer = window.setTimeout(() => {
+      revealAll();
+    }, 1500);
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible');
-            observer.unobserve(entry.target);
+          if (entry.isIntersecting || entry.intersectionRatio > 0) {
+            const target = entry.target as HTMLElement;
+            if (!target.classList.contains('is-visible')) {
+              target.classList.add('is-visible');
+              remaining -= 1;
+            }
+            observer.unobserve(target);
+
+            if (remaining <= 0) {
+              window.clearTimeout(emergencyTimer);
+              root.classList.remove('reveal-ready');
+              observer.disconnect();
+            }
           }
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.12, rootMargin: '0px 0px -10% 0px' }
     );
 
     elements.forEach((element) => observer.observe(element));
 
     return () => {
+      window.clearTimeout(emergencyTimer);
       observer.disconnect();
-      document.documentElement.classList.remove('reveal-ready');
+      root.classList.remove('reveal-ready');
     };
   }, [pathname]);
 
