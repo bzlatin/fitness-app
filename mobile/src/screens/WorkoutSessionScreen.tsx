@@ -53,6 +53,7 @@ import {
 } from "../hooks/useWorkoutTemplates";
 import { useActiveWorkoutStatus } from "../hooks/useActiveWorkoutStatus";
 import { fatigueQueryKey, recommendationsQueryKey } from "../hooks/useFatigue";
+import { upNextQueryKey } from "../hooks/useUpNextRecommendation";
 import { Visibility } from "../types/social";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
@@ -1916,6 +1917,7 @@ const WorkoutSessionScreen = () => {
       // Invalidate fatigue query to refresh recovery data
       queryClient.invalidateQueries({ queryKey: fatigueQueryKey });
       queryClient.invalidateQueries({ queryKey: recommendationsQueryKey });
+      queryClient.invalidateQueries({ queryKey: upNextQueryKey });
 
       // Immediately remove "Resume Workout" banner
       queryClient.setQueryData(["activeSession"], {

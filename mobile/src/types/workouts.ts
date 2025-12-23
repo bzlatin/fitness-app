@@ -5,6 +5,8 @@ export type SplitType =
   | "upper"
   | "lower"
   | "full_body"
+  | "chest_back"
+  | "arms_shoulders"
   | "custom";
 
 export type MuscleGroup =

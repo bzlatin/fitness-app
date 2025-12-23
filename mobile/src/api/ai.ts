@@ -47,6 +47,7 @@ export interface SmartNextWorkoutRecommendation {
   preferredSplit: string;
   selected: SmartNextWorkoutCandidate;
   alternates: SmartNextWorkoutCandidate[];
+  restRecommended: boolean;
 }
 
 export interface RecommendNextWorkoutRequest {

@@ -53,6 +53,46 @@ const parseRirValue = (value: unknown) => {
   return { value: parsed, valid: true };
 };
 
+const normalizeSetId = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const fetchExistingSetIds = async (client: PoolClient, ids: string[]) => {
+  if (ids.length === 0) return new Set<string>();
+  const result = await client.query<{ id: string }>(
+    `SELECT id FROM workout_sets WHERE id = ANY($1::text[])`,
+    [ids]
+  );
+  return new Set(result.rows.map((row) => row.id));
+};
+
+const buildSetIdResolver = async (
+  client: PoolClient,
+  sets: Partial<WorkoutSet>[]
+) => {
+  const providedIds = sets
+    .map((set) => normalizeSetId(set.id))
+    .filter((id): id is string => Boolean(id));
+  const existingIds = await fetchExistingSetIds(client, providedIds);
+  const usedIds = new Set<string>();
+
+  return (incomingId?: string | null) => {
+    const candidate = normalizeSetId(incomingId);
+    if (candidate && !existingIds.has(candidate) && !usedIds.has(candidate)) {
+      usedIds.add(candidate);
+      return candidate;
+    }
+    let next = generateId();
+    while (existingIds.has(next) || usedIds.has(next)) {
+      next = generateId();
+    }
+    usedIds.add(next);
+    return next;
+  };
+};
+
 const normalizeCardioType = (
   value?: string | null
 ): CardioData["type"] | undefined => {
@@ -931,6 +971,7 @@ router.patch("/:id", async (req, res) => {
     await withTransaction(async (client) => {
       if (sets) {
         await client.query(`DELETE FROM workout_sets WHERE session_id = $1`, [req.params.id]);
+        const resolveSetId = await buildSetIdResolver(client, sets);
         for (const set of sets) {
           const setKind = normalizeSetKind(set.setKind);
           const difficultyRating = normalizeDifficultyRating(
@@ -963,7 +1004,7 @@ router.patch("/:id", async (req, res) => {
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             `,
             [
-              set.id ?? generateId(),
+              resolveSetId(set.id),
               req.params.id,
               set.templateExerciseId ?? null,
               set.exerciseId,
@@ -1209,6 +1250,7 @@ router.post("/manual", async (req, res) => {
         ]
       );
 
+      const resolveSetId = await buildSetIdResolver(client, sets);
       for (const [index, set] of sets.entries()) {
         if (!set.exerciseId) continue;
         const setKind = normalizeSetKind(set.setKind);
@@ -1242,7 +1284,7 @@ router.post("/manual", async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           `,
           [
-            set.id ?? generateId(),
+            resolveSetId(set.id),
             sessionId,
             set.templateExerciseId ?? null,
             set.exerciseId,

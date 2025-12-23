@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
@@ -16,8 +11,10 @@ const SPLIT_EMOJIS: Record<string, string> = {
   pull: "🦾",
   legs: "🦵",
   upper: "🏅",
-  lower: "🔥",
+  lower: "🦵",
   full_body: "⚡",
+  chest_back: "💪",
+  arms_shoulders: "💥",
   chest: "💪",
   back: "🦾",
   shoulders: "🏋️",
@@ -39,6 +36,14 @@ const FATIGUE_LABELS: Record<UpNextRecommendation["fatigueStatus"], string> = {
   "moderate-fatigue": "Recovering",
   "high-fatigue": "Fatigued",
   "no-data": "No data yet",
+};
+
+const daysSince = (dateValue?: string | null) => {
+  if (!dateValue) return null;
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const diffMs = Date.now() - parsed.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 };
 
 type UpNextCardProps = {
@@ -101,7 +106,7 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
           minHeight: 180,
         }}
       >
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={colors.primary} size='large' />
         <Text
           style={{
             color: colors.textSecondary,
@@ -163,9 +168,17 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
             >
               {overrideTemplate.templateName}
             </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                marginTop: 2,
+              }}
+            >
               {overrideTemplate.exerciseCount} exercises
-              {overrideTemplate.splitType ? ` • ${overrideTemplate.splitType}` : ""}
+              {overrideTemplate.splitType
+                ? ` • ${overrideTemplate.splitType}`
+                : ""}
             </Text>
           </View>
           <Pressable
@@ -202,7 +215,13 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
             gap: 10,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <View style={{ flex: 1 }}>
               <Text
                 style={{
@@ -214,7 +233,13 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               >
                 {overrideTemplate.templateName}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
                 {overrideTemplate.exerciseCount} exercises • Manually selected
               </Text>
             </View>
@@ -226,7 +251,11 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
                 backgroundColor: pressed ? colors.surface : "transparent",
               })}
             >
-              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+              <Ionicons
+                name='pencil-outline'
+                size={18}
+                color={colors.textSecondary}
+              />
             </Pressable>
           </View>
 
@@ -311,14 +340,29 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
     );
   }
 
-  const { recommendedSplit, matchedTemplate, fatigueStatus, canGenerateAI, reasoning, daysSinceLastSplit } = recommendation;
+  const {
+    recommendedSplit,
+    matchedTemplate,
+    fatigueStatus,
+    canGenerateAI,
+    reasoning,
+    daysSinceLastSplit,
+  } = recommendation;
   const canGenerateFree = !isPro && canGenerateAI;
+  const canGenerate = isPro || canGenerateAI;
   const splitEmoji = SPLIT_EMOJIS[recommendedSplit.splitKey] ?? "🎯";
   const fatigueColor = FATIGUE_COLORS[fatigueStatus];
   const fatigueLabel = FATIGUE_LABELS[fatigueStatus];
+  const daysSinceTemplateUsed = daysSince(matchedTemplate?.lastUsedAt);
+  const templateUsedRecently =
+    daysSinceTemplateUsed !== null && daysSinceTemplateUsed <= 2;
+  const generateLabel = templateUsedRecently
+    ? "Generate a fresh workout"
+    : "Generate another option";
 
   // Has a matching template to use (must have score >= 85 to be a true match)
-  const hasMatchedTemplate = matchedTemplate && matchedTemplate.matchScore >= 85;
+  const hasMatchedTemplate =
+    matchedTemplate && matchedTemplate.matchScore >= 85;
 
   // Filter out tags that duplicate the fatigue status shown in the header
   const fatigueRelatedTags = ["Fresh", "High fatigue risk", "Recovering"];
@@ -367,7 +411,14 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
           >
             {recommendedSplit.label} Day
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 2,
+            }}
+          >
             <View
               style={{
                 width: 8,
@@ -448,7 +499,13 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
             gap: 10,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <View style={{ flex: 1 }}>
               <Text
                 style={{
@@ -460,8 +517,15 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               >
                 {matchedTemplate.templateName}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                {matchedTemplate.exerciseCount} exercises • {matchedTemplate.matchReason}
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                {matchedTemplate.exerciseCount} exercises •{" "}
+                {matchedTemplate.matchReason}
               </Text>
             </View>
             <Pressable
@@ -472,7 +536,11 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
                 backgroundColor: pressed ? colors.surface : "transparent",
               })}
             >
-              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+              <Ionicons
+                name='pencil-outline'
+                size={18}
+                color={colors.textSecondary}
+              />
             </Pressable>
           </View>
 
@@ -496,6 +564,63 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               Start workout
             </Text>
           </Pressable>
+
+          <Pressable
+            onPress={() => {
+              if (canGenerate) {
+                onGenerate(recommendedSplit.splitKey);
+              } else {
+                onUpgrade();
+              }
+            }}
+            style={({ pressed }) => ({
+              paddingVertical: 10,
+              borderRadius: 12,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: canGenerateFree || isPro ? `${colors.primary}55` : colors.border,
+              backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+              opacity: pressed ? 0.85 : 1,
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 6,
+            })}
+          >
+            {!isPro && (
+              <View
+                style={{
+                  backgroundColor: canGenerateFree ? colors.surface : colors.border,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    color: canGenerateFree ? colors.primary : colors.textSecondary,
+                    fontSize: 9,
+                    fontWeight: "700",
+                  }}
+                >
+                  {canGenerateFree ? "1 FREE" : "PRO"}
+                </Text>
+              </View>
+            )}
+            <Ionicons
+              name={canGenerateFree || isPro ? "sparkles-outline" : "lock-closed-outline"}
+              size={14}
+              color={canGenerateFree || isPro ? colors.primary : colors.textSecondary}
+            />
+            <Text
+              style={{
+                color: canGenerateFree || isPro ? colors.primary : colors.textSecondary,
+                fontFamily: fontFamilies.semibold,
+                fontSize: 13,
+              }}
+            >
+              {generateLabel}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         // No matching template - show generation options
@@ -509,7 +634,13 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               borderColor: colors.border,
             }}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                lineHeight: 18,
+              }}
+            >
               No saved {recommendedSplit.label.toLowerCase()} template found.{" "}
               {isPro || canGenerateFree
                 ? "Generate a smart workout or create your own."
@@ -529,7 +660,10 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               }}
               style={({ pressed }) => ({
                 flex: 1,
-                backgroundColor: isPro || canGenerateFree ? colors.primary : colors.surfaceMuted,
+                backgroundColor:
+                  isPro || canGenerateFree
+                    ? colors.primary
+                    : colors.surfaceMuted,
                 paddingVertical: 14,
                 borderRadius: 12,
                 alignItems: "center",
@@ -544,7 +678,9 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               {!isPro && (
                 <View
                   style={{
-                    backgroundColor: canGenerateFree ? "#0B1220" : colors.primary,
+                    backgroundColor: canGenerateFree
+                      ? "#0B1220"
+                      : colors.primary,
                     paddingHorizontal: 6,
                     paddingVertical: 2,
                     borderRadius: 6,
@@ -563,7 +699,8 @@ export const UpNextCard: React.FC<UpNextCardProps> = ({
               )}
               <Text
                 style={{
-                  color: isPro || canGenerateFree ? colors.surface : colors.primary,
+                  color:
+                    isPro || canGenerateFree ? colors.surface : colors.primary,
                   fontFamily: fontFamilies.semibold,
                   fontSize: 15,
                 }}

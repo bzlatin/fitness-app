@@ -14,6 +14,8 @@ interface TrainingStyleStepProps {
 const SPLIT_DESCRIPTIONS: Record<TrainingSplit, string> = {
   push_pull_legs: "Split workouts into push, pull, and leg days (3-6x/week)",
   upper_lower: "Alternate between upper and lower body (2-4x/week)",
+  ppl_upper_lower: "Push, pull, legs, then upper and lower days (4-6x/week)",
+  arnold_split: "Chest/Back, Bi/Tri/Shoulders, Legs (3-6x/week)",
   full_body: "Train all major muscle groups each session (2-3x/week)",
   custom: "Create your own training split",
 };
@@ -25,7 +27,14 @@ const TrainingStyleStep = ({
   rirEnabled,
   onRirChange,
 }: TrainingStyleStepProps) => {
-  const splits: TrainingSplit[] = ["push_pull_legs", "upper_lower", "full_body", "custom"];
+  const splits: TrainingSplit[] = [
+    "push_pull_legs",
+    "ppl_upper_lower",
+    "upper_lower",
+    "arnold_split",
+    "full_body",
+    "custom",
+  ];
 
   return (
     <View style={{ gap: 20 }}>
