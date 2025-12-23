@@ -7,6 +7,8 @@ import {
   updateSession,
 } from "../api/sessions";
 import { WorkoutHistoryResponse, WorkoutSet } from "../types/workouts";
+import { fatigueQueryKey, recommendationsQueryKey } from "./useFatigue";
+import { upNextQueryKey } from "./useUpNextRecommendation";
 
 const historyKey = (startIso: string, endIso: string, tzOffsetMinutes: number) => [
   "history",
@@ -55,13 +57,18 @@ export const useCreateManualSession = (rangeStart: Date, rangeEnd: Date) => {
   return useMutation({
     mutationFn: createManualSession,
     onSuccess: () =>
-      client.invalidateQueries({
-        queryKey: historyKey(
-          rangeStart.toISOString(),
-          rangeEnd.toISOString(),
-          new Date().getTimezoneOffset()
-        ),
-      }),
+      Promise.all([
+        client.invalidateQueries({
+          queryKey: historyKey(
+            rangeStart.toISOString(),
+            rangeEnd.toISOString(),
+            new Date().getTimezoneOffset()
+          ),
+        }),
+        client.invalidateQueries({ queryKey: fatigueQueryKey }),
+        client.invalidateQueries({ queryKey: recommendationsQueryKey }),
+        client.invalidateQueries({ queryKey: upNextQueryKey }),
+      ]),
   });
 };
 
@@ -70,13 +77,18 @@ export const useDuplicateSession = (rangeStart: Date, rangeEnd: Date) => {
   return useMutation({
     mutationFn: duplicateSession,
     onSuccess: () =>
-      client.invalidateQueries({
-        queryKey: historyKey(
-          rangeStart.toISOString(),
-          rangeEnd.toISOString(),
-          new Date().getTimezoneOffset()
-        ),
-      }),
+      Promise.all([
+        client.invalidateQueries({
+          queryKey: historyKey(
+            rangeStart.toISOString(),
+            rangeEnd.toISOString(),
+            new Date().getTimezoneOffset()
+          ),
+        }),
+        client.invalidateQueries({ queryKey: fatigueQueryKey }),
+        client.invalidateQueries({ queryKey: recommendationsQueryKey }),
+        client.invalidateQueries({ queryKey: upNextQueryKey }),
+      ]),
   });
 };
 
@@ -85,13 +97,18 @@ export const useDeleteSession = (rangeStart: Date, rangeEnd: Date) => {
   return useMutation({
     mutationFn: deleteSession,
     onSuccess: () =>
-      client.invalidateQueries({
-        queryKey: historyKey(
-          rangeStart.toISOString(),
-          rangeEnd.toISOString(),
-          new Date().getTimezoneOffset()
-        ),
-      }),
+      Promise.all([
+        client.invalidateQueries({
+          queryKey: historyKey(
+            rangeStart.toISOString(),
+            rangeEnd.toISOString(),
+            new Date().getTimezoneOffset()
+          ),
+        }),
+        client.invalidateQueries({ queryKey: fatigueQueryKey }),
+        client.invalidateQueries({ queryKey: recommendationsQueryKey }),
+        client.invalidateQueries({ queryKey: upNextQueryKey }),
+      ]),
   });
 };
 
@@ -106,12 +123,17 @@ export const useUpdateSession = (rangeStart: Date, rangeEnd: Date) => {
       payload: Partial<{ startedAt: string; finishedAt: string; sets: WorkoutSet[] }>;
     }) => updateSession(id, payload),
     onSuccess: () =>
-      client.invalidateQueries({
-        queryKey: historyKey(
-          rangeStart.toISOString(),
-          rangeEnd.toISOString(),
-          new Date().getTimezoneOffset()
-        ),
-      }),
+      Promise.all([
+        client.invalidateQueries({
+          queryKey: historyKey(
+            rangeStart.toISOString(),
+            rangeEnd.toISOString(),
+            new Date().getTimezoneOffset()
+          ),
+        }),
+        client.invalidateQueries({ queryKey: fatigueQueryKey }),
+        client.invalidateQueries({ queryKey: recommendationsQueryKey }),
+        client.invalidateQueries({ queryKey: upNextQueryKey }),
+      ]),
   });
 };

@@ -181,6 +181,8 @@ export type UpNextRecommendation = {
   alternateTemplates: UpNextTemplate[];
   // Recovery status for the recommended split
   fatigueStatus: "fresh" | "ready" | "moderate-fatigue" | "high-fatigue" | "no-data";
+  // Whether recovery data suggests a full rest day
+  restRecommended: boolean;
   // Overall readiness score (0-100)
   readinessScore: number;
   // Whether user has Pro access (affects what actions are available)

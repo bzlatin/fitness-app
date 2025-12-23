@@ -22,6 +22,14 @@ import {
 } from "./smartNextWorkout";
 import { createLogger } from "../utils/logger";
 import { GymPreferences, normalizeGymPreferences } from "../utils/gymPreferences";
+import {
+  buildCanonicalMuscleStats,
+  normalizeMuscleGroup,
+  READINESS_BLOCKED_THRESHOLD,
+  READINESS_FRESH_THRESHOLD,
+  READINESS_HIGH_THRESHOLD,
+  READINESS_MODERATE_THRESHOLD,
+} from "./muscleReadiness";
 
 const log = createLogger("UpNextIntelligence");
 
@@ -35,10 +43,14 @@ const formatSplitLabel = (splitKey?: string, fallback?: string) => {
     upper: "Upper",
     lower: "Lower",
     full_body: "Full Body",
+    chest_back: "Chest/Back",
+    arms_shoulders: "Arms/Shoulders",
     chest: "Chest",
     back: "Back",
     shoulders: "Shoulders",
     arms: "Arms",
+    ppl_upper_lower: "PPL + Upper/Lower",
+    arnold_split: "Arnold Split",
   };
   if (!key) return fallback ?? "Training";
   return (
@@ -210,6 +222,8 @@ export type UpNextRecommendation = {
     | "moderate-fatigue"
     | "high-fatigue"
     | "no-data";
+  // Whether recovery data suggests a full rest day
+  restRecommended: boolean;
   // Overall readiness score (0-100)
   readinessScore: number;
   // Whether user has Pro access (affects what actions are available)
@@ -334,9 +348,11 @@ const scoreTemplateMatch = (
   recommendedSplit: string,
   fatigue: FatigueResult | null
 ): { score: number; reason: string } => {
-  const templateSplit = normalizeSplitKey(template.split_type);
+  const templateSplit = normalizeSplitKey(template.split_type ?? template.name);
   const templateNameLower = template.name.toLowerCase();
-  const muscles = template.muscle_groups ?? [];
+  const muscles = (template.muscle_groups ?? []).map((muscle) =>
+    normalizeMuscleGroup(muscle)
+  );
 
   // Perfect match on split type metadata
   if (templateSplit === recommendedSplit) {
@@ -391,6 +407,25 @@ const getSplitKeywords = (splitKey: string): string[] => {
       return ["upper"];
     case "full_body":
       return ["full body", "full-body", "fullbody", "total body"];
+    case "chest_back":
+      return [
+        "chest back",
+        "chest/back",
+        "chest & back",
+        "back & chest",
+        "chest-back",
+        "chest_back",
+      ];
+    case "arms_shoulders":
+      return [
+        "arms shoulders",
+        "arms/shoulders",
+        "arms & shoulders",
+        "arms-shoulders",
+        "arms_shoulders",
+        "biceps triceps shoulders",
+        "bi tri shoulders",
+      ];
     case "chest":
       return ["chest"];
     case "back":
@@ -429,10 +464,44 @@ const getSplitMuscles = (splitKey: string): string[] => {
         "glutes",
         "core",
       ];
+    case "chest_back":
+      return ["chest", "back"];
+    case "arms_shoulders":
+      return ["shoulders", "biceps", "triceps"];
     case "chest":
       return ["chest", "triceps"];
     case "back":
       return ["back", "biceps"];
+    case "shoulders":
+      return ["shoulders"];
+    case "arms":
+      return ["biceps", "triceps"];
+    default:
+      return [];
+  }
+};
+
+const getSplitFocusMuscles = (splitKey: string): string[] => {
+  switch (splitKey) {
+    case "push":
+      return ["chest", "shoulders"];
+    case "pull":
+      return ["back"];
+    case "legs":
+    case "lower":
+      return ["legs", "glutes"];
+    case "upper":
+      return ["chest", "back", "shoulders"];
+    case "full_body":
+      return ["chest", "back", "legs", "glutes"];
+    case "chest_back":
+      return ["chest", "back"];
+    case "arms_shoulders":
+      return ["biceps", "triceps", "shoulders"];
+    case "chest":
+      return ["chest"];
+    case "back":
+      return ["back"];
     case "shoulders":
       return ["shoulders"];
     case "arms":
@@ -447,25 +516,26 @@ const getSplitMuscles = (splitKey: string): string[] => {
  */
 const getFatigueStatusForSplit = (
   fatigue: FatigueResult | null,
-  splitKey: string
+  splitKey: string,
+  canonicalStats?: Map<string, { readiness: number }>
 ): UpNextRecommendation["fatigueStatus"] => {
   if (!fatigue) return "no-data";
 
-  const splitMuscles = getSplitMuscles(splitKey);
+  const stats = canonicalStats ?? buildCanonicalMuscleStats(fatigue);
+  const splitMuscles = getSplitFocusMuscles(splitKey);
   if (splitMuscles.length === 0) return "ready";
 
-  const muscleScores = fatigue.perMuscle
-    .filter((m) => splitMuscles.includes(m.muscleGroup))
-    .map((m) => m.fatigueScore);
+  const readinessScores = splitMuscles
+    .map((muscle) => stats.get(normalizeMuscleGroup(muscle))?.readiness)
+    .filter((value): value is number => typeof value === "number");
 
-  if (muscleScores.length === 0) return "no-data";
+  if (readinessScores.length === 0) return "no-data";
 
-  const avgScore =
-    muscleScores.reduce((a, b) => a + b, 0) / muscleScores.length;
+  const minReadiness = Math.min(...readinessScores);
 
-  if (avgScore > 130) return "high-fatigue";
-  if (avgScore > 110) return "moderate-fatigue";
-  if (avgScore < 70) return "fresh";
+  if (minReadiness <= READINESS_HIGH_THRESHOLD) return "high-fatigue";
+  if (minReadiness <= READINESS_MODERATE_THRESHOLD) return "moderate-fatigue";
+  if (minReadiness >= READINESS_FRESH_THRESHOLD) return "fresh";
   return "ready";
 };
 
@@ -569,6 +639,13 @@ export const getUpNextRecommendation = async (
 
     const recommendedSplitKey = splitRecommendation.selected.splitKey;
     const equipmentFilter = buildEquipmentFilter(gymPreferences);
+    const canonicalStats = buildCanonicalMuscleStats(fatigue);
+    const fatiguedMuscles = new Set<string>();
+    canonicalStats.forEach((value, muscle) => {
+      if (value.readiness <= READINESS_BLOCKED_THRESHOLD) {
+        fatiguedMuscles.add(muscle);
+      }
+    });
 
     // Find matching templates
     const scoredTemplates = templates
@@ -578,28 +655,42 @@ export const getUpNextRecommendation = async (
           equipmentFilter &&
           templateEquipment.length > 0 &&
           templateEquipment.some((item) => !equipmentFilter.has(item));
+        const templateMuscles = template.muscle_groups ?? [];
+        const canonicalTemplateMuscles = templateMuscles.map((muscle) =>
+          normalizeMuscleGroup(muscle)
+        );
+        const hitsFatiguedMuscles =
+          fatiguedMuscles.size > 0 &&
+          canonicalTemplateMuscles.some((muscle) => fatiguedMuscles.has(muscle));
         const { score, reason } = scoreTemplateMatch(
           template,
           recommendedSplitKey,
           fatigue
         );
-        const matchScore = hasEquipmentMismatch ? 0 : score;
+        const isBlocked = hasEquipmentMismatch || hitsFatiguedMuscles;
+        const matchScore = score;
         const matchReason = hasEquipmentMismatch
           ? "Needs gear not in this gym"
-          : reason;
+          : hitsFatiguedMuscles
+            ? "Targets fatigued muscles"
+            : reason;
         return {
           templateId: template.id,
           templateName: template.name,
           splitType: template.split_type,
           exerciseCount: parseInt(template.exercise_count) || 0,
-          muscleGroups: template.muscle_groups ?? [],
+          muscleGroups: templateMuscles,
           lastUsedAt: template.last_used_at,
           matchScore,
           matchReason,
+          isBlocked,
         };
       })
       .sort((a, b) => {
-        // Sort by match score first, then by last used (prefer less recently used to add variety)
+        // Prefer templates that fit recovery/equipment, then by match score, then by last used.
+        if (a.isBlocked !== b.isBlocked) {
+          return a.isBlocked ? 1 : -1;
+        }
         if (b.matchScore !== a.matchScore) {
           return b.matchScore - a.matchScore;
         }
@@ -620,14 +711,17 @@ export const getUpNextRecommendation = async (
     const alternateTemplates = scoredTemplates
       .filter(
         (t) =>
-          t.templateId !== matchedTemplate?.templateId && t.matchScore >= 85
+          t.templateId !== matchedTemplate?.templateId &&
+          t.matchScore >= 85 &&
+          !t.isBlocked
       )
       .slice(0, 3);
 
     // Get fatigue status for the recommended split
     const fatigueStatus = getFatigueStatusForSplit(
       fatigue,
-      recommendedSplitKey
+      recommendedSplitKey,
+      canonicalStats
     );
 
     // Get days since last workout of this split type
@@ -651,6 +745,7 @@ export const getUpNextRecommendation = async (
       matchedTemplateId: matchedTemplate?.templateId ?? null,
       fatigueStatus,
       daysSinceLastSplit,
+      restRecommended: splitRecommendation.restRecommended,
     });
 
     return {
@@ -668,6 +763,7 @@ export const getUpNextRecommendation = async (
       matchedTemplate,
       alternateTemplates,
       fatigueStatus,
+      restRecommended: splitRecommendation.restRecommended,
       readinessScore: fatigue?.readinessScore ?? 80,
       canGenerateAI: canGenerateAi,
       reasoning,

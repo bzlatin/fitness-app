@@ -238,6 +238,8 @@ const normalizePreferredSplit = (value?: unknown): string | undefined => {
   const raw = String(value).toLowerCase().trim();
   if (!raw) return undefined;
   if (raw === "push_pull_legs") return "ppl";
+  if (raw === "ppl_upper_lower" || raw === "ppl_upper/lower") return "ppl_upper_lower";
+  if (raw === "arnold" || raw === "arnold_split" || raw === "arnold split") return "arnold_split";
   return raw;
 };
 

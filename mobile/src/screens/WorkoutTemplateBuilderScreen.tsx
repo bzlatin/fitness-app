@@ -61,6 +61,8 @@ const splitOptions: { value: WorkoutTemplate["splitType"]; label: string }[] = [
   { value: "upper", label: "Upper Body" },
   { value: "lower", label: "Lower Body" },
   { value: "full_body", label: "Full Body" },
+  { value: "chest_back", label: "Chest + Back" },
+  { value: "arms_shoulders", label: "Arms + Shoulders" },
   { value: "custom", label: "Custom" },
 ];
 

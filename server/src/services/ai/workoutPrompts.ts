@@ -18,13 +18,23 @@ export const determineNextInCycle = (
 
   const canonicalPreferred = preferredSplit.toLowerCase().trim();
   const normalizedPreferred =
-    canonicalPreferred === "push_pull_legs" ? "ppl" : canonicalPreferred;
+    canonicalPreferred === "push_pull_legs"
+      ? "ppl"
+      : canonicalPreferred === "ppl_upper/lower"
+        ? "ppl_upper_lower"
+        : canonicalPreferred === "arnold"
+          ? "arnold_split"
+          : canonicalPreferred === "arnold split"
+            ? "arnold_split"
+            : canonicalPreferred;
 
   // Define split cycles
   const splitCycles: Record<string, string[]> = {
     ppl: ["push", "pull", "legs"],
+    ppl_upper_lower: ["push", "pull", "legs", "upper", "lower"],
     upper_lower: ["upper", "lower"],
     full_body: ["full_body"],
+    arnold_split: ["chest_back", "arms_shoulders", "legs"],
     bro_split: ["chest", "back", "legs", "shoulders", "arms"],
   };
 
@@ -44,6 +54,15 @@ export const determineNextInCycle = (
   const lastIndex = cycle.findIndex((split) => {
     if (split === "full_body") return lastSplit.includes("full");
     if (split === "legs") return lastSplit.includes("leg");
+    if (split === "chest_back") return lastSplit.includes("chest") || lastSplit.includes("back");
+    if (split === "arms_shoulders") {
+      return (
+        lastSplit.includes("arm") ||
+        lastSplit.includes("bicep") ||
+        lastSplit.includes("tricep") ||
+        lastSplit.includes("shoulder")
+      );
+    }
     return lastSplit.includes(split) || split.includes(lastSplit);
   });
 
@@ -365,7 +384,7 @@ ${exercisesToUse
 
 7. **Naming & Labeling**:
    - Keep the workout name EXTREMELY brief (1-8 words max) - just a simple overview of what's trained
-   - Use simple muscle group names or split types: "Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Back & Biceps", "Chest", etc.
+   - Use simple muscle group names or split types: "Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Chest/Back", "Arms/Shoulders", "Back & Biceps", "Chest", etc.
    - NO descriptive words like "power", "volume", "focused", "day", "session", "workout", "training"
    - NO emojis or special characters except "&" and "-"
    - If a specific muscle focus is requested (${
@@ -378,7 +397,7 @@ Respond with ONLY valid JSON matching this exact schema (no markdown, no additio
 
 {
   "name": "Simple workout name (1-8 words, e.g., 'Push', 'Pull', 'Upper', 'Back & Biceps', 'Arms and Shoulder focus')",
-  "splitType": "push|pull|legs|upper|lower|full_body|custom",
+  "splitType": "push|pull|legs|upper|lower|full_body|chest_back|arms_shoulders|custom",
   "exercises": [
     {
       "exerciseId": "exact ID from available exercises list",

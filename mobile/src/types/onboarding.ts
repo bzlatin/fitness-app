@@ -16,6 +16,8 @@ export type EquipmentType =
 export type TrainingSplit =
   | "push_pull_legs"
   | "upper_lower"
+  | "ppl_upper_lower"
+  | "arnold_split"
   | "full_body"
   | "custom";
 
@@ -85,6 +87,8 @@ export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
 export const TRAINING_SPLIT_LABELS: Record<TrainingSplit, string> = {
   push_pull_legs: "Push / Pull / Legs",
   upper_lower: "Upper / Lower",
+  ppl_upper_lower: "PPL + Upper/Lower",
+  arnold_split: "Arnold Split",
   full_body: "Full Body",
   custom: "Custom Split",
 };

@@ -394,6 +394,8 @@ export class OpenAIProvider implements AIProvider {
           upper: "Upper",
           lower: "Lower",
           full_body: "Full Body",
+          chest_back: "Chest/Back",
+          arms_shoulders: "Arms/Shoulders",
           custom: "Custom"
         };
         const splitType = generatedWorkout.splitType || "custom";

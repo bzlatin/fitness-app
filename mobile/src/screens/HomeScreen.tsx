@@ -12,6 +12,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -19,7 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
+import { templatesKey, useWorkoutTemplates } from "../hooks/useWorkoutTemplates";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useActiveSession } from "../hooks/useActiveSession";
 import { useUpNextRecommendation } from "../hooks/useUpNextRecommendation";
@@ -120,6 +121,8 @@ const HomeScreen = () => {
     dismissedAt: number;
   } | null>(null);
   const [pendingGymId, setPendingGymId] = useState<string | null>(null);
+  const [dismissedRestToast, setDismissedRestToast] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Subscription status for trial/grace/expired handling
   const subscriptionStatusError = subscriptionAccess.isError;
@@ -201,6 +204,43 @@ const HomeScreen = () => {
       void refetchUpNext();
     }, [refetchFatigue, refetchUpNext])
   );
+
+  const restRecommended = upNextRecommendation?.restRecommended ?? false;
+
+  useEffect(() => {
+    if (!restRecommended) {
+      setDismissedRestToast(false);
+    }
+  }, [restRecommended]);
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchFatigue(),
+        refetchUpNext(),
+        refresh(),
+        queryClient.invalidateQueries({ queryKey: templatesKey }),
+        queryClient.invalidateQueries({ queryKey: ["activeSession"] }),
+        queryClient.invalidateQueries({ queryKey: ["gym-preferences"] }),
+        isPro ? refetchRecap() : Promise.resolve(),
+        subscriptionStatusError ? refetchSubscriptionStatus() : Promise.resolve(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    isRefreshing,
+    isPro,
+    queryClient,
+    refetchFatigue,
+    refetchRecap,
+    refetchSubscriptionStatus,
+    refetchUpNext,
+    refresh,
+    subscriptionStatusError,
+  ]);
 
   const closePaywall = () => {
     setShowPaywallModal(false);
@@ -425,7 +465,16 @@ const HomeScreen = () => {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer
+      scroll
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor={colors.textSecondary}
+        />
+      }
+    >
       {/* Subscription status banners */}
       {subscriptionStatusError ? (
         <Pressable
@@ -781,6 +830,71 @@ const HomeScreen = () => {
               color={colors.textSecondary}
             />
           </Pressable>
+        ) : null}
+
+        {restRecommended && !dismissedRestToast ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              padding: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceMuted,
+            }}
+          >
+            <Ionicons
+              name='alert-circle-outline'
+              size={18}
+              color={colors.textSecondary}
+            />
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamilies.semibold,
+                  fontSize: 13,
+                }}
+              >
+                Rest recommended
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                Recovery is maxed out across your muscles today.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setDismissedRestToast(true)}
+              accessibilityRole='button'
+              accessibilityLabel='Dismiss rest recommendation'
+              style={({ pressed }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  fontFamily: fontFamilies.medium,
+                }}
+              >
+                Dismiss
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <UpNextCard
@@ -1418,6 +1532,8 @@ const SPLIT_EMOJIS: Record<string, string> = {
   upper: "🏅",
   lower: "🔥",
   full_body: "⚡",
+  chest_back: "🫀",
+  arms_shoulders: "💥",
   chest: "💪",
   back: "🦾",
   shoulders: "🏋️",

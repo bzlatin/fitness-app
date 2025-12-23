@@ -35,6 +35,8 @@ const SPLIT_OPTIONS = [
   { value: "upper", label: "Upper Body", emoji: "🏅" },
   { value: "lower", label: "Lower Body", emoji: "🔥" },
   { value: "full_body", label: "Full Body", emoji: "⚡" },
+  { value: "chest_back", label: "Chest + Back", emoji: "🫀" },
+  { value: "arms_shoulders", label: "Arms + Shoulders", emoji: "💥" },
 ];
 
 const WorkoutGeneratorScreen = () => {

@@ -70,6 +70,8 @@ export interface WorkoutTemplate {
     | "upper"
     | "lower"
     | "full_body"
+    | "chest_back"
+    | "arms_shoulders"
     | "custom";
   isFavorite: boolean;
   sharingDisabled?: boolean;
