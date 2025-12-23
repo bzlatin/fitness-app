@@ -882,6 +882,8 @@ const WorkoutSessionScreen = () => {
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showWarmupSets, setShowWarmupSets] = useState(true);
+  const [warmupOverridesByExerciseKey, setWarmupOverridesByExerciseKey] =
+    useState<Record<string, boolean>>({});
   const [rirEnabledByExerciseKey, setRirEnabledByExerciseKey] = useState<
     Record<string, boolean>
   >({});
@@ -901,6 +903,11 @@ const WorkoutSessionScreen = () => {
     () => ensureGymPreferences(user?.gymPreferences).warmupSets,
     [user?.gymPreferences]
   );
+  const markWarmupOverride = useCallback((exerciseKey: string) => {
+    setWarmupOverridesByExerciseKey((prev) =>
+      prev[exerciseKey] ? prev : { ...prev, [exerciseKey]: true }
+    );
+  }, []);
 
   // Refs to access latest state in deep link handler without causing re-renders
   const activeSetIdRef = useRef<string | null>(null);
@@ -2007,6 +2014,86 @@ const WorkoutSessionScreen = () => {
     void setStoredShowWarmupSets(showWarmupSets);
   }, [hasHydratedWarmupPreference, showWarmupSets]);
 
+  const resolveWarmupContext = useCallback(
+    (workingSets: WorkoutSet[]) => {
+      const workingBase = workingSets[0];
+      if (!workingBase) return null;
+      if (isCardioExercise(workingBase.exerciseId, workingBase.exerciseName)) {
+        return null;
+      }
+
+      const weightCandidates = workingSets
+        .flatMap((set) => [
+          typeof set.actualWeight === 'number' ? set.actualWeight : undefined,
+          typeof set.targetWeight === 'number' ? set.targetWeight : undefined,
+        ])
+        .filter((value): value is number => Boolean(value && value > 0));
+      const maxWorkingWeight =
+        weightCandidates.length > 0 ? Math.max(...weightCandidates) : undefined;
+      const suggestionWeight =
+        startingSuggestions[workingBase.exerciseId]?.suggestedWeight;
+      const profileWeight = estimateWorkingWeightFromProfile(
+        workingBase.exerciseName,
+        workingBase.exerciseId,
+        user?.onboardingData ?? null
+      );
+      const isBodyweight = isBodyweightMovement(
+        workingBase.exerciseName,
+        workingBase.exerciseId
+      );
+      const fallbackWeight = isBodyweight
+        ? undefined
+        : isLowerBodyMovement(workingBase.exerciseName, workingBase.exerciseId)
+        ? 45
+        : 20;
+      const resolvedWorkingWeight =
+        maxWorkingWeight ?? suggestionWeight ?? profileWeight ?? fallbackWeight;
+
+      const workingReps =
+        typeof workingBase.targetReps === 'number' && workingBase.targetReps > 0
+          ? workingBase.targetReps
+          : typeof workingBase.actualReps === 'number' &&
+            workingBase.actualReps > 0
+          ? workingBase.actualReps
+          : undefined;
+
+      return {
+        workingBase,
+        workingReps,
+        resolvedWorkingWeight,
+      };
+    },
+    [startingSuggestions, user?.onboardingData]
+  );
+
+  const getNextWarmupSpec = useCallback(
+    (
+      resolvedWorkingWeight: number,
+      workingReps: number | undefined,
+      existingWarmups: WorkoutSet[]
+    ) => {
+      const nextCount = existingWarmups.length + 1;
+      const specs = calculateWarmupSets(resolvedWorkingWeight, workingReps, {
+        ...warmupSettings,
+        numSets: nextCount,
+      });
+      if (specs.length === 0) return undefined;
+
+      const existingWeights = new Set(
+        existingWarmups
+          .map((set) =>
+            typeof set.targetWeight === 'number' ? set.targetWeight : undefined
+          )
+          .filter((value): value is number => Boolean(value && value > 0))
+      );
+      return (
+        specs.find((spec) => !existingWeights.has(spec.targetWeight)) ??
+        specs[specs.length - 1]
+      );
+    },
+    [warmupSettings]
+  );
+
   const addWarmupSetsIfMissing = useCallback(
     (inputSets?: WorkoutSet[]) => {
       const currentSets = inputSets ?? setsRef.current;
@@ -2033,93 +2120,29 @@ const WorkoutSessionScreen = () => {
         const groupSets = grouped.get(key) ?? [];
         const sorted = [...groupSets].sort((a, b) => a.setIndex - b.setIndex);
         const hasWarmups = sorted.some((set) => set.setKind === "warmup");
+        const hasWarmupOverride = warmupOverridesByExerciseKey[key];
         let warmupAdds: WorkoutSet[] = [];
 
-        if (!hasWarmups) {
+        if (!hasWarmups && !hasWarmupOverride) {
           const workingSets = sorted.filter((set) => set.setKind !== "warmup");
-          const workingBase = workingSets[0];
-          if (!workingBase) {
-            const combined = hasWarmups ? sorted : [...warmupAdds, ...sorted];
-            combined.forEach((set) => {
-              nextSets.push({ ...set, setIndex: nextIndex });
-              nextIndex += 1;
-            });
-            return;
-          }
-
+          const warmupContext = resolveWarmupContext(workingSets);
           if (
-            isCardioExercise(workingBase.exerciseId, workingBase.exerciseName)
+            warmupContext?.resolvedWorkingWeight &&
+            warmupSettings.numSets > 0
           ) {
-            const combined = hasWarmups ? sorted : [...warmupAdds, ...sorted];
-            combined.forEach((set) => {
-              nextSets.push({ ...set, setIndex: nextIndex });
-              nextIndex += 1;
-            });
-            return;
-          }
-
-          const weightCandidates = workingSets
-            .flatMap((set) => [
-              typeof set.actualWeight === "number"
-                ? set.actualWeight
-                : undefined,
-              typeof set.targetWeight === "number"
-                ? set.targetWeight
-                : undefined,
-            ])
-            .filter((value): value is number => Boolean(value && value > 0));
-          const maxWorkingWeight =
-            weightCandidates.length > 0
-              ? Math.max(...weightCandidates)
-              : undefined;
-          const suggestionWeight =
-            startingSuggestions[workingBase.exerciseId]?.suggestedWeight;
-          const profileWeight = estimateWorkingWeightFromProfile(
-            workingBase.exerciseName,
-            workingBase.exerciseId,
-            user?.onboardingData ?? null
-          );
-          const isBodyweight = isBodyweightMovement(
-            workingBase.exerciseName,
-            workingBase.exerciseId
-          );
-          const fallbackWeight = isBodyweight
-            ? undefined
-            : isLowerBodyMovement(
-                workingBase.exerciseName,
-                workingBase.exerciseId
-              )
-            ? 45
-            : 20;
-          const resolvedWorkingWeight =
-            maxWorkingWeight ??
-            suggestionWeight ??
-            profileWeight ??
-            fallbackWeight;
-
-          if (resolvedWorkingWeight && warmupSettings.numSets > 0) {
-            const workingReps =
-              typeof workingBase.targetReps === "number" &&
-              workingBase.targetReps > 0
-                ? workingBase.targetReps
-                : typeof workingBase.actualReps === "number" &&
-                  workingBase.actualReps > 0
-                ? workingBase.actualReps
-                : undefined;
-
             const specs = calculateWarmupSets(
-              resolvedWorkingWeight,
-              workingReps,
+              warmupContext.resolvedWorkingWeight,
+              warmupContext.workingReps,
               warmupSettings
             );
             if (specs.length > 0) {
               warmupAdds = specs.map((spec) => ({
                 id: createWarmupSetId(),
                 sessionId: session,
-                templateExerciseId: workingBase.templateExerciseId,
-                exerciseId: workingBase.exerciseId,
-                exerciseName: workingBase.exerciseName,
-                exerciseImageUrl: workingBase.exerciseImageUrl,
+                templateExerciseId: warmupContext.workingBase.templateExerciseId,
+                exerciseId: warmupContext.workingBase.exerciseId,
+                exerciseName: warmupContext.workingBase.exerciseName,
+                exerciseImageUrl: warmupContext.workingBase.exerciseImageUrl,
                 setKind: "warmup",
                 setIndex: 0,
                 targetReps: spec.targetReps,
@@ -2142,7 +2165,12 @@ const WorkoutSessionScreen = () => {
       setsRef.current = nextSets;
       setSets(nextSets);
     },
-    [sessionId, startingSuggestions, user?.onboardingData, warmupSettings]
+    [
+      resolveWarmupContext,
+      sessionId,
+      warmupOverridesByExerciseKey,
+      warmupSettings,
+    ]
   );
 
   const handleToggleWarmupSets = useCallback(() => {
@@ -3410,6 +3438,86 @@ const WorkoutSessionScreen = () => {
     setSets((prev) => [...prev, newSet]);
   };
 
+  const handleAddWarmupSet = (exerciseKey: string) => {
+    const group = groupedSets.find((g) => g.key === exerciseKey);
+    if (!group) return;
+
+    const baseSet = group.sets[0];
+    if (!baseSet) return;
+
+    if (isCardioExercise(baseSet.exerciseId, baseSet.exerciseName)) {
+      Alert.alert(
+        'Warm-up not available',
+        'Cardio exercises only have one log.'
+      );
+      return;
+    }
+
+    const warmupSets = group.sets.filter((set) => set.setKind === 'warmup');
+    const workingSets = group.sets.filter((set) => set.setKind !== 'warmup');
+    const warmupContext = resolveWarmupContext(workingSets);
+    const resolvedWeight = warmupContext?.resolvedWorkingWeight;
+    const nextSpec =
+      typeof resolvedWeight === 'number' && Number.isFinite(resolvedWeight)
+        ? getNextWarmupSpec(
+            resolvedWeight,
+            warmupContext?.workingReps,
+            warmupSets
+          )
+        : undefined;
+
+    const fallbackReps =
+      warmupSets[warmupSets.length - 1]?.targetReps ??
+      warmupContext?.workingReps ??
+      baseSet.targetReps ??
+      baseSet.actualReps;
+    const fallbackWeight =
+      warmupSets[warmupSets.length - 1]?.targetWeight ??
+      baseSet.targetWeight ??
+      baseSet.actualWeight;
+
+    const newSet: WorkoutSet = {
+      id: createWarmupSetId(),
+      sessionId: sessionId ?? baseSet.sessionId,
+      templateExerciseId: baseSet.templateExerciseId,
+      exerciseId: baseSet.exerciseId,
+      exerciseName: baseSet.exerciseName,
+      exerciseImageUrl: baseSet.exerciseImageUrl,
+      setKind: 'warmup',
+      setIndex: baseSet.setIndex,
+      targetReps: nextSpec?.targetReps ?? fallbackReps,
+      targetWeight: nextSpec?.targetWeight ?? fallbackWeight,
+    };
+
+    const nextGroupSets = [...warmupSets, newSet, ...workingSets];
+    const baseIndex = Math.min(...group.sets.map((set) => set.setIndex));
+    const reindexedGroupSets = nextGroupSets.map((set, index) => ({
+      ...set,
+      setIndex: baseIndex + index,
+    }));
+
+    markWarmupOverride(exerciseKey);
+    setSets((prev) => {
+      const next: WorkoutSet[] = [];
+      let replaced = false;
+      prev.forEach((set) => {
+        const key = set.templateExerciseId ?? set.exerciseId;
+        if (key !== exerciseKey) {
+          next.push(set);
+          return;
+        }
+        if (!replaced) {
+          next.push(...reindexedGroupSets);
+          replaced = true;
+        }
+      });
+      if (!replaced) {
+        next.push(...reindexedGroupSets);
+      }
+      return next;
+    });
+  };
+
   const handleRemoveSet = (setId: string) => {
     const setToRemove = sets.find((s) => s.id === setId);
     if (!setToRemove) return;
@@ -3430,6 +3538,9 @@ const WorkoutSessionScreen = () => {
         text: "Remove",
         style: "destructive",
         onPress: () => {
+          if (setToRemove.setKind === 'warmup') {
+            markWarmupOverride(groupKey);
+          }
           setSets((prev) => prev.filter((s) => s.id !== setId));
           setLoggedSetIds((prev) => {
             const next = new Set(prev);
@@ -4318,6 +4429,8 @@ const WorkoutSessionScreen = () => {
                     onAdjustTimer={() => setTimerAdjustExerciseKey(group.key)}
                     onDrag={drag}
                     isDragging={isActive}
+                    showWarmupControls={showWarmupSets}
+                    onAddWarmupSet={() => handleAddWarmupSet(group.key)}
                     onAddSet={() => handleAddSet(group.key)}
                     onRemoveSet={handleRemoveSet}
                     onDeleteExercise={() => handleDeleteExercise(group.key)}
@@ -4991,6 +5104,8 @@ type ExerciseCardProps = {
   onAdjustTimer: () => void;
   onDrag: () => void;
   isDragging: boolean;
+  showWarmupControls: boolean;
+  onAddWarmupSet: () => void;
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
   onDeleteExercise: () => void;
@@ -5029,6 +5144,8 @@ const ExerciseCard = ({
   onAdjustTimer,
   onDrag,
   isDragging,
+  showWarmupControls,
+  onAddWarmupSet,
   onAddSet,
   onRemoveSet,
   onDeleteExercise,
@@ -5055,6 +5172,9 @@ const ExerciseCard = ({
     (set) => set.setKind === "warmup"
   ).length;
   const workingSetCount = group.sets.length - warmupSetCount;
+  const lastWarmupSetId =
+    group.sets.filter((set) => set.setKind === 'warmup').slice(-1)[0]?.id ??
+    null;
   const primaryWorkingSet =
     group.sets.find((set) => set.setKind !== "warmup") ?? group.sets[0];
   const exerciseRestSeconds =
@@ -5444,6 +5564,40 @@ const ExerciseCard = ({
             </View>
           ) : null}
 
+          {showWarmupControls && !isCardioGroup && warmupSetCount === 0 ? (
+            <Pressable
+              onPress={onAddWarmupSet}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceMuted,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons
+                name='flame-outline'
+                size={16}
+                color={colors.secondary}
+              />
+              <Text
+                style={{
+                  color: colors.secondary,
+                  fontSize: 12,
+                  fontWeight: '600',
+                }}
+              >
+                Add Warm-up
+              </Text>
+            </Pressable>
+          ) : null}
+
           {group.sets.map((set, displayIndex) => {
             // Use a shorter default rest for warm-ups unless the user explicitly set a session timer.
             const restSecondsForSet =
@@ -5512,6 +5666,41 @@ const ExerciseCard = ({
                       {formatSeconds(restRemaining)}
                     </Text>
                   </View>
+                ) : null}
+                {showWarmupControls &&
+                !isCardioGroup &&
+                set.id === lastWarmupSetId ? (
+                  <Pressable
+                    onPress={onAddWarmupSet}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      backgroundColor: colors.surfaceMuted,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Ionicons
+                      name='flame-outline'
+                      size={16}
+                      color={colors.secondary}
+                    />
+                    <Text
+                      style={{
+                        color: colors.secondary,
+                        fontSize: 12,
+                        fontWeight: '600',
+                      }}
+                    >
+                      Add Warm-up
+                    </Text>
+                  </Pressable>
                 ) : null}
               </View>
             );
@@ -5681,7 +5870,7 @@ const ExerciseCard = ({
                   fontWeight: "600",
                 }}
               >
-                Add Set
+                {showWarmupControls ? 'Add Working' : 'Add Set'}
               </Text>
             </Pressable>
           ) : null}

@@ -1056,6 +1056,21 @@ router.patch("/:id", async (req, res) => {
           req.params.id,
         ]);
       }
+
+      const shouldClearActiveStatus =
+        (endedReasonProvided && endedReason !== null) ||
+        (finishedAtProvided && finishedAt !== null);
+
+      if (shouldClearActiveStatus) {
+        await client.query(
+          `
+            UPDATE active_workout_statuses
+            SET is_active = false, updated_at = NOW()
+            WHERE session_id = $1 AND user_id = $2
+          `,
+          [req.params.id, userId]
+        );
+      }
     });
 
     const session = await fetchSessionById(req.params.id, userId);

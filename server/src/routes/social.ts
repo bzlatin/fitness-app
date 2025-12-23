@@ -2831,6 +2831,7 @@ router.get("/squad-feed", async (req, res) => {
         FROM active_workout_statuses s
         JOIN users u ON u.id = s.user_id
         WHERE s.is_active = true
+          AND s.started_at >= NOW() - INTERVAL '4 hours'
         ORDER BY s.updated_at DESC
         LIMIT 12
       `
