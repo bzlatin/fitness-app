@@ -899,7 +899,7 @@ const WorkoutSessionScreen = () => {
   const { user, updateProfile } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
   const isRirFeatureEnabled =
-    subscriptionAccess.hasProAccess && (user?.rirEnabled ?? true);
+    subscriptionAccess.hasProAccess && (user?.rirEnabled ?? false);
   const warmupSettings = useMemo(
     () => ensureGymPreferences(user?.gymPreferences).warmupSets,
     [user?.gymPreferences]
@@ -2030,6 +2030,8 @@ const WorkoutSessionScreen = () => {
           typeof set.targetWeight === 'number' ? set.targetWeight : undefined,
         ])
         .filter((value): value is number => Boolean(value && value > 0));
+      const minWorkingWeight =
+        weightCandidates.length > 0 ? Math.min(...weightCandidates) : undefined;
       const maxWorkingWeight =
         weightCandidates.length > 0 ? Math.max(...weightCandidates) : undefined;
       const suggestionWeight =
@@ -2049,7 +2051,11 @@ const WorkoutSessionScreen = () => {
         ? 45
         : 20;
       const resolvedWorkingWeight =
-        maxWorkingWeight ?? suggestionWeight ?? profileWeight ?? fallbackWeight;
+        minWorkingWeight ??
+        maxWorkingWeight ??
+        suggestionWeight ??
+        profileWeight ??
+        fallbackWeight;
 
       const workingReps =
         typeof workingBase.targetReps === 'number' && workingBase.targetReps > 0
@@ -2820,7 +2826,8 @@ const WorkoutSessionScreen = () => {
     (
       exerciseKey: string,
       loggedWorkingSets: WorkoutSet[],
-      { persistTemplate }: { persistTemplate?: boolean } = {}
+      { persistTemplate }: { persistTemplate?: boolean } = {},
+      equipment?: string
     ) => {
       if (loggedWorkingSets.length === 0) return;
       const baseSet = loggedWorkingSets[0];
@@ -2852,6 +2859,7 @@ const WorkoutSessionScreen = () => {
         goal,
         unit: 'lb',
         fallbackWeight,
+        equipment,
       });
       if (!suggestion) return;
 
@@ -3103,7 +3111,7 @@ const WorkoutSessionScreen = () => {
       if (loggedWorkingSets.length > 0) {
         updateNextWeightSuggestionForGroup(group.key, loggedWorkingSets, {
           persistTemplate: allWorkingLogged,
-        });
+        }, group.equipment);
       }
 
       // All sets in this exercise are logged - show difficulty feedback before advancing
@@ -3477,6 +3485,17 @@ const WorkoutSessionScreen = () => {
       warmupSets[warmupSets.length - 1]?.targetWeight ??
       baseSet.targetWeight ??
       baseSet.actualWeight;
+    const warmupWeightCap =
+      typeof resolvedWeight === 'number' && Number.isFinite(resolvedWeight)
+        ? resolvedWeight - 2.5
+        : undefined;
+    const normalizedFallbackWeight =
+      typeof fallbackWeight === 'number' &&
+      Number.isFinite(fallbackWeight) &&
+      typeof warmupWeightCap === 'number' &&
+      warmupWeightCap > 0
+        ? Math.min(fallbackWeight, warmupWeightCap)
+        : fallbackWeight;
 
     const newSet: WorkoutSet = {
       id: createWarmupSetId(),
@@ -3488,7 +3507,7 @@ const WorkoutSessionScreen = () => {
       setKind: 'warmup',
       setIndex: baseSet.setIndex,
       targetReps: nextSpec?.targetReps ?? fallbackReps,
-      targetWeight: nextSpec?.targetWeight ?? fallbackWeight,
+      targetWeight: nextSpec?.targetWeight ?? normalizedFallbackWeight,
     };
 
     const nextGroupSets = [...warmupSets, newSet, ...workingSets];
@@ -4353,7 +4372,7 @@ const WorkoutSessionScreen = () => {
                 (set) => set.rir !== undefined && set.rir !== null
               );
               const isRirEnabled = isRirFeatureEnabled
-                ? rirEnabledByExerciseKey[group.key] ?? hasRirValues ?? true
+                ? rirEnabledByExerciseKey[group.key] ?? hasRirValues ?? false
                 : false;
               const inSessionSuggestion =
                 inSessionSuggestionsByExerciseKey[group.key];

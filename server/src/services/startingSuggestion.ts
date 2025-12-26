@@ -1,5 +1,9 @@
 import { query } from "../db";
 import { fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
+import {
+  isDumbbellEquipment,
+  roundToStandardDumbbellWeight,
+} from "../utils/weightRounding";
 
 export type StartingSuggestion = {
   exerciseId: string;
@@ -79,10 +83,13 @@ export const getStartingSuggestion = async (
           : difficulty === "too_hard"
             ? roundToIncrement(Math.max(2.5, baseWeight - 2.5), 2.5)
             : baseWeight;
+      const suggestedWeight = isDumbbellEquipment(meta.equipment)
+        ? roundToStandardDumbbellWeight(adjustedWeight, "nearest")
+        : adjustedWeight;
 
       return {
         exerciseId,
-        suggestedWeight: adjustedWeight,
+        suggestedWeight,
         suggestedReps: reps ? Math.max(1, reps) : undefined,
         reason:
           difficulty === "too_easy"
@@ -136,9 +143,15 @@ export const getStartingSuggestion = async (
   const weightMedian = median(weights);
   const repsMedian = median(reps);
 
-  const suggestedWeight =
+  const suggestedWeightRaw =
     typeof weightMedian === "number" && Number.isFinite(weightMedian)
-      ? roundToIncrement(weightMedian * 0.9, 2.5)
+      ? weightMedian * 0.9
+      : undefined;
+  const suggestedWeight =
+    typeof suggestedWeightRaw === "number" && Number.isFinite(suggestedWeightRaw)
+      ? isDumbbellEquipment(meta.equipment)
+        ? roundToStandardDumbbellWeight(suggestedWeightRaw, "nearest")
+        : roundToIncrement(suggestedWeightRaw, 2.5)
       : undefined;
   const suggestedReps =
     typeof repsMedian === "number" && Number.isFinite(repsMedian)

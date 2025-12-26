@@ -1,4 +1,5 @@
-import { Pressable, Switch, Text, View } from "react-native";
+import { Alert, Pressable, Switch, Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { colors } from "../../theme/colors";
 import { fontFamilies, typography } from "../../theme/typography";
 import { TrainingSplit, TRAINING_SPLIT_LABELS } from "../../types/onboarding";
@@ -208,6 +209,22 @@ const TrainingStyleStep = ({
             >
               Track RIR
             </Text>
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  "What is RIR?",
+                  "RIR (reps in reserve) is how many reps you could still do at the end of a set. Example: RIR 2 means you likely had about two reps left."
+                );
+              }}
+              hitSlop={8}
+              style={{ padding: 2 }}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color={colors.textSecondary}
+              />
+            </Pressable>
             <View
               style={{
                 paddingHorizontal: 8,
@@ -250,7 +267,7 @@ const TrainingStyleStep = ({
           )}
         </View>
         <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
-          Log reps in reserve per set. Keep this on to see RIR inputs during workouts.
+          Log reps in reserve per set. RIR means how many reps you had left at the end of a set.
         </Text>
       </View>
 
