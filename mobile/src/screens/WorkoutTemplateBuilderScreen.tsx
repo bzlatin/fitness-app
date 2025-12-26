@@ -28,6 +28,7 @@ import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import CreateCustomExerciseModal from "../components/workouts/CreateCustomExerciseModal";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import PaywallComparisonModal from "../components/premium/PaywallComparisonModal";
+import ShareTemplateButton from "../components/workout/ShareTemplateButton";
 import {
   createTemplate,
   fetchTemplate,
@@ -175,6 +176,7 @@ const WorkoutTemplateBuilderScreen = () => {
     enabled: Boolean(route.params?.templateId && !existingTemplate),
     initialData: existingTemplate,
   });
+  const shareTemplate = detailQuery.data ?? existingTemplate;
 
   const [name, setName] = useState(existingTemplate?.name ?? "");
   const [description, setDescription] = useState(
@@ -629,9 +631,24 @@ const WorkoutTemplateBuilderScreen = () => {
   const headerComponent = (
     <View style={{ gap: 16, paddingBottom: 16, marginTop: 72 }}>
       <View style={{ gap: 4 }}>
-        <Text style={{ ...typography.heading1, color: colors.textPrimary }}>
-          {isEditing ? "Edit workout" : "Build a workout"}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Text
+            style={{
+              ...typography.heading1,
+              color: colors.textPrimary,
+              flex: 1,
+            }}
+          >
+            {isEditing ? "Edit workout" : "Build a workout"}
+          </Text>
+          {isEditing && shareTemplate ? (
+            <ShareTemplateButton
+              templateId={shareTemplate.id}
+              templateName={shareTemplate.name}
+              sharingDisabled={shareTemplate.sharingDisabled}
+            />
+          ) : null}
+        </View>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
           Name it, define the split, then arrange exercises with long-press
           drag.

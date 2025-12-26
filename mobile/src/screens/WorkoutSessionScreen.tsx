@@ -75,6 +75,7 @@ import {
   playTimerSound,
   scheduleRestTimerFinishSound,
 } from "../utils/timerSound";
+import { isCardioExerciseName } from "../utils/exercises";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { syncActiveSessionToWidget } from "../services/widgetSync";
 import { exportWorkoutToAppleHealth } from "../services/appleHealth";
@@ -698,33 +699,8 @@ const createWarmupSetId = () =>
   `warmup-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Helper to identify cardio exercises
-const isCardioExercise = (
-  exerciseId: string,
-  exerciseName?: string
-): boolean => {
-  const name = (exerciseName || exerciseId).toLowerCase();
-  const cardioKeywords = [
-    "treadmill",
-    "running",
-    "jogging",
-    "walking",
-    "bike",
-    "cycling",
-    "bicycle",
-    "biking",
-    "rowing",
-    "rower",
-    "elliptical",
-    "stair",
-    "stepper",
-    "swimming",
-    "swim",
-    "jumping rope",
-    "jump rope",
-    "air bike",
-  ];
-  return cardioKeywords.some((keyword) => name.includes(keyword));
-};
+const isCardioExercise = (exerciseId: string, exerciseName?: string): boolean =>
+  isCardioExerciseName(exerciseName || exerciseId);
 
 const resolveExerciseImageUri = (uri?: string) => {
   if (!uri) return undefined;
