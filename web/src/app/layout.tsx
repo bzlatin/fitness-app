@@ -114,6 +114,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
+        url: '/favicon.ico',
+        type: 'image/x-icon',
+      },
+      {
         url: '/favicon.png',
         sizes: '48x48',
         type: 'image/png',
@@ -124,7 +128,7 @@ export const metadata: Metadata = {
         type: 'image/png',
       },
     ],
-    shortcut: '/favicon.png',
+    shortcut: '/favicon.ico',
     apple: '/push-pull-logo.png',
   },
   robots: {
