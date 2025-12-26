@@ -14,7 +14,12 @@ import {
   ScrollView,
   RefreshControl,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +33,7 @@ import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
 import { RootNavigation } from "../navigation/RootNavigator";
+import { RootTabParamList } from "../navigation/types";
 import { WorkoutSession, WorkoutTemplate } from "../types/workouts";
 import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import UpNextCard from "../components/workout/UpNextCard";
@@ -64,6 +70,7 @@ const generateId = () =>
 
 const HomeScreen = () => {
   const navigation = useNavigation<RootNavigation>();
+  const route = useRoute<RouteProp<RootTabParamList, "Home">>();
   const { data: templates } = useWorkoutTemplates();
   const { user, refresh } = useCurrentUser();
   const subscriptionAccess = useSubscriptionAccess();
@@ -110,6 +117,7 @@ const HomeScreen = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
   );
+  const appliedSelectedTemplateIdRef = useRef<string | null>(null);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [dismissedSession, setDismissedSession] = useState<{
     id: string;
@@ -123,6 +131,14 @@ const HomeScreen = () => {
   const [pendingGymId, setPendingGymId] = useState<string | null>(null);
   const [dismissedRestToast, setDismissedRestToast] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const incomingTemplateId = route.params?.selectedTemplateId;
+    if (!incomingTemplateId) return;
+    if (appliedSelectedTemplateIdRef.current === incomingTemplateId) return;
+    appliedSelectedTemplateIdRef.current = incomingTemplateId;
+    setSelectedTemplateId(incomingTemplateId);
+  }, [route.params?.selectedTemplateId]);
 
   // Subscription status for trial/grace/expired handling
   const subscriptionStatusError = subscriptionAccess.isError;

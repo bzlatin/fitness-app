@@ -4384,6 +4384,12 @@ const WorkoutSessionScreen = () => {
                   group.exerciseId,
                   user?.onboardingData ?? null
                 );
+              const isBodyweight =
+                isBodyweightMovement(group.name, group.exerciseId) ||
+                Boolean(group.equipment?.toLowerCase().includes("bodyweight"));
+              const bodyweightLabel = isBodyweight
+                ? "Bodyweight"
+                : undefined;
               return (
                 <ScaleDecorator>
                   <ExerciseCard
@@ -4391,6 +4397,8 @@ const WorkoutSessionScreen = () => {
                     expanded={group.key === activeExerciseKey}
                     suggestedWeight={suggestedWeight}
                     inSessionSuggestion={inSessionSuggestion}
+                    isBodyweight={isBodyweight}
+                    bodyweightLabel={bodyweightLabel}
                     onToggle={() => {
                       setAutoFocusEnabled(false);
                       setActiveExerciseKey((prev) => {
@@ -4567,6 +4575,8 @@ type SetInputRowProps = {
   suggestedWeight?: number;
   inSessionSuggestion?: NextWeightSuggestion;
   isPerSideWeight?: boolean;
+  isBodyweight?: boolean;
+  bodyweightLabel?: string;
   onChange: (updated: WorkoutSet) => void;
   onLog: () => void;
   restSeconds?: number;
@@ -4586,6 +4596,8 @@ const SetInputRow = ({
   suggestedWeight,
   inSessionSuggestion,
   isPerSideWeight,
+  isBodyweight,
+  bodyweightLabel,
   onChange,
   onLog,
   restSeconds,
@@ -4661,6 +4673,7 @@ const SetInputRow = ({
   const shouldShowSuggestedWeight =
     !isWarmup &&
     !isCardio &&
+    !isBodyweight &&
     set.actualWeight === undefined &&
     set.targetWeight === undefined &&
     typeof suggestedWeight === "number" &&
@@ -4682,9 +4695,9 @@ const SetInputRow = ({
       ? `${set.targetWeight} lb${weightSuffix}`
       : undefined;
   const displayWeightLabel =
-    inSessionWeightLabel ??
-    targetWeightLabel ??
-    suggestedWeightLabel;
+    isBodyweight
+      ? bodyweightLabel ?? "Bodyweight"
+      : inSessionWeightLabel ?? targetWeightLabel ?? suggestedWeightLabel;
 
   const targetLine = isCardio
     ? [
@@ -4706,7 +4719,7 @@ const SetInputRow = ({
       ]
         .filter(Boolean)
         .join(" · ");
-  const targetPrefix = 'Target';
+  const targetPrefix = isBodyweight ? '' : 'Target';
 
   const inSessionWeight =
     typeof inSessionSuggestion?.weight === 'number' &&
@@ -4717,6 +4730,7 @@ const SetInputRow = ({
     !logged &&
     !isWarmup &&
     !isCardio &&
+    !isBodyweight &&
     inSessionWeight !== undefined &&
     inSessionWeight > 0;
 
@@ -4798,7 +4812,11 @@ const SetInputRow = ({
             ) : null}
           </View>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {targetLine ? `${targetPrefix} ${targetLine}` : 'Log this effort'}
+            {targetLine
+              ? targetPrefix
+                ? `${targetPrefix} ${targetLine}`
+                : targetLine
+              : 'Log this effort'}
           </Text>
         </View>
         <View style={{ flexDirection: "row", gap: 6 }}>
@@ -4974,40 +4992,61 @@ const SetInputRow = ({
         <>
           {/* Strength training inputs: Weight & Reps */}
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                {`Weight${isPerSideWeight ? ' (per arm)' : ''}`}
-              </Text>
-              <TextInput
-                style={{
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  borderRadius: 8,
-                  padding: 10,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-                keyboardType='decimal-pad'
-                placeholder='--'
-                placeholderTextColor={colors.textSecondary}
-                value={weightText}
-                onFocus={() => setIsEditingWeight(true)}
-                onBlur={() => {
-                  setIsEditingWeight(false);
-                  setWeightText(set.actualWeight?.toString() ?? "");
-                }}
-                onChangeText={(text) => {
-                  const next = text.replace(/[^0-9.]/g, "");
-                  const parts = next.split(".");
-                  const normalized =
-                    parts.length <= 2
-                      ? next
-                      : `${parts[0]}.${parts.slice(1).join("")}`;
-                  setWeightText(normalized);
-                  updateField("actualWeight", normalized);
-                }}
-              />
-            </View>
+            {isBodyweight ? (
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Bodyweight
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 8,
+                    padding: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
+                    {bodyweightLabel ?? "Bodyweight"}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {`Weight${isPerSideWeight ? ' (per arm)' : ''}`}
+                </Text>
+                <TextInput
+                  style={{
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                    borderRadius: 8,
+                    padding: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                  keyboardType='decimal-pad'
+                  placeholder='--'
+                  placeholderTextColor={colors.textSecondary}
+                  value={weightText}
+                  onFocus={() => setIsEditingWeight(true)}
+                  onBlur={() => {
+                    setIsEditingWeight(false);
+                    setWeightText(set.actualWeight?.toString() ?? "");
+                  }}
+                  onChangeText={(text) => {
+                    const next = text.replace(/[^0-9.]/g, "");
+                    const parts = next.split(".");
+                    const normalized =
+                      parts.length <= 2
+                        ? next
+                        : `${parts[0]}.${parts.slice(1).join("")}`;
+                    setWeightText(normalized);
+                    updateField("actualWeight", normalized);
+                  }}
+                />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                 Reps
@@ -5103,6 +5142,8 @@ type ExerciseCardProps = {
   expanded: boolean;
   suggestedWeight?: number;
   inSessionSuggestion?: NextWeightSuggestion;
+  isBodyweight: boolean;
+  bodyweightLabel?: string;
   onToggle: () => void;
   onChangeSet: (updated: WorkoutSet) => void;
   startingSuggestion?: StartingSuggestion;
@@ -5143,6 +5184,8 @@ const ExerciseCard = ({
   expanded,
   suggestedWeight,
   inSessionSuggestion,
+  isBodyweight,
+  bodyweightLabel,
   onToggle,
   onChangeSet,
   startingSuggestion,
@@ -5635,6 +5678,8 @@ const ExerciseCard = ({
                   suggestedWeight={suggestedWeight}
                   inSessionSuggestion={inSessionSuggestion}
                   isPerSideWeight={isPerSideWeight}
+                  isBodyweight={isBodyweight}
+                  bodyweightLabel={bodyweightLabel}
                   onChange={onChangeSet}
                   onLog={() => onLogSet(set.id, restSecondsForSet)}
                   restSeconds={restSecondsForSet}
