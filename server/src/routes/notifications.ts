@@ -18,6 +18,10 @@ router.post(
       tzOffsetMinutes?: number;
     };
 
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     if (!pushToken) {
       return res.status(400).json({ error: "Push token is required" });
     }
@@ -69,6 +73,10 @@ router.post(
   async (req: Request, res: Response) => {
     const userId = res.locals.userId;
     const { tzOffsetMinutes } = req.body as { tzOffsetMinutes?: number };
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     if (
       typeof tzOffsetMinutes !== "number" ||
