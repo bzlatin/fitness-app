@@ -15,18 +15,18 @@ initDb()
     app.listen(PORT, () => {
       log.info(`Push / Pull API running on http://localhost:${PORT}`);
 
-      // Schedule daily notification job at 9am
-      cron.schedule("0 9 * * *", async () => {
-        log.info("Running daily notification job at 9am...");
+      // Run notification job every 15 minutes (delivers at 3pm user-local)
+      cron.schedule("*/15 * * * *", async () => {
+        log.info("Running notification job (15-min cadence)...");
         try {
           await processNotifications();
-          log.info("Daily notification job completed successfully");
+          log.info("Notification job completed successfully");
         } catch (error) {
-          log.error("Daily notification job failed", { error });
+          log.error("Notification job failed", { error });
         }
       });
 
-      log.info("Daily notification job scheduled for 9:00 AM");
+      log.info("Notification job scheduled every 15 minutes (3pm user-local)");
     });
   })
   .catch((err) => {

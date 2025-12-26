@@ -14,13 +14,23 @@ export const isBodyweightMovement = (
   const name = normalizeExerciseText(exerciseName, exerciseId);
   const keywords = [
     "bodyweight",
+    "body weight",
+    "bw",
     "push-up",
+    "push up",
+    "pushup",
     "pull-up",
+    "pull up",
+    "pullup",
     "chin-up",
+    "chin up",
+    "chinup",
     "dip",
     "plank",
     "burpee",
     "sit-up",
+    "sit up",
+    "situp",
     "crunch",
     "mountain climber",
     "air squat",
@@ -135,6 +145,14 @@ const estimateBodyWeightKg = (profile?: User["onboardingData"] | null) => {
       ? 23
       : 22;
   return bmi * heightMeters * heightMeters;
+};
+
+export const estimateBodyWeightLb = (
+  profile?: User["onboardingData"] | null
+) => {
+  const bodyWeightKg = estimateBodyWeightKg(profile);
+  if (!bodyWeightKg) return undefined;
+  return bodyWeightKg * KG_TO_LB;
 };
 
 const roundToIncrement = (value: number, increment: number) => {

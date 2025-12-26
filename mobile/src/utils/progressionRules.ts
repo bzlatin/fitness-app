@@ -14,6 +14,8 @@ export type NextWeightSuggestion = {
   goal: FitnessGoal;
 };
 
+type DumbbellRoundDirection = 'nearest' | 'up' | 'down';
+
 const GOAL_PRIORITY: FitnessGoal[] = [
   'strength',
   'build_muscle',
@@ -29,6 +31,10 @@ const GOAL_REP_RANGES: Record<FitnessGoal, RepRange> = {
   lose_weight: { min: 8, max: 15 },
   general_fitness: { min: 8, max: 12 },
 };
+
+const STANDARD_DUMBBELL_WEIGHTS_LB = [
+  5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25,
+];
 
 const INCREASE_SMALL = 0.05;
 const DECREASE_SMALL = 0.05;
@@ -49,6 +55,48 @@ export const getRepRangeForGoal = (goal: FitnessGoal): RepRange =>
 const roundToIncrement = (value: number, unit: WeightUnit) => {
   const increment = unit === 'kg' ? 1 : 2.5;
   if (!Number.isFinite(value)) return value;
+  return Math.round(value / increment) * increment;
+};
+
+const isDumbbellEquipment = (equipment?: string) =>
+  typeof equipment === 'string' &&
+  equipment.toLowerCase().includes('dumbbell');
+
+const roundToStandardDumbbellWeight = (
+  value: number,
+  direction: DumbbellRoundDirection
+) => {
+  if (!Number.isFinite(value)) return value;
+  if (value <= STANDARD_DUMBBELL_WEIGHTS_LB[0]) {
+    return STANDARD_DUMBBELL_WEIGHTS_LB[0];
+  }
+
+  const maxBase =
+    STANDARD_DUMBBELL_WEIGHTS_LB[STANDARD_DUMBBELL_WEIGHTS_LB.length - 1];
+  if (value <= maxBase) {
+    if (direction === 'up') {
+      return (
+        STANDARD_DUMBBELL_WEIGHTS_LB.find((weight) => weight >= value) ?? maxBase
+      );
+    }
+    if (direction === 'down') {
+      const candidates = STANDARD_DUMBBELL_WEIGHTS_LB.filter(
+        (weight) => weight <= value
+      );
+      return candidates[candidates.length - 1] ?? STANDARD_DUMBBELL_WEIGHTS_LB[0];
+    }
+    return STANDARD_DUMBBELL_WEIGHTS_LB.reduce((closest, weight) =>
+      Math.abs(weight - value) < Math.abs(closest - value) ? weight : closest
+    );
+  }
+
+  const increment = 5;
+  if (direction === 'up') {
+    return Math.ceil(value / increment) * increment;
+  }
+  if (direction === 'down') {
+    return Math.floor(value / increment) * increment;
+  }
   return Math.round(value / increment) * increment;
 };
 
@@ -77,11 +125,13 @@ export const calculateNextWeightSuggestion = ({
   goal,
   unit = 'lb',
   fallbackWeight,
+  equipment,
 }: {
   workingSets: WorkoutSet[];
   goal: FitnessGoal;
   unit?: WeightUnit;
   fallbackWeight?: number;
+  equipment?: string;
 }): NextWeightSuggestion | null => {
   if (!workingSets.length) return null;
 
@@ -120,7 +170,16 @@ export const calculateNextWeightSuggestion = ({
     suggestedWeight = workingWeight * (1 - DECREASE_SMALL);
   }
 
-  const rounded = roundToIncrement(suggestedWeight, unit);
+  const direction: DumbbellRoundDirection =
+    suggestedWeight > workingWeight
+      ? 'up'
+      : suggestedWeight < workingWeight
+      ? 'down'
+      : 'nearest';
+  const rounded =
+    unit === 'lb' && isDumbbellEquipment(equipment)
+      ? roundToStandardDumbbellWeight(suggestedWeight, direction)
+      : roundToIncrement(suggestedWeight, unit);
   if (!Number.isFinite(rounded) || rounded <= 0) {
     return null;
   }

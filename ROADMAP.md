@@ -1123,7 +1123,7 @@ Reactions & Comments:
 - [x] Add comment section to workout shares
 - [x] Optimistic UI updates for instant feedback
 - [x] Comments modal with full comment list
-- [ ] Push notifications for reactions (future)
+- [x] Push notifications for comments (rate-limited, respects notification prefs)
 
 **Technical Details**:
 
@@ -1146,13 +1146,16 @@ Reactions & Comments:
 **Key Triggers**:
 
 - [x] Approaching weekly goal miss (24-48 hours left with remaining sessions above threshold)
+- [x] Streak risk nudge (last workout yesterday, streak >= 3 days)
 - [x] Inactivity nudge (no logged workout in 5-7 days, respects rest days)
 - [x] Squad highlights (teammate hits weekly goal or reacts to your workout, with frequency capping)
+- [x] Workout comments (immediate, rate-limited)
 - [x] Weekly goal met (positive reinforcement, single celebratory push)
+- [x] Weekly goal missed reset (gentle recap at start of week)
 
 **Implementation**:
 
-- [x] Add notification scheduler to server (cron/worker) that checks goal risk and inactivity once daily
+- [x] Add notification scheduler to server (cron/worker) running every 15 minutes, delivering at 3pm user-local
 - [x] Add user-level quiet hours + frequency cap (max 3 per week) in settings
 - [x] Add client-side in-app inbox for missed pushes
 - [x] Instrument with analytics to measure open → session starts
@@ -1176,9 +1179,12 @@ Reactions & Comments:
 - **Notification Triggers**:
 
   - Goal Risk: Sends 1-2 days before week end if user needs 1+ sessions to hit goal
+  - Streak Risk: Sends when yesterday was the last workout day (streak >= 3)
   - Inactivity: One nudge after 5-7 days of no workouts
   - Weekly Goal Met: Celebration notification when completing weekly goal
+  - Weekly Goal Missed: Gentle recap on Sunday if goal not met
   - Squad Reactions: Real-time or daily digest of squad member reactions
+  - Workout Comments: Immediate push with rate limiting
   - Squad Goal Met: When squad members complete their weekly goals
 
 - **User Preferences** (stored in JSONB):
@@ -1246,14 +1252,14 @@ CREATE TABLE notification_events (
 
 **Notification Scheduler**:
 
-The notification job (`processNotifications()`) should be run once daily (recommended: 9am local time) using a cron job or task scheduler:
+The notification job (`processNotifications()`) should run every 15 minutes; it delivers when a user's local time hits 3pm:
 
 ```typescript
 import { processNotifications } from "./jobs/notifications";
 
-// Example: Run daily at 9am using node-cron
+// Example: Run every 15 minutes using node-cron (3pm user-local delivery)
 import cron from "node-cron";
-cron.schedule("0 9 * * *", async () => {
+cron.schedule("*/15 * * * *", async () => {
   await processNotifications();
 });
 ```
@@ -2029,7 +2035,7 @@ These features are planned for implementation after the initial app launch and w
 - **v1.3**: Progressive overload automation (smart weight/rep suggestions, confidence scoring, user preferences)
 - **v1.4** (In progress): Stripe integration + Paywall (Stripe subscriptions, PaymentSheet upgrade flow, webhook + billing portal)
 - **v1.5**: Advanced analytics + Squad management enhancements (Phase 4 complete — new squad settings, reactions/comments, invite links, analytics dashboard)
-- **v1.6** (Current): Retention & Feedback (smart notifications, profile/settings redesign, weekly streaks shipped; widgets, feedback board, data export pending)
+- **v1.6** (Current): Retention & Feedback (smart notifications incl. streak-risk, goal-missed, comment alerts + user-local 3pm delivery; profile/settings redesign, weekly streaks shipped; widgets, feedback board, data export pending)
 - **v1.6.1**: Session Quality Recap (quality scoring vs baseline + RPE, recap timeline on Analytics, win-back card on Home)
 - **v1.6.2**: Apple Health sync (iOS permissions/toggles, daily import & dedupe, streak-safe calories + HR overlays, settings clear/reset)
 - **v1.6.3**: Workout template share links (native share sheet + clipboard, shared template preview, one-tap copy, creator analytics + signup attribution)

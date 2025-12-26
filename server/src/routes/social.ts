@@ -1982,6 +1982,62 @@ router.post("/comments", validateBody(commentBodySchema), async (req, res) => {
     const row = result.rows[0];
     const user = await fetchUserSummary(userId);
 
+    const notifyOwner = async () => {
+      try {
+        let ownerId: string | null = null;
+        if (targetType === "share") {
+          const shareResult = await query<{ user_id: string }>(
+            `SELECT user_id FROM workout_shares WHERE id = $1 LIMIT 1`,
+            [targetId]
+          );
+          ownerId = shareResult.rows[0]?.user_id ?? null;
+        } else if (targetType === "status") {
+          const statusResult = await query<{ user_id: string }>(
+            `SELECT user_id FROM active_workout_statuses WHERE session_id = $1 LIMIT 1`,
+            [targetId]
+          );
+          ownerId = statusResult.rows[0]?.user_id ?? null;
+        }
+
+        if (!ownerId || ownerId === userId) return;
+
+        const blockResult = await query(
+          `
+          SELECT 1
+          FROM user_blocks
+          WHERE (blocker_id = $1 AND blocked_id = $2)
+             OR (blocker_id = $2 AND blocked_id = $1)
+          LIMIT 1
+          `,
+          [ownerId, userId]
+        );
+        if ((blockResult.rowCount ?? 0) > 0) return;
+
+        const { sendWorkoutCommentNotification } = await import(
+          "../jobs/notifications"
+        );
+        sendWorkoutCommentNotification(
+          ownerId,
+          userId,
+          user.name ?? "Someone",
+          trimmedComment,
+          { targetType, targetId }
+        ).catch((err) =>
+          console.error(
+            "[Social] Failed to send comment notification:",
+            err
+          )
+        );
+      } catch (error) {
+        console.error(
+          "[Social] Failed to prepare comment notification:",
+          error
+        );
+      }
+    };
+
+    void notifyOwner();
+
     return res.status(201).json({
       id: row.id,
       user: {

@@ -1236,7 +1236,7 @@ const SettingsScreen = () => {
       : "Unlock progressive overload"
   } · RIR ${
     isPro
-      ? user?.rirEnabled ?? true
+      ? user?.rirEnabled ?? false
         ? "on"
         : "off"
       : "locked"
@@ -2248,6 +2248,22 @@ const SettingsScreen = () => {
                 >
                   Track RIR
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      "What is RIR?",
+                      "RIR (reps in reserve) is how many reps you could still do at the end of a set. Example: RIR 2 means you likely had about two reps left."
+                    );
+                  }}
+                  hitSlop={8}
+                  style={{ padding: 2 }}
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
                 {!isPro && (
                   <View
                     style={{
@@ -2277,13 +2293,13 @@ const SettingsScreen = () => {
                 }}
               >
                 {!isPro
-                  ? "Tap to unlock optional reps in reserve tracking"
-                  : "Show RIR inputs during workouts and summaries"}
+                  ? "Tap to unlock optional reps in reserve tracking. RIR means how many reps you had left at the end of a set."
+                  : "Show RIR inputs during workouts and summaries. RIR means how many reps you had left at the end of a set."}
               </Text>
             </View>
             {isPro ? (
               <Switch
-                value={user?.rirEnabled ?? true}
+                value={user?.rirEnabled ?? false}
                 disabled={isTogglingRir}
                 onValueChange={async (value) => {
                   setIsTogglingRir(true);
@@ -2299,7 +2315,7 @@ const SettingsScreen = () => {
                   }
                 }}
                 trackColor={{ true: colors.primary, false: colors.border }}
-                thumbColor={user?.rirEnabled ?? true ? "#fff" : "#f4f3f4"}
+                thumbColor={user?.rirEnabled ?? false ? "#fff" : "#f4f3f4"}
               />
             ) : (
               <View
@@ -2935,11 +2951,11 @@ const SettingsScreen = () => {
                       }}
                     >
                       {key === "goalReminders"
-                        ? "Remind me when at risk of missing weekly goal"
+                        ? "Remind me when my streak or weekly goal is at risk"
                         : key === "inactivityNudges"
                         ? "Gentle reminder if inactive for 5+ days"
                         : key === "squadActivity"
-                        ? "Reactions and squad members hitting goals"
+                        ? "Comments, reactions, and squad members hitting goals"
                         : "Celebrate when you complete your weekly goal"}
                     </Text>
                   </View>

@@ -1,5 +1,10 @@
 import { query } from "../db";
 import { Exercise } from "../types/workouts";
+import { fetchExerciseMetaByIds } from "../utils/exerciseCatalog";
+import {
+  isDumbbellEquipment,
+  roundToStandardDumbbellWeight,
+} from "../utils/weightRounding";
 
 export type ExerciseCategory = "compound" | "isolation" | "bodyweight";
 
@@ -182,6 +187,9 @@ const analyzeExerciseProgression = async (
     return null;
   }
 
+  const metaMap = await fetchExerciseMetaByIds([exerciseId], { userId });
+  const equipment = metaMap.get(exerciseId)?.equipment;
+
   const exerciseName = sessions[0]?.exercise_name || exerciseId;
   const category = categorizeExercise(exerciseId);
 
@@ -208,6 +216,30 @@ const analyzeExerciseProgression = async (
     latestRatedSets > 0;
   const feltTooEasy = hasDifficultySignal && latestDifficultyScore >= 0.5;
   const feltTooHard = hasDifficultySignal && latestDifficultyScore <= -0.5;
+
+  const applyDumbbellRounding = (
+    suggestion: ProgressionSuggestion | null
+  ): ProgressionSuggestion | null => {
+    if (!suggestion || !isDumbbellEquipment(equipment)) {
+      return suggestion;
+    }
+    const direction =
+      suggestion.suggestedWeight > suggestion.currentWeight
+        ? "up"
+        : suggestion.suggestedWeight < suggestion.currentWeight
+          ? "down"
+          : "nearest";
+    const rounded = roundToStandardDumbbellWeight(
+      suggestion.suggestedWeight,
+      direction
+    );
+    const adjusted = Math.max(0, rounded);
+    return {
+      ...suggestion,
+      suggestedWeight: adjusted,
+      increment: adjusted - suggestion.currentWeight,
+    };
+  };
 
   // Check progression criteria
   const last2Sessions = sessionData.slice(0, 2);
@@ -257,7 +289,7 @@ const analyzeExerciseProgression = async (
       confidence: "medium",
       lastSessionsData: sessionData,
     };
-    return suggestion;
+    return applyDumbbellRounding(suggestion);
   }
 
   if (feltTooHard) {
@@ -301,7 +333,7 @@ const analyzeExerciseProgression = async (
     };
   }
 
-  return suggestion;
+  return applyDumbbellRounding(suggestion);
 };
 
 /**

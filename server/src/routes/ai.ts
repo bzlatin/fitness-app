@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAIProvider, MuscleFatigueData, WorkoutGenerationParams } from "../services/ai";
 import { getFatigueScores, getRecentWorkouts, getTrainingRecommendations } from "../services/fatigue";
 import { determineNextInCycle } from "../services/ai/workoutPrompts";
-import { recommendSmartNextWorkout } from "../services/smartNextWorkout";
+import { recommendSmartNextWorkout, normalizeSplitKey } from "../services/smartNextWorkout";
 import { checkAiWorkoutGenerationLimit, requireProPlan } from "../middleware/planLimits";
 import { query } from "../db";
 import { generateId } from "../utils/id";
@@ -10,6 +10,7 @@ import { fetchExerciseCatalog, ExerciseMeta } from "../utils/exerciseCatalog";
 import { loadExercisesJson } from "../utils/exerciseData";
 import { createLogger } from "../utils/logger";
 import { normalizeGymPreferences } from "../utils/gymPreferences";
+import { normalizeMuscleGroup } from "../services/muscleReadiness";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
 import { aiGenerateLimiter, aiRecommendLimiter, aiSwapLimiter } from "../middleware/rateLimit";
@@ -108,6 +109,92 @@ const normalizeExercise = (item: LocalExercise): ExerciseMeta => {
     equipment: equipment.toLowerCase(),
     gifUrl: imagePath ? `/api/exercises/assets/${imagePath}` : undefined,
   };
+};
+
+const ALLOWED_SPLIT_TYPES = new Set([
+  "push",
+  "pull",
+  "legs",
+  "upper",
+  "lower",
+  "full_body",
+  "chest_back",
+  "arms_shoulders",
+  "custom",
+]);
+
+const inferSplitFromMuscles = (muscles: Set<string>) => {
+  if (muscles.has("full_body")) return "full_body";
+
+  const hasChest = muscles.has("chest");
+  const hasBack = muscles.has("back");
+  const hasShoulders = muscles.has("shoulders");
+  const hasBiceps = muscles.has("biceps");
+  const hasTriceps = muscles.has("triceps");
+  const hasLegs = muscles.has("legs") || muscles.has("glutes");
+  const hasUpper =
+    hasChest || hasBack || hasShoulders || hasBiceps || hasTriceps;
+
+  if (hasChest && hasBack) return "chest_back";
+  if (hasShoulders && (hasBiceps || hasTriceps)) return "arms_shoulders";
+  if (hasUpper && hasLegs) return "full_body";
+  if (hasUpper && !hasLegs) {
+    if (hasChest && hasShoulders && hasTriceps && !hasBack) return "push";
+    if (hasBack && hasBiceps && !hasChest) return "pull";
+    return "upper";
+  }
+  if (hasLegs && !hasUpper) return "legs";
+
+  return undefined;
+};
+
+const resolveGeneratedSplitType = (params: {
+  generatedSplit?: string | null;
+  requestedSplit?: string | null;
+  specificRequest?: string | null;
+  exercises: { primaryMuscleGroup?: string | null }[];
+}) => {
+  const normalizedGenerated = normalizeSplitKey(params.generatedSplit);
+  if (
+    normalizedGenerated &&
+    ALLOWED_SPLIT_TYPES.has(normalizedGenerated) &&
+    normalizedGenerated !== "custom"
+  ) {
+    return normalizedGenerated;
+  }
+
+  const normalizedRequested = normalizeSplitKey(params.requestedSplit);
+  if (
+    normalizedRequested &&
+    ALLOWED_SPLIT_TYPES.has(normalizedRequested) &&
+    normalizedRequested !== "custom"
+  ) {
+    return normalizedRequested;
+  }
+
+  const normalizedSpecific = normalizeSplitKey(params.specificRequest);
+  if (
+    normalizedSpecific &&
+    ALLOWED_SPLIT_TYPES.has(normalizedSpecific) &&
+    normalizedSpecific !== "custom"
+  ) {
+    return normalizedSpecific;
+  }
+
+  const muscleSet = new Set(
+    params.exercises
+      .map((ex) => normalizeMuscleGroup(ex.primaryMuscleGroup))
+      .filter((muscle) =>
+        Boolean(muscle && muscle !== "other" && muscle !== "custom" && muscle !== "cardio")
+      )
+  );
+  const inferred = inferSplitFromMuscles(muscleSet);
+  if (inferred) return inferred;
+
+  if (normalizedGenerated && ALLOWED_SPLIT_TYPES.has(normalizedGenerated)) {
+    return normalizedGenerated;
+  }
+  return "custom";
 };
 
 let exerciseCatalogCache: ExerciseMeta[] | null = null;
@@ -556,6 +643,13 @@ router.post(
         };
       }),
     };
+
+    enrichedWorkout.splitType = resolveGeneratedSplitType({
+      generatedSplit: enrichedWorkout.splitType,
+      requestedSplit: finalRequestedSplit ?? null,
+      specificRequest: specificRequest ?? null,
+      exercises: enrichedWorkout.exercises,
+    });
 
     // Track AI usage
     await query(

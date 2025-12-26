@@ -1,6 +1,10 @@
-import { query } from "../db";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from "expo-server-sdk";
+import { query } from "../db";
 import { createIdGenerator } from "../utils/id";
+import {
+  clampTzOffsetMinutes,
+  computeNextNotificationAt,
+} from "../utils/notificationSchedule";
 
 const nanoid = createIdGenerator("0123456789abcdefghijklmnopqrstuvwxyz", 12);
 
@@ -22,16 +26,67 @@ interface User {
   email: string;
   weeklyGoal: number;
   pushToken: string | null;
+  timezoneOffsetMinutes: number | null;
+  nextNotificationAt: string | null;
   notificationPreferences: NotificationPreferences;
 }
 
 /**
- * Check if current time is within quiet hours (local to server timezone)
+ * Local-time helpers (timezone offset is minutes behind UTC, like JS getTimezoneOffset).
  */
-const isQuietHours = (preferences: NotificationPreferences): boolean => {
-  const now = new Date();
-  const currentHour = now.getHours();
-  const { quietHoursStart, quietHoursEnd } = preferences;
+const getUserTzOffsetMinutes = (user: User): number =>
+  clampTzOffsetMinutes(user.timezoneOffsetMinutes);
+
+const getUserLocalDate = (date: Date, tzOffsetMinutes: number): Date =>
+  new Date(date.getTime() - tzOffsetMinutes * 60 * 1000);
+
+const getUtcDateFromUserLocal = (
+  localDate: Date,
+  tzOffsetMinutes: number
+): Date => new Date(localDate.getTime() + tzOffsetMinutes * 60 * 1000);
+
+const formatLocalDateKey = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getUserLocalWeekRange = (user: User) => {
+  const tzOffsetMinutes = getUserTzOffsetMinutes(user);
+  const localNow = getUserLocalDate(new Date(), tzOffsetMinutes);
+  const localWeekStart = new Date(localNow.getTime());
+  localWeekStart.setUTCHours(0, 0, 0, 0);
+  localWeekStart.setUTCDate(
+    localWeekStart.getUTCDate() - localWeekStart.getUTCDay()
+  );
+  const localWeekEnd = new Date(localWeekStart.getTime());
+  localWeekEnd.setUTCDate(localWeekEnd.getUTCDate() + 7);
+  const weekStartUtc = getUtcDateFromUserLocal(
+    localWeekStart,
+    tzOffsetMinutes
+  );
+  const weekEndUtc = getUtcDateFromUserLocal(localWeekEnd, tzOffsetMinutes);
+
+  return {
+    tzOffsetMinutes,
+    localNow,
+    localWeekStart,
+    weekStartUtc,
+    weekEndUtc,
+  };
+};
+
+/**
+ * Check if current time is within quiet hours (user local time)
+ */
+const isQuietHours = (user: User): boolean => {
+  const localNow = getUserLocalDate(
+    new Date(),
+    getUserTzOffsetMinutes(user)
+  );
+  const currentHour = localNow.getUTCHours();
+  const { quietHoursStart, quietHoursEnd } = user.notificationPreferences;
 
   // Handle overnight quiet hours (e.g., 22:00 to 8:00)
   if (quietHoursStart > quietHoursEnd) {
@@ -66,6 +121,70 @@ const hasReachedWeeklyCap = async (
   return count >= maxNotifications;
 };
 
+const hasSentNotificationSince = async (
+  userId: string,
+  notificationType: string,
+  since: Date
+): Promise<boolean> => {
+  const result = await query<{ count: string }>(
+    `
+    SELECT COUNT(*) as count
+    FROM notification_events
+    WHERE user_id = $1
+      AND notification_type = $2
+      AND sent_at >= $3
+    `,
+    [userId, notificationType, since.toISOString()]
+  );
+
+  return parseInt(result.rows[0]?.count || "0", 10) > 0;
+};
+
+const hasRecentCommentNotification = async (
+  userId: string,
+  targetType: "share" | "status",
+  targetId: string
+): Promise<boolean> => {
+  const result = await query<{ count: string }>(
+    `
+    SELECT COUNT(*) as count
+    FROM notification_events
+    WHERE user_id = $1
+      AND notification_type = 'workout_comment'
+      AND sent_at >= NOW() - INTERVAL '24 hours'
+      AND data->>'targetType' = $2
+      AND data->>'targetId' = $3
+    `,
+    [userId, targetType, targetId]
+  );
+
+  return parseInt(result.rows[0]?.count || "0", 10) > 0;
+};
+
+const formatCommentPreview = (comment: string, maxLength = 90): string => {
+  const normalized = comment.replace(/\s+/g, " ").trim();
+  if (!normalized) return "Tap to view the comment.";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+};
+
+const scheduleNextNotification = async (user: User): Promise<void> => {
+  const tzOffsetMinutes = getUserTzOffsetMinutes(user);
+  const nextAt = computeNextNotificationAt({
+    userId: user.id,
+    tzOffsetMinutes,
+  });
+
+  await query(
+    `
+    UPDATE users
+    SET next_notification_at = $1, updated_at = NOW()
+    WHERE id = $2
+    `,
+    [nextAt.toISOString(), user.id]
+  );
+};
+
 /**
  * Send a push notification to a user and log to database
  */
@@ -82,7 +201,7 @@ const sendNotification = async (
   const notificationId = nanoid();
 
   // Check quiet hours
-  if (isQuietHours(user.notificationPreferences)) {
+  if (isQuietHours(user)) {
     console.log(
       `[Notifications] Skipped ${notification.type} for ${user.id} - quiet hours`
     );
@@ -170,26 +289,33 @@ const sendNotification = async (
   );
 };
 
-/**
- * Calculate how many workouts a user has completed this week
- */
-const getWorkoutsThisWeek = async (userId: string): Promise<number> => {
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
-  weekStart.setHours(0, 0, 0, 0);
-
+const getWorkoutsInRange = async (
+  userId: string,
+  startUtc: Date,
+  endUtc: Date
+): Promise<number> => {
   const result = await query<{ count: string }>(
     `
     SELECT COUNT(*) as count
     FROM workout_sessions
     WHERE user_id = $1
-      AND completed_at >= $2
-      AND completed_at IS NOT NULL
+      AND finished_at >= $2
+      AND finished_at < $3
+      AND finished_at IS NOT NULL
+      AND ended_reason IS DISTINCT FROM 'auto_inactivity'
     `,
-    [userId, weekStart.toISOString()]
+    [userId, startUtc.toISOString(), endUtc.toISOString()]
   );
 
   return parseInt(result.rows[0]?.count || "0", 10);
+};
+
+/**
+ * Calculate how many workouts a user has completed this week (user local week)
+ */
+const getWorkoutsThisWeek = async (user: User): Promise<number> => {
+  const { weekStartUtc, weekEndUtc } = getUserLocalWeekRange(user);
+  return getWorkoutsInRange(user.id, weekStartUtc, weekEndUtc);
 };
 
 /**
@@ -198,20 +324,141 @@ const getWorkoutsThisWeek = async (userId: string): Promise<number> => {
 const getLastWorkoutDate = async (
   userId: string
 ): Promise<Date | null> => {
-  const result = await query<{ completed_at: string }>(
+  const result = await query<{ finished_at: string }>(
     `
-    SELECT completed_at
+    SELECT finished_at
     FROM workout_sessions
     WHERE user_id = $1
-      AND completed_at IS NOT NULL
-    ORDER BY completed_at DESC
+      AND finished_at IS NOT NULL
+      AND ended_reason IS DISTINCT FROM 'auto_inactivity'
+    ORDER BY finished_at DESC
     LIMIT 1
     `,
     [userId]
   );
 
   if (!result.rows.length) return null;
-  return new Date(result.rows[0].completed_at);
+  return new Date(result.rows[0].finished_at);
+};
+
+const getCurrentStreakInfo = async (
+  user: User
+): Promise<{ currentStreak: number; lastWorkoutDate: string | null }> => {
+  const tzOffsetMinutes = getUserTzOffsetMinutes(user);
+  const result = await query<{
+    streak_days: string;
+    last_workout_date: string | null;
+  }>(
+    `
+    WITH daily_workouts AS (
+      SELECT DISTINCT DATE(finished_at - make_interval(mins => $2)) as workout_date
+      FROM workout_sessions
+      WHERE user_id = $1
+        AND finished_at IS NOT NULL
+        AND ended_reason IS DISTINCT FROM 'auto_inactivity'
+      ORDER BY workout_date DESC
+    ),
+    streaks AS (
+      SELECT
+        workout_date,
+        workout_date - ROW_NUMBER() OVER (ORDER BY workout_date DESC)::int as streak_group
+      FROM daily_workouts
+    )
+    SELECT COUNT(*) as streak_days, MAX(workout_date) as last_workout_date
+    FROM streaks
+    WHERE streak_group = (SELECT streak_group FROM streaks LIMIT 1)
+    `,
+    [user.id, tzOffsetMinutes]
+  );
+
+  if (!result.rows.length) {
+    return { currentStreak: 0, lastWorkoutDate: null };
+  }
+
+  const row = result.rows[0];
+  return {
+    currentStreak: parseInt(row.streak_days || "0", 10),
+    lastWorkoutDate: row.last_workout_date ?? null,
+  };
+};
+
+/**
+ * Check if user is about to lose their streak (yesterday was last workout)
+ */
+const checkStreakRisk = async (user: User): Promise<void> => {
+  if (!user.notificationPreferences.goalReminders) return;
+
+  const { tzOffsetMinutes } = getUserLocalWeekRange(user);
+  const { currentStreak, lastWorkoutDate } = await getCurrentStreakInfo(user);
+  if (!lastWorkoutDate || currentStreak < 3) return;
+
+  const localNow = getUserLocalDate(new Date(), tzOffsetMinutes);
+  const localToday = new Date(localNow.getTime());
+  localToday.setUTCHours(0, 0, 0, 0);
+  const localYesterday = new Date(localToday.getTime());
+  localYesterday.setUTCDate(localYesterday.getUTCDate() - 1);
+
+  if (lastWorkoutDate !== formatLocalDateKey(localYesterday)) return;
+
+  const alreadySent = await hasSentNotificationSince(
+    user.id,
+    "streak_risk",
+    getUtcDateFromUserLocal(localToday, tzOffsetMinutes)
+  );
+  if (alreadySent) return;
+
+  await sendNotification(user, {
+    type: "streak_risk",
+    triggerReason: `streak ${currentStreak} days, last workout yesterday`,
+    title: "Keep your streak alive 🔥",
+    body: `You're on a ${currentStreak}-day streak. Log a session today to keep it going.`,
+    data: { currentStreak },
+  });
+};
+
+/**
+ * Check if user missed their weekly goal (previous week summary)
+ */
+const checkWeeklyGoalMissed = async (user: User): Promise<void> => {
+  if (!user.notificationPreferences.goalReminders) return;
+
+  const { localNow, localWeekStart, weekStartUtc, tzOffsetMinutes } =
+    getUserLocalWeekRange(user);
+
+  // Only send on the first day of the week (Sunday) at the daily window
+  if (localNow.getUTCDay() !== 0) return;
+
+  const previousWeekStartLocal = new Date(localWeekStart.getTime());
+  previousWeekStartLocal.setUTCDate(previousWeekStartLocal.getUTCDate() - 7);
+
+  const previousWeekStartUtc = getUtcDateFromUserLocal(
+    previousWeekStartLocal,
+    tzOffsetMinutes
+  );
+
+  const workoutsLastWeek = await getWorkoutsInRange(
+    user.id,
+    previousWeekStartUtc,
+    weekStartUtc
+  );
+
+  if (workoutsLastWeek >= user.weeklyGoal) return;
+  if (workoutsLastWeek === 0) return;
+
+  const alreadySent = await hasSentNotificationSince(
+    user.id,
+    "goal_missed",
+    weekStartUtc
+  );
+  if (alreadySent) return;
+
+  await sendNotification(user, {
+    type: "goal_missed",
+    triggerReason: `completed ${workoutsLastWeek}/${user.weeklyGoal} last week`,
+    title: "Fresh week, fresh start 💫",
+    body: `Last week you logged ${workoutsLastWeek}/${user.weeklyGoal} sessions. Want to plan one for today?`,
+    data: { weeklyGoal: user.weeklyGoal, completed: workoutsLastWeek },
+  });
 };
 
 /**
@@ -220,17 +467,24 @@ const getLastWorkoutDate = async (
 const checkGoalRisk = async (user: User): Promise<void> => {
   if (!user.notificationPreferences.goalReminders) return;
 
-  const workoutsThisWeek = await getWorkoutsThisWeek(user.id);
+  const { localNow, weekStartUtc } = getUserLocalWeekRange(user);
+  const workoutsThisWeek = await getWorkoutsThisWeek(user);
   const remaining = user.weeklyGoal - workoutsThisWeek;
 
   if (remaining <= 0) return; // Already met goal
 
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const dayOfWeek = localNow.getUTCDay(); // 0 = Sunday, 6 = Saturday
   const daysLeftInWeek = 6 - dayOfWeek; // Days until Saturday
 
   // Only send if 1-2 days left and still need 1+ workouts
   if (daysLeftInWeek >= 1 && daysLeftInWeek <= 2 && remaining >= 1) {
+    const alreadySent = await hasSentNotificationSince(
+      user.id,
+      "goal_risk",
+      weekStartUtc
+    );
+    if (alreadySent) return;
+
     const sessionWord = remaining === 1 ? "session" : "sessions";
     const dayWord = daysLeftInWeek === 1 ? "day" : "days";
 
@@ -290,16 +544,13 @@ const checkInactivity = async (user: User): Promise<void> => {
 const checkWeeklyGoalMet = async (user: User): Promise<void> => {
   if (!user.notificationPreferences.weeklyGoalMet) return;
 
-  const workoutsThisWeek = await getWorkoutsThisWeek(user.id);
+  const { weekStartUtc } = getUserLocalWeekRange(user);
+  const workoutsThisWeek = await getWorkoutsThisWeek(user);
 
   // Only send if they just hit the goal (exactly equal)
   if (workoutsThisWeek !== user.weeklyGoal) return;
 
   // Check if we already sent this notification this week
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-
   const alreadySent = await query<{ count: string }>(
     `
     SELECT COUNT(*) as count
@@ -308,7 +559,7 @@ const checkWeeklyGoalMet = async (user: User): Promise<void> => {
       AND notification_type = 'goal_met'
       AND sent_at >= $2
     `,
-    [user.id, weekStart.toISOString()]
+    [user.id, weekStartUtc.toISOString()]
   );
 
   if (parseInt(alreadySent.rows[0]?.count || "0", 10) > 0) return;
@@ -351,6 +602,7 @@ const checkSquadActivity = async (user: User): Promise<void> => {
     JOIN users u ON u.id = wr.user_id
     WHERE ws.user_id = $1
       AND wr.user_id != $1
+      AND wr.reaction_type = 'emoji'
       AND wr.created_at >= NOW() - INTERVAL '24 hours'
       AND wr.deleted_at IS NULL
       AND NOT EXISTS (
@@ -382,10 +634,13 @@ const checkSquadActivity = async (user: User): Promise<void> => {
 
 /**
  * Main job: Process all users and send appropriate notifications
- * Should be run once daily (recommended: 9am local time)
+ * Run every 15 minutes; delivers near 3pm user-local based on next_notification_at.
  */
-export const processNotifications = async (): Promise<void> => {
-  console.log("[Notifications] Starting daily notification job...");
+export const processNotifications = async (
+  options: { force?: boolean } = {}
+): Promise<void> => {
+  const { force = false } = options;
+  console.log("[Notifications] Starting notification job...");
 
   try {
     // Fetch all users with notification preferences enabled
@@ -397,10 +652,14 @@ export const processNotifications = async (): Promise<void> => {
         email,
         weekly_goal as "weeklyGoal",
         push_token as "pushToken",
+        timezone_offset_minutes as "timezoneOffsetMinutes",
+        next_notification_at as "nextNotificationAt",
         notification_preferences as "notificationPreferences"
       FROM users
       WHERE push_token IS NOT NULL
-      `
+        AND ($1::boolean OR next_notification_at IS NULL OR next_notification_at <= NOW())
+      `,
+      [force]
     );
 
     console.log(
@@ -409,11 +668,20 @@ export const processNotifications = async (): Promise<void> => {
 
     for (const user of usersResult.rows) {
       try {
+        if (!force && !user.nextNotificationAt) {
+          await scheduleNextNotification(user);
+          continue;
+        }
+
         // Run all notification checks
-        await checkGoalRisk(user);
-        await checkInactivity(user);
         await checkWeeklyGoalMet(user);
+        await checkStreakRisk(user);
+        await checkGoalRisk(user);
+        await checkWeeklyGoalMissed(user);
+        await checkInactivity(user);
         await checkSquadActivity(user);
+
+        await scheduleNextNotification(user);
       } catch (error) {
         console.error(
           `[Notifications] Error processing user ${user.id}:`,
@@ -422,7 +690,7 @@ export const processNotifications = async (): Promise<void> => {
       }
     }
 
-    console.log("[Notifications] Daily notification job complete!");
+    console.log("[Notifications] Notification job complete!");
   } catch (error) {
     console.error("[Notifications] Job failed:", error);
     throw error;
@@ -449,6 +717,7 @@ export const sendSquadActivityNotification = async (
       email,
       weekly_goal as "weeklyGoal",
       push_token as "pushToken",
+      timezone_offset_minutes as "timezoneOffsetMinutes",
       notification_preferences as "notificationPreferences"
     FROM users
     WHERE id = $1
@@ -499,6 +768,7 @@ export const sendFriendRequestNotification = async (
       email,
       weekly_goal as "weeklyGoal",
       push_token as "pushToken",
+      timezone_offset_minutes as "timezoneOffsetMinutes",
       notification_preferences as "notificationPreferences"
     FROM users
     WHERE id = $1
@@ -542,6 +812,7 @@ export const sendFriendAcceptanceNotification = async (
       email,
       weekly_goal as "weeklyGoal",
       push_token as "pushToken",
+      timezone_offset_minutes as "timezoneOffsetMinutes",
       notification_preferences as "notificationPreferences"
     FROM users
     WHERE id = $1
@@ -564,6 +835,63 @@ export const sendFriendAcceptanceNotification = async (
       acceptorId: acceptorUserId,
       acceptorName,
       acceptorHandle,
+    },
+  });
+};
+
+/**
+ * Send notification when someone comments on your workout
+ */
+export const sendWorkoutCommentNotification = async (
+  targetUserId: string,
+  commenterUserId: string,
+  commenterName: string,
+  comment: string,
+  target: {
+    targetType: "share" | "status";
+    targetId: string;
+  }
+): Promise<void> => {
+  if (targetUserId === commenterUserId) return;
+
+  const userResult = await query<User>(
+    `
+    SELECT
+      id,
+      name,
+      email,
+      weekly_goal as "weeklyGoal",
+      push_token as "pushToken",
+      timezone_offset_minutes as "timezoneOffsetMinutes",
+      notification_preferences as "notificationPreferences"
+    FROM users
+    WHERE id = $1
+    `,
+    [targetUserId]
+  );
+
+  if (!userResult.rows.length) return;
+  const user = userResult.rows[0];
+
+  if (!user.notificationPreferences.squadActivity) return;
+
+  const alreadySent = await hasRecentCommentNotification(
+    user.id,
+    target.targetType,
+    target.targetId
+  );
+  if (alreadySent) return;
+
+  await sendNotification(user, {
+    type: "workout_comment",
+    triggerReason: `comment_${target.targetType}`,
+    title: `${commenterName} commented on your workout 💬`,
+    body: formatCommentPreview(comment),
+    data: {
+      commenterId: commenterUserId,
+      commenterName,
+      targetType: target.targetType,
+      targetId: target.targetId,
     },
   });
 };

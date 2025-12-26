@@ -105,7 +105,7 @@ const OnboardingScreen = () => {
 
   // Step 8: Training Style
   const [preferredSplit, setPreferredSplit] = useState<TrainingSplit | undefined>(user?.onboardingData?.preferredSplit);
-  const [rirEnabled, setRirEnabled] = useState(user?.rirEnabled ?? true);
+  const [rirEnabled, setRirEnabled] = useState(user?.rirEnabled ?? false);
 
   // Step 9: Notifications
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);

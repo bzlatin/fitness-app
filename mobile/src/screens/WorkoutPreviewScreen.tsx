@@ -54,8 +54,10 @@ const WorkoutPreviewScreen = () => {
         {
           text: "OK",
           onPress: () => {
-            // Navigate back to home
-            navigation.goBack();
+            navigation.navigate("RootTabs", {
+              screen: "Home",
+              params: { selectedTemplateId: template.id },
+            });
           },
         },
       ]);
