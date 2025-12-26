@@ -68,7 +68,7 @@ const NotificationsStep = ({
     {
       icon: "🎯",
       title: "Goal Reminders",
-      description: "Get a nudge when you're at risk of missing your weekly goal",
+      description: "Nudges when your streak or weekly goal is at risk",
     },
     {
       icon: "💪",
@@ -83,7 +83,7 @@ const NotificationsStep = ({
     {
       icon: "👥",
       title: "Squad Activity",
-      description: "Know when squad members react to your workouts",
+      description: "Know when squad members comment or react to your workouts",
     },
   ];
 

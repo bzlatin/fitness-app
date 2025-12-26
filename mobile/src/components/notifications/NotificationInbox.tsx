@@ -35,6 +35,10 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     switch (notification.notification_type) {
       case "goal_risk":
         return "🎯";
+      case "streak_risk":
+        return "🔥";
+      case "goal_missed":
+        return "💫";
       case "inactivity":
         return "💪";
       case "goal_met":
@@ -43,6 +47,12 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         return "🔥";
       case "squad_goal_met":
         return "🙌";
+      case "workout_comment":
+        return "💬";
+      case "friend_request":
+        return "👋";
+      case "friend_acceptance":
+        return "✅";
       default:
         return "📢";
     }
@@ -241,7 +251,7 @@ export const NotificationInbox: React.FC = () => {
               No notifications yet
             </Text>
             <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 8, textAlign: "center", opacity: 0.7, lineHeight: 20 }}>
-              When you receive goal reminders, squad activity, or achievement notifications, they'll appear here
+              When you receive goal reminders, streak nudges, or squad comments, they'll appear here
             </Text>
           </View>
         }

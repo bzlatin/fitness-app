@@ -11,7 +11,10 @@ import {
 import * as AuthSession from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
 import { setAuthErrorHandler, setAuthTokenProvider } from "../api/client";
-import { registerForPushNotificationsAsync } from "../services/notifications";
+import {
+  registerForPushNotificationsAsync,
+  updateNotificationTimezoneOffset,
+} from "../services/notifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -107,6 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasRegisteredPushToken = useRef(false);
+  const hasSyncedTimezone = useRef(false);
 
   const discovery = AuthSession.useAutoDiscovery(`https://${AUTH0_DOMAIN}`);
 
@@ -233,11 +237,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!isSessionActive) {
       hasRegisteredPushToken.current = false;
+      hasSyncedTimezone.current = false;
       return;
     }
 
     if (hasRegisteredPushToken.current) {
       return;
+    }
+
+    if (!hasSyncedTimezone.current) {
+      hasSyncedTimezone.current = true;
+      void updateNotificationTimezoneOffset();
     }
 
     hasRegisteredPushToken.current = true;

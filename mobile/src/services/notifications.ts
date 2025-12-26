@@ -124,6 +124,7 @@ export const registerForPushNotificationsAsync = async (
     // Register token with backend
     await apiClient.post("/notifications/register-token", {
       pushToken: token,
+      tzOffsetMinutes: new Date().getTimezoneOffset(),
     });
 
     console.log("[Notifications] Token registered with server");
@@ -143,6 +144,19 @@ export const registerForPushNotificationsAsync = async (
   }
 
   return token;
+};
+
+/**
+ * Update user's timezone offset for notification scheduling
+ */
+export const updateNotificationTimezoneOffset = async (): Promise<void> => {
+  try {
+    await apiClient.post("/notifications/timezone", {
+      tzOffsetMinutes: new Date().getTimezoneOffset(),
+    });
+  } catch (error) {
+    console.error("[Notifications] Error updating timezone offset:", error);
+  }
 };
 
 /**

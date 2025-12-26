@@ -2951,11 +2951,11 @@ const SettingsScreen = () => {
                       }}
                     >
                       {key === "goalReminders"
-                        ? "Remind me when at risk of missing weekly goal"
+                        ? "Remind me when my streak or weekly goal is at risk"
                         : key === "inactivityNudges"
                         ? "Gentle reminder if inactive for 5+ days"
                         : key === "squadActivity"
-                        ? "Reactions and squad members hitting goals"
+                        ? "Comments, reactions, and squad members hitting goals"
                         : "Celebrate when you complete your weekly goal"}
                     </Text>
                   </View>

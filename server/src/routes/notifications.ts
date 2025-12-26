@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { query } from "../db";
 import { createIdGenerator } from "../utils/id";
+import { computeNextNotificationAt } from "../utils/notificationSchedule";
 
 const router = Router();
 const nanoid = createIdGenerator("0123456789abcdefghijklmnopqrstuvwxyz", 12);
@@ -12,26 +13,95 @@ router.post(
   "/register-token",
   async (req: Request, res: Response) => {
     const userId = res.locals.userId;
-    const { pushToken } = req.body;
+    const { pushToken, tzOffsetMinutes } = req.body as {
+      pushToken?: string;
+      tzOffsetMinutes?: number;
+    };
 
     if (!pushToken) {
       return res.status(400).json({ error: "Push token is required" });
     }
 
+    if (tzOffsetMinutes !== undefined) {
+      if (
+        typeof tzOffsetMinutes !== "number" ||
+        !Number.isFinite(tzOffsetMinutes) ||
+        tzOffsetMinutes < -14 * 60 ||
+        tzOffsetMinutes > 14 * 60
+      ) {
+        return res.status(400).json({
+          error: "tzOffsetMinutes must be between -840 and 840",
+        });
+      }
+    }
+
+    const nextNotificationAt =
+      tzOffsetMinutes !== undefined
+        ? computeNextNotificationAt({ userId, tzOffsetMinutes })
+        : null;
+
     try {
       await query(
         `
         UPDATE users
-        SET push_token = $1, updated_at = NOW()
-        WHERE id = $2
+        SET push_token = $1,
+            timezone_offset_minutes = COALESCE($2, timezone_offset_minutes),
+            next_notification_at = COALESCE($3, next_notification_at),
+            updated_at = NOW()
+        WHERE id = $4
         `,
-        [pushToken, userId]
+        [pushToken, tzOffsetMinutes ?? null, nextNotificationAt, userId]
       );
 
       res.json({ success: true });
     } catch (error) {
       console.error("[Notifications] Error registering token:", error);
       res.status(500).json({ error: "Failed to register push token" });
+    }
+  }
+);
+
+/**
+ * Update user's timezone offset (minutes behind UTC)
+ */
+router.post(
+  "/timezone",
+  async (req: Request, res: Response) => {
+    const userId = res.locals.userId;
+    const { tzOffsetMinutes } = req.body as { tzOffsetMinutes?: number };
+
+    if (
+      typeof tzOffsetMinutes !== "number" ||
+      !Number.isFinite(tzOffsetMinutes) ||
+      tzOffsetMinutes < -14 * 60 ||
+      tzOffsetMinutes > 14 * 60
+    ) {
+      return res.status(400).json({
+        error: "tzOffsetMinutes must be between -840 and 840",
+      });
+    }
+
+    const nextNotificationAt = computeNextNotificationAt({
+      userId,
+      tzOffsetMinutes,
+    });
+
+    try {
+      await query(
+        `
+        UPDATE users
+        SET timezone_offset_minutes = $1,
+            next_notification_at = $2,
+            updated_at = NOW()
+        WHERE id = $3
+        `,
+        [tzOffsetMinutes, nextNotificationAt, userId]
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Notifications] Error updating timezone:", error);
+      res.status(500).json({ error: "Failed to update timezone offset" });
     }
   }
 );
@@ -389,7 +459,7 @@ router.post("/admin/trigger-job", async (req: Request, res: Response) => {
   try {
     console.log("[Admin] Manually triggering notification job...");
     const { processNotifications } = await import("../jobs/notifications");
-    await processNotifications();
+    await processNotifications({ force: true });
     res.json({
       success: true,
       message: "Notification job completed successfully"
