@@ -47,14 +47,12 @@ h3,
   margin-top: 2.5rem;
   font-size: 1.7rem;
   color: #f9fafb;
-  clear: both;
 }
 
 .blog-article h3 {
   margin-top: 1.75rem;
   font-size: 1.2rem;
   color: #f9fafb;
-  clear: both;
 }
 
 .blog-article h2:first-child,
@@ -76,6 +74,13 @@ h3,
   color: #22c55e;
   text-decoration: underline;
   text-decoration-color: rgba(34, 197, 94, 0.5);
+}
+
+@media (min-width: 768px) {
+  .blog-article .blog-callout {
+    max-width: 50%;
+    margin-right: 2rem;
+  }
 }
 
 @keyframes fade-up {

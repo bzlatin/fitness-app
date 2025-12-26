@@ -35,8 +35,8 @@ const Screenshot = ({
   <figure
     className={`rounded-3xl border border-border/60 bg-surface/70 p-4 shadow-[0_20px_60px_rgba(5,8,22,0.25)] md:w-[45%] ${
       align === 'left'
-        ? 'md:float-left md:mr-6 md:mt-2 md:mb-6'
-        : 'md:float-right md:ml-6 md:mt-2 md:mb-6'
+        ? 'md:float-left md:mr-8 md:mt-2 md:mb-6'
+        : 'md:float-right md:ml-8 md:mt-2 md:mb-6'
     }`}
   >
     <div className='rounded-2xl bg-background/60 p-3'>
@@ -56,7 +56,7 @@ const Screenshot = ({
 );
 
 const Callout = ({ title, children }: { title: string; children: ReactNode }) => (
-  <div className='rounded-2xl border border-primary/30 bg-primary/10 p-5'>
+  <div className='blog-callout rounded-2xl border border-primary/30 bg-primary/10 p-5'>
     <div className='text-sm font-semibold text-primary uppercase tracking-[0.2em]'>{title}</div>
     <div className='mt-3 text-text-primary'>{children}</div>
   </div>
