@@ -140,10 +140,14 @@ const SettingsScreen = () => {
   const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] =
     useState(false);
   const isLoadingNotificationPrefsRef = useRef(false);
+  const notificationPrefsRequestIdRef = useRef(0);
   const [notificationPermissionStatus, setNotificationPermissionStatus] =
     useState<NotificationPermissionStatus | null>(null);
   const [isLoadingNotificationPermission, setIsLoadingNotificationPermission] =
     useState(false);
+  const isLoadingNotificationPermissionRef = useRef(false);
+  const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
+  const hasLoadedNotificationsSheetRef = useRef(false);
   const [healthPermissions, setHealthPermissions] =
     useState<AppleHealthPermissions>({
       workouts: true,
@@ -500,7 +504,8 @@ const SettingsScreen = () => {
   }, []);
 
   const loadNotificationPermissionStatus = useCallback(async () => {
-    if (isLoadingNotificationPermission) return;
+    if (isLoadingNotificationPermissionRef.current) return;
+    isLoadingNotificationPermissionRef.current = true;
     setIsLoadingNotificationPermission(true);
     try {
       const status = await getNotificationPermissionStatus();
@@ -512,14 +517,14 @@ const SettingsScreen = () => {
       );
     } finally {
       setIsLoadingNotificationPermission(false);
+      isLoadingNotificationPermissionRef.current = false;
     }
-  }, [isLoadingNotificationPermission]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
       void refetchSubscriptionStatus();
-      void loadNotificationPermissionStatus();
       // Only load notification prefs if we don't have them yet
       if (!notificationPrefs) {
         void loadNotificationPreferences();
@@ -527,13 +532,32 @@ const SettingsScreen = () => {
     }, [
       refresh,
       refetchSubscriptionStatus,
-      loadNotificationPermissionStatus,
       loadNotificationPreferences,
       notificationPrefs,
     ])
   );
 
+  useEffect(() => {
+    if (!showNotificationsSheet) {
+      hasLoadedNotificationsSheetRef.current = false;
+      return;
+    }
+    if (hasLoadedNotificationsSheetRef.current) return;
+    hasLoadedNotificationsSheetRef.current = true;
+    void loadNotificationPermissionStatus();
+    if (!notificationPrefs) {
+      void loadNotificationPreferences();
+    }
+  }, [
+    showNotificationsSheet,
+    loadNotificationPermissionStatus,
+    loadNotificationPreferences,
+    notificationPrefs,
+  ]);
+
   const handleEnableNotifications = async () => {
+    if (isEnablingNotifications) return;
+    setIsEnablingNotifications(true);
     try {
       const token = await registerForPushNotificationsAsync();
       if (token) {
@@ -543,8 +567,8 @@ const SettingsScreen = () => {
         );
         // Reset ref and reload prefs after enabling
         isLoadingNotificationPrefsRef.current = false;
-        await loadNotificationPreferences();
-        await loadNotificationPermissionStatus();
+        void loadNotificationPreferences();
+        void loadNotificationPermissionStatus();
       } else {
         const status = await getNotificationPermissionStatus();
         if (status === "denied") {
@@ -565,7 +589,7 @@ const SettingsScreen = () => {
             "Please enable notifications in your device settings to receive updates."
           );
         }
-        await loadNotificationPermissionStatus();
+        void loadNotificationPermissionStatus();
       }
     } catch (error) {
       console.error("[Settings] Error enabling notifications:", error);
@@ -587,7 +611,9 @@ const SettingsScreen = () => {
           "Failed to enable notifications. Please try again."
         );
       }
-      await loadNotificationPermissionStatus();
+      void loadNotificationPermissionStatus();
+    } finally {
+      setIsEnablingNotifications(false);
     }
   };
 
@@ -605,16 +631,26 @@ const SettingsScreen = () => {
   ) => {
     if (!notificationPrefs) return;
 
+    const previousPrefs = notificationPrefs;
+    setNotificationPrefs({ ...notificationPrefs, [key]: value });
+    notificationPrefsRequestIdRef.current += 1;
+    const requestId = notificationPrefsRequestIdRef.current;
+
     try {
       const updatedPrefs = await updateNotificationPreferences(
         { [key]: value } as Partial<NotificationPreferences>
       );
-      setNotificationPrefs(updatedPrefs);
+      if (notificationPrefsRequestIdRef.current === requestId) {
+        setNotificationPrefs(updatedPrefs);
+      }
     } catch (error) {
       console.error(
         "[Settings] Error updating notification preference:",
         error
       );
+      if (notificationPrefsRequestIdRef.current === requestId) {
+        setNotificationPrefs(previousPrefs);
+      }
       Alert.alert("Error", "Failed to update notification settings.");
     }
   };
@@ -1299,9 +1335,10 @@ const SettingsScreen = () => {
 
   const notificationsSubtitle =
     isLoadingNotificationPrefs ||
-    isLoadingNotificationPermission ||
-    notificationPermissionStatus === null
+    isLoadingNotificationPermission
     ? "Loading notification preferences…"
+    : notificationPermissionStatus === null
+    ? "Tap to check notification permissions"
     : !isPushEnabled
     ? "Push disabled · Tap to enable"
     : !notificationPrefs
@@ -2951,6 +2988,7 @@ const SettingsScreen = () => {
                     await handleEnableNotifications();
                     setShowNotificationsSheet(false);
                   }}
+                  disabled={isEnablingNotifications}
                   style={{
                     paddingVertical: 14,
                     borderRadius: 12,
@@ -2958,17 +2996,22 @@ const SettingsScreen = () => {
                     borderWidth: 1,
                     borderColor: colors.primary,
                     alignItems: "center",
+                    opacity: isEnablingNotifications ? 0.7 : 1,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: colors.surface,
-                      fontFamily: fontFamilies.semibold,
-                      fontSize: 15,
-                    }}
-                  >
-                    Enable Push Notifications
-                  </Text>
+                  {isEnablingNotifications ? (
+                    <ActivityIndicator color={colors.surface} size="small" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.surface,
+                        fontFamily: fontFamilies.semibold,
+                        fontSize: 15,
+                      }}
+                    >
+                      Enable Push Notifications
+                    </Text>
+                  )}
                 </Pressable>
               ) : null}
 

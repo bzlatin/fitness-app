@@ -123,18 +123,33 @@ export const registerForPushNotificationsAsync = async (
     ).data;
 
     console.log("[Notifications] Push token obtained");
-
-    // Register token with backend
-    await apiClient.post("/notifications/register-token", {
-      pushToken: token,
-      tzOffsetMinutes: new Date().getTimezoneOffset(),
-    });
-
-    console.log("[Notifications] Token registered with server");
   } catch (error) {
-    console.error("[Notifications] Error registering for push notifications:", error);
+    console.error(
+      "[Notifications] Error registering for push notifications:",
+      error
+    );
     return null;
   }
+
+  // Register token with backend without blocking UI.
+  void apiClient
+    .post(
+      "/notifications/register-token",
+      {
+        pushToken: token,
+        tzOffsetMinutes: new Date().getTimezoneOffset(),
+      },
+      { timeoutMs: 5000 }
+    )
+    .then(() => {
+      console.log("[Notifications] Token registered with server");
+    })
+    .catch((error) => {
+      console.error(
+        "[Notifications] Error registering token with server:",
+        error
+      );
+    });
 
   // Android-specific notification channel setup
   if (Platform.OS === "android") {
