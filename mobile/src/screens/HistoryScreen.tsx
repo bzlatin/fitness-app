@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -12,6 +14,7 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { colors } from "../theme/colors";
 import { fontFamilies, typography } from "../theme/typography";
@@ -28,11 +31,13 @@ import {
   WorkoutHistorySession,
   WorkoutHistoryStats,
 } from "../types/workouts";
+import { WorkoutComment } from "../types/social";
 import { RootStackParamList } from "../navigation/types";
 import { fetchSession } from "../api/sessions";
+import { deleteComment, getSessionComments } from "../api/social";
 import { createTemplate, fetchTemplate } from "../api/templates";
-import { useQueryClient } from "@tanstack/react-query";
 import ShareTemplateLinkSheet from "../components/workout/ShareTemplateLinkSheet";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -47,6 +52,25 @@ const startOfMonth = (date: Date) =>
 
 const addMonths = (date: Date, delta: number) =>
   startOfMonth(new Date(date.getFullYear(), date.getMonth() + delta, 1));
+
+const initialsForName = (name?: string) => {
+  if (!name) return "?";
+  const parts = name.trim().split(" ");
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
+
+const formatCommentTime = (iso: string) => {
+  const created = new Date(iso);
+  const diffMs = Date.now() - created.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 1) return "now";
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+  const hours = Math.floor(diffMinutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+};
 
 const getWeekDates = (anchor: Date) => {
   const start = startOfDayLocal(anchor);
@@ -92,6 +116,7 @@ const buildManualForm = (date: string) => ({
 const HistoryScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
+  const { user } = useCurrentUser();
 
   // Get current date in local timezone to correctly identify "today"
   const today = startOfDayLocal(new Date());
@@ -149,6 +174,21 @@ const HistoryScreen = () => {
   const duplicate = useDuplicateSession(rangeStart, rangeEnd);
   const deleteSession = useDeleteSession(rangeStart, rangeEnd);
   const updateSession = useUpdateSession(rangeStart, rangeEnd);
+  const sessionCommentsQuery = useQuery({
+    queryKey: ["social", "session-comments", selectedSession?.id],
+    queryFn: () => getSessionComments(selectedSession?.id ?? ""),
+    enabled: Boolean(selectedSession?.id),
+    staleTime: 30000,
+  });
+  const sessionComments = sessionCommentsQuery.data ?? [];
+  const deleteCommentMutation = useMutation({
+    mutationFn: deleteComment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["social", "session-comments", selectedSession?.id],
+      });
+    },
+  });
 
   // Auto-refresh history when screen comes into focus
   useFocusEffect(
@@ -395,6 +435,22 @@ const HistoryScreen = () => {
 
   const handleSessionClick = (session: WorkoutHistorySession) => {
     setSelectedSession(session);
+  };
+
+  const handleCommentProfilePress = (userId: string) => {
+    setSelectedSession(null);
+    navigation.navigate("UserProfile", { userId });
+  };
+
+  const handleRequestDeleteComment = (commentId: string) => {
+    Alert.alert("Delete this comment?", undefined, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteCommentMutation.mutate(commentId),
+      },
+    ]);
   };
 
   const handleAddManual = async () => {
@@ -1492,30 +1548,35 @@ const HistoryScreen = () => {
         visible={!!selectedSession}
         onRequestClose={() => setSelectedSession(null)}
       >
-        <TouchableWithoutFeedback onPress={() => setSelectedSession(null)}>
-          <View
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <Pressable
+            onPress={() => setSelectedSession(null)}
             style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              justifyContent: "center",
-              padding: 16,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
             }}
-      >
-        <TouchableWithoutFeedback>
+          />
           <View
             style={{
               backgroundColor: colors.surface,
               borderRadius: 18,
-              padding: 18,
-              gap: 14,
               borderWidth: 1,
               borderColor: colors.border,
-              maxHeight: "80%",
-              position: "relative",
+              maxHeight: "85%",
             }}
           >
             {selectedSession && (
-              <>
+              <View style={{ padding: 18, gap: 14 }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -1570,6 +1631,37 @@ const HistoryScreen = () => {
                       {formatDateTimeShort(new Date(selectedSession.startedAt))}
                     </Text>
                   </View>
+                  <Pressable
+                    onPress={() => {
+                      if (!selectedSession) return;
+                      const session = selectedSession;
+                      setSelectedSession(null);
+                      void openTemplateShareFromHistory(session);
+                    }}
+                    disabled={shareLinkLoading}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      marginLeft: "auto",
+                      padding: 6,
+                      borderRadius: 10,
+                      backgroundColor: pressed
+                        ? colors.surfaceMuted
+                        : colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      opacity: pressed || shareLinkLoading ? 0.7 : 1,
+                    })}
+                  >
+                    {shareLinkLoading ? (
+                      <ActivityIndicator size="small" color={colors.textPrimary} />
+                    ) : (
+                      <Ionicons
+                        name='share-outline'
+                        color={colors.textPrimary}
+                        size={18}
+                      />
+                    )}
+                  </Pressable>
                 </View>
                 <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                   <MetricPill
@@ -1611,31 +1703,113 @@ const HistoryScreen = () => {
                       >
                         Exercises
                       </Text>
-                      {selectedSession.exercises.map((exercise, idx) => (
-                        <View
-                          key={`${exercise.exerciseId}-${idx}`}
-                          style={{
-                            backgroundColor: colors.surfaceMuted,
-                            borderRadius: 10,
-                            padding: 10,
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <Text
+                      <ScrollView
+                        style={{ maxHeight: 240 }}
+                        contentContainerStyle={{ gap: 8, paddingBottom: 2 }}
+                        showsVerticalScrollIndicator
+                      >
+                        {selectedSession.exercises.map((exercise, idx) => (
+                          <View
+                            key={`${exercise.exerciseId}-${idx}`}
                             style={{
-                              color: colors.textPrimary,
-                              fontFamily: fontFamilies.medium,
+                              backgroundColor: colors.surfaceMuted,
+                              borderRadius: 10,
+                              padding: 10,
                             }}
                           >
-                            {exercise.name}
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                              }}
+                            >
+                              <Text
+                                numberOfLines={2}
+                                style={{
+                                  color: colors.textPrimary,
+                                  fontFamily: fontFamilies.medium,
+                                  flex: 1,
+                                  minWidth: 0,
+                                  marginRight: 8,
+                                }}
+                              >
+                                {exercise.name}
+                              </Text>
+                              <Text
+                                numberOfLines={1}
+                                style={{
+                                  color: colors.textSecondary,
+                                  textAlign: "right",
+                                }}
+                              >
+                                {exercise.sets} sets ·{" "}
+                                {Math.round(exercise.volumeLbs)} lbs
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    <View
+                      style={{
+                        borderTopWidth: 1,
+                        borderTopColor: colors.border,
+                        paddingTop: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontFamily: fontFamilies.semibold,
+                          }}
+                        >
+                          Comments
+                        </Text>
+                        {sessionComments.length > 0 ? (
+                          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                            {sessionComments.length}
                           </Text>
-                          <Text style={{ color: colors.textSecondary }}>
-                            {exercise.sets} sets · {Math.round(exercise.volumeLbs)}{" "}
-                            lbs
-                          </Text>
+                        ) : null}
+                      </View>
+                      {sessionCommentsQuery.isLoading ? (
+                        <View style={{ paddingVertical: 8, alignItems: "center" }}>
+                          <ActivityIndicator size="small" color={colors.textSecondary} />
                         </View>
-                      ))}
+                      ) : sessionCommentsQuery.isError ? (
+                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                          Unable to load comments right now.
+                        </Text>
+                      ) : sessionComments.length === 0 ? (
+                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                          No comments yet.
+                        </Text>
+                      ) : (
+                        <ScrollView
+                          style={{ maxHeight: 160 }}
+                          contentContainerStyle={{ gap: 8, paddingBottom: 2 }}
+                          showsVerticalScrollIndicator
+                        >
+                          {sessionComments.map((comment) => (
+                            <SessionCommentItem
+                              key={comment.id}
+                              comment={comment}
+                              onPressProfile={handleCommentProfilePress}
+                              canDelete={Boolean(user?.id)}
+                              onDelete={handleRequestDeleteComment}
+                              isDeleting={deleteCommentMutation.isPending}
+                            />
+                          ))}
+                        </ScrollView>
+                      )}
                     </View>
 
                     <View style={{ gap: 8, marginTop: 6 }}>
@@ -1759,12 +1933,10 @@ const HistoryScreen = () => {
                         </Text>
                       </Pressable>
                     </View>
-                  </>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
+                </View>
+            )}
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal
@@ -2020,6 +2192,119 @@ const MetricPill = ({ label, value }: { label: string; value: string }) => (
     >
       {value}
     </Text>
+  </View>
+);
+
+const SessionCommentItem = ({
+  comment,
+  onPressProfile,
+  canDelete,
+  onDelete,
+  isDeleting,
+}: {
+  comment: WorkoutComment;
+  onPressProfile?: (userId: string) => void;
+  canDelete?: boolean;
+  onDelete?: (commentId: string) => void;
+  isDeleting?: boolean;
+}) => (
+  <View
+    style={{
+      flexDirection: "row",
+      gap: 10,
+      padding: 10,
+      backgroundColor: colors.surfaceMuted,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    }}
+  >
+    <Pressable
+      onPress={() => onPressProfile?.(comment.user.id)}
+      hitSlop={6}
+      style={{ alignSelf: "flex-start" }}
+    >
+      {comment.user.avatarUrl ? (
+        <Image
+          source={{ uri: comment.user.avatarUrl }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            backgroundColor: colors.surface,
+          }}
+        />
+      ) : (
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            backgroundColor: colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontFamily: fontFamilies.semibold,
+            }}
+          >
+            {initialsForName(comment.user.name)}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+    <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        <Pressable
+          onPress={() => onPressProfile?.(comment.user.id)}
+          hitSlop={4}
+          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 13,
+            }}
+            numberOfLines={1}
+          >
+            {comment.user.name}
+          </Text>
+        </Pressable>
+        <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+          {formatCommentTime(comment.createdAt)}
+        </Text>
+        {canDelete && onDelete ? (
+          <Pressable
+            onPress={() => onDelete(comment.id)}
+            disabled={isDeleting}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              marginLeft: "auto",
+              opacity: pressed || isDeleting ? 0.5 : 1,
+            })}
+          >
+            <Ionicons name='trash-outline' size={14} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+      <Text style={{ color: colors.textPrimary, marginTop: 2 }}>
+        {comment.comment}
+      </Text>
+    </View>
   </View>
 );
 

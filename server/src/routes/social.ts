@@ -121,6 +121,7 @@ type ShareRow = {
   created_at: string;
   visibility: Visibility;
   progress_photo_url: string | null;
+  progress_photo_visibility: Visibility | null;
   name: string | null;
   handle: string | null;
   avatar_url: string | null;
@@ -366,11 +367,12 @@ router.get("/me/progress-photos", async (_req, res) => {
       session_id: string | null;
       template_name: string | null;
       visibility: Visibility;
+      progress_photo_visibility: Visibility | null;
       progress_photo_url: string;
       created_at: string;
     }>(
       `
-        SELECT id, session_id, template_name, visibility, progress_photo_url, created_at
+        SELECT id, session_id, template_name, visibility, progress_photo_visibility, progress_photo_url, created_at
         FROM workout_shares
         WHERE user_id = $1 AND progress_photo_url IS NOT NULL
         ORDER BY created_at DESC
@@ -384,7 +386,7 @@ router.get("/me/progress-photos", async (_req, res) => {
         id: row.id,
         sessionId: row.session_id,
         templateName: row.template_name,
-        visibility: row.visibility,
+        visibility: row.progress_photo_visibility ?? row.visibility,
         imageUrl: row.progress_photo_url,
         createdAt: row.created_at,
       })),
@@ -745,7 +747,12 @@ const mapStatus = (row: ActiveStatusRow) => ({
   ),
 });
 
-const mapShare = (row: ShareRow) => ({
+const mapShare = (row: ShareRow, viewerId?: string) => {
+  const photoVisibility = row.progress_photo_visibility ?? row.visibility;
+  const canSeePhoto =
+    !viewerId || viewerId === row.user_id || photoVisibility !== "private";
+
+  return {
   id: row.id,
   user: {
     id: row.user_id,
@@ -760,8 +767,9 @@ const mapShare = (row: ShareRow) => ({
   prCount: row.pr_count ?? undefined,
   createdAt: row.created_at,
   visibility: row.visibility,
-  progressPhotoUrl: row.progress_photo_url ?? undefined,
-});
+  progressPhotoUrl: canSeePhoto ? row.progress_photo_url ?? undefined : undefined,
+};
+};
 
 router.get("/me", async (_req, res) => {
   const userId = res.locals.userId;
@@ -2192,6 +2200,77 @@ router.get("/reactions/:targetType/:targetId", async (req, res) => {
   }
 });
 
+router.get("/session-comments/:sessionId", async (req, res) => {
+  const userId = res.locals.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const sessionId = (req.params.sessionId ?? "").trim();
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId required" });
+  }
+
+  try {
+    const sessionResult = await query<{ id: string }>(
+      `SELECT id FROM workout_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [sessionId, userId]
+    );
+    if (!sessionResult.rowCount) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const shareRows = await query<{ id: string }>(
+      `SELECT id FROM workout_shares WHERE session_id = $1 AND user_id = $2`,
+      [sessionId, userId]
+    );
+    const shareIds = shareRows.rows.map((row) => row.id);
+
+    const params: Array<string | string[]> = [sessionId];
+    const shareClause =
+      shareIds.length > 0
+        ? " OR (r.target_type = 'share' AND r.target_id = ANY($2::text[]))"
+        : "";
+    if (shareIds.length > 0) {
+      params.push(shareIds);
+    }
+
+    const comments = await query<ReactionRow>(
+      `
+        SELECT r.*, u.name, u.handle, u.avatar_url
+        FROM workout_reactions r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.reaction_type = 'comment'
+          AND r.deleted_at IS NULL
+          AND (
+            (r.target_type = 'status' AND r.target_id = $1)
+            ${shareClause}
+          )
+        ORDER BY r.created_at ASC
+        LIMIT 80
+      `,
+      params
+    );
+
+    return res.json({
+      comments: comments.rows.map((row) => ({
+        id: row.id,
+        user: {
+          id: row.user_id,
+          name: row.name ?? "Athlete",
+          handle: row.handle ?? undefined,
+          avatarUrl: row.avatar_url ?? undefined,
+        },
+        comment: row.comment,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("Failed to load session comments", err);
+    return res.status(500).json({ error: "Failed to load session comments" });
+  }
+});
+
 router.get("/search", async (req, res) => {
   const userId = res.locals.userId;
   if (!userId) {
@@ -2773,6 +2852,7 @@ router.post("/share", async (req, res) => {
     sessionId,
     visibility,
     progressPhotoUrl,
+    progressPhotoVisibility,
     templateName,
     totalSets,
     totalVolume,
@@ -2781,6 +2861,7 @@ router.post("/share", async (req, res) => {
     sessionId?: string;
     visibility?: Visibility;
     progressPhotoUrl?: string;
+    progressPhotoVisibility?: Visibility;
     templateName?: string;
     totalSets?: number;
     totalVolume?: number;
@@ -2790,12 +2871,21 @@ router.post("/share", async (req, res) => {
     return res.status(400).json({ error: "sessionId required" });
   }
   const vis: Visibility = visibility ?? "private";
+  const validPhotoVisibility =
+    progressPhotoVisibility === "private" ||
+    progressPhotoVisibility === "followers" ||
+    progressPhotoVisibility === "squad";
+  const photoVisibility = progressPhotoUrl
+    ? validPhotoVisibility
+      ? progressPhotoVisibility
+      : "private"
+    : null;
 
   try {
     const result = await query<ShareRow>(
       `
-        INSERT INTO workout_shares (id, user_id, session_id, template_name, total_sets, total_volume, pr_count, visibility, progress_photo_url, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        INSERT INTO workout_shares (id, user_id, session_id, template_name, total_sets, total_volume, pr_count, visibility, progress_photo_url, progress_photo_visibility, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         RETURNING *
       `,
       [
@@ -2808,17 +2898,39 @@ router.post("/share", async (req, res) => {
         prCount ?? null,
         vis,
         progressPhotoUrl ?? null,
+        photoVisibility,
       ]
     );
     const row = result.rows[0];
     const user = await fetchUserSummary(userId);
+    try {
+      await query(
+        `
+          UPDATE workout_reactions
+          SET target_type = 'share', target_id = $1
+          WHERE target_type = 'status'
+            AND target_id = $2
+            AND reaction_type = 'comment'
+            AND deleted_at IS NULL
+        `,
+        [row.id, sessionId]
+      );
+    } catch (error) {
+      console.error(
+        "[Social] Failed to migrate status comments to share:",
+        error
+      );
+    }
     return res.status(201).json(
-      mapShare({
-        ...row,
-        name: user.name,
-        handle: user.handle ?? null,
-        avatar_url: user.avatarUrl ?? null,
-      })
+      mapShare(
+        {
+          ...row,
+          name: user.name,
+          handle: user.handle ?? null,
+          avatar_url: user.avatarUrl ?? null,
+        },
+        userId
+      )
     );
   } catch (err) {
     console.error("Failed to record share", err);
@@ -2933,7 +3045,7 @@ router.get("/squad-feed", async (req, res) => {
         }
         return canView(row.user_id, row.visibility, userId, following, mutual);
       })
-      .map(mapShare);
+      .map((row) => mapShare(row, userId));
 
     return res.json({ activeStatuses, recentShares });
   } catch (err) {

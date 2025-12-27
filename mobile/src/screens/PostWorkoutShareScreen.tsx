@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Platform, Pressable, Text, View } from "react-native";
+import { Image, Platform, Pressable, Switch, Text, View } from "react-native";
 import ScreenContainer from "../components/layout/ScreenContainer";
 import { shareWorkoutSummary, uploadProgressPhoto } from "../api/social";
 import { RootNavigation } from "../navigation/RootNavigator";
@@ -12,6 +12,7 @@ import { typography, fontFamilies } from "../theme/typography";
 import { Visibility } from "../types/social";
 import { maybePromptForRatingAfterLoggedWorkout } from "../services/ratingPrompt";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getStoredLiveVisibility } from "../utils/liveVisibilityPreference";
 
 const VisibilityToggle = ({
   value,
@@ -21,7 +22,7 @@ const VisibilityToggle = ({
   onChange: (next: Visibility) => void;
 }) => {
   const options: { value: Visibility; label: string; helper: string }[] = [
-    { value: "private", label: "Private", helper: "Only you see this." },
+    { value: "private", label: "Private", helper: "Only you see\nthis." },
     { value: "followers", label: "Followers", helper: "Approved followers." },
     { value: "squad", label: "Squad", helper: "People in your squad." },
   ];
@@ -29,7 +30,7 @@ const VisibilityToggle = ({
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ ...typography.title, color: colors.textPrimary }}>
-        Visibility
+        Share visibility
       </Text>
       <View style={{ flexDirection: "row", gap: 8 }}>
         {options.map((option) => {
@@ -73,6 +74,16 @@ const VisibilityToggle = ({
           );
         })}
       </View>
+      <Text
+        style={{
+          color: colors.textSecondary,
+          ...typography.caption,
+          lineHeight: 18,
+        }}
+      >
+        This controls who can see the workout summary. Photo sharing is separate
+        and can stay private.
+      </Text>
     </View>
   );
 };
@@ -82,13 +93,16 @@ const PostWorkoutShareScreen = () => {
   const route = useRoute<RootRoute<"PostWorkoutShare">>();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
-  const [visibility, setVisibility] = useState<Visibility>("private");
+  const [visibility, setVisibility] = useState<Visibility>(
+    route.params.initialVisibility ?? "squad"
+  );
   const [progressPhotoUri, setProgressPhotoUri] = useState<
     string | undefined
   >();
   const [progressPhotoUploadedUrl, setProgressPhotoUploadedUrl] = useState<
     string | undefined
   >();
+  const [sharePhotoPrivate, setSharePhotoPrivate] = useState(true);
   const appleHealthEnabled = user?.appleHealthEnabled === true;
 
   useEffect(() => {
@@ -97,6 +111,19 @@ const PostWorkoutShareScreen = () => {
     }, 800);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (route.params.initialVisibility) return;
+      const stored = await getStoredLiveVisibility();
+      if (cancelled || !stored) return;
+      setVisibility(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [route.params.initialVisibility]);
 
   const shareMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof shareWorkoutSummary>[0]) => {
@@ -119,10 +146,20 @@ const PostWorkoutShareScreen = () => {
       return shareWorkoutSummary({
         ...payload,
         progressPhotoUri: progressPhotoUrl,
+        progressPhotoVisibility: progressPhotoUrl
+          ? sharePhotoPrivate
+            ? "private"
+            : payload.visibility
+          : undefined,
       });
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["progressPhotos", "me"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["progressPhotos", "me"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["social", "squad-feed"],
+      });
       navigation.navigate("RootTabs", { screen: "History" });
     },
   });
@@ -293,9 +330,48 @@ const PostWorkoutShareScreen = () => {
             <Text
               style={{ color: colors.textSecondary, ...typography.caption }}
             >
-              Add a quick snap—only people in this visibility group will see it.
+              Add a quick snap—by default it stays private. Toggle off to share
+              it.
             </Text>
           )}
+
+          {progressPhotoUri ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamilies.semibold,
+                  }}
+                >
+                  Photo privacy
+                </Text>
+                <Text
+                  style={{ color: colors.textSecondary, ...typography.caption }}
+                >
+                  {sharePhotoPrivate
+                    ? "Only you can see this photo."
+                    : "Shared with the same audience as the summary."}
+                </Text>
+              </View>
+              <Switch
+                value={sharePhotoPrivate}
+                onValueChange={setSharePhotoPrivate}
+                thumbColor={sharePhotoPrivate ? colors.primary : undefined}
+                trackColor={{
+                  false: colors.border,
+                  true: `${colors.primary}55`,
+                }}
+              />
+            </View>
+          ) : null}
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Pressable
@@ -349,6 +425,7 @@ const PostWorkoutShareScreen = () => {
               onPress={() => {
                 setProgressPhotoUri(undefined);
                 setProgressPhotoUploadedUrl(undefined);
+                setSharePhotoPrivate(true);
               }}
               style={({ pressed }) => ({
                 paddingVertical: 10,

@@ -18,6 +18,7 @@ export type RootStackParamList = {
     totalVolume?: number;
     prCount?: number;
     durationSeconds?: number;
+    initialVisibility?: Visibility;
   };
   WorkoutPreview: {
     workout: {

@@ -130,7 +130,7 @@ const visibilityOptions: {
     label: "Friends",
     helper: "Gym buddies who follow back.",
   },
-  { value: "squad", label: "Squad", helper: "Friends + squads" },
+  { value: "squad", label: "Squad + friends", helper: "Squadmates + mutuals." },
 ];
 
 const VisibilityModal = ({
@@ -315,10 +315,10 @@ const LiveVisibilityPromptModal = ({
               fontWeight: "700",
             }}
           >
-            Share with friends
+            Share with squad + friends
           </Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-            We default live sharing to Friends so your gym buddies can cheer you
+            We default live sharing to Squad + Friends so your gym buddies can cheer you
             on. You can change this anytime and we will remember your choice.
           </Text>
         </View>
@@ -352,7 +352,7 @@ const LiveVisibilityPromptModal = ({
             })}
           >
             <Text style={{ color: "#0B1220", fontWeight: "700" }}>
-              Keep Friends
+              Keep Squad
             </Text>
           </Pressable>
         </View>
@@ -1774,7 +1774,7 @@ const WorkoutSessionScreen = () => {
 
   const handleVisibilityPromptKeep = useCallback(() => {
     setShowVisibilityPrompt(false);
-    setVisibility("followers");
+    setVisibility("squad");
     void setStoredLiveVisibilityPrompted();
   }, [setVisibility]);
 
@@ -1914,6 +1914,7 @@ const WorkoutSessionScreen = () => {
         totalVolume: summary.totalVolume,
         prCount: summary.prCount,
         durationSeconds: elapsedSeconds,
+        initialVisibility: visibility,
       });
     },
     onError: () => {

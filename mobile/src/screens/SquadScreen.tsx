@@ -154,12 +154,11 @@ const buildFeedItems = (
     recentSubtitle?: string;
   }
 ): FeedItem[] => {
-  const filteredActive = activeStatuses.filter(
-    (status) => status.user.id !== excludeUserId
-  );
-  const filteredShares = recentShares.filter(
-    (share) => share.user.id !== excludeUserId
-  );
+  const filteredActive =
+    excludeUserId !== undefined
+      ? activeStatuses.filter((status) => status.user.id !== excludeUserId)
+      : activeStatuses;
+  const filteredShares = recentShares;
   const defaultLiveTitle = titles?.liveTitle ?? "Active friends";
   const items: FeedItem[] = [];
 
@@ -250,96 +249,100 @@ const ShareCard = ({
 }: {
   share: WorkoutSummaryShare;
   onPressProfile: (userId: string) => void;
-}) => (
-  <View
-    style={{
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-    }}
-  >
-    <Pressable
-      onPress={() => onPressProfile(share.user.id)}
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.92 : 1,
-      })}
+}) => {
+  const showProgressPhoto = Boolean(share.progressPhotoUrl);
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-        }}
+      <Pressable
+        onPress={() => onPressProfile(share.user.id)}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.92 : 1,
+        })}
       >
-        <Avatar user={share.user} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ ...typography.title, color: colors.textPrimary }}>
-            {share.user.name}
-          </Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-            {formatRelativeTime(share.createdAt)}
-          </Text>
-        </View>
-        <VisibilityPill
-          label={
-            share.visibility === "private"
-              ? "Private"
-              : share.visibility === "followers"
-              ? "Friends"
-              : "Squad"
-          }
-        />
-      </View>
-      <View
-        style={{
-          marginTop: 10,
-          flexDirection: "row",
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamilies.semibold,
-            }}
-          >
-            {share.templateName ?? "Custom workout"}
-          </Text>
-          <Text style={{ color: colors.textSecondary, ...typography.caption }}>
-            {share.totalSets} sets
-            {share.totalVolume
-              ? ` · ${share.totalVolume.toLocaleString()} kg`
-              : ""}{" "}
-            {share.prCount ? ` · ${share.prCount} PRs` : ""}
-          </Text>
-        </View>
-        {share.progressPhotoUrl ? (
-          <Image
-            source={{ uri: share.progressPhotoUrl }}
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surfaceMuted,
-            }}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <Avatar user={share.user} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...typography.title, color: colors.textPrimary }}>
+              {share.user.name}
+            </Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              {formatRelativeTime(share.createdAt)}
+            </Text>
+          </View>
+          <VisibilityPill
+            label={
+              share.visibility === "private"
+                ? "Private"
+                : share.visibility === "followers"
+                ? "Friends"
+                : "Squad"
+            }
           />
-        ) : null}
-      </View>
-    </Pressable>
-    <WorkoutReactions
-      targetType='share'
-      targetId={share.id}
-      ownerUserId={share.user.id}
-      compact
-    />
-  </View>
-);
+        </View>
+        <View
+          style={{
+            marginTop: 10,
+            flexDirection: "row",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: fontFamilies.semibold,
+              }}
+            >
+              {share.templateName ?? "Custom workout"}
+            </Text>
+            <Text style={{ color: colors.textSecondary, ...typography.caption }}>
+              {share.totalSets} sets
+              {share.totalVolume
+                ? ` · ${share.totalVolume.toLocaleString()} kg`
+                : ""}{" "}
+              {share.prCount ? ` · ${share.prCount} PRs` : ""}
+            </Text>
+          </View>
+          {showProgressPhoto ? (
+            <Image
+              source={{ uri: share.progressPhotoUrl }}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceMuted,
+              }}
+            />
+          ) : null}
+        </View>
+      </Pressable>
+      <WorkoutReactions
+        targetType='share'
+        targetId={share.id}
+        ownerUserId={share.user.id}
+        compact
+      />
+    </View>
+  );
+};
 
 const SquadScreen = () => {
   const navigation = useNavigation<RootNavigation>();
