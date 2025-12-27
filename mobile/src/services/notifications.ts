@@ -47,6 +47,9 @@ export interface InboxResponse {
   hasMore: boolean;
 }
 
+export type NotificationPermissionStatus =
+  Notifications.PermissionStatus;
+
 type RegisterOptions = {
   requestPermissions?: boolean;
 };
@@ -151,6 +154,12 @@ export const registerForPushNotificationsAsync = async (
 
   return token;
 };
+
+export const getNotificationPermissionStatus =
+  async (): Promise<NotificationPermissionStatus> => {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  };
 
 /**
  * Update user's timezone offset for notification scheduling

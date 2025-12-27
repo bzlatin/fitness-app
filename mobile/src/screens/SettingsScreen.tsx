@@ -61,9 +61,11 @@ import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { isRemoteAvatarUrl, processAvatarAsset } from "../utils/avatarImage";
 import {
   registerForPushNotificationsAsync,
+  getNotificationPermissionStatus,
   getNotificationPreferences,
   updateNotificationPreferences,
   NotificationPreferences,
+  NotificationPermissionStatus,
 } from "../services/notifications";
 import { useNewShippedCount } from "../api/feedback";
 import { uploadCurrentUserAvatar } from "../api/social";
@@ -138,6 +140,10 @@ const SettingsScreen = () => {
   const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] =
     useState(false);
   const isLoadingNotificationPrefsRef = useRef(false);
+  const [notificationPermissionStatus, setNotificationPermissionStatus] =
+    useState<NotificationPermissionStatus | null>(null);
+  const [isLoadingNotificationPermission, setIsLoadingNotificationPermission] =
+    useState(false);
   const [healthPermissions, setHealthPermissions] =
     useState<AppleHealthPermissions>({
       workouts: true,
@@ -493,10 +499,27 @@ const SettingsScreen = () => {
     }
   }, []);
 
+  const loadNotificationPermissionStatus = useCallback(async () => {
+    if (isLoadingNotificationPermission) return;
+    setIsLoadingNotificationPermission(true);
+    try {
+      const status = await getNotificationPermissionStatus();
+      setNotificationPermissionStatus(status);
+    } catch (error) {
+      console.error(
+        "[Settings] Error loading notification permission status:",
+        error
+      );
+    } finally {
+      setIsLoadingNotificationPermission(false);
+    }
+  }, [isLoadingNotificationPermission]);
+
   useFocusEffect(
     useCallback(() => {
       void refresh();
       void refetchSubscriptionStatus();
+      void loadNotificationPermissionStatus();
       // Only load notification prefs if we don't have them yet
       if (!notificationPrefs) {
         void loadNotificationPreferences();
@@ -504,6 +527,7 @@ const SettingsScreen = () => {
     }, [
       refresh,
       refetchSubscriptionStatus,
+      loadNotificationPermissionStatus,
       loadNotificationPreferences,
       notificationPrefs,
     ])
@@ -520,11 +544,28 @@ const SettingsScreen = () => {
         // Reset ref and reload prefs after enabling
         isLoadingNotificationPrefsRef.current = false;
         await loadNotificationPreferences();
+        await loadNotificationPermissionStatus();
       } else {
-        Alert.alert(
-          "Notification Permission Required",
-          "Please enable notifications in your device settings to receive updates."
-        );
+        const status = await getNotificationPermissionStatus();
+        if (status === "denied") {
+          Alert.alert(
+            "Notifications Disabled",
+            "Enable notifications in iOS Settings to receive comment alerts and reminders.",
+            [
+              { text: "Not now", style: "cancel" },
+              {
+                text: "Open Settings",
+                onPress: () => Linking.openSettings(),
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Notification Permission Required",
+            "Please enable notifications in your device settings to receive updates."
+          );
+        }
+        await loadNotificationPermissionStatus();
       }
     } catch (error) {
       console.error("[Settings] Error enabling notifications:", error);
@@ -546,6 +587,7 @@ const SettingsScreen = () => {
           "Failed to enable notifications. Please try again."
         );
       }
+      await loadNotificationPermissionStatus();
     }
   };
 
@@ -1249,15 +1291,25 @@ const SettingsScreen = () => {
       ? "Private · Only you can see your highlights"
       : "Friends only · Gym buddies can see your highlights";
 
+  const isPushEnabled = notificationPermissionStatus === "granted";
+
   const notificationToggleCount = notificationPrefs
     ? notificationToggleKeys.filter((key) => notificationPrefs[key]).length
     : 0;
 
-  const notificationsSubtitle = isLoadingNotificationPrefs
+  const notificationsSubtitle =
+    isLoadingNotificationPrefs ||
+    isLoadingNotificationPermission ||
+    notificationPermissionStatus === null
     ? "Loading notification preferences…"
+    : !isPushEnabled
+    ? "Push disabled · Tap to enable"
     : !notificationPrefs
     ? "Enable push to manage goal reminders and squad activity"
     : `${notificationToggleCount}/4 toggles on · Inbox`;
+
+  const shouldShowEnableNotifications =
+    !isPushEnabled || !notificationPrefs;
 
   const billingSubtitle = isSubscriptionLoading
     ? "Loading billing status…"
@@ -2889,96 +2941,102 @@ const SettingsScreen = () => {
             </Text>
           </Pressable>
 
-          {isLoadingNotificationPrefs ? (
+          {isLoadingNotificationPrefs || isLoadingNotificationPermission ? (
             <ActivityIndicator size='small' color={colors.primary} />
-          ) : !notificationPrefs ? (
-            <Pressable
-              onPress={async () => {
-                await handleEnableNotifications();
-                setShowNotificationsSheet(false);
-              }}
-              style={{
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: colors.primary,
-                borderWidth: 1,
-                borderColor: colors.primary,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.surface,
-                  fontFamily: fontFamilies.semibold,
-                  fontSize: 15,
-                }}
-              >
-                Enable Push Notifications
-              </Text>
-            </Pressable>
           ) : (
             <>
-              {notificationToggleKeys.map((key) => (
-                <View
-                  key={key}
+              {shouldShowEnableNotifications ? (
+                <Pressable
+                  onPress={async () => {
+                    await handleEnableNotifications();
+                    setShowNotificationsSheet(false);
+                  }}
                   style={{
-                    flexDirection: "row",
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    backgroundColor: colors.primary,
+                    borderWidth: 1,
+                    borderColor: colors.primary,
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 8,
                   }}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: 14,
-                      }}
-                    >
-                      {key === "goalReminders"
-                        ? "Goal Reminders"
-                        : key === "inactivityNudges"
-                        ? "Inactivity Nudges"
-                        : key === "squadActivity"
-                        ? "Squad Activity"
-                        : "Weekly Goal Met"}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      {key === "goalReminders"
-                        ? "Remind me when my streak or weekly goal is at risk"
-                        : key === "inactivityNudges"
-                        ? "Gentle reminder if inactive for 5+ days"
-                        : key === "squadActivity"
-                        ? "Comments, reactions, and squad members hitting goals"
-                        : "Celebrate when you complete your weekly goal"}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notificationPrefs[key]}
-                    onValueChange={(value) =>
-                      handleToggleNotificationPref(key, value)
-                    }
-                    trackColor={{ true: colors.primary, false: colors.border }}
-                    thumbColor={notificationPrefs[key] ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-              ))}
+                  <Text
+                    style={{
+                      color: colors.surface,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 15,
+                    }}
+                  >
+                    Enable Push Notifications
+                  </Text>
+                </Pressable>
+              ) : null}
 
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 8,
-                }}
-              >
-                Max 3 notifications per week
-              </Text>
+              {notificationPrefs ? (
+                <>
+                  {notificationToggleKeys.map((key) => (
+                    <View
+                      key={key}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontSize: 14,
+                          }}
+                        >
+                          {key === "goalReminders"
+                            ? "Goal Reminders"
+                            : key === "inactivityNudges"
+                            ? "Inactivity Nudges"
+                            : key === "squadActivity"
+                            ? "Squad Activity"
+                            : "Weekly Goal Met"}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            marginTop: 2,
+                          }}
+                        >
+                          {key === "goalReminders"
+                            ? "Remind me when my streak or weekly goal is at risk"
+                            : key === "inactivityNudges"
+                            ? "Gentle reminder if inactive for 5+ days"
+                            : key === "squadActivity"
+                            ? "Comments, reactions, and squad members hitting goals"
+                            : "Celebrate when you complete your weekly goal"}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={notificationPrefs[key]}
+                        onValueChange={(value) =>
+                          handleToggleNotificationPref(key, value)
+                        }
+                        trackColor={{ true: colors.primary, false: colors.border }}
+                        thumbColor={notificationPrefs[key] ? "#fff" : "#f4f3f4"}
+                      />
+                    </View>
+                  ))}
+
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 8,
+                    }}
+                  >
+                    Max 3 notifications per week
+                  </Text>
+                </>
+              ) : null}
             </>
           )}
         </DrillInSheet>
