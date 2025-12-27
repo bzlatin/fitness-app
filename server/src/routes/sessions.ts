@@ -107,6 +107,37 @@ const normalizeCardioType = (
 const hasInvalidRir = (sets?: Partial<WorkoutSet>[]) =>
   Boolean(sets?.some((set) => !parseRirValue(set.rir).valid));
 
+const summarizeShareSets = (sets?: Partial<WorkoutSet>[]) => {
+  if (!sets) return null;
+  const workingSets = sets.filter(
+    (set) => normalizeSetKind(set.setKind) !== "warmup"
+  );
+  const totalSets = workingSets.length;
+  const totalVolume = workingSets.reduce((acc, set) => {
+    const reps = typeof set.actualReps === "number" ? set.actualReps : 0;
+    const weight = typeof set.actualWeight === "number" ? set.actualWeight : 0;
+    if (!Number.isFinite(reps) || !Number.isFinite(weight)) return acc;
+    return acc + reps * weight;
+  }, 0);
+  const prCount = workingSets.filter((set) => {
+    const actualWeight =
+      typeof set.actualWeight === "number" ? set.actualWeight : undefined;
+    const targetWeight =
+      typeof set.targetWeight === "number" ? set.targetWeight : undefined;
+    return (
+      actualWeight !== undefined &&
+      targetWeight !== undefined &&
+      actualWeight > targetWeight
+    );
+  }).length;
+
+  return {
+    totalSets,
+    totalVolume: totalVolume > 0 ? totalVolume : null,
+    prCount: prCount > 0 ? prCount : null,
+  };
+};
+
 const roundToIncrement = (value: number, increment: number) => {
   if (!Number.isFinite(value)) return value;
   if (!Number.isFinite(increment) || increment <= 0) return value;
@@ -956,17 +987,20 @@ router.patch("/:id", async (req, res) => {
   const shouldUpdateDuration = startedAt !== undefined || finishedAt !== undefined;
 
   try {
-    const sessionExists = await query(
-      `SELECT 1 FROM workout_sessions WHERE id = $1 AND user_id = $2`,
+    const sessionExists = await query<{ template_name: string | null }>(
+      `SELECT template_name FROM workout_sessions WHERE id = $1 AND user_id = $2`,
       [req.params.id, userId]
     );
     if (!sessionExists.rowCount) {
       return res.status(404).json({ error: "Session not found" });
     }
+    const sessionTemplateName = sessionExists.rows[0]?.template_name ?? null;
 
     if (hasInvalidRir(sets)) {
       return res.status(400).json({ error: "RIR must be between 0 and 10" });
     }
+
+    const shareSummary = summarizeShareSets(sets);
 
     await withTransaction(async (client) => {
       if (sets) {
@@ -1026,6 +1060,28 @@ router.patch("/:id", async (req, res) => {
             ]
           );
         }
+      }
+
+      if (shareSummary) {
+        await client.query(
+          `
+            UPDATE workout_shares
+            SET
+              template_name = $1,
+              total_sets = $2,
+              total_volume = $3,
+              pr_count = $4
+            WHERE session_id = $5 AND user_id = $6
+          `,
+          [
+            sessionTemplateName,
+            shareSummary.totalSets,
+            shareSummary.totalVolume,
+            shareSummary.prCount,
+            req.params.id,
+            userId,
+          ]
+        );
       }
 
       if (

@@ -63,6 +63,9 @@ struct LogSetIntent: LiveActivityIntent {
         }
 
         let currentState = activity.contentState
+        userDefaults.set(currentState.exerciseName, forKey: "pendingLogSetExerciseName")
+        userDefaults.set(currentState.currentSet, forKey: "pendingLogSetCurrentSet")
+        userDefaults.synchronize()
 
         // Read rest duration from App Group (synced by React Native)
         // Key is prefixed with "widget_" by WidgetSyncModule

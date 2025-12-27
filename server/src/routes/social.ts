@@ -2882,26 +2882,68 @@ router.post("/share", async (req, res) => {
     : null;
 
   try {
-    const result = await query<ShareRow>(
-      `
-        INSERT INTO workout_shares (id, user_id, session_id, template_name, total_sets, total_volume, pr_count, visibility, progress_photo_url, progress_photo_visibility, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-        RETURNING *
-      `,
-      [
-        generateId(),
-        userId,
-        sessionId,
-        templateName ?? null,
-        totalSets ?? null,
-        totalVolume ?? null,
-        prCount ?? null,
-        vis,
-        progressPhotoUrl ?? null,
-        photoVisibility,
-      ]
+    const existing = await query<ShareRow>(
+      `SELECT * FROM workout_shares WHERE session_id = $1 AND user_id = $2 LIMIT 1`,
+      [sessionId, userId]
     );
-    const row = result.rows[0];
+
+    const row =
+      existing.rowCount && existing.rows[0]
+        ? (
+            await query<ShareRow>(
+              `
+                UPDATE workout_shares
+                SET
+                  template_name = $1,
+                  total_sets = $2,
+                  total_volume = $3,
+                  pr_count = $4,
+                  visibility = $5,
+                  progress_photo_url = $6,
+                  progress_photo_visibility = $7
+                WHERE id = $8
+                RETURNING *
+              `,
+              [
+                templateName ?? existing.rows[0].template_name,
+                totalSets ?? existing.rows[0].total_sets,
+                totalVolume ?? existing.rows[0].total_volume,
+                prCount ?? existing.rows[0].pr_count,
+                visibility ?? existing.rows[0].visibility,
+                progressPhotoUrl !== undefined
+                  ? progressPhotoUrl
+                  : existing.rows[0].progress_photo_url,
+                progressPhotoUrl !== undefined
+                  ? progressPhotoUrl
+                    ? photoVisibility
+                    : null
+                  : existing.rows[0].progress_photo_visibility,
+                existing.rows[0].id,
+              ]
+            )
+          ).rows[0]
+        : (
+            await query<ShareRow>(
+              `
+                INSERT INTO workout_shares (id, user_id, session_id, template_name, total_sets, total_volume, pr_count, visibility, progress_photo_url, progress_photo_visibility, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                RETURNING *
+              `,
+              [
+                generateId(),
+                userId,
+                sessionId,
+                templateName ?? null,
+                totalSets ?? null,
+                totalVolume ?? null,
+                prCount ?? null,
+                vis,
+                progressPhotoUrl ?? null,
+                photoVisibility,
+              ]
+            )
+          ).rows[0];
+
     const user = await fetchUserSummary(userId);
     try {
       await query(

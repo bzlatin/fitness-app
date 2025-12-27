@@ -27,6 +27,14 @@ const unduckedAudioMode: Partial<Audio.AudioMode> = {
   shouldDuckAndroid: false,
   interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
 };
+const fullTimerAudioMode: Audio.AudioMode = {
+  ...baseAudioMode,
+  ...timerAudioMode,
+};
+const fullUnduckedAudioMode: Audio.AudioMode = {
+  ...baseAudioMode,
+  ...unduckedAudioMode,
+};
 
 const restoreAudioMode = async () => {
   try {
@@ -117,7 +125,7 @@ export const playTimerSound = async () => {
         }
       }
 
-      await Audio.setAudioModeAsync(timerAudioMode);
+      await Audio.setAudioModeAsync(fullTimerAudioMode);
 
       // Play the custom timer completion sound
       const { sound } = await Audio.Sound.createAsync(
@@ -153,7 +161,7 @@ export const playTimerSound = async () => {
 
       // Unduck quickly even if the sound keeps playing
       unduckAudioModeTimeout = setTimeout(() => {
-        void Audio.setAudioModeAsync(unduckedAudioMode);
+        void Audio.setAudioModeAsync(fullUnduckedAudioMode);
       }, 500);
 
       // Fallback cleanup in case playback status doesn't fire

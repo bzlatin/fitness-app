@@ -8,6 +8,7 @@ import {
 } from "../api/sessions";
 import { WorkoutHistoryResponse, WorkoutSet } from "../types/workouts";
 import { fatigueQueryKey, recommendationsQueryKey } from "./useFatigue";
+import { squadFeedKey } from "./useSquadFeed";
 import { upNextQueryKey } from "./useUpNextRecommendation";
 
 const historyKey = (startIso: string, endIso: string, tzOffsetMinutes: number) => [
@@ -108,6 +109,7 @@ export const useDeleteSession = (rangeStart: Date, rangeEnd: Date) => {
         client.invalidateQueries({ queryKey: fatigueQueryKey }),
         client.invalidateQueries({ queryKey: recommendationsQueryKey }),
         client.invalidateQueries({ queryKey: upNextQueryKey }),
+        client.invalidateQueries({ queryKey: squadFeedKey }),
       ]),
   });
 };
@@ -134,6 +136,7 @@ export const useUpdateSession = (rangeStart: Date, rangeEnd: Date) => {
         client.invalidateQueries({ queryKey: fatigueQueryKey }),
         client.invalidateQueries({ queryKey: recommendationsQueryKey }),
         client.invalidateQueries({ queryKey: upNextQueryKey }),
+        client.invalidateQueries({ queryKey: squadFeedKey }),
       ]),
   });
 };

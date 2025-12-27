@@ -931,6 +931,7 @@ const WorkoutSessionScreen = () => {
   const templateRef = useRef<WorkoutTemplate | null>(null);
   const pendingTemplateWeightUpdatesRef = useRef<Record<string, number>>({});
   const templateUpdateInFlightRef = useRef(false);
+  const groupedSetsRef = useRef<ExerciseGroup[]>([]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -2207,6 +2208,10 @@ const WorkoutSessionScreen = () => {
   );
 
   useEffect(() => {
+    groupedSetsRef.current = groupedSets;
+  }, [groupedSets]);
+
+  useEffect(() => {
     const missingExerciseIds = Array.from(
       new Set(
         groupedSets
@@ -2496,6 +2501,96 @@ const WorkoutSessionScreen = () => {
     pendingDifficultyFeedbackKey,
   ]);
 
+  const readAppGroupValue = useCallback(
+    <T,>(key: string): Promise<T | null> => {
+      const { WidgetSyncModule } = NativeModules;
+      if (!WidgetSyncModule) {
+        return Promise.resolve(null);
+      }
+      return new Promise((resolve) => {
+        WidgetSyncModule.readFromAppGroup(
+          key,
+          (value: T | null) => resolve(value ?? null)
+        );
+      });
+    },
+    []
+  );
+
+  const resolveFirstUnloggedSetId = useCallback(() => {
+    const currentLoggedSetIds = loggedSetIdsRef.current;
+    const orderedSets = [...setsRef.current].sort(
+      (a, b) => a.setIndex - b.setIndex
+    );
+    return (
+      orderedSets.find((set) => !currentLoggedSetIds.has(set.id))?.id ?? null
+    );
+  }, []);
+
+  const resolveLiveActivityLogSetId = useCallback(async () => {
+    const [
+      pendingExerciseNameRaw,
+      pendingCurrentSetRaw,
+      widgetExerciseNameRaw,
+      widgetCurrentSetRaw,
+    ] = await Promise.all([
+      readAppGroupValue<string>("pendingLogSetExerciseName"),
+      readAppGroupValue<number | string>("pendingLogSetCurrentSet"),
+      readAppGroupValue<string>("widget_activeSessionExerciseName"),
+      readAppGroupValue<number | string>("widget_activeSessionCurrentSet"),
+    ]);
+
+    const exerciseNameRaw =
+      typeof pendingExerciseNameRaw === "string" && pendingExerciseNameRaw.trim()
+        ? pendingExerciseNameRaw
+        : widgetExerciseNameRaw;
+    const exerciseName =
+      typeof exerciseNameRaw === "string" && exerciseNameRaw.trim().length > 0
+        ? exerciseNameRaw.trim()
+        : null;
+
+    const currentSetValue =
+      pendingCurrentSetRaw ?? widgetCurrentSetRaw ?? null;
+    const currentSetNumber =
+      typeof currentSetValue === "number"
+        ? currentSetValue
+        : Number(currentSetValue);
+    if (!exerciseName || !Number.isFinite(currentSetNumber)) return null;
+
+    const normalizedName = exerciseName.toLowerCase();
+    const group = groupedSetsRef.current.find(
+      (item) => item.name.toLowerCase() === normalizedName
+    );
+    if (!group) return null;
+
+    const sorted = [...group.sets].sort((a, b) => a.setIndex - b.setIndex);
+    const targetIndex = Math.max(
+      0,
+      Math.min(sorted.length - 1, Math.floor(currentSetNumber) - 1)
+    );
+    const currentLoggedSetIds = loggedSetIdsRef.current;
+    const candidate = sorted[targetIndex];
+    if (candidate && !currentLoggedSetIds.has(candidate.id)) {
+      return candidate.id;
+    }
+    return (
+      sorted.find((set) => !currentLoggedSetIds.has(set.id))?.id ?? null
+    );
+  }, [readAppGroupValue]);
+
+  const resolveLogSetId = useCallback(async () => {
+    const currentLoggedSetIds = loggedSetIdsRef.current;
+    const fromLiveActivity = await resolveLiveActivityLogSetId();
+    if (fromLiveActivity && !currentLoggedSetIds.has(fromLiveActivity)) {
+      return fromLiveActivity;
+    }
+    const activeSet = activeSetIdRef.current;
+    if (activeSet && !currentLoggedSetIds.has(activeSet)) {
+      return activeSet;
+    }
+    return resolveFirstUnloggedSetId();
+  }, [resolveFirstUnloggedSetId, resolveLiveActivityLogSetId]);
+
   // Listen for "Log Set" button from Live Activity (via App Group shared storage)
   useEffect(() => {
     const { WidgetSyncModule } = NativeModules;
@@ -2546,6 +2641,8 @@ const WorkoutSessionScreen = () => {
           // Clear stale actions
           WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
           WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
+          WidgetSyncModule.writeToAppGroup("pendingLogSetExerciseName", null);
+          WidgetSyncModule.writeToAppGroup("pendingLogSetCurrentSet", null);
           return;
         }
 
@@ -2562,8 +2659,10 @@ const WorkoutSessionScreen = () => {
         WidgetSyncModule.writeToAppGroup("pendingLogSetSessionId", null);
         WidgetSyncModule.writeToAppGroup("pendingLogSetTimestamp", null);
 
-        // Use the activeSetId from the ref - this is what the user sees as highlighted
-        const setToLog = activeSetIdRef.current;
+        const setToLog = await resolveLogSetId();
+
+        WidgetSyncModule.writeToAppGroup("pendingLogSetExerciseName", null);
+        WidgetSyncModule.writeToAppGroup("pendingLogSetCurrentSet", null);
 
         if (setToLog) {
           const currentLoggedSetIds = loggedSetIdsRef.current;
@@ -2619,10 +2718,10 @@ const WorkoutSessionScreen = () => {
           return;
         }
 
-        // Use the activeSetId - this is what the user sees as highlighted
-        const setToLog = activeSetIdRef.current;
+        void (async () => {
+          const setToLog = await resolveLogSetId();
+          if (!setToLog) return;
 
-        if (setToLog) {
           const currentLoggedSetIds = loggedSetIdsRef.current;
 
           // Verify this set hasn't already been logged
@@ -2640,7 +2739,7 @@ const WorkoutSessionScreen = () => {
               logSet(setToLog);
             }
           }
-        }
+        })();
       }
     };
 
@@ -2669,14 +2768,16 @@ const WorkoutSessionScreen = () => {
         return;
       }
 
-      // Find the active set to log
-      if (activeSetId) {
-        logSet(activeSetId);
-      }
+      void (async () => {
+        const setToLog = await resolveLogSetId();
+        if (setToLog) {
+          logSet(setToLog);
+        }
+      })();
     });
 
     return cleanup;
-  }, [sessionId, activeSetId]);
+  }, [resolveLogSetId, sessionId]);
 
   /**
    * Calculate intelligent rest time based on set intensity
@@ -3005,11 +3106,20 @@ const WorkoutSessionScreen = () => {
         restSeconds ??
         currentSet.targetRestSeconds;
 
+    const sorted = group
+      ? [...group.sets]
+          .map((s) => (s.id === setId ? updated : s))
+          .sort((a, b) => a.setIndex - b.setIndex)
+      : [];
+    const allLogged = group
+      ? sorted.every((s) => updatedLoggedSetIds.has(s.id))
+      : false;
+
     // Start rest timer and capture the end timestamp
+    const restDuration = fallbackRest ?? smartDefaultRestSeconds;
     let calculatedRestEndsAt: number | null = null;
-    const shouldRunRestTimer = autoRestTimer && !isCardioSet;
+    const shouldRunRestTimer = autoRestTimer && !isCardioSet && !allLogged;
     if (shouldRunRestTimer) {
-      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
       calculatedRestEndsAt = Date.now() + restDuration * 1000;
       startRestTimer(restDuration);
     } else {
@@ -3017,9 +3127,6 @@ const WorkoutSessionScreen = () => {
     }
 
     if (group) {
-      const sorted = [...group.sets]
-        .map((s) => (s.id === setId ? updated : s))
-        .sort((a, b) => a.setIndex - b.setIndex);
       const currentSortedIndex = sorted.findIndex((s) => s.id === setId);
       const nextSetAfterCurrent =
         currentSortedIndex >= 0
@@ -3031,11 +3138,15 @@ const WorkoutSessionScreen = () => {
         nextSetAfterCurrent ??
         sorted.find((s) => !updatedLoggedSetIds.has(s.id));
 
-      // Keep widgets/live activity in sync with the set that was just logged (no auto-advance between sets).
-      const restDuration = fallbackRest ?? smartDefaultRestSeconds;
+      const nextSetForSync = nextSetAfterCurrent ?? nextUnloggedSet;
+      const nextSyncIndex = nextSetForSync
+        ? sorted.findIndex((s) => s.id === nextSetForSync.id)
+        : -1;
+      const syncIndex =
+        nextSyncIndex >= 0 ? nextSyncIndex : Math.max(0, currentSortedIndex);
       syncCurrentExerciseToWidget(
         groupKey,
-        Math.max(0, currentSortedIndex),
+        syncIndex,
         updated.actualReps,
         updated.actualWeight,
         shouldRunRestTimer ? restDuration : 0,
@@ -3102,7 +3213,6 @@ const WorkoutSessionScreen = () => {
       }
 
       // All sets in this exercise are logged - show difficulty feedback before advancing
-      const allLogged = sorted.every((s) => updatedLoggedSetIds.has(s.id));
       if (allLogged) {
         // Check if any working set in this exercise already has a difficulty rating
         const hasExistingRating = workingSets.some((s) => s.difficultyRating);
