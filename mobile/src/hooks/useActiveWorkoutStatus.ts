@@ -26,7 +26,7 @@ export const useActiveWorkoutStatus = ({
   autoClearOnUnmount = true,
 }: Options) => {
   const [visibility, setVisibilityState] = useState<Visibility>(
-    initialVisibility ?? "followers"
+    initialVisibility ?? "squad"
   );
   const [visibilityResolved, setVisibilityResolved] = useState<boolean>(
     Boolean(initialVisibility)
@@ -48,7 +48,7 @@ export const useActiveWorkoutStatus = ({
       const stored = await getStoredLiveVisibility();
       if (cancelled) return;
       if (!stored) {
-        setVisibilityState("followers");
+        setVisibilityState("squad");
         setVisibilityResolved(true);
         return;
       }

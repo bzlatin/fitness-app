@@ -36,19 +36,22 @@ struct WorkoutLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    if let restEndTime = context.state.restEndTime {
-                        RestTimerView(endTime: restEndTime)
-                    } else {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            if let targetReps = context.state.targetReps {
-                                Text("\(targetReps) reps")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
-                            }
-                            if let targetWeight = context.state.targetWeight {
-                                Text(formatWeight(targetWeight))
-                                    .font(.caption2)
-                                    .foregroundColor(.gray)
+                    TimelineView(.periodic(from: Date(), by: 1)) { timeline in
+                        if let restEndTime = context.state.restEndTime,
+                           restEndTime > timeline.date {
+                            RestTimerView(endTime: restEndTime)
+                        } else {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                if let targetReps = context.state.targetReps {
+                                    Text("\(targetReps) reps")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                                if let targetWeight = context.state.targetWeight {
+                                    Text(formatWeight(targetWeight))
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                }
                             }
                         }
                     }
@@ -92,17 +95,20 @@ struct WorkoutLiveActivity: Widget {
                     .foregroundColor(.green)
             } compactTrailing: {
                 // Compact trailing (right side of Dynamic Island)
-                if let restEndTime = context.state.restEndTime {
-                    TimerText(endTime: restEndTime)
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 40)
-                        .monospacedDigit()
-                } else {
-                    Text("Set \(context.state.currentSet)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
+                TimelineView(.periodic(from: Date(), by: 1)) { timeline in
+                    if let restEndTime = context.state.restEndTime,
+                       restEndTime > timeline.date {
+                        TimerText(endTime: restEndTime)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 40)
+                            .monospacedDigit()
+                    } else {
+                        Text("Set \(context.state.currentSet)")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                    }
                 }
             } minimal: {
                 // Minimal view (when multiple activities)
@@ -135,87 +141,90 @@ struct LockScreenLiveActivityView: View {
     let context: ActivityViewContext<WorkoutActivityAttributes>
 
     var body: some View {
-        let restActive = context.state.restEndTime != nil
+        TimelineView(.periodic(from: Date(), by: 1)) { timeline in
+            let restEndTime = context.state.restEndTime
+            let restActive = restEndTime.map { $0 > timeline.date } ?? false
 
-        VStack(spacing: 12) {
-            // Row 1: Exercise name + Resting/Set info
-            HStack(alignment: .center) {
-                // Left: Exercise name (takes available space)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.state.exerciseName)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    Text("\(context.state.currentSet)/\(context.state.totalSets) sets")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer(minLength: 12)
-
-                // Right: Timer or status
-                if restActive, let restEndTime = context.state.restEndTime {
-                    HStack(spacing: 6) {
-                        Text("Resting")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-
-                        TimerText(endTime: restEndTime)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+            VStack(spacing: 12) {
+                // Row 1: Exercise name + Resting/Set info
+                HStack(alignment: .center) {
+                    // Left: Exercise name (takes available space)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.state.exerciseName)
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.green.opacity(0.2))
-                    .cornerRadius(10)
-                } else {
-                    // Show target reps
-                    if let targetReps = context.state.targetReps {
-                        VStack(alignment: .trailing, spacing: 0) {
-                            Text("\(targetReps) reps")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
+                            .lineLimit(1)
 
-                            if let weight = context.state.targetWeight, weight > 0 {
-                                Text(formatWeight(weight))
-                                    .font(.caption)
-                                    .foregroundColor(.green)
+                        Text("\(context.state.currentSet)/\(context.state.totalSets) sets")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    // Right: Timer or status
+                    if restActive, let restEndTime = restEndTime {
+                        HStack(spacing: 6) {
+                            Text("Resting")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+
+                            TimerText(endTime: restEndTime)
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.green.opacity(0.2))
+                        .cornerRadius(10)
+                    } else {
+                        // Show target reps
+                        if let targetReps = context.state.targetReps {
+                            VStack(alignment: .trailing, spacing: 0) {
+                                Text("\(targetReps) reps")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+
+                                if let weight = context.state.targetWeight, weight > 0 {
+                                    Text(formatWeight(weight))
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Row 2: Progress + Last set
-            HStack {
-                Text("\(context.state.completedExercises)/\(context.state.totalExercises) exercises")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                if let lastReps = context.state.lastReps,
-                   let lastWeight = context.state.lastWeight {
-                    Text("Last: \(lastReps) × \(formatWeight(lastWeight))")
+                // Row 2: Progress + Last set
+                HStack {
+                    Text("\(context.state.completedExercises)/\(context.state.totalExercises) exercises")
                         .font(.caption2)
-                        .foregroundColor(.green)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    if let lastReps = context.state.lastReps,
+                       let lastWeight = context.state.lastWeight {
+                        Text("Last: \(lastReps) × \(formatWeight(lastWeight))")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
+
+                // Row 3: Progress bar
+                ProgressView(value: Double(context.state.completedExercises), total: Double(max(context.state.totalExercises, 1)))
+                    .tint(.green)
+
+                // Row 4: Log Set button (only when not resting)
+                if !restActive {
+                    logSetButton
                 }
             }
-
-            // Row 3: Progress bar
-            ProgressView(value: Double(context.state.completedExercises), total: Double(max(context.state.totalExercises, 1)))
-                .tint(.green)
-
-            // Row 4: Log Set button (only when not resting)
-            if !restActive {
-                logSetButton
-            }
+            .padding(16)
+            .activityBackgroundTint(Color(red: 5/255, green: 8/255, blue: 22/255))
+            .activitySystemActionForegroundColor(.white)
         }
-        .padding(16)
-        .activityBackgroundTint(Color(red: 5/255, green: 8/255, blue: 22/255))
-        .activitySystemActionForegroundColor(.white)
     }
 
     private var logSetButton: some View {

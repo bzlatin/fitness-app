@@ -4,6 +4,19 @@ This is a practical “go/no-go” checklist for shipping **Push / Pull** to pro
 
 ---
 
+## Open product todos
+
+- [x] Rest timer shows on cardio exercise before log; remove timer for cardio exercises; for other exercises, timer still shows before logging a set.
+- [x] Rest timer does not show when the "how did this feel" prompt is visible.
+- [x] Live activity on lock screen does not update when timer hits 0.
+- [x] Allow custom exercise option when adding an exercise in workout session (like it does for swapping).
+- [x] When adding an exercise during workout session and a user inputs a weight, autofill with that weight and set the target to the weight the user put.
+- [x] Ab crunch machine is not body weight; it is a machine.
+- [x] Comments on workouts should show in notifications or somewhere users can see (maybe history); they also do not save in the user's workout if someone comments while they are actively working out.
+- [x] Ensure recent workouts show instantly after a user completes a workout (shows in squads but not friends view).
+- [x] Viewing a past workout UI bugs: exercise list should scroll instead of growing/overflowing; long exercise names go off screen.
+- [x] Add option for sharing progress photo as well - it should default to private and not show on users workout. but if they decide to share it then we should share it as it does now.
+
 ## How to ship:
 
 - cd mobile

@@ -146,12 +146,14 @@ export const shareWorkoutSummary = async (payload: {
   totalVolume?: number;
   prCount?: number;
   progressPhotoUri?: string;
+  progressPhotoVisibility?: Visibility;
 }) => {
-  const { progressPhotoUri, ...rest } = payload;
+  const { progressPhotoUri, progressPhotoVisibility, ...rest } = payload;
   try {
     const res = await apiClient.post<WorkoutSummaryShare>("/social/share", {
       ...rest,
       progressPhotoUrl: progressPhotoUri,
+      progressPhotoVisibility,
     });
     return res.data;
   } catch (err) {
@@ -468,4 +470,13 @@ export const getReactions = async (
     `/social/reactions/${targetType}/${targetId}`
   );
   return res.data ?? { emojis: [], comments: [] };
+};
+
+export const getSessionComments = async (
+  sessionId: string
+): Promise<WorkoutComment[]> => {
+  const res = await apiClient.get<{ comments: WorkoutComment[] }>(
+    `/social/session-comments/${sessionId}`
+  );
+  return res.data?.comments ?? [];
 };
