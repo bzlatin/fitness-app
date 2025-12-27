@@ -59,6 +59,7 @@ import MuscleGroupBreakdown from "../components/MuscleGroupBreakdown";
 import ExerciseSwapModal from "../components/workouts/ExerciseSwapModal";
 import TimerAdjustmentModal from "../components/workouts/TimerAdjustmentModal";
 import ExercisePicker from "../components/workouts/ExercisePicker";
+import CreateCustomExerciseModal from "../components/workouts/CreateCustomExerciseModal";
 import ProgressionSuggestionModal, {
   ProgressionData,
 } from "../components/ProgressionSuggestion";
@@ -858,6 +859,9 @@ const WorkoutSessionScreen = () => {
     "progression" | "analytics"
   >("progression");
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showCreateCustomExercise, setShowCreateCustomExercise] =
+    useState(false);
+  const [createCustomInitialName, setCreateCustomInitialName] = useState("");
   const [showWarmupSets, setShowWarmupSets] = useState(true);
   const [warmupOverridesByExerciseKey, setWarmupOverridesByExerciseKey] =
     useState<Record<string, boolean>>({});
@@ -2749,21 +2753,28 @@ const WorkoutSessionScreen = () => {
     const currentSet = group.sets[currentSetIndex];
     if (!currentSet) return;
 
-    // Determine actual rest duration for widgets
-    // If restDuration is explicitly 0, pass 0 to clear the timer
-    // If undefined, use the group's rest seconds as fallback
-    const actualRestDuration =
-      restDuration !== undefined
-        ? restDuration
-        : group.restSeconds ?? DEFAULT_WORKING_REST_SECONDS;
+    const resolvedRestEndsAt =
+      restEndsAtTimestamp ?? restEndsAtRef.current ?? null;
+    const hasActiveRest =
+      typeof resolvedRestEndsAt === "number" && resolvedRestEndsAt > Date.now();
+    const restEndsAtISO = hasActiveRest
+      ? new Date(resolvedRestEndsAt).toISOString()
+      : null;
 
-    // Calculate restEndsAt ISO string if we have a timestamp
-    const restEndsAtISO =
-      restEndsAtTimestamp && restEndsAtTimestamp > 0
-        ? new Date(restEndsAtTimestamp).toISOString()
-        : actualRestDuration === 0
-        ? undefined
-        : undefined;
+    const liveActivityRestUpdates: {
+      restDuration?: number;
+      restEndsAt?: string | null;
+    } = {};
+    if (restDuration !== undefined) {
+      liveActivityRestUpdates.restDuration = restDuration;
+      liveActivityRestUpdates.restEndsAt =
+        restDuration > 0 && restEndsAtISO ? restEndsAtISO : null;
+    } else if (hasActiveRest && restEndsAtISO) {
+      liveActivityRestUpdates.restEndsAt = restEndsAtISO;
+    } else {
+      liveActivityRestUpdates.restDuration = 0;
+      liveActivityRestUpdates.restEndsAt = null;
+    }
 
     // Sync to home screen widget
     void syncActiveSessionToWidget({
@@ -2776,8 +2787,8 @@ const WorkoutSessionScreen = () => {
       targetReps: currentSet.targetReps,
       targetWeight: currentSet.targetWeight,
       startedAt: startTime,
-      restDuration: actualRestDuration,
-      restEndsAt: restEndsAtISO,
+      restDuration,
+      restEndsAt: restEndsAtISO ?? undefined,
     });
 
     // Sync to Live Activity (Dynamic Island + Lock Screen)
@@ -2793,8 +2804,7 @@ const WorkoutSessionScreen = () => {
       completedExercises: groupedSets.filter((g) =>
         g.sets.every((s) => loggedSetIds.has(s.id))
       ).length,
-      restDuration: actualRestDuration, // Always pass a defined value
-      restEndsAt: restEndsAtISO,
+      ...liveActivityRestUpdates,
     });
   };
 
@@ -2996,13 +3006,13 @@ const WorkoutSessionScreen = () => {
 
     // Start rest timer and capture the end timestamp
     let calculatedRestEndsAt: number | null = null;
-    if (autoRestTimer) {
+    const shouldRunRestTimer = autoRestTimer && !isCardioSet;
+    if (shouldRunRestTimer) {
       const restDuration = fallbackRest ?? smartDefaultRestSeconds;
       calculatedRestEndsAt = Date.now() + restDuration * 1000;
       startRestTimer(restDuration);
     } else {
-      setRestRemaining(null);
-      setRestEndsAt(null);
+      startRestTimer(0);
     }
 
     if (group) {
@@ -3027,8 +3037,8 @@ const WorkoutSessionScreen = () => {
         Math.max(0, currentSortedIndex),
         updated.actualReps,
         updated.actualWeight,
-        autoRestTimer ? restDuration : 0,
-        autoRestTimer ? calculatedRestEndsAt ?? undefined : undefined
+        shouldRunRestTimer ? restDuration : 0,
+        shouldRunRestTimer ? calculatedRestEndsAt ?? undefined : undefined
       );
 
       if (nextUnloggedSet) {
@@ -3310,6 +3320,14 @@ const WorkoutSessionScreen = () => {
       exerciseForm.exercise.id,
       exerciseForm.exercise.name
     );
+    const parsedWeight =
+      exerciseForm.weight !== undefined && exerciseForm.weight !== null
+        ? Number(exerciseForm.weight)
+        : undefined;
+    const resolvedWeight =
+      !cardio && Number.isFinite(parsedWeight) && parsedWeight > 0
+        ? parsedWeight
+        : undefined;
     const numSets = cardio ? 1 : exerciseForm.sets || 3;
     const newSets: WorkoutSet[] = [];
 
@@ -3323,9 +3341,9 @@ const WorkoutSessionScreen = () => {
         setKind: "working",
         setIndex: baseIndex + i,
         targetReps: exerciseForm.reps || 10,
-        targetWeight: undefined,
+        targetWeight: resolvedWeight,
         actualReps: exerciseForm.reps || 10,
-        actualWeight: undefined,
+        actualWeight: resolvedWeight,
         targetRestSeconds: exerciseForm.restSeconds || 90,
         templateExerciseId: exerciseForm.exercise.id, // Use exercise ID as key
       };
@@ -4239,6 +4257,30 @@ const WorkoutSessionScreen = () => {
         selected={[]}
         onAdd={handleAddExerciseToSession}
         onRemove={() => {}}
+        onCreateCustomExercise={(suggestedName) => {
+          setShowExercisePicker(false);
+          setCreateCustomInitialName(suggestedName ?? "");
+          setShowCreateCustomExercise(true);
+        }}
+      />
+      <CreateCustomExerciseModal
+        visible={showCreateCustomExercise}
+        initialName={createCustomInitialName}
+        onClose={() => {
+          setShowCreateCustomExercise(false);
+          setCreateCustomInitialName("");
+        }}
+        onCreated={(exercise) => {
+          setShowCreateCustomExercise(false);
+          setCreateCustomInitialName("");
+          handleAddExerciseToSession({
+            exercise,
+            sets: 3,
+            reps: 10,
+            repMode: "single",
+            restSeconds: 90,
+          });
+        }}
       />
       <ProgressionSuggestionModal
         visible={showProgressionModal}
@@ -5093,22 +5135,24 @@ const SetInputRow = ({
           ) : null}
         </>
       )}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-          Rest after set: {restLabelSeconds}s
-        </Text>
-        {!autoRestTimer ? (
+      {!isCardio ? (
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Auto rest off
+            Rest after set: {restLabelSeconds}s
           </Text>
-        ) : null}
-      </View>
+          {!autoRestTimer ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Auto rest off
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -5670,8 +5714,7 @@ const ExerciseCard = ({
                   canRemove={group.sets.length > 1}
                 />
                 {restRemaining !== null &&
-                lastLoggedSetId === set.id &&
-                !showExerciseDifficultyFeedback ? (
+                lastLoggedSetId === set.id ? (
                   <View
                     style={{
                       padding: 10,

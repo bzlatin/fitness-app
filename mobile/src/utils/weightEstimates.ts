@@ -12,6 +12,10 @@ export const isBodyweightMovement = (
   exerciseId?: string
 ) => {
   const name = normalizeExerciseText(exerciseName, exerciseId);
+  const nonBodyweightKeywords = ["machine", "cable"];
+  if (nonBodyweightKeywords.some((keyword) => name.includes(keyword))) {
+    return false;
+  }
   const keywords = [
     "bodyweight",
     "body weight",
