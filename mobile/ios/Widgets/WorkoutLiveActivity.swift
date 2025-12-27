@@ -37,9 +37,11 @@ struct WorkoutLiveActivity: Widget {
 
                 DynamicIslandExpandedRegion(.trailing) {
                     TimelineView(.periodic(from: Date(), by: 1)) { timeline in
-                        if let restEndTime = context.state.restEndTime,
-                           restEndTime > timeline.date {
-                            RestTimerView(endTime: restEndTime)
+                        let remainingSeconds = context.state.restEndTime.map {
+                            max(0, Int(ceil($0.timeIntervalSince(timeline.date))))
+                        } ?? 0
+                        if remainingSeconds > 0 {
+                            RestTimerView(remainingSeconds: remainingSeconds)
                         } else {
                             VStack(alignment: .trailing, spacing: 4) {
                                 if let targetReps = context.state.targetReps {
@@ -91,29 +93,43 @@ struct WorkoutLiveActivity: Widget {
 
             } compactLeading: {
                 // Compact leading (left side of Dynamic Island)
-                Image(systemName: "dumbbell.fill")
-                    .foregroundColor(.green)
-            } compactTrailing: {
-                // Compact trailing (right side of Dynamic Island)
                 TimelineView(.periodic(from: Date(), by: 1)) { timeline in
-                    if let restEndTime = context.state.restEndTime,
-                       restEndTime > timeline.date {
-                        TimerText(endTime: restEndTime)
+                    let remainingSeconds = context.state.restEndTime.map {
+                        max(0, Int(ceil($0.timeIntervalSince(timeline.date))))
+                    } ?? 0
+                    if remainingSeconds > 0 {
+                        TimerText(remainingSeconds: remainingSeconds)
                             .font(.caption2)
                             .foregroundColor(.orange)
-                            .multilineTextAlignment(.trailing)
+                            .multilineTextAlignment(.leading)
                             .frame(width: 40)
-                            .monospacedDigit()
                     } else {
-                        Text("Set \(context.state.currentSet)")
-                            .font(.caption2)
-                            .foregroundColor(.white)
+                        Image(systemName: "dumbbell.fill")
+                            .foregroundColor(.green)
                     }
                 }
+            } compactTrailing: {
+                // Compact trailing (right side of Dynamic Island)
+                Text("Set \(context.state.currentSet)")
+                    .font(.caption2)
+                    .foregroundColor(.white)
             } minimal: {
                 // Minimal view (when multiple activities)
-                Image(systemName: "dumbbell.fill")
-                    .foregroundColor(.green)
+                TimelineView(.periodic(from: Date(), by: 1)) { timeline in
+                    let remainingSeconds = context.state.restEndTime.map {
+                        max(0, Int(ceil($0.timeIntervalSince(timeline.date))))
+                    } ?? 0
+                    if remainingSeconds > 0 {
+                        TimerText(remainingSeconds: remainingSeconds)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                            .multilineTextAlignment(.center)
+                            .frame(width: 40)
+                    } else {
+                        Image(systemName: "dumbbell.fill")
+                            .foregroundColor(.green)
+                    }
+                }
             }
         }
     }
@@ -142,8 +158,10 @@ struct LockScreenLiveActivityView: View {
 
     var body: some View {
         TimelineView(.periodic(from: Date(), by: 1)) { timeline in
-            let restEndTime = context.state.restEndTime
-            let restActive = restEndTime.map { $0 > timeline.date } ?? false
+            let remainingSeconds = context.state.restEndTime.map {
+                max(0, Int(ceil($0.timeIntervalSince(timeline.date))))
+            } ?? 0
+            let restActive = remainingSeconds > 0
 
             VStack(spacing: 12) {
                 // Row 1: Exercise name + Resting/Set info
@@ -163,16 +181,15 @@ struct LockScreenLiveActivityView: View {
                     Spacer(minLength: 12)
 
                     // Right: Timer or status
-                    if restActive, let restEndTime = restEndTime {
+                    if restActive {
                         HStack(spacing: 6) {
                             Text("Resting")
                                 .font(.caption2)
                                 .foregroundColor(.green)
 
-                            TimerText(endTime: restEndTime)
+                            TimerText(remainingSeconds: remainingSeconds)
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
-                                .monospacedDigit()
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -267,26 +284,31 @@ struct LockScreenLiveActivityView: View {
 }
 
 // MARK: - Timer Text View for Live Activities
-// Uses SwiftUI's native countdown which works in Live Activities without needing Timer.publish
+// Uses timeline-driven countdown so rest states swap cleanly at 0.
 
 @available(iOS 16.1, *)
 struct TimerText: View {
-    let endTime: Date
+    let remainingSeconds: Int
 
     var body: some View {
-        // Use timerInterval to show countdown that stops at 0
-        // This prevents the timer from counting UP after it expires
-        Text(timerInterval: Date()...endTime, countsDown: true, showsHours: false)
+        Text(formatCountdown(remainingSeconds))
             .monospacedDigit()
+    }
+
+    private func formatCountdown(_ totalSeconds: Int) -> String {
+        let clamped = max(0, totalSeconds)
+        let minutes = clamped / 60
+        let seconds = clamped % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
 // MARK: - Rest Timer View for Dynamic Island Expanded Region
-// Uses SwiftUI's native countdown which works in Live Activities
+// Matches the same countdown logic as compact/lock screen timers.
 
 @available(iOS 16.1, *)
 struct RestTimerView: View {
-    let endTime: Date
+    let remainingSeconds: Int
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
@@ -294,11 +316,10 @@ struct RestTimerView: View {
                 .font(.caption2)
                 .foregroundColor(.orange)
 
-            Text(timerInterval: Date()...endTime, countsDown: true, showsHours: false)
+            TimerText(remainingSeconds: remainingSeconds)
                 .font(.headline)
                 .fontWeight(.bold)
                 .foregroundColor(.orange)
-                .monospacedDigit()
         }
     }
 }

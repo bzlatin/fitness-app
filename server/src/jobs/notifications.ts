@@ -140,27 +140,6 @@ const hasSentNotificationSince = async (
   return parseInt(result.rows[0]?.count || "0", 10) > 0;
 };
 
-const hasRecentCommentNotification = async (
-  userId: string,
-  targetType: "share" | "status",
-  targetId: string
-): Promise<boolean> => {
-  const result = await query<{ count: string }>(
-    `
-    SELECT COUNT(*) as count
-    FROM notification_events
-    WHERE user_id = $1
-      AND notification_type = 'workout_comment'
-      AND sent_at >= NOW() - INTERVAL '24 hours'
-      AND data->>'targetType' = $2
-      AND data->>'targetId' = $3
-    `,
-    [userId, targetType, targetId]
-  );
-
-  return parseInt(result.rows[0]?.count || "0", 10) > 0;
-};
-
 const formatCommentPreview = (comment: string, maxLength = 90): string => {
   const normalized = comment.replace(/\s+/g, " ").trim();
   if (!normalized) return "Tap to view the comment.";
@@ -188,6 +167,12 @@ const scheduleNextNotification = async (user: User): Promise<void> => {
 /**
  * Send a push notification to a user and log to database
  */
+type NotificationSendOptions = {
+  bypassQuietHours?: boolean;
+  bypassWeeklyCap?: boolean;
+  deliverSilentlyInQuietHours?: boolean;
+};
+
 const sendNotification = async (
   user: User,
   notification: {
@@ -196,12 +181,16 @@ const sendNotification = async (
     title: string;
     body: string;
     data?: Record<string, unknown>;
-  }
+  },
+  options: NotificationSendOptions = {}
 ): Promise<void> => {
   const notificationId = nanoid();
+  const isQuietTime = isQuietHours(user);
+  const shouldSendDuringQuiet =
+    options.bypassQuietHours || options.deliverSilentlyInQuietHours;
 
   // Check quiet hours
-  if (isQuietHours(user)) {
+  if (isQuietTime && !shouldSendDuringQuiet) {
     console.log(
       `[Notifications] Skipped ${notification.type} for ${user.id} - quiet hours`
     );
@@ -209,18 +198,21 @@ const sendNotification = async (
   }
 
   // Check weekly cap
-  const reachedCap = await hasReachedWeeklyCap(
-    user.id,
-    user.notificationPreferences.maxNotificationsPerWeek
-  );
-  if (reachedCap) {
-    console.log(
-      `[Notifications] Skipped ${notification.type} for ${user.id} - weekly cap reached`
+  if (!options.bypassWeeklyCap) {
+    const reachedCap = await hasReachedWeeklyCap(
+      user.id,
+      user.notificationPreferences.maxNotificationsPerWeek
     );
-    return;
+    if (reachedCap) {
+      console.log(
+        `[Notifications] Skipped ${notification.type} for ${user.id} - weekly cap reached`
+      );
+      return;
+    }
   }
 
-  let deliveryStatus = "sent";
+  const isSilent = isQuietTime && options.deliverSilentlyInQuietHours;
+  let deliveryStatus = isSilent ? "silent" : "sent";
   let errorMessage: string | null = null;
 
   // Send push notification if user has a valid push token
@@ -228,10 +220,12 @@ const sendNotification = async (
     try {
       const message: ExpoPushMessage = {
         to: user.pushToken,
-        sound: "default",
         title: notification.title,
         body: notification.body,
         data: notification.data || {},
+        ...(isSilent
+          ? { priority: "normal", channelId: "silent" }
+          : { sound: "default" }),
       };
 
       const ticketChunk = await expo.sendPushNotificationsAsync([message]);
@@ -875,13 +869,6 @@ export const sendWorkoutCommentNotification = async (
 
   if (!user.notificationPreferences.squadActivity) return;
 
-  const alreadySent = await hasRecentCommentNotification(
-    user.id,
-    target.targetType,
-    target.targetId
-  );
-  if (alreadySent) return;
-
   await sendNotification(user, {
     type: "workout_comment",
     triggerReason: `comment_${target.targetType}`,
@@ -893,5 +880,9 @@ export const sendWorkoutCommentNotification = async (
       targetType: target.targetType,
       targetId: target.targetId,
     },
+  },
+  {
+    bypassWeeklyCap: true,
+    deliverSilentlyInQuietHours: true,
   });
 };

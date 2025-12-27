@@ -136,7 +136,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
         do {
           let duckSession = AVAudioSession.sharedInstance()
           // Use voicePrompt for more reliable, short-lived ducking across music apps.
-          try duckSession.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+          try duckSession.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .mixWithOthers])
           try duckSession.setActive(true)
         } catch {
           print("⚠️ [TimerSound] Failed to enable ducking: \(error.localizedDescription)")
@@ -231,7 +231,7 @@ class LiveActivityModule: RCTEventEmitter, AVAudioPlayerDelegate {
     do {
       let session = AVAudioSession.sharedInstance()
       // Voice prompt mode improves ducking reliability for short sounds.
-      try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+      try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .mixWithOthers])
       try session.setActive(true)
 
       let player = try AVAudioPlayer(contentsOf: url)

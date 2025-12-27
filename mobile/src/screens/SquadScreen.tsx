@@ -314,7 +314,7 @@ const ShareCard = ({
             <Text style={{ color: colors.textSecondary, ...typography.caption }}>
               {share.totalSets} sets
               {share.totalVolume
-                ? ` · ${share.totalVolume.toLocaleString()} kg`
+                ? ` · ${share.totalVolume.toLocaleString()} lbs`
                 : ""}{" "}
               {share.prCount ? ` · ${share.prCount} PRs` : ""}
             </Text>

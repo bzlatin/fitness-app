@@ -6,8 +6,10 @@ import {
   fetchHistoryRange,
   updateSession,
 } from "../api/sessions";
+import { SquadFeedResponse } from "../api/social";
 import { WorkoutHistoryResponse, WorkoutSet } from "../types/workouts";
 import { fatigueQueryKey, recommendationsQueryKey } from "./useFatigue";
+import { squadFeedKey } from "./useSquadFeed";
 import { upNextQueryKey } from "./useUpNextRecommendation";
 
 const historyKey = (startIso: string, endIso: string, tzOffsetMinutes: number) => [
@@ -96,8 +98,25 @@ export const useDeleteSession = (rangeStart: Date, rangeEnd: Date) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: deleteSession,
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: async (_data, sessionId) => {
+      client.setQueriesData<SquadFeedResponse | undefined>(
+        { queryKey: squadFeedKey },
+        (prev) => {
+          if (!prev) return prev;
+          const hasMatch = prev.recentShares.some(
+            (share) => share.sessionId === sessionId
+          );
+          if (!hasMatch) return prev;
+          return {
+            ...prev,
+            recentShares: prev.recentShares.filter(
+              (share) => share.sessionId !== sessionId
+            ),
+          };
+        }
+      );
+
+      await Promise.all([
         client.invalidateQueries({
           queryKey: historyKey(
             rangeStart.toISOString(),
@@ -108,7 +127,9 @@ export const useDeleteSession = (rangeStart: Date, rangeEnd: Date) => {
         client.invalidateQueries({ queryKey: fatigueQueryKey }),
         client.invalidateQueries({ queryKey: recommendationsQueryKey }),
         client.invalidateQueries({ queryKey: upNextQueryKey }),
-      ]),
+        client.invalidateQueries({ queryKey: squadFeedKey }),
+      ]);
+    },
   });
 };
 
@@ -134,6 +155,7 @@ export const useUpdateSession = (rangeStart: Date, rangeEnd: Date) => {
         client.invalidateQueries({ queryKey: fatigueQueryKey }),
         client.invalidateQueries({ queryKey: recommendationsQueryKey }),
         client.invalidateQueries({ queryKey: upNextQueryKey }),
+        client.invalidateQueries({ queryKey: squadFeedKey }),
       ]),
   });
 };
