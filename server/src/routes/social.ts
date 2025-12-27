@@ -2883,7 +2883,13 @@ router.post("/share", async (req, res) => {
 
   try {
     const existing = await query<ShareRow>(
-      `SELECT * FROM workout_shares WHERE session_id = $1 AND user_id = $2 LIMIT 1`,
+      `
+        SELECT *
+        FROM workout_shares
+        WHERE session_id = $1 AND user_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
       [sessionId, userId]
     );
 
@@ -3049,10 +3055,18 @@ router.get("/squad-feed", async (req, res) => {
 
     const shares = await query<ShareRow>(
       `
-        SELECT sh.*, u.name, u.handle, u.avatar_url
-        FROM workout_shares sh
-        JOIN users u ON u.id = sh.user_id
-        ORDER BY sh.created_at DESC
+        SELECT deduped.*, u.name, u.handle, u.avatar_url
+        FROM (
+          SELECT DISTINCT ON (sh.session_id, sh.user_id) sh.*
+          FROM workout_shares sh
+          JOIN workout_sessions s
+            ON s.id = sh.session_id AND s.user_id = sh.user_id
+          WHERE s.finished_at IS NOT NULL
+            AND s.ended_reason IS DISTINCT FROM 'auto_inactivity'
+          ORDER BY sh.session_id, sh.user_id, sh.created_at DESC
+        ) deduped
+        JOIN users u ON u.id = deduped.user_id
+        ORDER BY deduped.created_at DESC
         LIMIT 20
       `
     );

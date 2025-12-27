@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { fontFamilies } from "../../theme/typography";
 import {
@@ -15,6 +16,8 @@ import {
   markNotificationAsClicked,
   markAllNotificationsAsRead,
   deleteNotification,
+  addNotificationReceivedListener,
+  addNotificationResponseReceivedListener,
   NotificationEvent,
 } from "../../services/notifications";
 
@@ -126,17 +129,23 @@ export const NotificationInbox: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadNotifications = async (refresh = false) => {
+  const fetchNotifications = useCallback(async () => {
+    const data = await getNotificationInbox(50, 0);
+    setNotifications(data.notifications ?? []);
+    setUnreadCount(data.unreadCount ?? 0);
+    setHasMore(data.hasMore ?? false);
+  }, []);
+
+  const loadNotifications = useCallback(async (refresh = false) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
 
-      const data = await getNotificationInbox(50, 0);
-      setNotifications(data.notifications ?? []);
-      setUnreadCount(data.unreadCount ?? 0);
-      setHasMore(data.hasMore ?? false);
+      await fetchNotifications();
     } catch (err) {
       console.error("[NotificationInbox] Error loading notifications:", err);
       // Don't show error for empty inbox - just show empty state
@@ -147,11 +156,63 @@ export const NotificationInbox: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [fetchNotifications]);
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
+  const refreshSilently = useCallback(async () => {
+    try {
+      await fetchNotifications();
+    } catch (err) {
+      console.error(
+        "[NotificationInbox] Error refreshing notifications:",
+        err
+      );
+    }
+  }, [fetchNotifications]);
+
+  const scheduleSilentRefresh = useCallback(
+    (delayMs = 0) => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      refreshTimeoutRef.current = setTimeout(() => {
+        refreshTimeoutRef.current = null;
+        void refreshSilently();
+      }, delayMs);
+    },
+    [refreshSilently]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasLoadedOnceRef.current) {
+        scheduleSilentRefresh();
+      } else {
+        hasLoadedOnceRef.current = true;
+        void loadNotifications();
+      }
+
+      const interval = setInterval(() => {
+        scheduleSilentRefresh();
+      }, 30000);
+
+      const receivedSubscription = addNotificationReceivedListener(() => {
+        scheduleSilentRefresh(600);
+      });
+      const responseSubscription = addNotificationResponseReceivedListener(() => {
+        scheduleSilentRefresh();
+      });
+
+      return () => {
+        clearInterval(interval);
+        receivedSubscription.remove();
+        responseSubscription.remove();
+        if (refreshTimeoutRef.current) {
+          clearTimeout(refreshTimeoutRef.current);
+          refreshTimeoutRef.current = null;
+        }
+      };
+    }, [loadNotifications, scheduleSilentRefresh])
+  );
 
   const handleNotificationPress = async (notification: NotificationEvent) => {
     try {

@@ -141,6 +141,12 @@ export const registerForPushNotificationsAsync = async (
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#22C55E",
     });
+    await Notifications.setNotificationChannelAsync("silent", {
+      name: "silent",
+      importance: Notifications.AndroidImportance.LOW,
+      vibrationPattern: [],
+      sound: null,
+    });
   }
 
   return token;
